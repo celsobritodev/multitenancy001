@@ -30,6 +30,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                    HttpServletResponse response,
                                    FilterChain filterChain) throws ServletException, IOException {
+    	
+    	String requestURI = request.getRequestURI();
+        
+        // Ignorar endpoints públicos
+        if (requestURI.startsWith("/api/auth/") || 
+            requestURI.equals("/api/accounts")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+    	
+    	
         
         try {
             String jwt = getJwtFromRequest(request);
