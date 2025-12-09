@@ -1,0 +1,58 @@
+para um sistema em java / spring / postgresql usando api rest onde tenho varias contas e cada uma precisa ter o seu proprio banco de dados , cada banco de dados tem uma tabela produtos, tabela vendas e tabela fornecedores. cada conta tera um usuario admin com acesso total e este usuario podera criar varias subcontas com diferentes permissoes. para criar o nomes dos usuarios pode se usar um hash() ou um UUID.
+a primeira vez que uma conta for criada os usuarios dela terao um acesso free. apos 30 dias é necessario fazer um pagamento recorrente. o sistema precisara verificar se os pagamentos estao em dia.
+gere todos os endpoints e escreva em camadas entity, services, repositories, controlles, dtos, config
+a melhor opçao é usar schemas no postgree para isto?
+
+
+src/main/java/com/seusistema/
+├── config/
+│   ├── TenantContext.java
+│   ├── TenantDataSource.java
+│   ├── WebConfig.java
+│   └── SecurityConfig.java
+├── controller/
+│   ├── AccountController.java
+│   ├── ProductController.java
+│   ├── SaleController.java
+│   └── SupplierController.java
+├── dto/
+│   ├── request/
+│   │   ├── AccountCreateRequest.java
+│   │   ├── UserCreateRequest.java
+│   │   └── PaymentRequest.java
+│   └── response/
+│       ├── AccountResponse.java
+│       ├── UserResponse.java
+│       └── PaymentResponse.java
+├── entity/
+│   ├── master/
+│   │   ├── Account.java
+│   │   ├── User.java
+│   │   └── Payment.java
+│   └── tenant/
+│       ├── Product.java
+│       ├── Sale.java
+│       └── Supplier.java
+├── repository/
+│   ├── master/
+│   │   ├── AccountRepository.java
+│   │   ├── UserRepository.java
+│   │   └── PaymentRepository.java
+│   └── tenant/
+│       ├── ProductRepository.java
+│       ├── SaleRepository.java
+│       └── SupplierRepository.java
+├── service/
+│   ├── AccountService.java
+│   ├── TenantService.java
+│   ├── ProductService.java
+│   ├── SaleService.java
+│   ├── SupplierService.java
+│   └── PaymentService.java
+├── security/
+│   ├── JwtTokenProvider.java
+│   ├── CustomUserDetailsService.java
+│   └── SecurityUtils.java
+└── util/
+    ├── TenantIdentifierResolver.java
+    └── DatabaseInitializer.java

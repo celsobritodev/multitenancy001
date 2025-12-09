@@ -1,0 +1,19 @@
+Considerações Finais
+
+    Escalabilidade: O uso de schemas permite fácil escalabilidade horizontal
+
+    Segurança: Cada tenant tem isolamento completo de dados
+
+    Manutenção: Backup e restore simplificados por schema
+
+    Performance: Índices e otimizações específicas por tenant
+
+    Migrations: Use Flyway ou Liquibase para gerenciar migrações de schema
+
+    Monitoramento: Implemente logs de auditoria por tenant
+
+    Cache: Configure cache separado por tenant quando necessário
+
+    Filas: Use filas separadas ou routing keys por tenant
+
+Este design oferece um bom equilíbrio entre isolamento, performance e facilidade de manutenção para um sistema multi-tenant.

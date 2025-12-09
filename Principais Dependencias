@@ -1,0 +1,58 @@
+Principais Dependências Explicadas:
+1. Spring Boot Starters:
+
+    spring-boot-starter-web → REST API + Tomcat + Jackson
+
+    spring-boot-starter-data-jpa → JPA + Hibernate
+
+    spring-boot-starter-security → Spring Security
+
+    spring-boot-starter-validation → Bean Validation (Hibernate Validator)
+
+    spring-boot-starter-cache → Cache Abstraction
+
+    spring-boot-starter-quartz → Agendamento de tarefas
+
+    spring-boot-starter-mail → Envio de emails
+
+    spring-boot-starter-actuator → Endpoints de monitoramento
+
+    spring-boot-starter-test → Testes (JUnit, Mockito, etc)
+
+    spring-boot-devtools → Hot reload para desenvolvimento
+    
+    
+  2. Banco de Dados:
+
+    postgresql → Driver PostgreSQL
+
+    HikariCP → Pool de conexões (já incluso nos starters, mas pode ser explícito)
+
+3. JWT (JSON Web Token):
+
+    jjwt-api → API para criar/verificar tokens
+
+    jjwt-impl → Implementação
+
+    jjwt-jackson → Integração com Jackson (JSON)
+
+4. Utilidades:
+
+    lombok → Reduz boilerplate (getters, setters, builders)
+
+    commons-lang3 → Utilitários do Apache
+
+    jackson-datatype-jsr310 → Suporte a LocalDate, LocalDateTime no Jackson
+
+5. Documentação:
+
+    springdoc-openapi-ui → Swagger UI + OpenAPI 3
+
+6. Cache:
+
+    caffeine → Implementação de cache (alta performance)  
+    
+    
+7. Metamodel (Opcional):
+
+    hibernate-jpamodelgen → Gera classes type-safe para Criteria API

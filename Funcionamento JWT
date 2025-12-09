@@ -1,0 +1,50 @@
+Funcionamento do JWT no Sistema:
+Fluxo de Autenticação:
+
+    Login: Usuário envia credentials → Servidor valida → Retorna JWT com claims (accountId, tenantSchema, roles)
+
+    Requests Seguintes: Cliente envia JWT no header Authorization: Bearer <token>
+
+    Filter: Extrai token → Valida → Carrega UserDetails → Seta Authentication no SecurityContext
+
+    Tenant Context: Extrai tenantSchema do token → Seta no ThreadLocal para uso na conexão com DB
+    
+    {
+  "sub": "username",
+  "roles": "ROLE_ADMIN,ROLE_USER",
+  "accountId": "uuid-da-conta",
+  "tenantSchema": "tenant_abc123",
+  "userId": "uuid-do-usuario",
+  "iat": 1625097600,
+  "exp": 1625184000
+}
+
+
+
+Vantagens do JWT neste sistema:
+
+    Stateless: Não precisa armazenar sessões no servidor
+
+    Multi-tenant: Token contém informações do tenant (schema)
+
+    Performance: Validação rápida, sem consulta ao banco
+
+    Escalabilidade: Fácil de distribuir entre múltiplas instâncias
+
+    Segurança: Tokens assinados, podem ser invalidados se necessário
+
+Considerações de Segurança:
+
+    Use HTTPS em produção
+
+    Tokens com expiração curta (24h) + refresh tokens
+
+    Implemente blacklist para logout forçado (opcional)
+
+    Valide assinatura e claims em cada request
+
+    Armazene secret key de forma segura (env vars, vault)
+
+Este setup fornece uma base sólida para autenticação JWT em um sistema multi-tenant com isolamento de dados por schema.
+    
+    
