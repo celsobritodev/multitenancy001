@@ -49,4 +49,15 @@ public interface UserRepository extends JpaRepository<User, Long> {  // ✅ Tamb
     
     @Query("SELECT u FROM User u WHERE u.lockedUntil < :now AND u.lockedUntil IS NOT NULL")
     List<User> findUsersWithExpiredLock(@Param("now") LocalDateTime now);
+    
+    Optional<User> findByIdAndAccountId(Long userId, Long accountId);
+    
+    Optional<User> findByPasswordResetToken(String token);
+
+    
+    
+
+
+
+    
 }

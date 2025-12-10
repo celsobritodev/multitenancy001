@@ -28,7 +28,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
     
-    // APENAS ESTE MÉTODO É NECESSÁRIO PARA RESOLVER O ERRO ATUAL
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration authConfig) throws Exception {
@@ -40,20 +39,31 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
+
+                // 🔓 Endpoints públicos
                 .requestMatchers("/api/auth/**").permitAll()
+
+                // 🔓 Recuperação de senha — NECESSÁRIO!
+                .requestMatchers(
+                    "/api/accounts/auth/forgot-password",
+                    "/api/accounts/auth/reset-password"
+                ).permitAll()
+
+                // 🔓 Criação de contas, se desejar
                 .requestMatchers("/api/accounts").permitAll()
+
+                // 🔒 Todo resto precisa de token
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             );
         
-        http.addFilterBefore(jwtAuthenticationFilter(), 
-                            UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(
+            jwtAuthenticationFilter(),
+            UsernamePasswordAuthenticationFilter.class
+        );
         
         return http.build();
     }
-    
-   
-    
 }

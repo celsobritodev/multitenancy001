@@ -25,7 +25,7 @@ public class ProductController {
     
     private final ProductService productService;
     
-    // Métodos existentes... (manter como estão)
+
     
     // Novos endpoints para os campos adicionais
     

@@ -116,6 +116,14 @@ public class User {
     @Column(name = "updated_by")
     private Long updatedBy;
     
+    @Column(name = "password_reset_token")
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_expires")
+    private LocalDateTime passwordResetExpires;
+
+    
+    
     @PrePersist
     protected void onCreate() {
         if (this.username == null && this.email != null) {
