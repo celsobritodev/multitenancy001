@@ -1,6 +1,5 @@
 package brito.com.example.multitenancy001.security;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,17 +29,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                    HttpServletResponse response,
                                    FilterChain filterChain) throws ServletException, IOException {
-    	
-    	String requestURI = request.getRequestURI();
         
-        // Ignorar endpoints públicos
-        if (requestURI.startsWith("/api/auth/") || 
-            requestURI.equals("/api/accounts")) {
+        // ⭐⭐ VERIFICAÇÃO CRÍTICA: Ignorar endpoints públicos ⭐⭐
+        if (shouldNotFilter(request)) {
             filterChain.doFilter(request, response);
             return;
         }
-    	
-    	
         
         try {
             String jwt = getJwtFromRequest(request);
@@ -67,6 +61,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
     
+    // ⭐⭐ MÉTODO NOVO: Determina quando NÃO aplicar o filtro ⭐⭐
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String requestURI = request.getRequestURI();
+        
+        // Endpoints públicos que NÃO precisam de token JWT
+        return requestURI.startsWith("/api/auth/") || 
+               requestURI.equals("/api/accounts") ||
+               request.getMethod().equals("OPTIONS");
+    }
+    
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
@@ -74,6 +79,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         return null;
     }
-
-	
 }

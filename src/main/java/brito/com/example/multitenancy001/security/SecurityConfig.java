@@ -1,9 +1,7 @@
 package brito.com.example.multitenancy001.security;
 
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -56,17 +54,6 @@ public class SecurityConfig {
         return http.build();
     }
     
-    @Bean
-    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration() {
-        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(jwtAuthenticationFilter());
-        registration.addUrlPatterns("/api/*");
-        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
-        
-        // URLs que o filtro deve IGNORAR
-        registration.addInitParameter("excludedUrls", "/api/auth/**,/api/accounts");
-        
-        return registration;
-    } 
+   
     
 }
