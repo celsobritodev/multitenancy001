@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.controllers;
 
 
+import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.AccountCreateRequest;
 import brito.com.multitenancy001.dtos.AccountResponse;
@@ -26,6 +27,10 @@ public class AccountController {
     
     private final AccountService accountService;
     private final UserService userService;
+    
+    
+   
+
     
     @PostMapping
     public ResponseEntity<AccountResponse> createAccount(
@@ -143,9 +148,11 @@ public class AccountController {
         }
 
         boolean valid = userService.checkCredentials(
-            request.username(), 
-            request.password()
-        );
+        	    request.slug(),
+        	    request.username(),
+        	    request.password()
+        	);
+
 
         if (!valid) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -41,6 +41,58 @@ public class JwtTokenProvider {
 
     @Value("${app.jwt.refresh.expiration}")
     private long refreshExpirationInMs;
+    
+    
+    public String getTokenType(String token) {
+        return getAllClaimsFromToken(token).get("type", String.class);
+    }
+
+    
+    
+    
+    public String generatePlatformToken(Authentication authentication) {
+
+        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
+
+        return Jwts.builder()
+            .setSubject(user.getUsername())
+            .claim("role", "SUPER_ADMIN")
+            .claim("type", "PLATFORM")
+            .claim("schema", "public")
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+            .signWith(getSigningKey(), Jwts.SIG.HS512)
+            .compact();
+    }
+
+    
+    
+    
+    public String generateTenantToken(
+            Authentication authentication,
+            Long accountId,
+            String schema
+    ) {
+        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
+
+        return Jwts.builder()
+            .setSubject(user.getUsername())
+            .claim("role", user.getAuthorities())
+            .claim("type", "TENANT")
+            .claim("schema", schema)
+            .claim("accountId", accountId)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+            .signWith(getSigningKey(), Jwts.SIG.HS512)
+            .compact();
+    }
+
+    
+    
+    
+    
+    
+    
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
@@ -159,12 +211,18 @@ public class JwtTokenProvider {
         return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);
     }
 
-    public String generatePasswordResetToken(String username) {
+    public String generatePasswordResetToken(
+            String username,
+            String tenantSchema,
+            Long accountId
+    ) {
         return Jwts.builder()
                 .subject(username)
                 .claim("type", "password_reset")
+                .claim("tenantSchema", tenantSchema)
+                .claim("accountId", accountId)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 3600000))
+                .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
                 .signWith(getSigningKey(), Jwts.SIG.HS512)
                 .compact();
     }

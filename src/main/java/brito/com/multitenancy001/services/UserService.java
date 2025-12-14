@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.services;
 
 
+import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.UserCreateRequest;
 import brito.com.multitenancy001.dtos.UserResponse;
@@ -10,6 +11,7 @@ import brito.com.multitenancy001.entities.master.UserRole;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserRepository;
+import brito.com.multitenancy001.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -30,6 +31,8 @@ public class UserService {
     private final UsernameGeneratorService usernameGenerator; // ✅ Injetado
     
     private final UsernameUniquenessService usernameUniquenessService;
+    
+    private final JwtTokenProvider jwtTokenProvider;
     
     
     public UserResponse createUser(Long accountId, UserCreateRequest request) {
@@ -297,71 +300,116 @@ public class UserService {
     
     public String generatePasswordResetToken(String email) {
 
-        User user = userRepository.findByEmailAndDeletedFalse(email)
+    	// 1️⃣ Busca no MASTER (public)
+        TenantContext.clear(); // remove o tenant atual
+    	
+    	User user = userRepository.findByEmailAndDeletedFalse(email)
                 .orElseThrow(() -> new ApiException(
                         "EMAIL_NOT_FOUND",
                         "Nenhum usuário foi encontrado com este email",
                         404
                 ));
-
-        String token = UUID.randomUUID().toString();
-        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(30);
-
-        user.setPasswordResetToken(token);
-        user.setPasswordResetExpires(expiresAt);
-
-        userRepository.save(user);
-
-        // Aqui você enviaria email real - por enquanto só log
-        System.out.println("TOKEN DE RESET: " + token);
+    	
+    	Account account = user.getAccount();
+    	
+        String token = jwtTokenProvider.generatePasswordResetToken(
+                user.getUsername(),
+                account.getSchemaName(),   // ⭐ AQUI
+                account.getId()); 
         
         return token;
     }
+    
+    
 
  
+    @Transactional
     public void resetPasswordWithToken(String token, String newPassword) {
 
-        User user = userRepository.findByPasswordResetToken(token)
-                .orElseThrow(() -> new ApiException(
-                        "INVALID_TOKEN",
-                        "Token inválido ou expirado",
-                        400
-                ));
-
-        if (user.getPasswordResetExpires().isBefore(LocalDateTime.now())) {
+        // 1️⃣ Validar JWT
+        if (!jwtTokenProvider.validateToken(token)) {
             throw new ApiException(
-                    "TOKEN_EXPIRED",
-                    "Token expirou, solicite novamente",
-                    410
+                    "INVALID_TOKEN",
+                    "Token inválido ou expirado",
+                    400
             );
         }
 
-        user.changePassword(passwordEncoder.encode(newPassword));
+        // 2️⃣ Extrair dados do token
+        String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(token);
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
+        String username = jwtTokenProvider.getUsernameFromToken(token);
 
-        user.setPasswordResetToken(null);
-        user.setPasswordResetExpires(null);
+        // 3️⃣ SETAR O TENANT (⭐ PONTO QUE VOCÊ PERGUNTOU ⭐)
+        TenantContext.setCurrentTenant(tenantSchema);
 
-        userRepository.save(user);
-    }
-    
-    public boolean checkCredentials(String username, String rawPassword) {
+        try {
+            // 4️⃣ Buscar usuário NO SCHEMA CORRETO
+            User user = userRepository
+                    .findByUsernameAndAccountId(username, accountId)
+                    .orElseThrow(() -> new ApiException(
+                            "USER_NOT_FOUND",
+                            "Usuário não encontrado",
+                            404
+                    ));
 
-        User user = userRepository.findByUsernameAndDeletedFalse(username)
-                .orElse(null);
+            if (user.isDeleted()) {
+                throw new ApiException(
+                        "USER_DELETED",
+                        "Usuário removido",
+                        400
+                );
+            }
 
-        if (user == null) {
-            return false;
+            // 5️⃣ Alterar senha
+            user.setPassword(passwordEncoder.encode(newPassword));
+            user.setPasswordChangedAt(LocalDateTime.now());
+            user.setMustChangePassword(false);
+
+            userRepository.save(user);
+
+        } finally {
+            // 6️⃣ LIMPAR CONTEXTO (OBRIGATÓRIO)
+            TenantContext.clear();
         }
-
-        return passwordEncoder.matches(rawPassword, user.getPassword());
     }
+
+    
+    
+    
+    
+    
+    
+    
+    public boolean checkCredentials(String slug, String username, String rawPassword) {
+
+        Account account = accountRepository
+                .findBySlugAndDeletedFalse(slug)
+                .orElseThrow(() -> new ApiException(
+                        "ACCOUNT_NOT_FOUND",
+                        "Conta não encontrada",
+                        404
+                ));
+
+        TenantContext.setCurrentTenant(account.getSchemaName());
+
+        try {
+            User user = userRepository
+                    .findByUsernameAndDeletedFalse(username)
+                    .orElse(null);
+
+            if (user == null) {
+                return false;
+            }
+
+            return passwordEncoder.matches(rawPassword, user.getPassword());
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
 
   
-//    private String generateUsername(String email) {
-//        String base = email.split("@")[0].toLowerCase();
-//        return base + "_" + UUID.randomUUID().toString().substring(0, 6);
-//    }
 
-    
     
 }

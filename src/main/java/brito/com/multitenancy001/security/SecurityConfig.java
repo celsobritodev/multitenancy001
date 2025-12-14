@@ -40,30 +40,35 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
 
-               
-            		 // 🔓 Endpoints PÚBLICOS ESPECÍFICOS
-                    .requestMatchers(
-                        "/api/accounts/auth/checkuser",
-                        "/api/accounts/auth/forgot-password",
-                        "/api/accounts/auth/reset-password",
-                        "/api/accounts"  // criar conta sem login
-                    ).permitAll()
+                // 🔓 Públicos
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/refresh",
+                    "/api/accounts/auth/checkuser",
+                    "/api/accounts/auth/forgot-password",
+                    "/api/accounts/auth/reset-password",
+                    "/api/accounts" // criar conta
+                ).permitAll()
 
-            
-                // 🔒 Todo resto precisa de token
+                // 🔒 PLATFORM
+                .requestMatchers("/api/admin/**")
+                .hasRole("SUPER_ADMIN")
+
+                // 🔒 Todo resto precisa de login
                 .anyRequest().authenticated()
             )
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             );
-        
+
         http.addFilterBefore(
             jwtAuthenticationFilter(),
             UsernamePasswordAuthenticationFilter.class
         );
-        
+
         return http.build();
     }
+
     
     
     

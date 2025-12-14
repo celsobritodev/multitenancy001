@@ -4,6 +4,10 @@ package brito.com.multitenancy001.dtos;
 import jakarta.validation.constraints.NotBlank;
 
 public record CheckUserRequest(
+		
+	@NotBlank(message = "Slug da conta é obrigatório")
+    String slug,	
+		
     @NotBlank(message = "Username é obrigatório")
     String username,
     

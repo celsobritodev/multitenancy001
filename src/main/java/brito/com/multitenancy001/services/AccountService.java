@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -39,7 +40,30 @@ public class AccountService {
     private final UsernameUniquenessService usernameUniquenessService;
     
 
-   
+
+
+    public List<AccountResponse> listAllAccounts() {
+
+        TenantContext.clear(); // ⭐ OBRIGATÓRIO
+
+        return accountRepository
+                .findByDeletedFalseOrderByCreatedAtDesc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private AccountResponse toResponse(Account account) {
+        return new AccountResponse(
+                account.getId(),
+                account.getName(),
+                account.getSchemaName(),
+                account.getStatus().name(),
+                account.getCreatedAt(),
+                account.getTrialEndDate(),
+                null // não expõe admin aqui
+        );
+    }
     
     
     public AccountResponse createAccount(AccountCreateRequest request) {
