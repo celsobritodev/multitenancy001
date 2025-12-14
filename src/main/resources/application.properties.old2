@@ -10,34 +10,31 @@ spring.datasource.url=jdbc:postgresql://localhost:5432/db_multitenancy
 spring.datasource.username=postgres
 spring.datasource.password=admin
 spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
-
-# IMPORTANTE: DESATIVE criacao automatica do Hibernate
 spring.jpa.hibernate.ddl-auto=none
 
-# FLYWAY CONFIGURATION (CORRETA)
+
+# Flyway Configuration CORRETA
 spring.flyway.enabled=true
 spring.flyway.baseline-on-migrate=true
 spring.flyway.baseline-version=0
 spring.flyway.validate-on-migrate=true
 spring.flyway.locations=classpath:db/migration
 spring.flyway.schemas=public
-spring.flyway.create-schemas=true
+spring.flyway.create-schemas=true 
 spring.flyway.default-schema=public
 spring.flyway.clean-disabled=true
-spring.flyway.table=flyway_schema_history
 
-# Ative logs do Flyway para debug
-logging.level.org.flywaydb=DEBUG
-logging.level.org.springframework.jdbc.core=TRACE
-logging.level.org.springframework.jdbc.datasource.init=DEBUG
+# JPA - NÃO crie tabelas automaticamente
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.properties.hibernate.jdbc.lob.non_contextual_creation=true
 
-# Connection pool settings
+
+# HikariCP
 spring.datasource.hikari.maximum-pool-size=10
 spring.datasource.hikari.minimum-idle=2
 spring.datasource.hikari.idle-timeout=300000
 spring.datasource.hikari.connection-timeout=20000
 spring.datasource.hikari.max-lifetime=1200000
 
-# LOGS DO HIBERNATE
-logging.level.org.hibernate.SQL=OFF
-logging.level.org.hibernate.type.descriptor.sql.BasicBinder=OFF
+# Logs
+logging.level.root=INFO
