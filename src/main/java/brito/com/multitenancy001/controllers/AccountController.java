@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.controllers;
 
 
-import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.AccountCreateRequest;
 import brito.com.multitenancy001.dtos.AccountResponse;

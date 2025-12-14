@@ -86,21 +86,24 @@ public class AuthController {
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
             
          // 5. Gera token
-            String jwt = tokenProvider.generateToken(
-                authentication,
-                account.getId(),
-                account.getSchemaName()
-            );
+            String jwt = tokenProvider.generateTenantToken(
+            	    authentication,
+            	    account.getId(),
+            	    account.getSchemaName()
+            	);
 
             return ResponseEntity.ok(new JwtResponse(
-                jwt,
-                tokenProvider.generateRefreshToken(user.getUsername(),account.getSchemaName()),
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getRole().name(),
-                account.getId(),
-                account.getSchemaName()
+            	    jwt,
+            	    tokenProvider.generateRefreshToken(
+            	        user.getUsername(),
+            	        account.getSchemaName()
+            	    ),
+            	    user.getId(),
+            	    user.getUsername(),
+            	    user.getEmail(),
+            	    user.getRole().name(),
+            	    account.getId(),
+            	    account.getSchemaName()
             ));
             
         } catch (Exception e) {
@@ -138,12 +141,13 @@ public class AuthController {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
             userDetails, null, userDetails.getAuthorities()
         );
+        
+        String newJwt = tokenProvider.generateTenantToken(
+        	    authentication,
+        	    user.getAccount().getId(),
+        	    schema
+        	);
 
-        String newJwt = tokenProvider.generateToken(
-            authentication,
-            user.getAccount().getId(),
-            schema
-        );
 
         String newRefreshToken = tokenProvider.generateRefreshToken(
         	    user.getUsername(),

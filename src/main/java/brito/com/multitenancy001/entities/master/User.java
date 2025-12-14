@@ -163,85 +163,91 @@ public class User {
         
         // Limpa permissões existentes se estiver vazio
         if (this.permissions.isEmpty()) {
-            switch (this.role) {
-                case ADMIN:
-                    this.permissions.addAll(List.of(
-                        "ACCOUNT_MANAGE",
-                        "USER_CREATE",
-                        "USER_UPDATE",
-                        "USER_DELETE",
-                        "USER_VIEW",
-                        "PRODUCT_CREATE",
-                        "PRODUCT_UPDATE",
-                        "PRODUCT_DELETE",
-                        "PRODUCT_VIEW",
-                        "SALE_CREATE",
-                        "SALE_UPDATE",
-                        "SALE_DELETE",
-                        "SALE_VIEW",
-                        "SUPPLIER_CREATE",
-                        "SUPPLIER_UPDATE",
-                        "SUPPLIER_DELETE",
-                        "SUPPLIER_VIEW",
-                        "REPORT_VIEW",
-                        "SETTINGS_MANAGE"
-                    ));
-                    break;
-                    
-                case PRODUCT_MANAGER:
-                    this.permissions.addAll(List.of(
-                        "PRODUCT_CREATE",
-                        "PRODUCT_UPDATE",
-                        "PRODUCT_DELETE",
-                        "PRODUCT_VIEW",
-                        "SUPPLIER_VIEW",
-                        "REPORT_VIEW"
-                    ));
-                    break;
-                    
-                case SALES_MANAGER:
-                    this.permissions.addAll(List.of(
-                        "SALE_CREATE",
-                        "SALE_UPDATE",
-                        "SALE_VIEW",
-                        "PRODUCT_VIEW",
-                        "REPORT_VIEW"
-                    ));
-                    break;
-                    
-                case VIEWER:
-                    this.permissions.addAll(List.of(
-                        "PRODUCT_VIEW",
-                        "SALE_VIEW",
-                        "REPORT_VIEW"
-                    ));
-                    break;
-                    
-                case SUPPORT:
-                    this.permissions.addAll(List.of(
-                        "USER_VIEW",
-                        "PRODUCT_VIEW",
-                        "SALE_VIEW",
-                        "SUPPLIER_VIEW"
-                    ));
-                    break;
-                    
-                case FINANCEIRO:
-                    this.permissions.addAll(List.of(
-                        "SALE_VIEW",
-                        "REPORT_VIEW",
-                        "FINANCE_VIEW"
-                    ));
-                    break;
-                    
-                case OPERACOES:
-                    this.permissions.addAll(List.of(
-                        "PRODUCT_VIEW",
-                        "SALE_VIEW",
-                        "SUPPLIER_VIEW"
-                    ));
-                    break;
-            }
+           switch (this.role) {
+
+    case SUPER_ADMIN:
+        this.permissions.add("ALL");
+        break;
+
+    case ADMIN:
+        this.permissions.addAll(List.of(
+            "ACCOUNT_MANAGE",
+            "USER_CREATE",
+            "USER_UPDATE",
+            "USER_DELETE",
+            "USER_VIEW",
+            "PRODUCT_CREATE",
+            "PRODUCT_UPDATE",
+            "PRODUCT_DELETE",
+            "PRODUCT_VIEW",
+            "SALE_CREATE",
+            "SALE_UPDATE",
+            "SALE_DELETE",
+            "SALE_VIEW",
+            "SUPPLIER_CREATE",
+            "SUPPLIER_UPDATE",
+            "SUPPLIER_DELETE",
+            "SUPPLIER_VIEW",
+            "REPORT_VIEW",
+            "SETTINGS_MANAGE"
+        ));
+        break;
+
+    case PRODUCT_MANAGER:
+        this.permissions.addAll(List.of(
+            "PRODUCT_CREATE",
+            "PRODUCT_UPDATE",
+            "PRODUCT_DELETE",
+            "PRODUCT_VIEW",
+            "SUPPLIER_VIEW",
+            "REPORT_VIEW"
+        ));
+        break;
+
+    case SALES_MANAGER:
+        this.permissions.addAll(List.of(
+            "SALE_CREATE",
+            "SALE_UPDATE",
+            "SALE_VIEW",
+            "PRODUCT_VIEW",
+            "REPORT_VIEW"
+        ));
+        break;
+
+    case VIEWER:
+        this.permissions.addAll(List.of(
+            "PRODUCT_VIEW",
+            "SALE_VIEW",
+            "REPORT_VIEW"
+        ));
+        break;
+
+    case SUPPORT:
+        this.permissions.addAll(List.of(
+            "USER_VIEW",
+            "PRODUCT_VIEW",
+            "SALE_VIEW",
+            "SUPPLIER_VIEW"
+        ));
+        break;
+
+    case FINANCEIRO:
+        this.permissions.addAll(List.of(
+            "SALE_VIEW",
+            "REPORT_VIEW",
+            "FINANCE_VIEW"
+        ));
+        break;
+
+    case OPERACOES:
+        this.permissions.addAll(List.of(
+            "PRODUCT_VIEW",
+            "SALE_VIEW",
+            "SUPPLIER_VIEW"
+        ));
+        break;
+}
+
         }
     }
     
