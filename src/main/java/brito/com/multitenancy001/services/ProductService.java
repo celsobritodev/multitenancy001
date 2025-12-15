@@ -2,6 +2,7 @@ package brito.com.multitenancy001.services;
 
 import brito.com.multitenancy001.entities.tenant.Product;
 import brito.com.multitenancy001.entities.tenant.Supplier;
+import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.ProductRepository;
 import brito.com.multitenancy001.repositories.SupplierRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,11 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Product findById(String id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Produto não encontrado com ID: " + id));
+                .orElseThrow(() -> new ApiException(
+                        "PRODUCT_NOT_FOUND",
+                        "Produto não encontrado com ID: " + id,
+                        404
+                ));
     }
     
     @Transactional(readOnly = true)
@@ -50,11 +55,14 @@ public class ProductService {
     public Product create(Product product) {
         validateProduct(product);
         
-        // Processa supplierId do ProductRequest
         if (product.getSupplier() != null && product.getSupplier().getId() != null) {
             String supplierId = product.getSupplier().getId();
             Supplier supplier = supplierRepository.findById(supplierId)
-                    .orElseThrow(() -> new RuntimeException("Fornecedor não encontrado com ID: " + supplierId));
+                    .orElseThrow(() -> new ApiException(
+                            "SUPPLIER_NOT_FOUND",
+                            "Fornecedor não encontrado com ID: " + supplierId,
+                            404
+                    ));
             product.setSupplier(supplier);
         }
         
@@ -65,7 +73,6 @@ public class ProductService {
     public Product update(String id, Product productDetails) {
         Product existingProduct = findById(id);
         
-        // Atualiza campos básicos
         if (StringUtils.hasText(productDetails.getName())) {
             existingProduct.setName(productDetails.getName());
         }
@@ -75,10 +82,13 @@ public class ProductService {
         }
         
         if (StringUtils.hasText(productDetails.getSku())) {
-            // Verifica unicidade do SKU
             Optional<Product> productWithSku = productRepository.findBySku(productDetails.getSku());
             if (productWithSku.isPresent() && !productWithSku.get().getId().equals(id)) {
-                throw new RuntimeException("SKU já cadastrado: " + productDetails.getSku());
+                throw new ApiException(
+                        "SKU_ALREADY_EXISTS",
+                        "SKU já cadastrado: " + productDetails.getSku(),
+                        409
+                );
             }
             existingProduct.setSku(productDetails.getSku());
         }
@@ -92,10 +102,13 @@ public class ProductService {
             existingProduct.setStockQuantity(productDetails.getStockQuantity());
         }
         
-        // Atualiza supplier se fornecido
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
             Supplier supplier = supplierRepository.findById(productDetails.getSupplier().getId())
-                    .orElseThrow(() -> new RuntimeException("Fornecedor não encontrado"));
+                    .orElseThrow(() -> new ApiException(
+                            "SUPPLIER_NOT_FOUND",
+                            "Fornecedor não encontrado",
+                            404
+                    ));
             existingProduct.setSupplier(supplier);
         }
         
@@ -171,15 +184,21 @@ public class ProductService {
         return csv.toString();
     }
     
-    // Métodos auxiliares
-    
     private void validateProduct(Product product) {
         if (!StringUtils.hasText(product.getName())) {
-            throw new RuntimeException("Nome do produto é obrigatório");
+            throw new ApiException(
+                    "PRODUCT_NAME_REQUIRED",
+                    "Nome do produto é obrigatório",
+                    400
+            );
         }
         
         if (product.getPrice() == null) {
-            throw new RuntimeException("Preço do produto é obrigatório");
+            throw new ApiException(
+                    "PRODUCT_PRICE_REQUIRED",
+                    "Preço do produto é obrigatório",
+                    400
+            );
         }
         
         validatePrice(product.getPrice());
@@ -189,25 +208,39 @@ public class ProductService {
         }
         
         if (product.getStockQuantity() < 0) {
-            throw new RuntimeException("Quantidade em estoque não pode ser negativa");
+            throw new ApiException(
+                    "INVALID_STOCK",
+                    "Quantidade em estoque não pode ser negativa",
+                    400
+            );
         }
     }
     
     private void validatePrice(BigDecimal price) {
         if (price == null) {
-            throw new RuntimeException("Preço não pode ser nulo");
+            throw new ApiException(
+                    "INVALID_PRICE",
+                    "Preço não pode ser nulo",
+                    400
+            );
         }
         
         if (price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("Preço não pode ser negativo");
+            throw new ApiException(
+                    "INVALID_PRICE",
+                    "Preço não pode ser negativo",
+                    400
+            );
         }
         
-        if (price.compareTo(BigDecimal.valueOf(1000000)) > 0) {
-            throw new RuntimeException("Preço muito alto. Valor máximo permitido: 1.000.000");
+        if (price.compareTo(BigDecimal.valueOf(1_000_000)) > 0) {
+            throw new ApiException(
+                    "PRICE_TOO_HIGH",
+                    "Preço muito alto. Valor máximo permitido: 1.000.000",
+                    400
+            );
         }
     }
-    
-    // Métodos adicionais para os novos campos
     
     @Transactional(readOnly = true)
     public List<Product> findByCategory(String category) {

@@ -10,6 +10,7 @@ import brito.com.multitenancy001.entities.master.Account;
 import brito.com.multitenancy001.entities.master.AccountStatus;
 import brito.com.multitenancy001.entities.master.User;
 import brito.com.multitenancy001.entities.master.UserRole;
+import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -71,9 +72,12 @@ public class AccountService {
         log.info("Criando nova conta: {}", request.name());
 
         if (accountRepository.findByName(request.name()).isPresent()) {
-            throw new RuntimeException("Nome da conta já existe");
+            throw new ApiException(
+                "ACCOUNT_ALREADY_EXISTS",
+                "Já existe uma conta com este nome.",
+                409
+            );
         }
-
         String schemaName = generateSchemaName(request.name());
 
         LocalDateTime now = LocalDateTime.now();
@@ -102,7 +106,16 @@ public class AccountService {
         AdminCreateRequest   adminReq = request.admin();
 
         if (!adminReq.password().equals(adminReq.confirmPassword())) {
-            throw new RuntimeException("As senhas não coincidem.");
+        	throw new ApiException(
+                    "PASSWORDS_NOT_MATCH",
+                    "As senhas não coincidem.",
+                    409
+        	
+      );
+            
+            
+            
+            
         }
 
         User adminUser = createAdminUser(
@@ -185,14 +198,24 @@ public class AccountService {
     @Transactional(readOnly = true)
     public Account getAccountById(Long accountId) {
         return accountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("Conta não encontrada com ID: " + accountId));
+                .orElseThrow(() -> new ApiException(
+                    "ACCOUNT_NOT_FOUND",
+                    "Conta não encontrada para o ID informado.",
+                    404
+                ));
     }
+
     
     @Transactional(readOnly = true)
     public Account getAccountBySchemaName(String schemaName) {
         return accountRepository.findBySchemaName(schemaName)
-                .orElseThrow(() -> new RuntimeException("Conta não encontrada com schema: " + schemaName));
+                .orElseThrow(() -> new ApiException(
+                    "ACCOUNT_NOT_FOUND",
+                    "Conta não encontrada para o schema informado.",
+                    404
+                ));
     }
+
     
     @Transactional
     public void updateAccountStatus(Long accountId, AccountStatus newStatus) {
@@ -234,14 +257,10 @@ public class AccountService {
     
     @Transactional(readOnly = true)
     public boolean isAccountActive(Long accountId) {
-        try {
-            Account account = getAccountById(accountId);
-            return account.isActive();
-        } catch (Exception e) {
-            log.error("Erro ao verificar status da conta {}: {}", accountId, e.getMessage());
-            return false;
-        }
+        Account account = getAccountById(accountId);
+        return account.isActive();
     }
+
     
     @Transactional(readOnly = true)
     public long getDaysRemainingInTrial(Long accountId) {

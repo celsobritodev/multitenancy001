@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.services;
 
-
-
+import brito.com.multitenancy001.exceptions.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,23 +10,27 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 @Slf4j
 public class TenantService {
-    
+
     private final JdbcTemplate jdbcTemplate;
-    
+
     public void createSchema(String schemaName) {
         try {
             String sql = "CREATE SCHEMA IF NOT EXISTS " + schemaName;
             jdbcTemplate.execute(sql);
             log.info("Schema criado: {}", schemaName);
         } catch (Exception e) {
-            log.error("Erro ao criar schema: {}", e.getMessage());
-            throw new RuntimeException("Erro ao criar schema: " + schemaName, e);
+            log.error("Erro ao criar schema {}: {}", schemaName, e.getMessage());
+
+            throw new ApiException(
+                "SCHEMA_CREATION_FAILED",
+                "Falha ao criar o schema do tenant.",
+                500
+            );
         }
     }
-    
+
     public void createTables(String schemaName) {
         try {
-            // Tabela de produtos
             String productsTable = String.format(
                 "CREATE TABLE IF NOT EXISTS %s.products (" +
                 "id VARCHAR(255) PRIMARY KEY, " +
@@ -50,11 +53,10 @@ public class TenantService {
                 "created_at TIMESTAMP NOT NULL, " +
                 "updated_at TIMESTAMP, " +
                 "deleted_at TIMESTAMP, " +
-                "deleted BOOLEAN DEFAULT false)", 
+                "deleted BOOLEAN DEFAULT false)",
                 schemaName
             );
-            
-            // Tabela de fornecedores
+
             String suppliersTable = String.format(
                 "CREATE TABLE IF NOT EXISTS %s.suppliers (" +
                 "id VARCHAR(255) PRIMARY KEY, " +
@@ -73,11 +75,10 @@ public class TenantService {
                 "notes TEXT, " +
                 "created_at TIMESTAMP NOT NULL, " +
                 "updated_at TIMESTAMP, " +
-                "deleted_at TIMESTAMP)", 
+                "deleted_at TIMESTAMP)",
                 schemaName
             );
-            
-            // Tabela de vendas
+
             String salesTable = String.format(
                 "CREATE TABLE IF NOT EXISTS %s.sales (" +
                 "id VARCHAR(255) PRIMARY KEY, " +
@@ -87,19 +88,24 @@ public class TenantService {
                 "customer_email VARCHAR(255), " +
                 "status VARCHAR(50), " +
                 "created_at TIMESTAMP NOT NULL, " +
-                "updated_at TIMESTAMP)", 
+                "updated_at TIMESTAMP)",
                 schemaName
             );
-            
+
             jdbcTemplate.execute(productsTable);
             jdbcTemplate.execute(suppliersTable);
             jdbcTemplate.execute(salesTable);
-            
-            log.info("Tabelas criadas no schema: {}", schemaName);
-            
+
+            log.info("Tabelas criadas com sucesso no schema: {}", schemaName);
+
         } catch (Exception e) {
-            log.error("Erro ao criar tabelas: {}", e.getMessage());
-            throw new RuntimeException("Erro ao criar tabelas no schema: " + schemaName, e);
+            log.error("Erro ao criar tabelas no schema {}: {}", schemaName, e.getMessage());
+
+            throw new ApiException(
+                "TABLE_CREATION_FAILED",
+                "Falha ao criar as tabelas do tenant.",
+                500
+            );
         }
     }
 }

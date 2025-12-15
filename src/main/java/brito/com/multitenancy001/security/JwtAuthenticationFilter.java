@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import brito.com.multitenancy001.configuration.TenantContext;
+import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.services.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -57,7 +58,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 					String tenantSchema = tokenProvider.getTenantSchemaFromToken(jwt);
 
 					if (!StringUtils.hasText(tenantSchema)) {
-						throw new RuntimeException("Tenant não definido no token");
+						throw new ApiException(
+								"TENANT_NOT_DEFINED",
+								"Tenant não definido no token",
+								401
+						);
 					}
 
 					TenantContext.setCurrentTenant(tenantSchema);

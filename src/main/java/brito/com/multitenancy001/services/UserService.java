@@ -81,7 +81,11 @@ public class UserService {
             
             // Verificar se username já existe
             if (userRepository.existsByUsernameAndAccountId(username, accountId)) {
-                throw new RuntimeException("Username já está em uso nesta conta");
+            	throw new ApiException(
+                        "USERNAME_ALREADY_IN_USE_IN_ACCOUNT",
+                        "Username já está em uso nesta conta",
+                        409
+            );
             }
         } else {
             // Gerar username automaticamente
@@ -218,11 +222,20 @@ public class UserService {
     }
     
     public UserResponse restoreUser(Long accountId, Long userId) {
+
         User user = userRepository.findByIdAndAccountId(userId, accountId)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado nesta conta"));
+                .orElseThrow(() -> new ApiException(
+                    "USER_NOT_FOUND_IN_ACCOUNT",
+                    "Usuário não encontrado nesta conta.",
+                    404
+                ));
 
         if (!user.isDeleted()) {
-            throw new RuntimeException("Usuário não está removido.");
+            throw new ApiException(
+                "USER_NOT_DELETED",
+                "O usuário não está removido e não pode ser restaurado.",
+                409
+            );
         }
 
         user.restore();
@@ -230,6 +243,9 @@ public class UserService {
 
         return mapToResponse(restored);
     }
+
+    
+    
     
     @Transactional
     public void hardDeleteUser(Long accountId, Long userId) {
@@ -387,7 +403,7 @@ public class UserService {
                 .findBySlugAndDeletedFalse(slug)
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
-                        "Conta não encontrada",
+                        "Conta não encontrada para o identificador informado.",
                         404
                 ));
 
