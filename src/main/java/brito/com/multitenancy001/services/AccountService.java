@@ -268,78 +268,9 @@ public class AccountService {
         return account.getDaysRemainingInTrial();
     }
     
-    private void createTenantSchema(String schema) {
-    	jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
-    	}
+   
 
 
-    	private void createTenantTables(String schema) {
-    	// users
-    	jdbcTemplate.execute("""
-    	CREATE TABLE IF NOT EXISTS %s.users (
-    	id BIGSERIAL PRIMARY KEY,
-    	username VARCHAR(100) NOT NULL,
-    	name VARCHAR(100),
-    	email VARCHAR(150) NOT NULL,
-    	password VARCHAR(255) NOT NULL,
-    	role VARCHAR(50),
-    	active BOOLEAN DEFAULT TRUE,
-    	created_at TIMESTAMP DEFAULT NOW()
-    	)
-    	""".formatted(schema));
-
-
-    	// suppliers
-    	jdbcTemplate.execute("""
-    	CREATE TABLE IF NOT EXISTS %s.suppliers (
-    	id UUID PRIMARY KEY,
-    	name VARCHAR(200) NOT NULL,
-    	document VARCHAR(20) UNIQUE,
-    	email VARCHAR(150),
-    	phone VARCHAR(20),
-    	created_at TIMESTAMP DEFAULT NOW()
-    	)
-    	""".formatted(schema));
-
-
-    	// products
-    	jdbcTemplate.execute("""
-    	CREATE TABLE IF NOT EXISTS %s.products (
-    	id UUID PRIMARY KEY,
-    	name VARCHAR(200) NOT NULL,
-    	sku VARCHAR(100) UNIQUE,
-    	price NUMERIC(10,2) NOT NULL,
-    	stock_quantity INT DEFAULT 0,
-    	supplier_id UUID NULL,
-    	created_at TIMESTAMP DEFAULT NOW()
-    	)
-    	""".formatted(schema));
-
-
-    	// sales
-    	jdbcTemplate.execute("""
-    	CREATE TABLE IF NOT EXISTS %s.sales (
-    	id UUID PRIMARY KEY,
-    	sale_date TIMESTAMP NOT NULL,
-    	total_amount NUMERIC(10,2),
-    	customer_name VARCHAR(200),
-    	customer_email VARCHAR(150),
-    	status VARCHAR(20)
-    	)
-    	""".formatted(schema));
-
-
-    	// sale_items
-    	jdbcTemplate.execute("""
-    	CREATE TABLE IF NOT EXISTS %s.sale_items (
-    	id BIGSERIAL PRIMARY KEY,
-    	sale_id UUID NOT NULL,
-    	product_id UUID,
-    	quantity INT,
-    	unit_price NUMERIC(10,2),
-    	FOREIGN KEY (sale_id) REFERENCES %s.sales(id)
-    	)
-    	""".formatted(schema, schema));
-    	}
+    
     	
 }
