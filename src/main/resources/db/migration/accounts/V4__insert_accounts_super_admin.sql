@@ -1,7 +1,5 @@
--- Garante que estamos no schema public
 SET search_path TO public;
 
--- Cria usuário SUPER_ADMIN da plataforma
 INSERT INTO users (
     name,
     username,
@@ -9,15 +7,15 @@ INSERT INTO users (
     password,
     role,
     active,
-    created_at
+    account_id
 )
 VALUES (
     'Platform Super Admin',
     'superadmin',
     'admin@plataforma.com',
-    '$2a$10$wHq7p2n2YQhYF8k8y8y9xeJ6n9mT9KcXyZ1XxkYtYwHh6xXcYpK9S', -- bcrypt
+    '$2a$10$wHq7p2n2YQhYF8k8y8y9xeJ6n9mT9KcXyZ1XxkYtYwHh6xXcYpK9S',
     'SUPER_ADMIN',
     true,
-    now()
+    1
 )
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT DO NOTHING;

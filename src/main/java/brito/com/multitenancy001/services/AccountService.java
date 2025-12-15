@@ -16,7 +16,6 @@ import brito.com.multitenancy001.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,11 +35,10 @@ public class AccountService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UsernameGeneratorService usernameGenerator; // ✅ Injetado
-    private final JdbcTemplate jdbcTemplate;
-    
     private final UsernameUniquenessService usernameUniquenessService;
     
-
+    private final TenantService tenantService;
+    private final TenantMigrationService tenantMigrationService;
 
 
     public List<AccountResponse> listAllAccounts() {
@@ -66,56 +64,52 @@ public class AccountService {
         );
     }
     
-    
-    public AccountResponse createAccount(AccountCreateRequest request) {
+   public AccountResponse createAccount(AccountCreateRequest request) {
 
-        log.info("Criando nova conta: {}", request.name());
+    log.info("Criando nova conta: {}", request.name());
 
-        if (accountRepository.findByName(request.name()).isPresent()) {
-            throw new ApiException(
-                "ACCOUNT_ALREADY_EXISTS",
-                "Já existe uma conta com este nome.",
-                409
-            );
-        }
-        String schemaName = generateSchemaName(request.name());
+    if (accountRepository.findByName(request.name()).isPresent()) {
+        throw new ApiException(
+            "ACCOUNT_ALREADY_EXISTS",
+            "Já existe uma conta com este nome.",
+            409
+        );
+    }
 
-        LocalDateTime now = LocalDateTime.now();
+    String schemaName = generateSchemaName(request.name());
+    LocalDateTime now = LocalDateTime.now();
 
-        Account account = Account.builder()
-                .name(request.name())
-                .schemaName(schemaName)
-                .companyEmail(request.companyEmail())
-                .companyDocument(request.companyDocument())
-                .createdAt(now)
-                .trialEndDate(now.plusDays(30))
-                .status(AccountStatus.FREE_TRIAL)
-                .build();
+    Account account = Account.builder()
+            .name(request.name())
+            .schemaName(schemaName)
+            .companyEmail(request.companyEmail())
+            .companyDocument(request.companyDocument())
+            .createdAt(now)
+            .trialEndDate(now.plusDays(30))
+            .status(AccountStatus.FREE_TRIAL)
+            .build();
 
-        account = accountRepository.save(account);
-        
-        createTenantSchema(account.getSchemaName());
-        createTenantTables(account.getSchemaName());
-        
-        
-     // ⭐ MUITO IMPORTANTE — AVISA O HIBERNATE QUAL TENANT USAR
-        TenantContext.setCurrentTenant(account.getSchemaName());
-        
-    
-        // Criar usuario admin
-        AdminCreateRequest   adminReq = request.admin();
+    // 1️⃣ Salva no MASTER (public)
+    account = accountRepository.save(account);
+
+    // 2️⃣ Cria schema do tenant
+    tenantService.createSchema(schemaName);
+
+    // 3️⃣ Executa Flyway SOMENTE nesse schema
+    tenantMigrationService.migrateTenant(schemaName);
+
+    // 4️⃣ Ativa tenant no contexto
+    TenantContext.setCurrentTenant(schemaName);
+
+    try {
+        AdminCreateRequest adminReq = request.admin();
 
         if (!adminReq.password().equals(adminReq.confirmPassword())) {
-        	throw new ApiException(
-                    "PASSWORDS_NOT_MATCH",
-                    "As senhas não coincidem.",
-                    409
-        	
-      );
-            
-            
-            
-            
+            throw new ApiException(
+                "PASSWORDS_NOT_MATCH",
+                "As senhas não coincidem.",
+                409
+            );
         }
 
         User adminUser = createAdminUser(
@@ -126,7 +120,12 @@ public class AccountService {
         );
 
         return mapToResponse(account, adminUser);
+
+    } finally {
+        // 5️⃣ LIMPA CONTEXTO (OBRIGATÓRIO)
+        TenantContext.clear();
     }
+}
 
     
     
