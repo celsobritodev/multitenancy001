@@ -1,27 +1,20 @@
 package brito.com.multitenancy001.configuration;
 
+import lombok.extern.slf4j.Slf4j;
 
-
-
+@Slf4j
 public class TenantContext {
-	
-	
-	
-	private static final ThreadLocal<String> CURRENT_TENANT =
-	        ThreadLocal.withInitial(() -> "public");
+    
+    // DELEGA para o CurrentTenantIdentifierResolverImpl
+    public static String getCurrentTenant() {
+        return CurrentTenantIdentifierResolverImpl.getCurrentTenant();
+    }
 
+    public static void setCurrentTenant(String tenantId) {
+        CurrentTenantIdentifierResolverImpl.setCurrentTenant(tenantId);
+    }
 
-public static String getCurrentTenant() {
-return CURRENT_TENANT.get();
-}
-
-
-public static void setCurrentTenant(String tenantId) {
-CURRENT_TENANT.set(tenantId);
-}
-
-
-public static void clear() {
-CURRENT_TENANT.remove();
-}
+    public static void clear() {
+        CurrentTenantIdentifierResolverImpl.clear();
+    }
 }
