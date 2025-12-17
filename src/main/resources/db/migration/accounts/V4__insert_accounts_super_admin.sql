@@ -1,6 +1,6 @@
 SET search_path TO public;
 
-INSERT INTO users (
+INSERT INTO users_account (
     name,
     username,
     email,

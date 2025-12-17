@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.security;
 
-
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -17,10 +15,6 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.stream.Collectors;
-
-
-
-
 
 @Component
 public class JwtTokenProvider {
@@ -44,44 +38,26 @@ public class JwtTokenProvider {
         }
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
-    
-   
-    public String generatePasswordResetToken(
-            String username,
-            String tenantSchema,
-            Long accountId
-    ) {
-        return Jwts.builder()
-            .subject(username)
-            .claim("type", "PASSWORD_RESET")
-            .claim("tenantSchema", tenantSchema)
-            .claim("accountId", accountId)
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
-    }
-
-    
-    
-    public String getTokenType(String token) {
-        return getAllClaimsFromToken(token).get("type", String.class);
-    }
-
-    
 
     /* =========================
-       TOKEN PLATFORM (SUPER ADMIN)
+       TOKEN ACCOUNT (para usuários do sistema account)
        ========================= */
-    public String generatePlatformToken(Authentication authentication) {
-
+    public String generateAccountToken(
+            Authentication authentication,
+            Long accountId,
+            String tenantSchema
+    ) {
         CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
 
         return Jwts.builder()
             .subject(user.getUsername())
-            .claim("role", "SUPER_ADMIN")
-            .claim("type", "PLATFORM")
-            .claim("tenantSchema", "public")
+            .claim("roles", user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.joining(",")))
+            .claim("type", "ACCOUNT")
+            .claim("tenantSchema", tenantSchema)
+            .claim("accountId", accountId)
+            .claim("userId", user.getUserId())
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
             .signWith(key, Jwts.SIG.HS512)
@@ -106,6 +82,7 @@ public class JwtTokenProvider {
             .claim("type", "TENANT")
             .claim("tenantSchema", tenantSchema)
             .claim("accountId", accountId)
+            .claim("userId", user.getUserId())
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
             .signWith(key, Jwts.SIG.HS512)
@@ -122,6 +99,25 @@ public class JwtTokenProvider {
             .claim("tenantSchema", tenantSchema)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact();
+    }
+
+    /* =========================
+       PASSWORD RESET TOKEN
+       ========================= */
+    public String generatePasswordResetToken(
+            String username,
+            String tenantSchema,
+            Long accountId
+    ) {
+        return Jwts.builder()
+            .subject(username)
+            .claim("type", "PASSWORD_RESET")
+            .claim("tenantSchema", tenantSchema)
+            .claim("accountId", accountId)
+            .issuedAt(new Date())
+            .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
             .signWith(key, Jwts.SIG.HS512)
             .compact();
     }
@@ -149,12 +145,49 @@ public class JwtTokenProvider {
         return getAllClaimsFromToken(token).get("accountId", Long.class);
     }
 
+    public String getTokenType(String token) {
+        return getAllClaimsFromToken(token).get("type", String.class);
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return getAllClaimsFromToken(token).get("userId", Long.class);
+    }
+
+    public boolean isTokenExpired(String token) {
+        try {
+            Claims claims = getAllClaimsFromToken(token);
+            Date expiration = claims.getExpiration();
+            return expiration.before(new Date());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     public boolean validateToken(String token) {
         try {
             getAllClaimsFromToken(token);
-            return true;
+            return !isTokenExpired(token);
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    /* =========================
+       MÉTODOS AUXILIARES
+       ========================= */
+    public boolean isAccountToken(String token) {
+        return "ACCOUNT".equals(getTokenType(token));
+    }
+
+    public boolean isTenantToken(String token) {
+        return "TENANT".equals(getTokenType(token));
+    }
+
+    public boolean isRefreshToken(String token) {
+        return "REFRESH".equals(getTokenType(token));
+    }
+
+    public boolean isPasswordResetToken(String token) {
+        return "PASSWORD_RESET".equals(getTokenType(token));
     }
 }

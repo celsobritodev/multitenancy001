@@ -9,8 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.entities.master.Payment;
-import brito.com.multitenancy001.entities.master.PaymentStatus;
+import brito.com.multitenancy001.entities.account.Payment;
+import brito.com.multitenancy001.entities.account.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

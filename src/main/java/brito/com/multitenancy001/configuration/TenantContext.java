@@ -4,7 +4,11 @@ package brito.com.multitenancy001.configuration;
 
 
 public class TenantContext {
-private static final ThreadLocal<String> CURRENT_TENANT = new ThreadLocal<>();
+	
+	
+	
+	private static final ThreadLocal<String> CURRENT_TENANT =
+	        ThreadLocal.withInitial(() -> "public");
 
 
 public static String getCurrentTenant() {

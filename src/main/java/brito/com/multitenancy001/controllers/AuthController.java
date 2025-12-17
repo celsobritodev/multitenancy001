@@ -15,11 +15,13 @@ import org.springframework.web.bind.annotation.*;
 import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.dtos.JwtResponse;
 import brito.com.multitenancy001.dtos.LoginRequest;
-import brito.com.multitenancy001.entities.master.Account;
-import brito.com.multitenancy001.entities.master.User;
+import brito.com.multitenancy001.entities.account.Account;
+import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.entities.tenant.UserTenant;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
-import brito.com.multitenancy001.repositories.UserRepository;
+import brito.com.multitenancy001.repositories.UserAccountRepository;
+import brito.com.multitenancy001.repositories.UserTenantRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import jakarta.validation.Valid;
 
@@ -35,7 +37,10 @@ public class AuthController {
     private JwtTokenProvider tokenProvider;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserTenantRepository userTenantRepository;
+
+    @Autowired
+    private UserAccountRepository userAccountRepository;
 
     @Autowired
     private UserDetailsService userDetailsService;
@@ -46,7 +51,99 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> authenticateUser(
             @Valid @RequestBody LoginRequest loginRequest) {
+        
+        // Verificar se é login account (slug especial)
+        if (isAccountLogin(loginRequest.slug())) {
+            return authenticateAccountUser(loginRequest);
+        } else {
+            return authenticateTenantUser(loginRequest);
+        }
+    }
 
+    private boolean isAccountLogin(String slug) {
+        // Login account quando slug é "account" ou começa com "account_"
+        return "account".equalsIgnoreCase(slug) || 
+               (slug != null && slug.startsWith("account_"));
+    }
+
+    private ResponseEntity<JwtResponse> authenticateAccountUser(LoginRequest loginRequest) {
+        // Login no schema public (account)
+        TenantContext.clear();
+        
+        try {
+            // Buscar usuário account
+            UserAccount user = userAccountRepository.findByUsername(loginRequest.username())
+                    .orElseThrow(() -> new ApiException(
+                            "USER_NOT_FOUND",
+                            "Usuário account não encontrado",
+                            404
+                    ));
+            
+            // Verificar se está ativo e não deletado
+            if (!user.isActive() || user.isDeleted()) {
+                throw new ApiException(
+                        "USER_INACTIVE",
+                        "Usuário inativo ou removido",
+                        403
+                );
+            }
+            
+            // Verificar se é role de plataforma
+            if (!user.getRole().isPlatformRole()) {
+                throw new ApiException(
+                        "INVALID_ROLE",
+                        "Usuário não tem permissão para login Account",
+                        403
+                );
+            }
+            
+            // Autenticar
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            loginRequest.username(),
+                            loginRequest.password()
+                    )
+            );
+            
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            
+            // Gerar tokens account
+            String accessToken = tokenProvider.generateAccountToken(
+                    authentication,
+                    user.getAccount().getId(),
+                    "public"
+            );
+            
+            String refreshToken = tokenProvider.generateRefreshToken(
+                    user.getUsername(),
+                    "public"
+            );
+            
+            return ResponseEntity.ok(new JwtResponse(
+                    accessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getRole().name(),
+                    user.getAccount().getId(),
+                    "public"
+            ));
+            
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException(
+                    "INVALID_CREDENTIALS",
+                    "Usuário ou senha inválidos",
+                    401
+            );
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private ResponseEntity<JwtResponse> authenticateTenantUser(LoginRequest loginRequest) {
         // 1️⃣ Buscar conta
         Account account = accountRepository
                 .findBySlugAndDeletedFalse(loginRequest.slug())
@@ -55,6 +152,15 @@ public class AuthController {
                         "Conta não encontrada",
                         404
                 ));
+
+        // Verificar se conta está ativa
+        if (!account.isActive()) {
+            throw new ApiException(
+                    "ACCOUNT_INACTIVE",
+                    "Conta inativa ou suspensa",
+                    403
+            );
+        }
 
         // 2️⃣ Definir tenant
         TenantContext.setCurrentTenant(account.getSchemaName());
@@ -71,13 +177,22 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             // 4️⃣ Buscar usuário no tenant
-            User user = userRepository
+            UserTenant user = userTenantRepository
                     .findByUsernameAndAccountId(loginRequest.username(), account.getId())
                     .orElseThrow(() -> new ApiException(
                             "USER_NOT_FOUND",
                             "Usuário não encontrado nesta conta",
                             404
                     ));
+
+            // Verificar se usuário está ativo
+            if (!user.isActive() || user.isDeleted()) {
+                throw new ApiException(
+                        "USER_INACTIVE",
+                        "Usuário inativo ou removido",
+                        403
+                );
+            }
 
             // 5️⃣ Gerar tokens
             String accessToken = tokenProvider.generateTenantToken(
@@ -135,39 +250,96 @@ public class AuthController {
         TenantContext.setCurrentTenant(schema);
 
         try {
-            User user = userRepository
-                    .findByUsernameAndDeletedFalse(username)
-                    .orElseThrow(() -> new ApiException(
-                            "USER_NOT_FOUND",
-                            "Usuário não encontrado",
-                            404
-                    ));
+            // Determinar se é refresh de account ou tenant
+            if ("public".equals(schema)) {
+                // Refresh account
+                UserAccount user = userAccountRepository
+                        .findByUsernameAndDeletedFalse(username)
+                        .orElseThrow(() -> new ApiException(
+                                "USER_NOT_FOUND",
+                                "Usuário account não encontrado",
+                                404
+                        ));
 
-            UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(username);
-
-            Authentication authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
+                // Verificar se está ativo
+                if (!user.isActive()) {
+                    throw new ApiException(
+                            "USER_INACTIVE",
+                            "Usuário account inativo",
+                            403
                     );
+                }
 
-            String newAccessToken = tokenProvider.generateTenantToken(
-                    authentication,
-                    user.getAccount().getId(),
-                    schema
-            );
+                UserDetails userDetails =
+                        userDetailsService.loadUserByUsername(username);
 
-            String newRefreshToken = tokenProvider.generateRefreshToken(
-                    user.getUsername(),
-                    schema
-            );
+                Authentication authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
 
-            return ResponseEntity.ok(Map.of(
-                    "accessToken", newAccessToken,
-                    "refreshToken", newRefreshToken
-            ));
+                String newAccessToken = tokenProvider.generateAccountToken(
+                        authentication,
+                        user.getAccount().getId(),
+                        "public"
+                );
+
+                String newRefreshToken = tokenProvider.generateRefreshToken(
+                        user.getUsername(),
+                        "public"
+                );
+
+                return ResponseEntity.ok(Map.of(
+                        "accessToken", newAccessToken,
+                        "refreshToken", newRefreshToken
+                ));
+            } else {
+                // Refresh tenant
+                UserTenant user = userTenantRepository
+                        .findByUsernameAndDeletedFalse(username)
+                        .orElseThrow(() -> new ApiException(
+                                "USER_NOT_FOUND",
+                                "Usuário não encontrado",
+                                404
+                        ));
+
+                // Verificar se está ativo
+                if (!user.isActive()) {
+                    throw new ApiException(
+                            "USER_INACTIVE",
+                            "Usuário inativo",
+                            403
+                    );
+                }
+
+                UserDetails userDetails =
+                        userDetailsService.loadUserByUsername(username);
+
+                Authentication authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+
+                String newAccessToken = tokenProvider.generateTenantToken(
+                        authentication,
+                        user.getAccountId(),
+                        schema
+                );
+
+                String newRefreshToken = tokenProvider.generateRefreshToken(
+                        user.getUsername(),
+                        schema
+                );
+
+                return ResponseEntity.ok(Map.of(
+                        "accessToken", newAccessToken,
+                        "refreshToken", newRefreshToken
+                ));
+            }
 
         } finally {
             TenantContext.clear(); // ⭐ OBRIGATÓRIO
@@ -178,5 +350,36 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> logoutUser() {
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(Map.of("message", "Logout realizado com sucesso"));
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validateToken(@RequestBody Map<String, String> request) {
+        String token = request.get("token");
+        
+        if (token == null) {
+            throw new ApiException(
+                    "TOKEN_REQUIRED",
+                    "Token é obrigatório",
+                    400
+            );
+        }
+        
+        boolean isValid = tokenProvider.validateToken(token);
+        
+        if (!isValid) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("valid", false, "message", "Token inválido ou expirado"));
+        }
+        
+        Map<String, Object> response = Map.of(
+                "valid", true,
+                "username", tokenProvider.getUsernameFromToken(token),
+                "type", tokenProvider.getTokenType(token),
+                "schema", tokenProvider.getTenantSchemaFromToken(token),
+                "accountId", tokenProvider.getAccountIdFromToken(token),
+                "userId", tokenProvider.getUserIdFromToken(token)
+        );
+        
+        return ResponseEntity.ok(response);
     }
 }

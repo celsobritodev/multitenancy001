@@ -1,96 +1,91 @@
 package brito.com.multitenancy001.security;
 
-
-
+import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.entities.tenant.UserTenant;
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
 import java.util.Collection;
+import java.util.List;
 
+@Getter
 public class CustomUserDetails implements UserDetails {
-
+    
     /**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
-	private final Long id;
+	private final Long userId;
     private final String username;
     private final String email;
     private final String password;
-    private final Collection<? extends GrantedAuthority> authorities;
     private final boolean active;
-    private final String tenantSchema;
     private final Long accountId;
-
-    public CustomUserDetails(
-            Long id,
-            String username,
-            String email,
-            String password,
-            Collection<? extends GrantedAuthority> authorities,
-            boolean active,
-            String tenantSchema,
-            Long accountId
-    ) {
-        this.id = id;
-        this.username = username;
-        this.email = email;
-        this.password = password;
-        this.authorities = authorities;
-        this.active = active;
-        this.tenantSchema = tenantSchema;
-        this.accountId = accountId;
+    private final String schemaName;
+    private final Collection<? extends GrantedAuthority> authorities;
+    
+    // Construtor para UserAccount
+    public CustomUserDetails(UserAccount user, String schemaName) {
+        this.userId = user.getId();
+        this.username = user.getUsername();
+        this.email = user.getEmail();
+        this.password = user.getPassword();
+        this.active = user.isActive() && !user.isDeleted();
+        this.accountId = user.getAccount().getId();
+        this.schemaName = schemaName;
+        this.authorities = mapRolesToAuthorities(user.getRole());
     }
-
+    
+    // Construtor para UserTenant
+    public CustomUserDetails(UserTenant user, String schemaName) {
+        this.userId = user.getId();
+        this.username = user.getUsername();
+        this.email = user.getEmail();
+        this.password = user.getPassword();
+        this.active = user.isActive() && !user.isDeleted();
+        this.accountId = user.getAccountId();
+        this.schemaName = schemaName;
+        this.authorities = mapRolesToAuthorities(user.getRole());
+    }
+    
+    private List<GrantedAuthority> mapRolesToAuthorities(brito.com.multitenancy001.entities.account.UserRole role) {
+        return List.of(new SimpleGrantedAuthority(role.asAuthority()));
+    }
+    
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return authorities; // já recebido no construtor
+        return authorities;
     }
-
+    
     @Override
     public String getPassword() {
-        return password; // já recebido no construtor
+        return password;
     }
-
+    
     @Override
     public String getUsername() {
-        return username; // já recebido no construtor
+        return username;
     }
-
+    
     @Override
     public boolean isAccountNonExpired() {
-        return true; // pode adaptar
+        return true;
     }
-
+    
     @Override
     public boolean isAccountNonLocked() {
-        return true; // pode adaptar
+        return active;
     }
-
+    
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // pode adaptar
+        return true;
     }
-
+    
     @Override
     public boolean isEnabled() {
-        return active; // já recebido no construtor
-    }
-
-    // ---- getters extras usados no JWT ----
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public Long getAccountId() {
-        return accountId;
-    }
-
-    public String getTenantSchema() {
-        return tenantSchema;
+        return active;
     }
 }

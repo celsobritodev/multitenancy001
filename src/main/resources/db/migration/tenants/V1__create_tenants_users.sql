@@ -1,0 +1,57 @@
+-- Cria a tabela users_tenant (não users)
+CREATE TABLE IF NOT EXISTS users_tenant (
+    id BIGSERIAL PRIMARY KEY,
+
+    -- 🔗 Relacionamento com account 
+    account_id BIGINT NOT NULL,
+
+    -- 📛 Dados principais
+    name VARCHAR(100) NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+
+    -- 👤 Perfil
+    role VARCHAR(50) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+
+    -- 🔐 Segurança / autenticação
+    last_login TIMESTAMP,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP,
+    must_change_password BOOLEAN NOT NULL DEFAULT false,
+    password_changed_at TIMESTAMP,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+
+    -- 📞 Extras
+    phone VARCHAR(20),
+    avatar_url VARCHAR(500),
+   
+    -- 🌎 Internacionalização
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+
+    -- 🧾 Auditoria
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP,
+    created_by BIGINT,
+    updated_by BIGINT,
+
+    -- 🗑️ Soft delete
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMP,
+
+    -- 🔒 Unicidade por tenant
+    CONSTRAINT uk_users_tenant_username_account UNIQUE (username, account_id),
+    CONSTRAINT uk_users_tenant_email_account UNIQUE (email, account_id)
+);
+
+
+
+-- Cria índices para performance
+CREATE INDEX idx_users_tenant_account_id ON users_tenant(account_id);
+CREATE INDEX idx_users_tenant_username ON users_tenant(username);
+CREATE INDEX idx_users_tenant_email ON users_tenant(email);
+CREATE INDEX idx_users_tenant_active ON users_tenant(active) WHERE active = true;
+CREATE INDEX idx_users_tenant_deleted ON users_tenant(deleted) WHERE deleted = false;

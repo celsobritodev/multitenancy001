@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.entities.master;
+package brito.com.multitenancy001.entities.account;
 
 
 

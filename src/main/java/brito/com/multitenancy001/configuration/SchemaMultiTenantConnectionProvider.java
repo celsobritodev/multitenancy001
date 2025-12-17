@@ -73,7 +73,7 @@ public class SchemaMultiTenantConnectionProvider
 
     @Override
     public boolean supportsAggressiveRelease() {
-        return true; // 
+        return false; // 
     }
     
     private void validateTenantSchema(String schemaName) {

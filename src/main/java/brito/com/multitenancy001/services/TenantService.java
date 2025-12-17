@@ -15,12 +15,15 @@ public class TenantService {
 
     public void createSchema(String schemaName) {
         try {
-            String sql = "CREATE SCHEMA IF NOT EXISTS " + schemaName;
-            jdbcTemplate.execute(sql);
+            if (!schemaName.matches("[a-zA-Z0-9_]+")) {
+                throw new IllegalArgumentException("Nome de schema inválido");
+            }
+
+            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
             log.info("Schema criado: {}", schemaName);
+
         } catch (Exception e) {
             log.error("Erro ao criar schema {}: {}", schemaName, e.getMessage());
-
             throw new ApiException(
                 "SCHEMA_CREATION_FAILED",
                 "Falha ao criar o schema do tenant.",
@@ -28,6 +31,10 @@ public class TenantService {
             );
         }
     }
+
+    
+    
+    
 
 
 }

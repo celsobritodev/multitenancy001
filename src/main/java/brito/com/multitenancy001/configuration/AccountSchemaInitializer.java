@@ -1,19 +1,21 @@
 package brito.com.multitenancy001.configuration;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MasterSchemaInitializer {
+public class AccountSchemaInitializer {
     
     private final JdbcTemplate jdbc;
     
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     public void verifyTables() {
         log.info("🔍 Verificando tabelas criadas pelo Flyway...");
         

@@ -38,7 +38,8 @@ public class HibernateMultitenancyConfig {
         // - "hibernate.multiTenancy" (versões mais antigas)
         
         // Para Hibernate 5.x/6.x use:
-        props.put("hibernate.multiTenancy", "SCHEMA");
+        props.put("hibernate.multi_tenant", "SCHEMA");
+
         
         // OU alternativa: usar a classe Environment
         // props.put(org.hibernate.cfg.Environment.MULTI_TENANT, 

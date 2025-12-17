@@ -13,13 +13,14 @@ public class TenantMigrationService {
     private final DataSource dataSource;
 
     public void migrateTenant(String schemaName) {
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schemaName)
+                .defaultSchema(schemaName) // 🔥 ESSENCIAL
+                .locations("classpath:db/migration/tenants")
+                .baselineOnMigrate(true)
+                .load();
 
-        Flyway.configure()
-            .dataSource(dataSource)
-            .schemas(schemaName)
-            .locations("classpath:db/migration/tenant")
-            .baselineOnMigrate(true)
-            .load()
-            .migrate();
+        flyway.migrate();
     }
 }

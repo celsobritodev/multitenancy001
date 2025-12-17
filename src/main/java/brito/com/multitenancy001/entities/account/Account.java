@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.entities.master;
+package brito.com.multitenancy001.entities.account;
 
 
 import jakarta.persistence.*;
@@ -108,7 +108,10 @@ public class Account {
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude
-    private List<User> users = new ArrayList<>();
+    private List<UserAccount> userAccount = new ArrayList<>();
+    
+    
+    
     
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
@@ -195,22 +198,30 @@ public class Account {
         return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
     }
     
+   /**
+ * Soft delete da conta
+ */
+public void softDelete() {
+    if (!this.deleted) {
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+        this.status = AccountStatus.CANCELLED;
+    }
+}
+
+    
     /**
-     * Soft delete da conta
+     * Restaura a conta (undo soft delete)
      */
-    public void softDelete() {
-        if (!this.deleted) {
-            this.deleted = true;
-            this.deletedAt = LocalDateTime.now();
-            this.status = AccountStatus.CANCELLED;
-            
-            if (this.users != null && !this.users.isEmpty()) {
-                for (User user : this.users) {
-                    if (!user.isDeleted()) {
-                        user.softDelete();
-                    }
-                }
-            }
+    public void restore() {
+        if (this.deleted) {
+            this.deleted = false;
+            this.deletedAt = null;
+
+            // Regra de negócio: ao restaurar, volta para ACTIVE
+            this.status = AccountStatus.ACTIVE;
         }
     }
+
+    
 }

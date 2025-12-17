@@ -1,6 +1,6 @@
 SET search_path TO public;
 
-CREATE TABLE users (
+CREATE TABLE users_account (
     id BIGSERIAL PRIMARY KEY,
 
     name VARCHAR(100) NOT NULL,
@@ -29,6 +29,10 @@ CREATE TABLE users (
 
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMP,
+    
+     -- 📞 Extras
+    phone VARCHAR(20),
+    avatar_url VARCHAR(500),
 
     CONSTRAINT fk_users_account
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
@@ -37,10 +41,10 @@ CREATE TABLE users (
     CONSTRAINT ux_users_account_email UNIQUE (account_id, email)
 );
 
-CREATE TABLE user_permissions (
+CREATE TABLE accounts_users_permissions (
     user_id BIGINT NOT NULL,
     permission VARCHAR(100) NOT NULL,
     CONSTRAINT fk_user_permissions_user
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users_account(id) ON DELETE CASCADE,
     CONSTRAINT ux_user_permission UNIQUE (user_id, permission)
 );

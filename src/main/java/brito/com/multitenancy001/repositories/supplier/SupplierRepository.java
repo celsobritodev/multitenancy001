@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.repositories;
+package brito.com.multitenancy001.repositories.supplier;
 
 
 import org.springframework.data.jpa.repository.JpaRepository;

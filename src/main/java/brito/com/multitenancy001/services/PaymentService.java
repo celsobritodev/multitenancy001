@@ -2,10 +2,10 @@ package brito.com.multitenancy001.services;
 
 import brito.com.multitenancy001.dtos.PaymentRequest;
 import brito.com.multitenancy001.dtos.PaymentResponse;
-import brito.com.multitenancy001.entities.master.Account;
-import brito.com.multitenancy001.entities.master.AccountStatus;
-import brito.com.multitenancy001.entities.master.Payment;
-import brito.com.multitenancy001.entities.master.PaymentStatus;
+import brito.com.multitenancy001.entities.account.Account;
+import brito.com.multitenancy001.entities.account.AccountStatus;
+import brito.com.multitenancy001.entities.account.Payment;
+import brito.com.multitenancy001.entities.account.PaymentStatus;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.PaymentRepository;

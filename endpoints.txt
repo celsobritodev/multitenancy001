@@ -25,7 +25,7 @@ src/main/java/com/seusistema/
 │       ├── UserResponse.java
 │       └── PaymentResponse.java
 ├── entity/
-│   ├── master/
+│   ├── account/
 │   │   ├── Account.java
 │   │   ├── User.java
 │   │   └── Payment.java
@@ -34,7 +34,7 @@ src/main/java/com/seusistema/
 │       ├── Sale.java
 │       └── Supplier.java
 ├── repository/
-│   ├── master/
+│   ├── account/
 │   │   ├── AccountRepository.java
 │   │   ├── UserRepository.java
 │   │   └── PaymentRepository.java
