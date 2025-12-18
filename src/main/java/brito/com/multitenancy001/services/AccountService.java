@@ -9,6 +9,7 @@ import brito.com.multitenancy001.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -64,42 +65,57 @@ public class AccountService {
  // REMOVA o método @Transactional existente
  // E use:
 
-   @Transactional
-    public AccountResponse createAccount(AccountCreateRequest request) {
-        log.info("🚀 Criando conta: {}", request.name());
+  @Transactional
+public AccountResponse createAccount(AccountCreateRequest request) {
+    log.info("🚀 Criando conta: {}", request.name());
+    TenantContext.clear();
 
-        // 1. Limpar contexto (segurança)
-        TenantContext.clear();
-
-        // 2. Criar account no schema public
+    try {
+        // 1. Criar account (PUBLIC)
         Account account = createAccountTx(request);
-        
-        // 3. Migrar schema do tenant (criar tabelas)
-        migrateTenant(account);
-        
-        // 4. Criar admin no schema public (para gestão da plataforma)
-        UserAccount accountAdmin = createAccountAdminTx(request.admin(), account);
-        
-        // 5. 🔥 NOVO: Criar admin no schema do tenant (sem @Transactional!)
-        try {
-            tenantSchemaService.createTenantAdmin(
-                account.getId(), 
-                account.getSchemaName(), 
-                request.admin()
-            );
-            
-            log.info("✅ Fluxo completo de criação concluído para conta: {}", account.getName());
-            
-        } catch (Exception e) {
-            log.error("⚠️ Erro ao criar admin do tenant, mas account já foi criada. AccountId: {}", 
-                     account.getId(), e);
-            // Você pode decidir se quer fazer rollback completo ou não
-            // throw e; // Para rollback completo
-        }
 
+        // 2. Criar schema + tabelas
+        migrateTenant(account);
+
+        // 3. Criar admin da plataforma
+        UserAccount accountAdmin = createAccountAdminTx(request.admin(), account);
+
+        // 4. Criar admin do tenant
+        tenantSchemaService.createTenantAdmin(
+            account.getId(),
+            account.getSchemaName(),
+            request.admin()
+        );
+
+        log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
         return mapToResponse(account, accountAdmin);
+
+    } catch (DataIntegrityViolationException e) {
+
+        log.warn("❌ Tentativa de criar conta duplicada. Documento ou Email já existem.");
+
+        throw new ApiException(
+            "ACCOUNT_ALREADY_EXISTS",
+            "Já existe uma conta cadastrada com este documento ou email",
+            409
+        );
+
+    } catch (ApiException e) {
+        // Repassa erros de negócio já tratados
+        throw e;
+
+    } catch (Exception e) {
+
+        log.error("❌ Erro inesperado ao criar conta", e);
+
+        throw new ApiException(
+            "ACCOUNT_CREATION_FAILED",
+            "Erro inesperado ao criar a conta",
+            500
+        );
     }
-   
+}
+
    
    
    /**

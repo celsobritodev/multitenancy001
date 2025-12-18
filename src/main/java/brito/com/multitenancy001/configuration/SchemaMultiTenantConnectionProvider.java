@@ -35,7 +35,7 @@ public class SchemaMultiTenantConnectionProvider
     	
     	
     	log.info("🔍 CHAMADA getConnection() - Thread: {}, Tenant solicitado: {}", 
-                Thread.currentThread().getId(), 
+                Thread.currentThread().threadId(), 
                 tenantIdentifier);
     	
     	 log.info("🔍 Tenant no ThreadLocal: {}", 

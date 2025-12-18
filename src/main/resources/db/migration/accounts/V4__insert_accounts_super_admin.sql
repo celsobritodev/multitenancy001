@@ -1,5 +1,3 @@
-SET search_path TO public;
-
 INSERT INTO users_account (
     name,
     username,
@@ -9,7 +7,7 @@ INSERT INTO users_account (
     active,
     account_id
 )
-VALUES (
+SELECT
     'Platform Super Admin',
     'superadmin',
     'admin@plataforma.com',
@@ -17,5 +15,9 @@ VALUES (
     'SUPER_ADMIN',
     true,
     1
-)
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM users_account
+    WHERE account_id = 1
+      AND (username = 'superadmin' OR email = 'admin@plataforma.com')
+);
