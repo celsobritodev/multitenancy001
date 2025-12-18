@@ -42,9 +42,8 @@ CREATE TABLE accounts (
     metadata_json TEXT,
 
     deleted BOOLEAN DEFAULT false,
-    deleted_at TIMESTAMP,
+    deleted_at TIMESTAMP
 
-    -- 🔐 CONSTRAINTS DE NEGÓCIO
-    CONSTRAINT ux_accounts_company_document UNIQUE (company_document),
-    CONSTRAINT ux_accounts_company_email UNIQUE (company_email)
+  
+    
 );

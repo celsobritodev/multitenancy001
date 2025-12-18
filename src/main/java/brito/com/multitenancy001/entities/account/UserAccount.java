@@ -34,7 +34,7 @@ public class UserAccount {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private UserRole role;
+    private UserAccountRole role;
 
     // ✅ FK COMPLETA no ACCOUNT
     @ManyToOne(fetch = FetchType.LAZY)

@@ -6,7 +6,7 @@ import brito.com.multitenancy001.dtos.UserCreateRequest;
 import brito.com.multitenancy001.dtos.UserResponse;
 import brito.com.multitenancy001.entities.account.Account;
 import brito.com.multitenancy001.entities.account.UserAccount;
-import brito.com.multitenancy001.entities.account.UserRole;
+import brito.com.multitenancy001.entities.account.UserAccountRole;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserAccountRepository;
@@ -85,7 +85,7 @@ public class UserAccountService {
                 .username(username)
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
-                .role(UserRole.valueOf(request.role().toUpperCase()))
+                .role(UserAccountRole.valueOf(request.role().toUpperCase()))
                 .account(account)
                 .active(true)
          

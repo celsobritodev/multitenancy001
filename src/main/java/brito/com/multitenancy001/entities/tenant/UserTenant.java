@@ -7,7 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.configuration.ValidationPatterns;
-import brito.com.multitenancy001.entities.account.UserRole;
+
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ public class UserTenant {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private UserRole role;
+    private UserTenantRole role;
 
     // ✅ APENAS ID (sem FK cross-schema)
     @Column(name = "account_id", nullable = false)
@@ -139,41 +139,19 @@ public class UserTenant {
 
         if (this.permissions.isEmpty()) {
             // Permissões específicas para TENANT
-            switch (this.role) {
-                case ADMIN:
-                    this.permissions.addAll(List.of(
-                        "USER_CREATE", "USER_UPDATE", "USER_DELETE", "USER_VIEW",
-                        "PRODUCT_CREATE", "PRODUCT_UPDATE", "PRODUCT_DELETE", "PRODUCT_VIEW",
-                        "SALE_CREATE", "SALE_UPDATE", "SALE_DELETE", "SALE_VIEW",
-                        "REPORT_VIEW", "SETTINGS_MANAGE"
-                    ));
-                    break;
-                case PRODUCT_MANAGER:
-                    this.permissions.addAll(List.of(
-                        "PRODUCT_CREATE", "PRODUCT_UPDATE", "PRODUCT_DELETE", "PRODUCT_VIEW",
-                        "SUPPLIER_VIEW", "REPORT_VIEW"
-                    ));
-                    break;
-                case SALES_MANAGER:
-                    this.permissions.addAll(List.of(
-                        "SALE_CREATE", "SALE_UPDATE", "SALE_VIEW", "PRODUCT_VIEW", "REPORT_VIEW"
-                    ));
-                    break;
-                case VIEWER:
-                    this.permissions.addAll(List.of("PRODUCT_VIEW", "SALE_VIEW", "REPORT_VIEW"));
-                    break;
-                case SUPPORT:
-                    this.permissions.addAll(List.of("USER_VIEW", "PRODUCT_VIEW", "SALE_VIEW", "SUPPLIER_VIEW"));
-                    break;
-                case FINANCEIRO:
-                    this.permissions.addAll(List.of("SALE_VIEW", "REPORT_VIEW", "FINANCE_VIEW"));
-                    break;
-                case OPERACOES:
-                    this.permissions.addAll(List.of("PRODUCT_VIEW", "SALE_VIEW", "SUPPLIER_VIEW"));
-                    break;
-                default:
-                    this.permissions.add("VIEW_BASIC");
-            }
+          switch (this.role) {
+    case TENANT_ADMIN -> permissions.addAll(List.of(
+        "USER_CREATE", "USER_UPDATE", "USER_DELETE", "USER_VIEW",
+        "PRODUCT_CREATE", "PRODUCT_UPDATE", "PRODUCT_DELETE", "PRODUCT_VIEW",
+        "SALE_CREATE", "SALE_UPDATE", "SALE_DELETE", "SALE_VIEW",
+        "REPORT_VIEW", "SETTINGS_MANAGE"
+    ));
+    case MANAGER -> permissions.addAll(List.of(
+        "PRODUCT_CREATE", "PRODUCT_UPDATE", "PRODUCT_VIEW",
+        "SALE_CREATE", "SALE_VIEW", "REPORT_VIEW"
+    ));
+    case USER -> permissions.add("VIEW_BASIC");
+}
         }
     }
 

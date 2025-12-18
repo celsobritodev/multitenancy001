@@ -5,8 +5,8 @@ import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.UserCreateRequest;
 import brito.com.multitenancy001.dtos.UserResponse;
 import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.account.UserRole;
 import brito.com.multitenancy001.entities.tenant.UserTenant;
+import brito.com.multitenancy001.entities.tenant.UserTenantRole;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserTenantRepository;
@@ -167,41 +167,44 @@ public class UserTenantService {
     
     private void validateUserRole(String role) {
         try {
-            UserRole userRole = UserRole.valueOf(role.toUpperCase());
-            
-            // Verificar se a role é válida para tenant (não pode ser SUPER_ADMIN)
-            if (userRole == UserRole.SUPER_ADMIN) {
-                throw new ApiException(
-                        "INVALID_ROLE_FOR_TENANT",
-                        "SUPER_ADMIN não é uma role válida para usuários de tenant",
-                        400
-                );
-            }
+            UserTenantRole.valueOf(role.toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new ApiException(
                     "INVALID_ROLE",
-                    "Role inválida: " + role,
+                    "Role inválida para usuário de tenant: " + role,
                     400
             );
         }
     }
+
     
-    private UserTenant buildUserTenant(UserCreateRequest request, String username, Long accountId) {
+    private UserTenant buildUserTenant(
+            UserCreateRequest request,
+            String username,
+            Long accountId
+    ) {
         return UserTenant.builder()
                 .name(request.name())
                 .username(username)
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
-                .role(UserRole.valueOf(request.role().toUpperCase()))
+                .role(UserTenantRole.valueOf(request.role().toUpperCase()))
                 .accountId(accountId)
                 .active(true)
-                .permissions(request.permissions() != null ? request.permissions() : List.of())
-                .avatarUrl(request.avatarUrl() != null ? request.avatarUrl().trim() : null)
-                .phone(request.phone() != null ? request.phone().trim() : null)
+                .permissions(
+                    request.permissions() != null ? request.permissions() : List.of()
+                )
+                .avatarUrl(
+                    request.avatarUrl() != null ? request.avatarUrl().trim() : null
+                )
+                .phone(
+                    request.phone() != null ? request.phone().trim() : null
+                )
                 .createdAt(LocalDateTime.now())
                 .createdBy(securityUtils.getCurrentUserId())
                 .build();
     }
+
     
     public List<UserResponse> listTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();

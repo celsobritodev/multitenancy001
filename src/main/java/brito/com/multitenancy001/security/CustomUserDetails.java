@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.security;
 
+import brito.com.multitenancy001.dtos.RoleAuthority;
 import brito.com.multitenancy001.entities.account.UserAccount;
 import brito.com.multitenancy001.entities.tenant.UserTenant;
 import lombok.Getter;
@@ -37,6 +38,8 @@ public class CustomUserDetails implements UserDetails {
         this.schemaName = schemaName;
         this.authorities = mapRolesToAuthorities(user.getRole());
     }
+
+
     
     // Construtor para UserTenant
     public CustomUserDetails(UserTenant user, String schemaName) {
@@ -49,10 +52,13 @@ public class CustomUserDetails implements UserDetails {
         this.schemaName = schemaName;
         this.authorities = mapRolesToAuthorities(user.getRole());
     }
+
+
     
-    private List<GrantedAuthority> mapRolesToAuthorities(brito.com.multitenancy001.entities.account.UserRole role) {
+    private List<GrantedAuthority> mapRolesToAuthorities(RoleAuthority role) {
         return List.of(new SimpleGrantedAuthority(role.asAuthority()));
     }
+
     
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

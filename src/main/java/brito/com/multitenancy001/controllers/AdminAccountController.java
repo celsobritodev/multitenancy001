@@ -20,10 +20,12 @@ public class AdminAccountController {
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<AccountResponse>> listAllAccounts() {
-
-        // 🔐 GARANTE schema public
-        TenantContext.clear();
-
-        return ResponseEntity.ok(accountService.listAllAccounts());
+        try {
+            TenantContext.clear();
+            return ResponseEntity.ok(accountService.listAllAccounts());
+        } finally {
+            TenantContext.clear(); // 🔥 evita vazamento de tenant
+        }
     }
+    
 }

@@ -24,301 +24,226 @@ import java.util.UUID;
 @Slf4j
 public class AccountService {
 
-    private final AccountRepository accountRepository;
-    private final UserAccountRepository userAccountRepository;
-    private final UserTenantRepository userTenantRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final TenantMigrationService tenantMigrationService;
-    private final TenantSchemaService tenantSchemaService;
-    private final JdbcTemplate jdbcTemplate;
+	private final AccountRepository accountRepository;
+	private final UserAccountRepository userAccountRepository;
+	private final UserTenantRepository userTenantRepository;
+	private final PasswordEncoder passwordEncoder;
+	private final TenantMigrationService tenantMigrationService;
+	private final TenantSchemaService tenantSchemaService;
+	private final JdbcTemplate jdbcTemplate;
 
-   
-    
-    
-    
-    
+	@Transactional(readOnly = true)
+	public List<AccountResponse> listAllAccounts() {
 
-    public List<AccountResponse> listAllAccounts() {
-        TenantContext.clear();
-        return accountRepository.findByDeletedFalseOrderByCreatedAtDesc()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
+		return accountRepository.findAllByDeletedFalse().stream().map(AccountResponse::fromEntity).toList();
+	}
 
-    private AccountResponse toResponse(Account account) {
-        return new AccountResponse(
-                account.getId(),
-                account.getName(),
-                account.getSchemaName(),
-                account.getStatus().name(),
-                account.getCreatedAt(),
-                account.getTrialEndDate(),
-                null
-        );
-    }
+	/*
+	 * ========================= CRIAÇÃO DE CONTA (ORQUESTRADOR)
+	 * =========================
+	 */
 
-    /* =========================
-       CRIAÇÃO DE CONTA (ORQUESTRADOR)
-       ========================= */
+	@Transactional
+	public AccountResponse createAccount(AccountCreateRequest request) {
+		log.info("🚀 Criando conta: {}", request.name());
+		TenantContext.clear();
 
- // REMOVA o método @Transactional existente
- // E use:
+		try {
+			// 1. Criar account (PUBLIC)
+			Account account = createAccountTx(request);
 
-  @Transactional
-public AccountResponse createAccount(AccountCreateRequest request) {
-    log.info("🚀 Criando conta: {}", request.name());
-    TenantContext.clear();
+			// 2. Criar schema + tabelas
+			migrateTenant(account);
 
-    try {
-        // 1. Criar account (PUBLIC)
-        Account account = createAccountTx(request);
+			// 3. Criar admin da plataforma
+			UserAccount accountAdmin = createAccountAdminTx(request.admin(), account);
 
-        // 2. Criar schema + tabelas
-        migrateTenant(account);
+			// 4. Criar admin do tenant
+			tenantSchemaService.createTenantAdmin(account.getId(), account.getSchemaName(), request.admin());
 
-        // 3. Criar admin da plataforma
-        UserAccount accountAdmin = createAccountAdminTx(request.admin(), account);
+			log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
+			return mapToResponse(account, accountAdmin);
 
-        // 4. Criar admin do tenant
-        tenantSchemaService.createTenantAdmin(
-            account.getId(),
-            account.getSchemaName(),
-            request.admin()
-        );
+		} catch (DataIntegrityViolationException e) {
 
-        log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
-        return mapToResponse(account, accountAdmin);
+			log.warn("❌ Tentativa de criar conta duplicada. Documento ou Email já existem.");
 
-    } catch (DataIntegrityViolationException e) {
+			throw new ApiException("ACCOUNT_ALREADY_EXISTS",
+					"Já existe uma conta cadastrada com este documento ou email", 409);
 
-        log.warn("❌ Tentativa de criar conta duplicada. Documento ou Email já existem.");
+		} catch (ApiException e) {
+			// Repassa erros de negócio já tratados
+			throw e;
 
-        throw new ApiException(
-            "ACCOUNT_ALREADY_EXISTS",
-            "Já existe uma conta cadastrada com este documento ou email",
-            409
-        );
+		} catch (Exception e) {
 
-    } catch (ApiException e) {
-        // Repassa erros de negócio já tratados
-        throw e;
+			log.error("❌ Erro inesperado ao criar conta", e);
 
-    } catch (Exception e) {
+			throw new ApiException("ACCOUNT_CREATION_FAILED", "Erro inesperado ao criar a conta", 500);
+		}
+	}
 
-        log.error("❌ Erro inesperado ao criar conta", e);
+	/**
+	 * Verifica se o fluxo de criação está funcionando
+	 */
+	public boolean testTenantCreation(String schemaName) {
+		try {
+			// Verifica apenas se o schema existe, sem tentar acessar tabelas
+			String sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = ?";
+			List<String> schemas = jdbcTemplate.queryForList(sql, String.class, schemaName);
+			return !schemas.isEmpty();
+		} catch (Exception e) {
+			log.error("Teste de tenant falhou: {}", e.getMessage());
+			return false;
+		}
+	}
 
-        throw new ApiException(
-            "ACCOUNT_CREATION_FAILED",
-            "Erro inesperado ao criar a conta",
-            500
-        );
-    }
-}
+	/**
+	 * Método de recuperação: cria admin se o schema existir mas não tiver admin
+	 */
+	public UserTenant recoverTenantAdmin(Long accountId, String schemaName, AdminCreateRequest adminReq) {
+		log.warn("⚠️ Executando recuperação de admin para tenant: {}", schemaName);
 
-   
-   
-   /**
-    * Verifica se o fluxo de criação está funcionando
-    */
-   public boolean testTenantCreation(String schemaName) {
-       try {
-           // Verifica apenas se o schema existe, sem tentar acessar tabelas
-           String sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = ?";
-           List<String> schemas = jdbcTemplate.queryForList(sql, String.class, schemaName);
-           return !schemas.isEmpty();
-       } catch (Exception e) {
-           log.error("Teste de tenant falhou: {}", e.getMessage());
-           return false;
-       }
-   }
-   
-   
-   /**
-    * Método de recuperação: cria admin se o schema existir mas não tiver admin
-    */
-   public UserTenant recoverTenantAdmin(Long accountId, String schemaName, AdminCreateRequest adminReq) {
-       log.warn("⚠️ Executando recuperação de admin para tenant: {}", schemaName);
-       
-       // Primeiro verifica se o schema está pronto
-       if (!tenantSchemaService.isSchemaReady(schemaName)) {
-           throw new ApiException(
-               "SCHEMA_NOT_READY",
-               "Schema do tenant não está pronto para uso",
-               500
-           );
-       }
-       
-       // Tenta criar o admin
-       return tenantSchemaService.createTenantAdmin(accountId, schemaName, adminReq);
-   }
+		// Primeiro verifica se o schema está pronto
+		if (!tenantSchemaService.isSchemaReady(schemaName)) {
+			throw new ApiException("SCHEMA_NOT_READY", "Schema do tenant não está pronto para uso", 500);
+		}
 
-   
-   
-   
-   
-   
-   
-   
-    
-    /* =========================
-       ACCOUNT (PUBLIC)
-       ========================= */
+		// Tenta criar o admin
+		return tenantSchemaService.createTenantAdmin(accountId, schemaName, adminReq);
+	}
 
-    @Transactional
-    protected Account createAccountTx(AccountCreateRequest request) {
-        TenantContext.clear();
+	/*
+	 * ========================= ACCOUNT (PUBLIC) =========================
+	 */
 
-        Account account = Account.builder()
-                .name(request.name())
-                .schemaName(generateSchemaName(request.name()))
-                .slug(generateSlug(request.name()))
-                .companyEmail(request.companyEmail())
-                .companyDocument(request.companyDocument())
-                .createdAt(LocalDateTime.now())
-                .trialEndDate(LocalDateTime.now().plusDays(30))
-                .status(AccountStatus.FREE_TRIAL)
-                .build();
+	@Transactional
+	protected Account createAccountTx(AccountCreateRequest request) {
+		TenantContext.clear();
 
-        return accountRepository.save(account);
-    }
+		Account account = Account.builder().name(request.name()).schemaName(generateSchemaName(request.name()))
+				.slug(generateSlug(request.name())).companyEmail(request.companyEmail())
+				.companyDocument(request.companyDocument()).createdAt(LocalDateTime.now())
+				.trialEndDate(LocalDateTime.now().plusDays(30)).status(AccountStatus.FREE_TRIAL).build();
 
-    
-    
-    
-    
-    
-    
-    
-    @Transactional
-    protected UserAccount createAccountAdminTx(AdminCreateRequest adminReq, Account account) {
-        TenantContext.clear();
+		return accountRepository.save(account);
+	}
 
-        String username = adminReq.username().toLowerCase().trim();
-        if (userAccountRepository.existsByUsernameAndAccountId(username, account.getId())) {
-            throw new ApiException("USERNAME_ALREADY_EXISTS",
-                    "Username já existe para esta conta", 409);
-        }
+	@Transactional
+	protected UserAccount createAccountAdminTx(AdminCreateRequest adminReq, Account account) {
+		TenantContext.clear();
 
-        UserAccount admin = UserAccount.builder()
-                .name("Administrador")
-                .username(username)
-                .email(adminReq.email())
-                .password(passwordEncoder.encode(adminReq.password()))
-                .role(UserRole.ADMIN)
-                .account(account)
-                .active(true)
-                .build();
+		String username = adminReq.username().toLowerCase().trim();
+		if (userAccountRepository.existsByUsernameAndAccountId(username, account.getId())) {
+			throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe para esta conta", 409);
+		}
 
-        return userAccountRepository.save(admin);
-    }
+		UserAccount admin = UserAccount.builder().name("Administrador").username(username).email(adminReq.email())
+				.password(passwordEncoder.encode(adminReq.password())).role(UserAccountRole.PLATFORM_ADMIN).account(account)
+				.active(true).build();
 
-    
+		return userAccountRepository.save(admin);
+	}
 
-    protected void migrateTenant(Account account) {
-        TenantContext.setCurrentTenant(account.getSchemaName());
-        try {
-            tenantMigrationService.migrateTenant(account.getSchemaName());
-        } finally {
-            TenantContext.clear();
-        }
-    }
+	protected void migrateTenant(Account account) {
+		TenantContext.setCurrentTenant(account.getSchemaName());
+		try {
+			tenantMigrationService.migrateTenant(account.getSchemaName());
+		} finally {
+			TenantContext.clear();
+		}
+	}
 
-   
-    
-    
-    
-    
-    /* =========================
-       SOFT DELETE / RESTORE
-       ========================= */
+	/*
+	 * ========================= SOFT DELETE / RESTORE =========================
+	 */
 
-    public void softDeleteAccount(Long accountId) {
-        softDeleteAccountTx(accountId);      // public
-        softDeleteTenantUsersTx(accountId);  // tenant
-    }
+	public void softDeleteAccount(Long accountId) {
+		softDeleteAccountTx(accountId); // public
+		softDeleteTenantUsersTx(accountId); // tenant
+	}
 
-    @Transactional
-    protected void softDeleteAccountTx(Long accountId) {
-        TenantContext.clear();
-        Account account = getAccountById(accountId);
-        account.softDelete();
-        accountRepository.save(account);
-    }
+	@Transactional
+	protected void softDeleteAccountTx(Long accountId) {
+		TenantContext.clear();
+		Account account = getAccountById(accountId);
+		account.softDelete();
+		accountRepository.save(account);
+	}
 
-    @Transactional
-    protected void softDeleteTenantUsersTx(Long accountId) {
-        Account account = getAccountById(accountId);
-        TenantContext.setCurrentTenant(account.getSchemaName());
-        try {
-            List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
-            users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-            userTenantRepository.saveAll(users);
-        } finally {
-            TenantContext.clear();
-        }
-    }
+	@Transactional
+	protected void softDeleteTenantUsersTx(Long accountId) {
+		Account account = getAccountById(accountId);
+		TenantContext.setCurrentTenant(account.getSchemaName());
+		try {
+			List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
+			users.forEach(u -> {
+				if (!u.isDeleted())
+					u.softDelete();
+			});
+			userTenantRepository.saveAll(users);
+		} finally {
+			TenantContext.clear();
+		}
+	}
 
-    public void restoreAccount(Long accountId) {
-        restoreAccountTx(accountId);     // public
-        restoreTenantUsersTx(accountId); // tenant
-    }
+	public void restoreAccount(Long accountId) {
+		restoreAccountTx(accountId); // public
+		restoreTenantUsersTx(accountId); // tenant
+	}
 
-    @Transactional
-    protected void restoreAccountTx(Long accountId) {
-        TenantContext.clear();
-        Account account = getAccountById(accountId);
-        account.restore();
-        accountRepository.save(account);
-    }
+	@Transactional
+	protected void restoreAccountTx(Long accountId) {
+		TenantContext.clear();
+		Account account = getAccountById(accountId);
+		account.restore();
+		accountRepository.save(account);
+	}
 
-    @Transactional
-    protected void restoreTenantUsersTx(Long accountId) {
-        Account account = getAccountById(accountId);
-        TenantContext.setCurrentTenant(account.getSchemaName());
-        try {
-            List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
-            users.forEach(u -> { if (u.isDeleted()) u.restore(); });
-            userTenantRepository.saveAll(users);
-        } finally {
-            TenantContext.clear();
-        }
-    }
+	@Transactional
+	protected void restoreTenantUsersTx(Long accountId) {
+		Account account = getAccountById(accountId);
+		TenantContext.setCurrentTenant(account.getSchemaName());
+		try {
+			List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
+			users.forEach(u -> {
+				if (u.isDeleted())
+					u.restore();
+			});
+			userTenantRepository.saveAll(users);
+		} finally {
+			TenantContext.clear();
+		}
+	}
 
-    /* =========================
-       AUXILIARES
-       ========================= */
+	/*
+	 * ========================= AUXILIARES =========================
+	 */
 
-    @Transactional(readOnly = true)
-    public Account getAccountById(Long accountId) {
-        return accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-    }
+	@Transactional(readOnly = true)
+	public Account getAccountById(Long accountId) {
+		return accountRepository.findById(accountId)
+				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+	}
 
-    private String generateSlug(String name) {
-        String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
-        String slug = base;
-        int i = 1;
-        while (accountRepository.findBySlugAndDeletedFalse(slug).isPresent()) {
-            slug = base + "-" + i++;
-        }
-        return slug;
-    }
+	private String generateSlug(String name) {
+		String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+		String slug = base;
+		int i = 1;
+		while (accountRepository.findBySlugAndDeletedFalse(slug).isPresent()) {
+			slug = base + "-" + i++;
+		}
+		return slug;
+	}
 
-    private String generateSchemaName(String name) {
-        return "tenant_" + name.toLowerCase().replaceAll("[^a-z0-9]", "_")
-                + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
+	private String generateSchemaName(String name) {
+		return "tenant_" + name.toLowerCase().replaceAll("[^a-z0-9]", "_") + "_"
+				+ UUID.randomUUID().toString().substring(0, 8);
+	}
 
-    private AccountResponse mapToResponse(Account account, UserAccount admin) {
-        return new AccountResponse(
-                account.getId(),
-                account.getName(),
-                account.getSchemaName(),
-                account.getStatus().name(),
-                account.getCreatedAt(),
-                account.getTrialEndDate(),
-                new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
-        );
-    }
+	private AccountResponse mapToResponse(Account account, UserAccount admin) {
+		return new AccountResponse(account.getId(), account.getName(), account.getSchemaName(),
+				account.getStatus().name(), account.getCreatedAt(), account.getTrialEndDate(),
+				new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive()));
+	}
 }
