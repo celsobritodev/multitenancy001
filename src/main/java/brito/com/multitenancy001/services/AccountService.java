@@ -32,16 +32,211 @@ public class AccountService {
 	private final TenantSchemaService tenantSchemaService;
 	private final JdbcTemplate jdbcTemplate;
 
+	
+	
+	@Transactional
+	public void changeAccountStatus(Long accountId, StatusRequest req) {
+
+	    TenantContext.clear(); // 🔥 GARANTE PUBLIC
+
+	    Account account = accountRepository.findById(accountId)
+	        .orElseThrow(() -> new ApiException(
+	            "ACCOUNT_NOT_FOUND",
+	            "Conta não encontrada",
+	            404
+	        ));
+
+	    AccountStatus current = account.getStatus();
+	    AccountStatus target = req.status();
+
+	    if (current == target) {
+	        return; // idempotente
+	    }
+
+	    // ❌ regra: conta cancelada não volta
+	    if (current == AccountStatus.CANCELLED) {
+	        throw new ApiException(
+	            "ACCOUNT_CANCELED",
+	            "Conta cancelada não pode ter status alterado",
+	            409
+	        );
+	    }
+
+	    // ❌ regra: não pode voltar para FREE_TRIAL
+	    if (target == AccountStatus.FREE_TRIAL && current != AccountStatus.FREE_TRIAL) {
+	        throw new ApiException(
+	            "INVALID_STATUS_TRANSITION",
+	            "Não é permitido voltar para FREE_TRIAL",
+	            409
+	        );
+	    }
+
+	    log.info(
+	        "🔄 Alterando status da conta {}: {} → {} | motivo={}",
+	        account.getId(),
+	        current,
+	        target,
+	        req.reason()
+	    );
+
+	    account.setStatus(target);
+
+	    // efeitos colaterais controlados
+	    switch (target) {
+
+	        case ACTIVE -> {
+	            account.setDeletedAt(null);
+	        }
+
+	        case SUSPENDED -> {
+	            suspendTenantUsers(account);
+	        }
+
+	        case CANCELLED -> {
+	            cancelAccount(account);
+	        }
+
+	        default -> {}
+	    }
+
+	    accountRepository.save(account);
+	}
+	
+	private void suspendTenantUsers(Account account) {
+
+	    TenantContext.setCurrentTenant(account.getSchemaName());
+
+	    try {
+	        List<UserTenant> users =
+	            userTenantRepository.findByAccountId(account.getId());
+
+	        users.forEach(u -> u.setActive(false));
+
+	        userTenantRepository.saveAll(users);
+
+	    } finally {
+	        TenantContext.clear();
+	    }
+	}
+	
+	private void cancelAccount(Account account) {
+
+	    // PUBLIC
+	    account.setDeletedAt(LocalDateTime.now());
+
+	    // TENANT
+	    TenantContext.setCurrentTenant(account.getSchemaName());
+	    try {
+	        List<UserTenant> users =
+	            userTenantRepository.findByAccountId(account.getId());
+
+	        users.forEach(UserTenant::softDelete);
+	        userTenantRepository.saveAll(users);
+	    } finally {
+	        TenantContext.clear();
+	    }
+	}
+
+
+
+	
+	
+
+	@Transactional(readOnly = true)
+	public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+
+	    TenantContext.clear(); // 🔥 PUBLIC SEMPRE
+
+	    Account account = accountRepository.findById(accountId)
+	        .orElseThrow(() -> new ApiException(
+	            "ACCOUNT_NOT_FOUND",
+	            "Conta não encontrada",
+	            404
+	        ));
+
+	    UserAccount admin = userAccountRepository
+	        .findFirstByAccountIdAndDeletedFalse(account.getId())
+	        .orElse(null);
+
+	    long totalUsers = userAccountRepository.countByAccountIdAndDeletedFalse(account.getId());
+
+	    boolean inTrial = account.getStatus() == AccountStatus.FREE_TRIAL;
+	    boolean trialExpired = inTrial && account.getTrialEndDate().isBefore(LocalDateTime.now());
+
+	    long daysRemaining = inTrial
+	        ? Math.max(0,
+	            java.time.Duration.between(
+	                LocalDateTime.now(),
+	                account.getTrialEndDate()
+	            ).toDays()
+	          )
+	        : 0;
+
+	    return new AccountAdminDetailsResponse(
+	        account.getId(),
+	        account.getName(),
+	        account.getSlug(),
+	        account.getSchemaName(),
+	        account.getStatus().name(),
+
+	        account.getCompanyDocument(),
+	        account.getCompanyEmail(),
+
+	        account.getCreatedAt(),
+	        account.getTrialEndDate(),
+	        account.getPaymentDueDate(),
+	        account.getDeletedAt(),
+
+	        inTrial,
+	        trialExpired,
+	        daysRemaining,
+
+	        admin != null
+	            ? new AdminUserResponse(
+	                admin.getId(),
+	                admin.getUsername(),
+	                admin.getEmail(),
+	                admin.isActive()
+	              )
+	            : null,
+
+	        totalUsers,
+	        !account.isDeleted()
+	    );
+	}
+
+	
+	
+	@Transactional(readOnly = true)
+	public AccountResponse getAccountDetails(Long accountId) {
+	    TenantContext.clear(); // 🔥 PUBLIC SEMPRE
+
+	    Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+	        .orElseThrow(() -> new ApiException(
+	            "ACCOUNT_NOT_FOUND",
+	            "Conta não encontrada",
+	            404
+	        ));
+
+	    // Busca admin da conta (platform admin)
+	    UserAccount admin = userAccountRepository
+	        .findFirstByAccountIdAndDeletedFalse(account.getId())
+	        .orElse(null);
+
+	    return mapToResponse(account, admin);
+	}
+
+	
+	
+	
+	
 	@Transactional(readOnly = true)
 	public List<AccountResponse> listAllAccounts() {
 
 		return accountRepository.findAllByDeletedFalse().stream().map(AccountResponse::fromEntity).toList();
 	}
 
-	/*
-	 * ========================= CRIAÇÃO DE CONTA (ORQUESTRADOR)
-	 * =========================
-	 */
+	
 
 	@Transactional
 	public AccountResponse createAccount(AccountCreateRequest request) {

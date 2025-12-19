@@ -14,6 +14,10 @@ import java.util.Optional;
 
 @Repository
 public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
+	
+	long countByAccountIdAndDeletedFalse(Long accountId);
+	
+	Optional<UserAccount> findFirstByAccountIdAndDeletedFalse(Long accountId);
     
     Optional<UserAccount> findByUsername(String username);
     
