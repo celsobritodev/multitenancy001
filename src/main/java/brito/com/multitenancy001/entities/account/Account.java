@@ -71,13 +71,13 @@ public class Account {
     @Builder.Default
     private Integer maxStorageMb = 100;
     
-    @Column(name = "company_document", length = 20)
+    @Column(name = "company_document", nullable = false, length = 20)
     private String companyDocument;
     
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
     
-    @Column(name = "company_email", length = 150)
+    @Column(name = "company_email", nullable = false, length = 150)
     private String companyEmail;
     
     @Column(name = "company_address", length = 500)

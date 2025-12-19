@@ -43,7 +43,17 @@ CREATE TABLE accounts (
 
     deleted BOOLEAN DEFAULT false,
     deleted_at TIMESTAMP
-
-  
+    
     
 );
+
+   -- Índice único para documento (somente contas ativas)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_document_active
+ON accounts (company_document)
+WHERE deleted = false;
+
+-- Índice único para email (somente contas ativas)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
+ON accounts (company_email)
+WHERE deleted = false;
+    

@@ -13,7 +13,7 @@ SELECT
     'Platform Super Admin',
     'superadmin',
     'admin@plataforma.com',
-    '$2a$10$wHq7p2n2YQhYF8k8y8y9xeJ6n9mT9KcXyZ1XxkYtYwHh6xXcYpK9S',
+    '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
     'SUPER_ADMIN',
     true,
     a.id

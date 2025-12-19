@@ -14,9 +14,15 @@ import lombok.extern.slf4j.Slf4j;
 public class FlywayAccountRunner implements ApplicationRunner {
 
     private final Flyway flywayAccount;
+    
+   
 
     @Override
     public void run(ApplicationArguments args) {
+    	
+   
+    	
+    	
         log.info("🚀 Executando Flyway ACCOUNT (public)");
         flywayAccount.migrate();
     }

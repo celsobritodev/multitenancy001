@@ -90,13 +90,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	// ⭐⭐ MÉTODO NOVO: Determina quando NÃO aplicar o filtro ⭐⭐
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		String requestURI = request.getRequestURI();
+	    String requestURI = request.getRequestURI();
 
-		// Deve corresponder EXATAMENTE ao que está em SecurityConfig
-		return requestURI.startsWith("/api/auth") ||
-			       requestURI.startsWith("/api/accounts/auth") ||
-			       request.getMethod().equals("OPTIONS");
+	    return requestURI.startsWith("/api/auth") ||
+	           requestURI.startsWith("/api/accounts/auth") ||
+	           requestURI.startsWith("/api/admin/auth") || // 🔥 AQUI
+	           request.getMethod().equals("OPTIONS");
 	}
+
 
 	private String getJwtFromRequest(HttpServletRequest request) {
 		String bearerToken = request.getHeader("Authorization");

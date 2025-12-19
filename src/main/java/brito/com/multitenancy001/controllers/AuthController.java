@@ -15,6 +15,7 @@ import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserTenantRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
+import brito.com.multitenancy001.services.UserTenantService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +29,7 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final AccountRepository accountRepository;
     private final UserTenantRepository userTenantRepository;
+    private final UserTenantService tenantUserService;
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> loginTenant(
@@ -109,4 +111,22 @@ public class AuthController {
             TenantContext.clear();
         }
     }
+    
+    @PostMapping("/forgot-password")
+    public ResponseEntity<String> forgotPassword(@RequestParam String email) {
+        String token = tenantUserService.generatePasswordResetToken(email);
+        return ResponseEntity.ok("Token gerado: " + token);
+    }  
+    
+    
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestParam String token,
+                                                @RequestParam String newPassword) {
+        tenantUserService.resetPasswordWithToken(token, newPassword);
+        return ResponseEntity.ok("Senha redefinida com sucesso.");
+    }
+    
+    
+   
+    
 }

@@ -40,23 +40,29 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
 
-                // 🔓 Públicos
-                .requestMatchers(
-                    "/api/auth/login",
-                    "/api/auth/refresh",
-                    "/api/accounts/auth/checkuser",
-                    "/api/accounts/auth/forgot-password",
-                    "/api/accounts/auth/reset-password",
-                    "/api/accounts" // criar conta
-                ).permitAll()
+            	    // 🔓 LOGIN / REFRESH (PLATFORM)
+            	    .requestMatchers(
+            	        "/api/admin/auth/login",
+            	        "/api/admin/auth/refresh"
+            	    ).permitAll()
 
-                // 🔒 PLATFORM
-                .requestMatchers("/api/admin/**")
-                .hasRole("SUPER_ADMIN")
+            	    // 🔓 LOGIN / REFRESH (TENANT)
+            	    .requestMatchers(
+            	        "/api/auth/login",
+            	        "/api/auth/refresh",
+            	        "/api/accounts/auth/checkuser",
+            	        "/api/accounts/auth/forgot-password",
+            	        "/api/accounts/auth/reset-password",
+            	        "/api/accounts"
+            	    ).permitAll()
 
-                // 🔒 Todo resto precisa de login
-                .anyRequest().authenticated()
-            )
+            	    // 🔒 PLATFORM (APÓS LOGIN)
+            	    .requestMatchers("/api/admin/**")
+            	    .hasRole("SUPER_ADMIN")
+
+            	    .anyRequest().authenticated()
+            	)
+
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             );
