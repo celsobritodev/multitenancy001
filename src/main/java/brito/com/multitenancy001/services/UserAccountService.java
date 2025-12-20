@@ -29,7 +29,7 @@ public class UserAccountService {
     
     public UserResponse createAccountUser(Long accountId, UserCreateRequest request) {
         // Garantir que estamos no schema public
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException(
@@ -97,7 +97,7 @@ public class UserAccountService {
     }
     
     public List<UserResponse> listAccountUsersByAccount(Long accountId) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         // Verificar se conta existe
         if (!accountRepository.existsById(accountId)) {
@@ -115,7 +115,7 @@ public class UserAccountService {
     }
     
     public UserResponse getAccountUser(Long userId) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(
@@ -128,7 +128,7 @@ public class UserAccountService {
     }
     
     public UserResponse updateAccountUserStatus(Long userId, boolean active) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(
@@ -145,7 +145,7 @@ public class UserAccountService {
     }
     
     public void softDeleteAccountUser(Long userId) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(
@@ -167,7 +167,7 @@ public class UserAccountService {
     }
     
     public UserResponse restoreAccountUser(Long userId) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(
@@ -190,7 +190,7 @@ public class UserAccountService {
     }
     
     public UserResponse resetAccountUserPassword(Long userId, String newPassword) {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(

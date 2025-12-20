@@ -50,7 +50,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 				if ("PLATFORM".equals(tokenType)) {
 
 					// 👉 SUPER_ADMIN SEMPRE NO PUBLIC
-					TenantContext.clear();
+					TenantContext.unbindTenant();
 
 				} else {
 
@@ -65,7 +65,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 						);
 					}
 
-					TenantContext.setCurrentTenant(tenantSchema);
+					TenantContext.bindTenant(tenantSchema);
 				}
 
 				UserDetails userDetails = userDetailsService.loadUserByUsername(username);
@@ -79,7 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			}
 
 		} catch (Exception ex) {
-			TenantContext.clear(); // ⭐ OBRIGATÓRIO
+			TenantContext.unbindTenant(); // ⭐ OBRIGATÓRIO
 			SecurityContextHolder.clearContext();
 			logger.error("Erro no filtro JWT", ex);
 		}

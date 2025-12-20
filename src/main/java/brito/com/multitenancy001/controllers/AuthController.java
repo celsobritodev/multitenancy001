@@ -52,8 +52,8 @@ public class AuthController {
             );
         }
 
-        // 2️⃣ Define tenant
-        TenantContext.setCurrentTenant(account.getSchemaName());
+        // Bind do tenant à thread atual.
+        TenantContext.bindTenant(account.getSchemaName());
 
         try {
             Authentication authentication =
@@ -108,7 +108,7 @@ public class AuthController {
             );
 
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     

@@ -30,7 +30,7 @@ public class AdminAuthController {
             @Valid @RequestBody SuperAdminLoginRequest request) {
 
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
-        TenantContext.clear();
+        TenantContext.unbindTenant();
 
         UserAccount user = userAccountRepository
                 .findByUsernameAndDeletedFalse(request.username())

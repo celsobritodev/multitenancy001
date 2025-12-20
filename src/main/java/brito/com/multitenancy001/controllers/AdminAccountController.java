@@ -9,6 +9,8 @@ import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserAccountRepository;
 import brito.com.multitenancy001.services.AccountService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,19 +21,38 @@ import java.util.List;
 @RequestMapping("/api/admin/accounts")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 @RequiredArgsConstructor
+@Slf4j
 public class AdminAccountController {
 
     private final AccountService accountService;
     private final AccountRepository accountRepository;
     private final UserAccountRepository userAccountRepository;
 
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Void> changeStatus(
+            @PathVariable Long id,
+            @RequestBody StatusRequest req
+    ) {
+        try {
+        	log.info("================>>>>>>>>>>>>    entrando em TenantContext.unbindTenant(); ");
+        	 TenantContext.unbindTenant();
+            accountService.changeAccountStatus(id, req);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.unbindTenant();
+        }
+    }
+
+    
+    
     @GetMapping
     public ResponseEntity<List<AccountResponse>> listAllAccounts() {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             return ResponseEntity.ok(accountService.listAllAccountsWithAdmin());
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -39,7 +60,7 @@ public class AdminAccountController {
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getById(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             Account account = accountRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(
                     "ACCOUNT_NOT_FOUND",
@@ -55,7 +76,7 @@ public class AdminAccountController {
             AccountResponse response = AccountResponse.fromEntity(account, admin);
             return ResponseEntity.ok(response);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -65,24 +86,10 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AccountAdminDetailsResponse> getDetails(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             return ResponseEntity.ok(accountService.getAccountAdminDetails(id));
         } finally {
-            TenantContext.clear();
-        }
-    }
-
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<Void> changeStatus(
-            @PathVariable Long id,
-            @RequestBody StatusRequest req
-    ) {
-        try {
-            TenantContext.clear();
-            accountService.changeAccountStatus(id, req);
-            return ResponseEntity.noContent().build();
-        } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 
@@ -90,11 +97,11 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> softDelete(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             accountService.softDeleteAccount(id);
             return ResponseEntity.noContent().build();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 
@@ -102,11 +109,11 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> restore(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             accountService.restoreAccount(id);
             return ResponseEntity.noContent().build();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 
@@ -114,7 +121,7 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> reset(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             
             // Valida se não é conta do sistema
             Account account = accountService.getAccountById(id);
@@ -129,7 +136,7 @@ public class AdminAccountController {
             // accountService.resetAccount(id);
             return ResponseEntity.noContent().build();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 
@@ -137,7 +144,7 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> impersonate(@PathVariable Long id) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             
             // Valida se não é conta do sistema
             Account account = accountService.getAccountById(id);
@@ -152,7 +159,7 @@ public class AdminAccountController {
             // accountService.impersonateAccount(id);
             return ResponseEntity.noContent().build();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 
@@ -160,7 +167,7 @@ public class AdminAccountController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> changePlan(@PathVariable Long id, @RequestBody PlanRequest req) {
         try {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
             
             // Valida se não é conta do sistema
             Account account = accountService.getAccountById(id);
@@ -175,7 +182,7 @@ public class AdminAccountController {
             // accountService.changePlan(id, req);
             return ResponseEntity.noContent().build();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
 }

@@ -4,17 +4,27 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TenantContext {
-    
-    // DELEGA para o CurrentTenantIdentifierResolverImpl
+
+    /**
+     * Retorna o tenant atualmente bindado à thread
+     */
     public static String getCurrentTenant() {
-        return CurrentTenantIdentifierResolverImpl.getCurrentTenant();
+        return CurrentTenantIdentifierResolverImpl.resolveBoundTenant();
     }
 
-    public static void setCurrentTenant(String tenantId) {
-        CurrentTenantIdentifierResolverImpl.setCurrentTenant(tenantId);
+    /**
+     * Bind do tenant à thread atual.
+     * ⚠️ Deve ser chamado ANTES de qualquer operação transacional.
+     */
+    public static void bindTenant(String tenantId) {
+        CurrentTenantIdentifierResolverImpl.bindTenantToCurrentThread(tenantId);
     }
 
-    public static void clear() {
-        CurrentTenantIdentifierResolverImpl.clear();
+    /**
+     * Remove o tenant da thread atual.
+     * ⚠️ Deve ser chamado no finally do filtro/interceptor.
+     */
+    public static void unbindTenant() {
+        CurrentTenantIdentifierResolverImpl.unbindTenantFromCurrentThread();
     }
 }

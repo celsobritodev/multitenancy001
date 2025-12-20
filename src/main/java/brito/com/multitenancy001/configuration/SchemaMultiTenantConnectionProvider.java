@@ -39,7 +39,7 @@ public class SchemaMultiTenantConnectionProvider
                 tenantIdentifier);
     	
     	 log.info("🔍 Tenant no ThreadLocal: {}", 
-    	            CurrentTenantIdentifierResolverImpl.getCurrentTenant());
+    	            CurrentTenantIdentifierResolverImpl.resolveBoundTenant());
     	
     	
         // 🔥 LOG CRÍTICO PARA DEBUG

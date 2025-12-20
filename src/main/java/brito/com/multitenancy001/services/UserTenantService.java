@@ -44,7 +44,7 @@ public class UserTenantService {
 
     try {
         // 🔑 1. FORÇA ACCOUNT (public)
-        TenantContext.clear();
+        TenantContext.unbindTenant();
         account = accountRepository.findById(accountId)
             .orElseThrow(() -> new ApiException(
                 "ACCOUNT_NOT_FOUND",
@@ -52,7 +52,7 @@ public class UserTenantService {
                 404
             ));
     } finally {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
     }
 
     if (!account.isActive()) {
@@ -64,7 +64,7 @@ public class UserTenantService {
     }
 
     // 🔁 2. ENTRA NO TENANT
-    TenantContext.setCurrentTenant(schemaName);
+    TenantContext.bindTenant(schemaName);
 
     try {
         if (hasReachedUserLimit(account)) {
@@ -95,7 +95,7 @@ public class UserTenantService {
         return mapToResponse(savedUser);
 
     } finally {
-        TenantContext.clear();
+        TenantContext.unbindTenant();
     }
 }
 
@@ -210,7 +210,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             List<UserTenant> users = userTenantRepository.findByAccountIdAndDeletedFalse(accountId);
@@ -218,7 +218,7 @@ public class UserTenantService {
                     .map(this::mapToResponse)
                     .toList();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -226,7 +226,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             List<UserTenant> users = userTenantRepository.findByAccountId(accountId)
@@ -237,7 +237,7 @@ public class UserTenantService {
                     .map(this::mapToResponse)
                     .toList();
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -245,7 +245,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -257,7 +257,7 @@ public class UserTenantService {
             
             return mapToResponse(user);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -265,7 +265,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -282,7 +282,7 @@ public class UserTenantService {
             UserTenant updated = userTenantRepository.save(user);
             return mapToResponse(updated);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -290,7 +290,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -314,7 +314,7 @@ public class UserTenantService {
             log.info("Usuário tenant soft deletado: {} na conta {}", 
                     user.getUsername(), accountId);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -322,7 +322,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -348,7 +348,7 @@ public class UserTenantService {
             
             return mapToResponse(restored);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -356,7 +356,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -394,7 +394,7 @@ public class UserTenantService {
             
             return mapToResponse(updated);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -402,7 +402,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findById(userId)
@@ -433,7 +433,7 @@ public class UserTenantService {
             log.warn("Usuário tenant hard deletado: {} (ID: {}) na conta {}", 
                     user.getUsername(), userId, accountId);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -444,7 +444,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByEmailAndDeletedFalse(email)
@@ -475,7 +475,7 @@ public class UserTenantService {
             
             return token;
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -511,7 +511,7 @@ public class UserTenantService {
             );
         }
         
-        TenantContext.setCurrentTenant(tenantSchema);
+        TenantContext.bindTenant(tenantSchema);
         
         try {
             UserTenant user = userTenantRepository
@@ -547,7 +547,7 @@ public class UserTenantService {
             log.info("Senha redefinida via token para usuário: {} na conta {}", 
                     user.getUsername(), accountId);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -570,7 +570,7 @@ public class UserTenantService {
             );
         }
         
-        TenantContext.setCurrentTenant(account.getSchemaName());
+        TenantContext.bindTenant(account.getSchemaName());
         
         try {
             UserTenant user = userTenantRepository
@@ -588,7 +588,7 @@ public class UserTenantService {
             
             return passwordEncoder.matches(rawPassword, user.getPassword());
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
@@ -597,7 +597,7 @@ public class UserTenantService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schemaName = securityUtils.getCurrentSchema();
         
-        TenantContext.setCurrentTenant(schemaName);
+        TenantContext.bindTenant(schemaName);
         
         try {
             UserTenant user = userTenantRepository.findByIdAndAccountId(userId, accountId)
@@ -656,7 +656,7 @@ public class UserTenantService {
             
             return mapToResponse(updated);
         } finally {
-            TenantContext.clear();
+            TenantContext.unbindTenant();
         }
     }
     
