@@ -33,25 +33,15 @@ public class AccountService {
 	private final JdbcTemplate jdbcTemplate;
 
 	
-	public void changeAccountStatus(Long accountId, StatusRequest req) {
+	public AccountStatusChangeResponse  changeAccountStatus(Long accountId, StatusRequest req) {
 
-		log.info("================>>>>>>>>>>>>    entrando em changeAccountStatus");
 
-		log.info("➡️ [changeAccountStatus] INÍCIO | accountId={} | statusReq={} | tenantAtual={}",
-				accountId,req.status(), TenantContext.getCurrentTenant());
 
 		TenantContext.unbindTenant();
-		log.debug("🧹 TenantContext limpo | tenantAtual={}", TenantContext.getCurrentTenant());
-
-		log.info("================>>>>>>>>>>>>    entrando em accountRepository.findById(accountId)");
+		
 
 		Account account = accountRepository.findById(accountId)
 				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-		log.info("================>>>>>>>>>>>>    saindo de accountRepository.findById(accountId)");
-
-		log.debug("📄 Conta carregada | id={} | statusAtual={} | schema={}", account.getId(), account.getStatus(),
-				account.getSchemaName());
 
 		if (account.isSystemAccount()) {
 			log.warn("⛔ Tentativa de alterar conta do sistema | accountId={}", accountId);
@@ -59,44 +49,81 @@ public class AccountService {
 					403);
 		}
 
-		AccountStatus current = account.getStatus();
-		AccountStatus target = req.status();
+		AccountStatus accountCurrentStatus = account.getStatus();
+		AccountStatus accountNewStatus = req.status();
 
-		if (current == target) {
-			log.info("↩️ Status já aplicado | accountId={} | status={}", accountId, current);
-			return;
+		if (accountCurrentStatus == accountNewStatus) {
+			log.info("↩️ Status já aplicado | accountId={} | status={}", accountId, accountCurrentStatus);
+			return buildResponse(account, accountCurrentStatus, false, 0);
+			
 		}
 
-		if (current == AccountStatus.CANCELLED) {
+		if (accountCurrentStatus == AccountStatus.CANCELLED) {
 			throw new ApiException("ACCOUNT_CANCELLED", "Conta cancelada não pode ter status alterado", 409);
 		}
 
-		if (target == AccountStatus.FREE_TRIAL && current != AccountStatus.FREE_TRIAL) {
+		if (accountNewStatus == AccountStatus.FREE_TRIAL && accountCurrentStatus != AccountStatus.FREE_TRIAL) {
 			throw new ApiException("INVALID_STATUS_TRANSITION", "Não é permitido voltar para FREE_TRIAL", 409);
 		}
 
-		log.info("🔄 Alterando status | {} → {} | motivo={}", current, target, req.reason());
+		log.info("🔄 Alterando status | {} → {} | motivo={}", accountCurrentStatus, accountNewStatus, req.reason());
 
-		account.setStatus(target);
+		account.setStatus(accountNewStatus);
 
-		if (target == AccountStatus.ACTIVE) {
+		if (accountNewStatus == AccountStatus.ACTIVE) {
 			account.setDeletedAt(null);
 		}
 
 		accountRepository.save(account);
 		log.info("💾 Conta salva em PUBLIC | accountId={}", accountId);
 
-		// 🔥 CHAMADAS ISOLADAS (fora da transação atual)
-		if (target == AccountStatus.SUSPENDED) {
-			suspendTenantUsersTx(account);
+		
+		boolean tenantUsersSuspended = false;
+	    int tenantUsersCount = 0;
+		
+		
+		if (accountNewStatus == AccountStatus.SUSPENDED) {
+			tenantUsersCount = suspendTenantUsersTx(account);
+	        tenantUsersSuspended = true;
 		}
 
-		if (target == AccountStatus.CANCELLED) {
-			cancelAccountTx(account);
+		if (accountNewStatus == AccountStatus.CANCELLED) {
+			 tenantUsersCount = cancelAccountTx(account);
+		     tenantUsersSuspended = true;
 		}
 
 		log.info("✅ [changeAccountStatus] FINALIZADO | accountId={}", accountId);
+		
+		return buildResponse(
+	            account,
+	            accountCurrentStatus,
+	            tenantUsersSuspended,
+	            tenantUsersCount);
+		
+		
 	}
+	
+	
+	
+	private AccountStatusChangeResponse buildResponse(
+	        Account account,
+	        AccountStatus previousStatus,
+	        boolean tenantUsersSuspended,
+	        int tenantUsersCount
+	) {
+	    return new AccountStatusChangeResponse(
+	            account.getId(),
+	            account.getStatus().name(),
+	            previousStatus.name(),
+	            LocalDateTime.now(),
+	            account.getSchemaName(),
+	            new AccountStatusChangeResponse.SideEffects(
+	                    tenantUsersSuspended,
+	                    tenantUsersCount
+	            )
+	    );
+	}
+
 	
 	
 	
@@ -108,7 +135,7 @@ public class AccountService {
 	
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void cancelAccountTx(Account account) {
+	public int cancelAccountTx(Account account) {
 
 		String tenantSchema = account.getSchemaName();
 
@@ -119,7 +146,7 @@ public class AccountService {
 
 		if (!validateTenantSchema(tenantSchema) || !tableExistsInTenant(tenantSchema, "users_tenant")) {
 			log.warn("⚠️ Cancelamento apenas PUBLIC | schema inválido");
-			return;
+			return 0;
 		}
 
 		TenantContext.bindTenant(tenantSchema);
@@ -129,11 +156,15 @@ public class AccountService {
 
 			users.forEach(UserTenant::softDelete);
 			userTenantRepository.saveAll(users);
-
 			log.info("✅ Usuários cancelados | {}", users.size());
+			return users.size();
+
+		
 
 		} catch (Exception e) {
 			log.error("💥 ERRO cancelAccountTx", e);
+			return 0;
+			
 		} finally {
 			TenantContext.unbindTenant();
 		}
@@ -146,7 +177,7 @@ public class AccountService {
 	
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void suspendTenantUsersTx(Account account) {
+	public int suspendTenantUsersTx(Account account) {
 
 		String tenantSchema = account.getSchemaName();
 
@@ -154,17 +185,17 @@ public class AccountService {
 
 		if ("public".equals(tenantSchema)) {
 			log.error("❌ ERRO CRÍTICO: schema public");
-			return;
+			return 0;
 		}
 
 		if (!validateTenantSchema(tenantSchema)) {
 			log.warn("⚠️ Schema inexistente | {}", tenantSchema);
-			return;
+			return 0;
 		}
 
 		if (!tableExistsInTenant(tenantSchema, "users_tenant")) {
 			log.warn("⚠️ Tabela users_tenant inexistente | {}", tenantSchema);
-			return;
+			return 0;
 		}
 
 		TenantContext.bindTenant(tenantSchema);
@@ -177,11 +208,15 @@ public class AccountService {
 
 			users.forEach(u -> u.setActive(false));
 			userTenantRepository.saveAll(users);
-
 			log.info("✅ Usuários suspensos com sucesso | {}", tenantSchema);
+			return users.size();
+
+			
 
 		} catch (Exception e) {
+		
 			log.error("💥 ERRO suspendTenantUsersTx", e);
+			return 0;
 		} finally {
 			TenantContext.unbindTenant();
 			log.debug("🧹 TenantContext limpo");

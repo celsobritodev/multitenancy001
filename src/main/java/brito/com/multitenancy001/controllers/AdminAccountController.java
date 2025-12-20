@@ -30,19 +30,20 @@ public class AdminAccountController {
 
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<Void> changeStatus(
+    public ResponseEntity<AccountStatusChangeResponse> changeStatus(
             @PathVariable Long id,
             @RequestBody StatusRequest req
     ) {
         try {
-        	log.info("================>>>>>>>>>>>>    entrando em TenantContext.unbindTenant(); ");
-        	 TenantContext.unbindTenant();
-            accountService.changeAccountStatus(id, req);
-            return ResponseEntity.noContent().build();
+            TenantContext.unbindTenant();
+            AccountStatusChangeResponse response =
+                    accountService.changeAccountStatus(id, req);
+            return ResponseEntity.ok(response);
         } finally {
             TenantContext.unbindTenant();
         }
     }
+
 
     
     
