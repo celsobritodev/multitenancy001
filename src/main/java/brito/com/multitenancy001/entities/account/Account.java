@@ -28,6 +28,11 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @Column(name = "is_system_account", nullable = false)
+    @Builder.Default
+    private boolean systemAccount = false;
+    
+    
     @Column(nullable = false, length = 150)
     private String name;
     
@@ -222,6 +227,11 @@ public void softDelete() {
             this.status = AccountStatus.ACTIVE;
         }
     }
+    
+    public boolean isSystemAccount() {
+        return this.systemAccount || "public".equals(this.schemaName);
+    }
+    
 
     
 }

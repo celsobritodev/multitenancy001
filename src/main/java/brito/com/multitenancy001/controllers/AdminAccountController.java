@@ -1,9 +1,12 @@
 package brito.com.multitenancy001.controllers;
 
 import brito.com.multitenancy001.configuration.TenantContext;
-import brito.com.multitenancy001.dtos.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.dtos.AccountResponse;
-import brito.com.multitenancy001.dtos.StatusRequest;
+import brito.com.multitenancy001.dtos.*;
+import brito.com.multitenancy001.entities.account.Account;
+import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.exceptions.ApiException;
+import brito.com.multitenancy001.repositories.AccountRepository;
+import brito.com.multitenancy001.repositories.UserAccountRepository;
 import brito.com.multitenancy001.services.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,34 +22,45 @@ import java.util.List;
 public class AdminAccountController {
 
     private final AccountService accountService;
+    private final AccountRepository accountRepository;
+    private final UserAccountRepository userAccountRepository;
 
-    
-    // listar contas
     @GetMapping
     public ResponseEntity<List<AccountResponse>> listAllAccounts() {
         try {
             TenantContext.clear();
-            return ResponseEntity.ok(accountService.listAllAccounts());
+            return ResponseEntity.ok(accountService.listAllAccountsWithAdmin());
         } finally {
-            TenantContext.clear(); // 🔥 evita vazamento de tenant
+            TenantContext.clear();
         }
     }
     
-    // Ver conta
 
-    // ✅ NOVO ENDPOINT
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getById(@PathVariable Long id) {
         try {
-            TenantContext.clear(); // 🔥 garante PUBLIC
-            return ResponseEntity.ok(accountService.getAccountDetails(id));
+            TenantContext.clear();
+            Account account = accountRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ApiException(
+                    "ACCOUNT_NOT_FOUND",
+                    "Conta não encontrada",
+                    404
+                ));
+            
+            // Busca admin da conta
+            UserAccount admin = userAccountRepository
+                .findFirstByAccountIdAndDeletedFalse(account.getId())
+                .orElse(null);
+                
+            AccountResponse response = AccountResponse.fromEntity(account, admin);
+            return ResponseEntity.ok(response);
         } finally {
             TenantContext.clear();
         }
     }
     
     
-    // detalhes de uma conta
+    
     @GetMapping("/{id}/details")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AccountAdminDetailsResponse> getDetails(@PathVariable Long id) {
@@ -57,16 +71,14 @@ public class AdminAccountController {
             TenantContext.clear();
         }
     }
- 
-    
-    //Ativar / suspender / cancelar conta
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<Void> changeStatus(
             @PathVariable Long id,
             @RequestBody StatusRequest req
     ) {
         try {
-            TenantContext.clear(); // 🔥 PUBLIC SEMPRE
+            TenantContext.clear();
             accountService.changeAccountStatus(id, req);
             return ResponseEntity.noContent().build();
         } finally {
@@ -74,26 +86,96 @@ public class AdminAccountController {
         }
     }
 
-    
-    
-   
-    // Alterar plano e limites
-    //@PatchMapping("/{id}/plan")
-    //public void changePlan(@PathVariable Long id, @RequestBody PlanRequest req) { }
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> softDelete(@PathVariable Long id) {
+        try {
+            TenantContext.clear();
+            accountService.softDeleteAccount(id);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.clear();
+        }
+    }
 
-    // Soft Delete
-    //@DeleteMapping("/{id}")
-    //public void softDelete(@PathVariable Long id) {  }
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> restore(@PathVariable Long id) {
+        try {
+            TenantContext.clear();
+            accountService.restoreAccount(id);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.clear();
+        }
+    }
 
-    // restore
-   // @PostMapping("/{id}/restore")
-   // public void restore(@PathVariable Long id) {  }
-    
-    // Reset administrativo de conta (suporte)
-   // @PostMapping("/{id}/reset")
-    //public void reset(@PathVariable Long id) {  }
-   
-    // Acesso de suporte (impersonation) 🚨 avançado
-   // @PostMapping("/{id}/impersonate")
-    //public void impersonate(@PathVariable Long id) {  }
+    @PostMapping("/{id}/reset")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> reset(@PathVariable Long id) {
+        try {
+            TenantContext.clear();
+            
+            // Valida se não é conta do sistema
+            Account account = accountService.getAccountById(id);
+            if (account.isSystemAccount()) {
+                throw new ApiException(
+                    "SYSTEM_ACCOUNT_PROTECTED",
+                    "Não é permitido resetar contas do sistema",
+                    403
+                );
+            }
+            
+            // accountService.resetAccount(id);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @PostMapping("/{id}/impersonate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> impersonate(@PathVariable Long id) {
+        try {
+            TenantContext.clear();
+            
+            // Valida se não é conta do sistema
+            Account account = accountService.getAccountById(id);
+            if (account.isSystemAccount()) {
+                throw new ApiException(
+                    "SYSTEM_ACCOUNT_PROTECTED",
+                    "Não é permitido acessar como conta do sistema",
+                    403
+                );
+            }
+            
+            // accountService.impersonateAccount(id);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @PatchMapping("/{id}/plan")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> changePlan(@PathVariable Long id, @RequestBody PlanRequest req) {
+        try {
+            TenantContext.clear();
+            
+            // Valida se não é conta do sistema
+            Account account = accountService.getAccountById(id);
+            if (account.isSystemAccount()) {
+                throw new ApiException(
+                    "SYSTEM_ACCOUNT_PROTECTED",
+                    "Não é permitido alterar plano de contas do sistema",
+                    403
+                );
+            }
+            
+            // accountService.changePlan(id, req);
+            return ResponseEntity.noContent().build();
+        } finally {
+            TenantContext.clear();
+        }
+    }
 }

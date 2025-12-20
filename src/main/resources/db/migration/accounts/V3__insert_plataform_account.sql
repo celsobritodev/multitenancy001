@@ -1,6 +1,6 @@
-SET search_path TO public;
-
+-- Insere a conta do sistema
 INSERT INTO accounts (
+    is_system_account,
     name,
     schema_name,
     slug,
@@ -12,6 +12,7 @@ INSERT INTO accounts (
     deleted
 )
 SELECT
+    true, -- 🔥 Marcada como conta do sistema
     'Plataforma',
     'public',
     'platform',

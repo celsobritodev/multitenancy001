@@ -1,7 +1,11 @@
+-- V1__create_initial_tables.sql
 SET search_path TO public;
 
 CREATE TABLE accounts (
     id BIGSERIAL PRIMARY KEY,
+
+    -- 🔥 NOVO: Flag para identificar contas do sistema
+    is_system_account BOOLEAN NOT NULL DEFAULT false,
 
     name VARCHAR(150) NOT NULL,
 
@@ -43,11 +47,9 @@ CREATE TABLE accounts (
 
     deleted BOOLEAN DEFAULT false,
     deleted_at TIMESTAMP
-    
-    
 );
 
-   -- Índice único para documento (somente contas ativas)
+-- Índice único para documento (somente contas ativas)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_document_active
 ON accounts (company_document)
 WHERE deleted = false;
@@ -56,4 +58,3 @@ WHERE deleted = false;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
 ON accounts (company_email)
 WHERE deleted = false;
-    

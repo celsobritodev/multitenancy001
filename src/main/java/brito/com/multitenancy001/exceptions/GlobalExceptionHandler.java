@@ -1,16 +1,12 @@
 package brito.com.multitenancy001.exceptions;
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -22,28 +18,36 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleNotReadable(HttpMessageNotReadableException ex) {
 
-        Throwable root = ex.getMostSpecificCause();
+        Throwable cause = ex;
 
-        if (root instanceof InvalidFormatException ife &&
-            ife.getTargetType().isEnum()) {
+        while (cause != null) {
 
-            String fieldName = ife.getPath().isEmpty()
-                    ? "status"
-                    : ife.getPath().get(0).getFieldName();
+            if (cause instanceof InvalidFormatException ife &&
+                ife.getTargetType().isEnum()) {
 
-            List<String> allowedValues =
-                    Arrays.stream(ife.getTargetType().getEnumConstants())
-                            .map(Object::toString)
-                            .toList();
+                String fieldName = "status";
 
-            return ResponseEntity.badRequest().body(
-                    ErrorResponse.builder()
-                            .timestamp(LocalDateTime.now())
-                            .error("INVALID_ENUM_VALUE")
-                            .message("Valor inválido para o campo '" + fieldName + "'")
-                            .details(allowedValues)
-                            .build()
-            );
+                if (!ife.getPath().isEmpty()) {
+                    JsonMappingException.Reference ref = ife.getPath().get(0);
+                    fieldName = ref.getFieldName();
+                }
+
+                List<String> allowedValues =
+                        Arrays.stream(ife.getTargetType().getEnumConstants())
+                                .map(Object::toString)
+                                .toList();
+
+                return ResponseEntity.badRequest().body(
+                        ErrorResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .error("INVALID_ENUM_VALUE")
+                                .message("Valor inválido para o campo '" + fieldName + "'")
+                                .details(allowedValues)
+                                .build()
+                );
+            }
+
+            cause = cause.getCause();
         }
 
         return ResponseEntity.badRequest().body(

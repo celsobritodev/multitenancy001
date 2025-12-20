@@ -1,3 +1,4 @@
+-- Insere o super admin
 SET search_path TO public;
 
 INSERT INTO users_account (

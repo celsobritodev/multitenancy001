@@ -32,7 +32,22 @@ public class AccountService {
 	private final TenantSchemaService tenantSchemaService;
 	private final JdbcTemplate jdbcTemplate;
 
-	
+
+	@Transactional(readOnly = true)
+	public List<AccountResponse> listAllAccountsWithAdmin() {
+	    TenantContext.clear();
+	    
+	    return accountRepository.findAllByDeletedFalse()
+	        .stream()
+	        .map(account -> {
+	            UserAccount admin = userAccountRepository
+	                .findFirstByAccountIdAndDeletedFalse(account.getId())
+	                .orElse(null);
+	            return mapToResponse(account, admin);
+	        })
+	        .toList();
+	}
+
 	
 	@Transactional
 	public void changeAccountStatus(Long accountId, StatusRequest req) {
@@ -45,6 +60,29 @@ public class AccountService {
 	            "Conta não encontrada",
 	            404
 	        ));
+	    
+	    // 🔥 VALIDAÇÃO: Não permite alterar status de contas do sistema
+	    if (account.isSystemAccount()) {
+	        throw new ApiException(
+	            "SYSTEM_ACCOUNT_PROTECTED",
+	            "Contas do sistema não podem ter seu status alterado",
+	            403
+	        );
+	    }
+	    
+	    
+	    
+	 // Valida se o schema do tenant existe (para operações que precisam acessá-lo)
+	    if (req.status() == AccountStatus.SUSPENDED || req.status() == AccountStatus.CANCELLED) {
+	        if (!validateTenantSchema(account.getSchemaName())) {
+	            log.warn("⚠️ Schema do tenant não encontrado: {}. Apenas marcando status da conta.", 
+	                    account.getSchemaName());
+	            // Continua apenas com a alteração do status da conta
+	        }
+	    }
+	    
+	    
+	    
 
 	    AccountStatus current = account.getStatus();
 	    AccountStatus target = req.status();
@@ -56,7 +94,7 @@ public class AccountService {
 	    // ❌ regra: conta cancelada não volta
 	    if (current == AccountStatus.CANCELLED) {
 	        throw new ApiException(
-	            "ACCOUNT_CANCELED",
+	            "ACCOUNT_CANCELLED",
 	            "Conta cancelada não pode ter status alterado",
 	            409
 	        );
@@ -103,41 +141,123 @@ public class AccountService {
 	}
 	
 	private void suspendTenantUsers(Account account) {
-
-	    TenantContext.setCurrentTenant(account.getSchemaName());
-
+	    String tenantSchema = account.getSchemaName();
+	    
+	    log.info("🔍 Tentando suspender usuários no tenant: {} (Conta ID: {})", 
+	            tenantSchema, account.getId());
+	    
+	    if ("public".equals(tenantSchema)) {
+	        log.error("❌ ERRO CRÍTICO: Conta {} tem schema_name='public'", account.getId());
+	        return;
+	    }
+	    
+	    // 🔥 PRIMEIRO: Verifica se o schema existe
+	    if (!validateTenantSchema(tenantSchema)) {
+	        log.warn("⚠️ Schema do tenant {} não existe para conta {}", 
+	                tenantSchema, account.getId());
+	        return;
+	    }
+	    
+	    // 🔥 SEGUNDO: Verifica se a tabela users_tenant existe
+	    if (!tableExistsInTenant(tenantSchema, "users_tenant")) {
+	        log.warn("⚠️ Tabela users_tenant não existe no tenant {}. Pulando suspensão de usuários.", 
+	                tenantSchema);
+	        return;
+	    }
+	    
+	    // Log para debug do contexto
+	    log.debug("🔧 Configurando TenantContext para: {}", tenantSchema);
+	    TenantContext.setCurrentTenant(tenantSchema);
+	    
 	    try {
-	        List<UserTenant> users =
-	            userTenantRepository.findByAccountId(account.getId());
-
-	        users.forEach(u -> u.setActive(false));
-
-	        userTenantRepository.saveAll(users);
-
+	        log.debug("🔍 Buscando usuários no tenant...");
+	        List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
+	        log.debug("📊 Encontrados {} usuários", users.size());
+	        
+	        if (!users.isEmpty()) {
+	            users.forEach(u -> u.setActive(false));
+	            userTenantRepository.saveAll(users);
+	            log.info("✅ {} usuários suspensos no tenant: {}", users.size(), tenantSchema);
+	        } else {
+	            log.info("ℹ️ Nenhum usuário encontrado para suspensão no tenant: {}", tenantSchema);
+	        }
+	        
+	    } catch (Exception e) {
+	        log.error("💥 ERRO em suspendTenantUsers: {}", e.getMessage(), e);
+	        // Não relança a exceção para não quebrar o fluxo principal
+	        log.warn("⚠️ Continuando apenas com alteração de status da conta...");
 	    } finally {
 	        TenantContext.clear();
+	        log.debug("🧹 TenantContext limpo");
+	    }
+	}
+
+	// 🔥 NOVO MÉTODO: Verifica se uma tabela existe no tenant
+	private boolean tableExistsInTenant(String schemaName, String tableName) {
+	    try {
+	        String sql = "SELECT EXISTS(SELECT 1 FROM information_schema.tables " +
+	                     "WHERE table_schema = ? AND table_name = ?)";
+	        Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, schemaName, tableName);
+	        return Boolean.TRUE.equals(exists);
+	    } catch (Exception e) {
+	        log.error("Erro ao verificar tabela {} no schema {}: {}", tableName, schemaName, e.getMessage());
+	        return false;
 	    }
 	}
 	
-	private void cancelAccount(Account account) {
+	
+	
+	
+	
+	public boolean validateTenantSchema(String schemaName) {
+        if ("public".equals(schemaName)) {
+            return false;
+        }
+        
+        try {
+            String sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = ?)";
+            Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, schemaName);
+            return Boolean.TRUE.equals(exists);
+        } catch (Exception e) {
+            log.error("Erro ao verificar schema: {}", e.getMessage());
+            return false;
+        }
+    }
 
-	    // PUBLIC
+	
+	
+	
+	private void cancelAccount(Account account) {
+	    // PUBLIC: marca como deletado
 	    account.setDeletedAt(LocalDateTime.now());
 
-	    // TENANT
-	    TenantContext.setCurrentTenant(account.getSchemaName());
-	    try {
-	        List<UserTenant> users =
-	            userTenantRepository.findByAccountId(account.getId());
-
-	        users.forEach(UserTenant::softDelete);
-	        userTenantRepository.saveAll(users);
-	    } finally {
-	        TenantContext.clear();
+	    // TENANT: suspende usuários no schema do tenant
+	    String tenantSchema = account.getSchemaName();
+	    
+	    if (!"public".equals(tenantSchema) && 
+	        validateTenantSchema(tenantSchema) && 
+	        tableExistsInTenant(tenantSchema, "users_tenant")) {
+	        
+	        TenantContext.setCurrentTenant(tenantSchema);
+	        try {
+	            List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
+	            
+	            if (!users.isEmpty()) {
+	                users.forEach(UserTenant::softDelete);
+	                userTenantRepository.saveAll(users);
+	                log.info("✅ {} usuários cancelados no tenant: {}", users.size(), tenantSchema);
+	            }
+	        } catch (Exception e) {
+	            log.error("❌ Erro ao cancelar usuários no tenant {}: {}", tenantSchema, e.getMessage());
+	            // Continua mesmo com erro no tenant
+	        } finally {
+	            TenantContext.clear();
+	        }
+	    } else {
+	        log.info("ℹ️ Conta {} sem schema/tabela de tenant válido para cancelar usuários", 
+	                account.getId());
 	    }
 	}
-
-
 
 	
 	
@@ -209,7 +329,7 @@ public class AccountService {
 	
 	@Transactional(readOnly = true)
 	public AccountResponse getAccountDetails(Long accountId) {
-	    TenantContext.clear(); // 🔥 PUBLIC SEMPRE
+	    TenantContext.clear();
 
 	    Account account = accountRepository.findByIdAndDeletedFalse(accountId)
 	        .orElseThrow(() -> new ApiException(
@@ -226,7 +346,22 @@ public class AccountService {
 	    return mapToResponse(account, admin);
 	}
 
-	
+	private AccountResponse mapToResponse(Account account, UserAccount admin) {
+	    AdminUserResponse adminResponse = admin != null 
+	        ? new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
+	        : null;
+	    
+	    return AccountResponse.builder()
+	        .id(account.getId())
+	        .name(account.getName())
+	        .schemaName(account.getSchemaName())
+	        .status(account.getStatus().name())
+	        .createdAt(account.getCreatedAt())
+	        .trialEndDate(account.getTrialEndDate())
+	        .admin(adminResponse)
+	        .systemAccount(account.isSystemAccount())
+	        .build();
+	}
 	
 	
 	
@@ -238,7 +373,7 @@ public class AccountService {
 
 	
 
-	@Transactional
+
 	public AccountResponse createAccount(AccountCreateRequest request) {
 		log.info("🚀 Criando conta: {}", request.name());
 		TenantContext.clear();
@@ -314,15 +449,27 @@ public class AccountService {
 
 	@Transactional
 	protected Account createAccountTx(AccountCreateRequest request) {
-		TenantContext.clear();
+	    TenantContext.clear();
 
-		Account account = Account.builder().name(request.name()).schemaName(generateSchemaName(request.name()))
-				.slug(generateSlug(request.name())).companyEmail(request.companyEmail())
-				.companyDocument(request.companyDocument()).createdAt(LocalDateTime.now())
-				.trialEndDate(LocalDateTime.now().plusDays(30)).status(AccountStatus.FREE_TRIAL).build();
+	    // 🔥 SEMPRE cria como conta de tenant NORMAL
+	    Account account = Account.builder()
+	        .name(request.name())
+	        .schemaName(generateSchemaName(request.name())) // 🔥 SEMPRE gera um schema próprio
+	        .slug(generateSlug(request.name()))
+	        .companyEmail(request.companyEmail())
+	        .companyDocument(request.companyDocument())
+	        .createdAt(LocalDateTime.now())
+	        .trialEndDate(LocalDateTime.now().plusDays(30))
+	        .status(AccountStatus.FREE_TRIAL)
+	        .systemAccount(false) // 🔥 SEMPRE false
+	        .build();
 
-		return accountRepository.save(account);
+	    return accountRepository.save(account);
 	}
+	
+	
+	
+	
 
 	@Transactional
 	protected UserAccount createAccountAdminTx(AdminCreateRequest adminReq, Account account) {
@@ -341,21 +488,48 @@ public class AccountService {
 	}
 
 	protected void migrateTenant(Account account) {
-		TenantContext.setCurrentTenant(account.getSchemaName());
-		try {
-			tenantMigrationService.migrateTenant(account.getSchemaName());
-		} finally {
-			TenantContext.clear();
-		}
+	    String schemaName = account.getSchemaName();
+	    log.info("🏗️  Migrando tenant: {}", schemaName);
+	    
+	    TenantContext.setCurrentTenant(schemaName);
+	    try {
+	        // Verifica se já existe
+	        boolean schemaExists = validateTenantSchema(schemaName);
+	        
+	        if (!schemaExists) {
+	            log.warn("❌ Schema {} não existe. Criando...", schemaName);
+	            // Cria o schema se não existir
+	            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
+	        }
+	        
+	        // Executa as migrações
+	        tenantMigrationService.migrateTenant(schemaName);
+	        log.info("✅ Tenant migrado com sucesso: {}", schemaName);
+	        
+	    } catch (Exception e) {
+	        log.error("💥 ERRO ao migrar tenant {}: {}", schemaName, e.getMessage(), e);
+	        throw new ApiException("TENANT_MIGRATION_FAILED", 
+	            "Falha ao criar estrutura do tenant: " + e.getMessage(), 500);
+	    } finally {
+	        TenantContext.clear();
+	    }
 	}
 
-	/*
-	 * ========================= SOFT DELETE / RESTORE =========================
-	 */
-
+	
+	@Transactional
 	public void softDeleteAccount(Long accountId) {
-		softDeleteAccountTx(accountId); // public
-		softDeleteTenantUsersTx(accountId); // tenant
+	    // Valida se não é conta do sistema
+	    Account account = getAccountById(accountId);
+	    if (account.isSystemAccount()) {
+	        throw new ApiException(
+	            "SYSTEM_ACCOUNT_PROTECTED",
+	            "Não é permitido excluir contas do sistema",
+	            403
+	        );
+	    }
+	    
+	    softDeleteAccountTx(accountId); // public
+	    softDeleteTenantUsersTx(accountId); // tenant
 	}
 
 	@Transactional
@@ -383,9 +557,22 @@ public class AccountService {
 	}
 
 	public void restoreAccount(Long accountId) {
-		restoreAccountTx(accountId); // public
-		restoreTenantUsersTx(accountId); // tenant
+	    Account account = getAccountById(accountId);
+	    
+	    // Valida se não é conta do sistema (opcional, mas recomendado)
+	    if (account.isSystemAccount() && account.isDeleted()) {
+	        throw new ApiException(
+	            "SYSTEM_ACCOUNT_PROTECTED",
+	            "Contas do sistema não podem ser restauradas via este endpoint",
+	            403
+	        );
+	    }
+	    
+	    restoreAccountTx(accountId); // public
+	    restoreTenantUsersTx(accountId); // tenant
 	}
+	
+	
 
 	@Transactional
 	protected void restoreAccountTx(Long accountId) {
@@ -436,9 +623,5 @@ public class AccountService {
 				+ UUID.randomUUID().toString().substring(0, 8);
 	}
 
-	private AccountResponse mapToResponse(Account account, UserAccount admin) {
-		return new AccountResponse(account.getId(), account.getName(), account.getSchemaName(),
-				account.getStatus().name(), account.getCreatedAt(), account.getTrialEndDate(),
-				new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive()));
-	}
+	
 }
