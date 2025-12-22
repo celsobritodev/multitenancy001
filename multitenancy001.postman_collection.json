@@ -51,7 +51,7 @@
 			"response": []
 		},
 		{
-			"name": "createAccount",
+			"name": "createAccount1",
 			"event": [
 				{
 					"listen": "test",
@@ -69,11 +69,61 @@
 				}
 			],
 			"request": {
+				"auth": {
+					"type": "noauth"
+				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"Minha Empresa\",\n    \"companyEmail\": \"empresa@teste.com\",\n    \"companyDocument\": \"12345678000199\",\n    \"adminEmail\": \"admin@empresa.com\",      // ← ADICIONE ESTE CAMPO\n    \"adminPassword\": \"admin123\",            // ← ADICIONE ESTE CAMPO\n    \"username\": \"admin\",\n    \"email\": \"admin@empresa.com\",\n    \"password\": \"admin123\",\n    \"confirmPassword\": \"admin123\"\n}",
+					"raw": "{\n    \"name\": \"abcde\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/accounts",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"accounts"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "createAccount2",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"abcde\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -118,7 +168,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2MDc4NSwiZXhwIjoxNzY1MzY0Mzg1fQ.J6jocWkO_zCs-tTZgXEVyrMWVmn3oPLoXhGujQDHJ-bJlK8u0cm6xeW7xL6HP6OqnYwIBazDpWfNW_tGON-qhw",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQxNzczMCwiZXhwIjoxNzY1NDIxMzMwfQ.eG0twAFvDLzngHhB6MtMFcr_Kza9-L50zye7FIG4gcpeuOgNVWgpJsUkRlPIDxpnjugiYqYI8gNCylORApxyww",
 							"type": "string"
 						}
 					]
@@ -127,7 +177,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"name\": \"Sandra Severo\",\n  \"email\": \"sandrafase@gmail.com\",\n  \"password\": \"admin1966\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+					"raw": "{\n  \"name\": \"Marina Brito\",\n  \"email\": \"marybrito@gmail.com\",\n  \"password\": \"mary2025\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -271,6 +321,231 @@
 			"response": []
 		},
 		{
+			"name": "listAllAccounts",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/admin/accounts",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"accounts"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "listAccount",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2MTQzODUwLCJleHAiOjE3NjYxNDc0NTB9.m6z448Uovr0jEQ0a_kotF7xn0NByfL3pRuuGcYr2xgUCjHGtQOyVETQvRnb2IIMfrsIKR7mc4EV1q1Q08olxoA",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/admin/accounts/2",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"accounts",
+						"2"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "listAccountDetails",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/admin/accounts/1/details",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"accounts",
+						"1",
+						"details"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "setAccountStatus",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2MTQ1MDY5LCJleHAiOjE3NjYxNDg2Njl9.6A4jumUjn3B4iqivREB7Q6cgacW2FVdEg7A2fBVovVRexdNWcERRzm2CQxOFJ04Yt9chJg5PPLM_0IFQUEJK-w",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Pagamento confirmado\"\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/admin/accounts/1/status",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"admin",
+						"accounts",
+						"1",
+						"status"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
 			"name": "listActiveUsersByAccount",
 			"event": [
 				{
@@ -328,7 +603,7 @@
 			"response": []
 		},
 		{
-			"name": "login",
+			"name": "loginAccount",
 			"event": [
 				{
 					"listen": "test",
@@ -346,11 +621,14 @@
 				}
 			],
 			"request": {
+				"auth": {
+					"type": "noauth"
+				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "\n{\n    \"username\": \"minhaempresa_admin_7815a6ea\",  // ← USERNAME GERADO\n    \"password\": \"admin123\"\n}",
+					"raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"$2a$10$wHq7p2n2YQhYF8k8y8y9xeJ6n9mT9KcXyZ1XxkYtYwHh6xXcYpK9S\"\n}\n",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -373,7 +651,7 @@
 			"response": []
 		},
 		{
-			"name": "testPassword",
+			"name": "loginSuperAdmin",
 			"event": [
 				{
 					"listen": "test",
@@ -391,11 +669,14 @@
 				}
 			],
 			"request": {
+				"auth": {
+					"type": "noauth"
+				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123\"\n}",
+					"raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"admin123\"\n}\n",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -403,12 +684,64 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/test-password-manual",
+					"raw": "{{base_url}}/api/admin/auth/login",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
-						"test-password-manual"
+						"api",
+						"admin",
+						"auth",
+						"login"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "checkUser",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"sandrafase_e7bd6a\",  // ou o username que você criou\n    \"password\": \"cebola\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/accounts/auth/checkuser",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"accounts",
+						"auth",
+						"checkuser"
 					]
 				},
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
@@ -438,7 +771,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123\"\n}",
+					"raw": "",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -493,7 +826,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123\"\n}",
+					"raw": "",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -501,7 +834,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/auth/reset-password?token=69aff582-73c0-482c-bcf3-216444f4b2e4&newPassword=cebola",
+					"raw": "{{base_url}}/api/accounts/auth/reset-password?token=fa290b2d-28ab-4936-a3af-b898993a427b&newPassword=cebola",
 					"host": [
 						"{{base_url}}"
 					],
@@ -514,7 +847,7 @@
 					"query": [
 						{
 							"key": "token",
-							"value": "69aff582-73c0-482c-bcf3-216444f4b2e4"
+							"value": "fa290b2d-28ab-4936-a3af-b898993a427b"
 						},
 						{
 							"key": "newPassword",

@@ -39,6 +39,10 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
+            		
+            		 // 🔓 ACTUATOR HEALTH (PUBLIC)
+            	    .requestMatchers("/actuator/health").permitAll()
+            		
 
             	    // 🔓 LOGIN / REFRESH (PLATFORM)
             	    .requestMatchers(
