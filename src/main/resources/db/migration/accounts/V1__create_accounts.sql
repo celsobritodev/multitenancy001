@@ -1,4 +1,4 @@
--- V1__create_initial_tables.sql
+-- V1__create_accounts.sql
 SET search_path TO public;
 
 CREATE TABLE accounts (

@@ -47,7 +47,6 @@ public class HibernateMultitenancyConfig {
         
         props.put("hibernate.multi_tenant_connection_provider", multiTenantConnectionProvider);
         props.put("hibernate.tenant_identifier_resolver", tenantResolver);
-        props.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
         

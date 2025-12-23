@@ -1,4 +1,4 @@
--- Insere o super admin
+-- V4__insert_accounts_super_admin.sql
 SET search_path TO public;
 
 INSERT INTO users_account (
@@ -23,6 +23,6 @@ WHERE a.slug = 'platform'
 AND NOT EXISTS (
     SELECT 1
     FROM users_account u
-    WHERE u.username = 'superadmin'
-       OR u.email = 'admin@plataforma.com'
+   WHERE u.account_id = a.id
+    AND (u.username = 'superadmin' OR u.email = 'admin@plataforma.com')
 );

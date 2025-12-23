@@ -1,3 +1,4 @@
+-- V2__create_accounts_users.sql
 SET search_path TO public;
 
 CREATE TABLE users_account (

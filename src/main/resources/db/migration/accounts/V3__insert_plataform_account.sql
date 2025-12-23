@@ -1,4 +1,6 @@
--- Insere a conta do sistema
+-- V3__insert_plataform_account.sql
+SET search_path TO public;
+
 INSERT INTO accounts (
     is_system_account,
     name,
