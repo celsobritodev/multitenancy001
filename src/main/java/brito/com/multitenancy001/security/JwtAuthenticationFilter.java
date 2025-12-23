@@ -1,109 +1,79 @@
 package brito.com.multitenancy001.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.util.StringUtils;
-import org.springframework.web.filter.OncePerRequestFilter;
-
 import brito.com.multitenancy001.configuration.TenantContext;
-import brito.com.multitenancy001.exceptions.ApiException;
-import brito.com.multitenancy001.services.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+@Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-	@Autowired
-	private JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final UserDetailsService userDetailsService;
 
-	@Autowired
-	private CustomUserDetailsService userDetailsService;
+    @Override
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
-	@Override
-	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-			throws ServletException, IOException {
+        try {
+            final String authHeader = request.getHeader("Authorization");
 
-		System.out.println("=== JWT FILTER DEBUG ===");
-		System.out.println("URI: " + request.getRequestURI());
+            if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-		if (shouldNotFilter(request)) {
-			filterChain.doFilter(request, response);
-			return;
-		}
+            final String jwt = authHeader.substring(7);
 
-		try {
-			String jwt = getJwtFromRequest(request);
+            // 1) valida token (assinatura + expiração)
+            if (!jwtTokenProvider.validateToken(jwt)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-			if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
+            // 2) extrai tenantSchema e binda ANTES de qualquer JPA
+            final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
+            TenantContext.bindTenant(tenantSchema);
 
-				String username = tokenProvider.getUsernameFromToken(jwt);
-				String tokenType = tokenProvider.getTokenType(jwt); // PLATFORM | TENANT
+            // 3) autenticação
+            final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
-				// 🔥 DECISÃO CRÍTICA
-				if ("PLATFORM".equals(tokenType)) {
+            if (StringUtils.hasText(username)
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-					// 👉 SUPER_ADMIN SEMPRE NO PUBLIC
-					TenantContext.unbindTenant();
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-				} else {
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities()
+                        );
 
-					// 👉 USUÁRIO DE TENANT
-					String tenantSchema = tokenProvider.getTenantSchemaFromToken(jwt);
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
 
-					if (!StringUtils.hasText(tenantSchema)) {
-						throw new ApiException(
-								"TENANT_NOT_DEFINED",
-								"Tenant não definido no token",
-								401
-						);
-					}
+            filterChain.doFilter(request, response);
 
-					TenantContext.bindTenant(tenantSchema);
-				}
-
-				UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-				UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-						userDetails, null, userDetails.getAuthorities());
-
-				authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-				SecurityContextHolder.getContext().setAuthentication(authentication);
-			}
-
-		} catch (Exception ex) {
-			TenantContext.unbindTenant(); // ⭐ OBRIGATÓRIO
-			SecurityContextHolder.clearContext();
-			logger.error("Erro no filtro JWT", ex);
-		}
-
-		filterChain.doFilter(request, response);
-	}
-
-	// ⭐⭐ MÉTODO NOVO: Determina quando NÃO aplicar o filtro ⭐⭐
-	@Override
-	protected boolean shouldNotFilter(HttpServletRequest request) {
-	    String requestURI = request.getRequestURI();
-
-	    return requestURI.startsWith("/api/auth") ||
-	           requestURI.startsWith("/api/accounts/auth") ||
-	           requestURI.startsWith("/api/admin/auth") || // 🔥 AQUI
-	           request.getMethod().equals("OPTIONS");
-	}
-
-
-	private String getJwtFromRequest(HttpServletRequest request) {
-		String bearerToken = request.getHeader("Authorization");
-		if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-			return bearerToken.substring(7);
-		}
-		return null;
-	}
+        } finally {
+            // 4) limpa sempre (anti vazamento)
+            TenantContext.unbindTenant();
+        }
+    }
 }

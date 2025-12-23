@@ -32,13 +32,51 @@ public class AccountService {
 	private final TenantSchemaService tenantSchemaService;
 	private final JdbcTemplate jdbcTemplate;
 
+	public List<TenantUserResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+
+		// PUBLIC
+		TenantContext.unbindTenant();
+
+		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+		if (!validateTenantSchema(account.getSchemaName())) {
+			throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant não existe", 404);
+		}
+
+		String schema = account.getSchemaName();
+
+		// 🔥 BIND ANTES DA TX
+		TenantContext.bindTenant(schema);
+		try {
+
+			return listTenantUsersTx(account.getId(), onlyActive);
+
+		} finally {
+
+			TenantContext.unbindTenant();
+		}
+
+	}
+
+	@Transactional(readOnly = true)
+	protected List<TenantUserResponse> listTenantUsersTx(Long accountId, boolean onlyActive) {
+
+		log.info("🧪 TX START | tenant={}", TenantContext.getCurrentTenant());
+
+		List<UserTenant> users = onlyActive
+				? userTenantRepository.findByAccountIdAndActiveTrueAndDeletedFalse(accountId)
+				: userTenantRepository.findByAccountId(accountId);
+
+		return users.stream().map(TenantUserResponse::from).toList();
+	}
 	
-	public AccountStatusChangeResponse  changeAccountStatus(Long accountId, StatusRequest req) {
+	
+	
 
-
+	public AccountStatusChangeResponse changeAccountStatus(Long accountId, StatusRequest statusReq) {
 
 		TenantContext.unbindTenant();
-		
 
 		Account account = accountRepository.findById(accountId)
 				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -50,12 +88,12 @@ public class AccountService {
 		}
 
 		AccountStatus accountCurrentStatus = account.getStatus();
-		AccountStatus accountNewStatus = req.status();
+		AccountStatus accountNewStatus = statusReq.status();
 
 		if (accountCurrentStatus == accountNewStatus) {
 			log.info("↩️ Status já aplicado | accountId={} | status={}", accountId, accountCurrentStatus);
 			return buildResponse(account, accountCurrentStatus, false, 0);
-			
+
 		}
 
 		if (accountCurrentStatus == AccountStatus.CANCELLED) {
@@ -66,7 +104,8 @@ public class AccountService {
 			throw new ApiException("INVALID_STATUS_TRANSITION", "Não é permitido voltar para FREE_TRIAL", 409);
 		}
 
-		log.info("🔄 Alterando status | {} → {} | motivo={}", accountCurrentStatus, accountNewStatus, req.reason());
+		log.info("🔄 Alterando status | {} → {} | motivo={}", accountCurrentStatus, accountNewStatus,
+				statusReq.reason());
 
 		account.setStatus(accountNewStatus);
 
@@ -77,70 +116,37 @@ public class AccountService {
 		accountRepository.save(account);
 		log.info("💾 Conta salva em PUBLIC | accountId={}", accountId);
 
-		
 		boolean tenantUsersSuspended = false;
-	    int tenantUsersCount = 0;
-		
-		
+		int tenantUsersCount = 0;
+
 		if (accountNewStatus == AccountStatus.SUSPENDED) {
 			tenantUsersCount = suspendTenantUsersTx(account);
-	        tenantUsersSuspended = true;
+			tenantUsersSuspended = true;
 		}
 
 		if (accountNewStatus == AccountStatus.CANCELLED) {
-			 tenantUsersCount = cancelAccountTx(account);
-		     tenantUsersSuspended = true;
+			tenantUsersCount = cancelAccountTx(account);
+			tenantUsersSuspended = true;
 		}
 
 		log.info("✅ [changeAccountStatus] FINALIZADO | accountId={}", accountId);
-		
-		return buildResponse(
-	            account,
-	            accountCurrentStatus,
-	            tenantUsersSuspended,
-	            tenantUsersCount);
-		
-		
-	}
-	
-	
-	
-	private AccountStatusChangeResponse buildResponse(
-	        Account account,
-	        AccountStatus previousStatus,
-	        boolean tenantUsersSuspended,
-	        int tenantUsersCount
-	) {
-	    return new AccountStatusChangeResponse(
-	            account.getId(),
-	            account.getStatus().name(),
-	            previousStatus.name(),
-	            LocalDateTime.now(),
-	            account.getSchemaName(),
-	            new AccountStatusChangeResponse.SideEffects(
-	                    tenantUsersSuspended,
-	                    tenantUsersCount
-	            )
-	    );
+
+		return buildResponse(account, accountCurrentStatus, tenantUsersSuspended, tenantUsersCount);
+
 	}
 
-	
-	
-	
-	
-	
-	
-	
-	
-	
+	private AccountStatusChangeResponse buildResponse(Account account, AccountStatus previousStatus,
+			boolean tenantUsersSuspended, int tenantUsersCount) {
+		return new AccountStatusChangeResponse(account.getId(), account.getStatus().name(), previousStatus.name(),
+				LocalDateTime.now(), account.getSchemaName(),
+				new AccountStatusChangeResponse.SideEffects(tenantUsersSuspended, tenantUsersCount));
+	}
 
-	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public int cancelAccountTx(Account account) {
-
+	public int cancelAccount(Account account) {
 		String tenantSchema = account.getSchemaName();
 
 		log.info("🛑 [cancelAccountTx] INÍCIO | accountId={} | schema={}", account.getId(), tenantSchema);
-
+		TenantContext.bindTenant(tenantSchema);
 		account.setDeletedAt(LocalDateTime.now());
 		accountRepository.save(account);
 
@@ -148,33 +154,21 @@ public class AccountService {
 			log.warn("⚠️ Cancelamento apenas PUBLIC | schema inválido");
 			return 0;
 		}
-
-		TenantContext.bindTenant(tenantSchema);
-
 		try {
-			List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
-
-			users.forEach(UserTenant::softDelete);
-			userTenantRepository.saveAll(users);
-			log.info("✅ Usuários cancelados | {}", users.size());
-			return users.size();
-
-		
-
-		} catch (Exception e) {
-			log.error("💥 ERRO cancelAccountTx", e);
-			return 0;
-			
+			return cancelAccountTx(account);
 		} finally {
 			TenantContext.unbindTenant();
 		}
 	}
-	
-	
-	
-	
-	
-	
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public int cancelAccountTx(Account account) {
+		List<UserTenant> users = userTenantRepository.findByAccountId(account.getId());
+		users.forEach(UserTenant::softDelete);
+		userTenantRepository.saveAll(users);
+		log.info("✅ Usuários cancelados | {}", users.size());
+		return users.size();
+	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public int suspendTenantUsersTx(Account account) {
@@ -211,10 +205,8 @@ public class AccountService {
 			log.info("✅ Usuários suspensos com sucesso | {}", tenantSchema);
 			return users.size();
 
-			
-
 		} catch (Exception e) {
-		
+
 			log.error("💥 ERRO suspendTenantUsersTx", e);
 			return 0;
 		} finally {
@@ -249,42 +241,6 @@ public class AccountService {
 			log.error("Erro ao verificar schema: {}", e.getMessage());
 			return false;
 		}
-	}
-
-	
-	@Transactional(readOnly = true)
-	public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-
-		TenantContext.unbindTenant(); // 🔥 PUBLIC SEMPRE
-
-		Account account = accountRepository.findById(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
-
-		long totalUsers = userAccountRepository.countByAccountIdAndDeletedFalse(account.getId());
-
-		boolean inTrial = account.getStatus() == AccountStatus.FREE_TRIAL;
-		boolean trialExpired = inTrial && account.getTrialEndDate().isBefore(LocalDateTime.now());
-
-		long daysRemaining = inTrial
-				? Math.max(0, java.time.Duration.between(LocalDateTime.now(), account.getTrialEndDate()).toDays())
-				: 0;
-
-		return new AccountAdminDetailsResponse(account.getId(), account.getName(), account.getSlug(),
-				account.getSchemaName(), account.getStatus().name(),
-
-				account.getCompanyDocument(), account.getCompanyEmail(),
-
-				account.getCreatedAt(), account.getTrialEndDate(), account.getPaymentDueDate(), account.getDeletedAt(),
-
-				inTrial, trialExpired, daysRemaining,
-
-				admin != null
-						? new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
-						: null,
-
-				totalUsers, !account.isDeleted());
 	}
 
 	@Transactional(readOnly = true)
@@ -534,6 +490,54 @@ public class AccountService {
 			UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
 			return mapToResponse(account, admin);
 		}).toList();
+	}
+
+	@Transactional(readOnly = true)
+	public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+
+		TenantContext.unbindTenant(); // 🔥 PUBLIC SEMPRE
+
+		Account account = accountRepository.findById(accountId)
+				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
+
+		long totalUsers = userAccountRepository.countByAccountIdAndDeletedFalse(account.getId());
+
+		boolean inTrial = account.getStatus() == AccountStatus.FREE_TRIAL;
+		boolean trialExpired = inTrial && account.getTrialEndDate().isBefore(LocalDateTime.now());
+
+		long daysRemaining = inTrial
+				? Math.max(0, java.time.Duration.between(LocalDateTime.now(), account.getTrialEndDate()).toDays())
+				: 0;
+
+		return new AccountAdminDetailsResponse(account.getId(), account.getName(), account.getSlug(),
+				account.getSchemaName(), account.getStatus().name(),
+
+				account.getCompanyDocument(), account.getCompanyEmail(),
+
+				account.getCreatedAt(), account.getTrialEndDate(), account.getPaymentDueDate(), account.getDeletedAt(),
+
+				inTrial, trialExpired, daysRemaining,
+
+				admin != null
+						? new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
+						: null,
+
+				totalUsers, !account.isDeleted());
+	}
+
+	@Transactional(readOnly = true)
+	public AccountResponse getAccountByIdWithAdmin(Long accountId) {
+
+		TenantContext.unbindTenant(); // sempre PUBLIC
+
+		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
+
+		return mapToResponse(account, admin);
 	}
 
 }

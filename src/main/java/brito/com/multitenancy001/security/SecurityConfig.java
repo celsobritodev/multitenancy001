@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.security;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,70 +17,59 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
-    
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter();
-    }
-    
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    
+
     @Bean
     public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration authConfig) throws Exception {
+            AuthenticationConfiguration authConfig
+    ) throws Exception {
         return authConfig.getAuthenticationManager();
     }
-    
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
-            		
-            		 // 🔓 ACTUATOR HEALTH (PUBLIC)
-            	    .requestMatchers("/actuator/health").permitAll()
-            		
 
-            	    // 🔓 LOGIN / REFRESH (PLATFORM)
-            	    .requestMatchers(
-            	        "/api/admin/auth/login",
-            	        "/api/admin/auth/refresh"
-            	    ).permitAll()
+                // 🔓 ACTUATOR HEALTH (PUBLIC)
+                .requestMatchers("/actuator/health").permitAll()
 
-            	    // 🔓 LOGIN / REFRESH (TENANT)
-            	    .requestMatchers(
-            	        "/api/auth/login",
-            	        "/api/auth/refresh",
-            	        "/api/accounts/auth/checkuser",
-            	        "/api/accounts/auth/forgot-password",
-            	        "/api/accounts/auth/reset-password",
-            	        "/api/accounts"
-            	    ).permitAll()
+                // 🔓 LOGIN / REFRESH (PLATFORM)
+                .requestMatchers(
+                    "/api/admin/auth/login",
+                    "/api/admin/auth/refresh"
+                ).permitAll()
 
-            	    // 🔒 PLATFORM (APÓS LOGIN)
-            	    .requestMatchers("/api/admin/**")
-            	    .hasRole("SUPER_ADMIN")
+                // 🔓 LOGIN / REFRESH (TENANT)
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/refresh",
+                    "/api/accounts/auth/checkuser",
+                    "/api/accounts/auth/forgot-password",
+                    "/api/accounts/auth/reset-password",
+                    "/api/accounts"
+                ).permitAll()
 
-            	    .anyRequest().authenticated()
-            	)
+                // 🔒 PLATFORM (APÓS LOGIN)
+                .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
 
+                .anyRequest().authenticated()
+            )
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             );
 
-        http.addFilterBefore(
-            jwtAuthenticationFilter(),
-            UsernamePasswordAuthenticationFilter.class
-        );
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
-
-    
-    
-    
 }

@@ -27,7 +27,7 @@ public class AccountSchemaInitializer {
             );
             
             Integer usersCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users'", 
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users_account'", 
                 Integer.class
             );
             

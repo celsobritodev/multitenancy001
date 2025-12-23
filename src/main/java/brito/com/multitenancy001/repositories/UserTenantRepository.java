@@ -15,6 +15,12 @@ import java.util.Optional;
 
 @Repository
 public interface UserTenantRepository extends JpaRepository<UserTenant, Long> {
+	
+	
+
+
+    List<UserTenant> findByAccountIdAndActiveTrueAndDeletedFalse(Long accountId);
+	
     
     Optional<UserTenant> findByUsernameAndAccountId(String username, Long accountId);
     

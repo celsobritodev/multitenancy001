@@ -31,14 +31,9 @@ public record AccountResponse(
     
     // Método estático para criar a partir da entidade (com admin)
     public static AccountResponse fromEntity(Account account, UserAccount userAccount) {
-        AdminUserResponse adminResponse = userAccount != null 
-            ? new AdminUserResponse(
-                userAccount.getId(),
-                userAccount.getUsername(),
-                userAccount.getEmail(),
-                userAccount.isActive()
-            )
-            : null;
+    	AdminUserResponse adminResponse = userAccount != null
+    	        ? AdminUserResponse.from(userAccount)
+    	        : null;
             
         return new AccountResponse(
             account.getId(),
