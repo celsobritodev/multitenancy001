@@ -272,6 +272,8 @@ public class AccountService {
 
 		return accountRepository.findAllByDeletedFalse().stream().map(AccountResponse::fromEntity).toList();
 	}
+	
+	
 
 	public AccountResponse createAccount(AccountCreateRequest request) {
 
@@ -300,6 +302,9 @@ public class AccountService {
 			throw e;
 		}
 	}
+	
+	
+	
 
 	/**
 	 * Verifica se o fluxo de criação está funcionando
