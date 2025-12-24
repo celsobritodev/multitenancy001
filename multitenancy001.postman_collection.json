@@ -51,7 +51,7 @@
 			"response": []
 		},
 		{
-			"name": "createAccount1",
+			"name": "signupAccount1",
 			"event": [
 				{
 					"listen": "test",
@@ -76,7 +76,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"abcde\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n    \"name\": \"foton\",\n    \"companyEmail\": \"sales@foton.com\",\n    \"companyDocument\": \"425457235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@foton.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -84,13 +84,13 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts",
+					"raw": "{{base_url}}/api/signup",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
 						"api",
-						"accounts"
+						"signup"
 					]
 				},
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
@@ -98,7 +98,7 @@
 			"response": []
 		},
 		{
-			"name": "createAccount2",
+			"name": "signupAccount3",
 			"event": [
 				{
 					"listen": "test",
@@ -123,7 +123,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"abcde\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n    \"name\": \"unadoc\",\n    \"companyEmail\": \"support@unadoc.com\",\n    \"companyDocument\": \"4498227712\",\n    \"admin\": {\n        \"username\": \"main\",\n        \"email\": \"main@unadoc.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -131,13 +131,60 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts",
+					"raw": "{{base_url}}/api/signup",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
 						"api",
-						"accounts"
+						"signup"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "signupAccount2",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"opta\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/signup",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"signup"
 					]
 				},
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
@@ -288,7 +335,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDkwNTU5LCJleHAiOjE3NjY0OTQxNTl9.zJ4A5G7Eexn4yiHHjsWh52W2x_JlYt1PopjarO3bPdYqbzXXCBOILh1lAj7m699RZo2i-CRdDMODav2FAQiiFw",
 							"type": "string"
 						}
 					]
@@ -305,14 +352,15 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users",
+					"raw": "{{base_url}}/api/admin/accounts/2/users",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
 						"api",
+						"admin",
 						"accounts",
-						"1",
+						"2",
 						"users"
 					]
 				},
@@ -344,7 +392,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwidHlwZSI6IlJFRlJFU0giLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJpYXQiOjE3NjY0NTc1NzUsImV4cCI6MTc2NzA2MjM3NX0.e0Pg_rLHQorCe7eQfUhB2a2IgdMiv8tF-ik4QBPFj8Qlh5RjHxTujr6gdGD0HtvSg3RCM7ZRTpKUmisb_xVdJA",
 							"type": "string"
 						}
 					]
@@ -455,7 +503,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDUwNDk5LCJleHAiOjE3NjY0NTQwOTl9.PGWwneLZavcsnZao0soj8wxzqtF7pjAA-FJPuOyc5guK7AL0clGtr33uH4HFTf4hMdznX6LjnxaLx6FaIMqjDw",
 							"type": "string"
 						}
 					]
@@ -472,7 +520,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/1/details",
+					"raw": "{{base_url}}/api/admin/accounts/2/details",
 					"host": [
 						"{{base_url}}"
 					],
@@ -480,7 +528,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"1",
+						"2",
 						"details"
 					]
 				},
@@ -569,7 +617,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2MjM4OCwiZXhwIjoxNzY1MzY1OTg4fQ.0e22GJmnDYsPJLEGkfEQgtI97aXzpHHGuBGWjf3r38QJ__1iq-eW2mgpBDchs_p1VrhXEbcfF6Kegekm7G6UZQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDUwNDk5LCJleHAiOjE3NjY0NTQwOTl9.PGWwneLZavcsnZao0soj8wxzqtF7pjAA-FJPuOyc5guK7AL0clGtr33uH4HFTf4hMdznX6LjnxaLx6FaIMqjDw",
 							"type": "string"
 						}
 					]
@@ -586,14 +634,15 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/active",
+					"raw": "{{base_url}}/api/admin/accounts/2/users/active",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
 						"api",
+						"admin",
 						"accounts",
-						"1",
+						"2",
 						"users",
 						"active"
 					]
@@ -725,7 +774,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"username\": \"sandrafase_e7bd6a\",  // ou o username que você criou\n    \"password\": \"cebola\"\n}",
+					"raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123456\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -767,6 +816,9 @@
 				}
 			],
 			"request": {
+				"auth": {
+					"type": "noauth"
+				},
 				"method": "POST",
 				"header": [],
 				"body": {
@@ -834,7 +886,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/auth/reset-password?token=fa290b2d-28ab-4936-a3af-b898993a427b&newPassword=cebola",
+					"raw": "{{base_url}}/api/accounts/auth/reset-password?token370d0c49-2fa7-4cdc-9875-ff304ba642e0&newPassword=delta",
 					"host": [
 						"{{base_url}}"
 					],
@@ -846,12 +898,12 @@
 					],
 					"query": [
 						{
-							"key": "token",
-							"value": "fa290b2d-28ab-4936-a3af-b898993a427b"
+							"key": "token370d0c49-2fa7-4cdc-9875-ff304ba642e0",
+							"value": null
 						},
 						{
 							"key": "newPassword",
-							"value": "cebola"
+							"value": "delta"
 						}
 					]
 				},
@@ -930,7 +982,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
 							"type": "string"
 						}
 					]
@@ -947,7 +999,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/2",
+					"raw": "{{base_url}}/api/accounts/1/users/5",
 					"host": [
 						"{{base_url}}"
 					],
@@ -956,7 +1008,7 @@
 						"accounts",
 						"1",
 						"users",
-						"2"
+						"5"
 					]
 				},
 				"description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
@@ -1045,7 +1097,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NDIzNCwiZXhwIjoxNzY1MzY3ODM0fQ.otbzv1pXd_GnaNUO3UWQ4Ny38V354ZCgYrRlF-MDmKaxSe8t1-OfmxOG97ecjAyLoDMInYjKOx6C52oG7-KJ6w",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
 							"type": "string"
 						}
 					]
@@ -1062,7 +1114,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/2/restore",
+					"raw": "{{base_url}}/api/accounts/1/users/5/restore",
 					"host": [
 						"{{base_url}}"
 					],
@@ -1071,7 +1123,7 @@
 						"accounts",
 						"1",
 						"users",
-						"2",
+						"5",
 						"restore"
 					]
 				},
@@ -1103,7 +1155,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2ODM5MywiZXhwIjoxNzY1MzcxOTkzfQ.xE3NEQ5d1SFJjMjcsm6X7t0RIMw0ueuBHhTVexpiAN8C7CG6QEBDkmUhvdHlDUCcxNJZmAEWPqRKWZhLNTRhWg",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
 							"type": "string"
 						}
 					]
@@ -1120,7 +1172,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/4/reset-password?newPassword=tomate",
+					"raw": "{{base_url}}/api/accounts/1/users/5/reset-password?newPassword=cebola",
 					"host": [
 						"{{base_url}}"
 					],
@@ -1129,13 +1181,13 @@
 						"accounts",
 						"1",
 						"users",
-						"4",
+						"5",
 						"reset-password"
 					],
 					"query": [
 						{
 							"key": "newPassword",
-							"value": "tomate"
+							"value": "cebola"
 						}
 					]
 				},

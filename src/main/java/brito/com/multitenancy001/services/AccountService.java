@@ -4,6 +4,7 @@ import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.dtos.*;
 import brito.com.multitenancy001.entities.account.*;
 import brito.com.multitenancy001.entities.tenant.UserTenant;
+import brito.com.multitenancy001.entities.tenant.UserTenantRole;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -289,34 +290,56 @@ public class AccountService {
 	
 
 	public AccountResponse createAccount(AccountCreateRequest request) {
+	    log.info("🚀 Criando conta: {}", request.name());
+	    TenantContext.unbindTenant(); // PUBLIC
 
-		log.info("🚀 Criando conta: {}", request.name());
-		TenantContext.unbindTenant(); // 🔥 PUBLIC
+	    Account account = createAccountTx(request); // salva em PUBLIC
 
-		try {
+	    try {
+	        // TENANT: bind + migrate (agora o migrate não desbinda)
+	        migrateTenant(account);
 
-			// 1️⃣ PUBLIC — cria account em public
-			Account account = createAccountTx(request);
+	        // ✅ agora o tenant ainda está bindado: JPA vai salvar no schema correto
+	        createTenantAdminJpa(account.getId(), request.admin());
 
-			// 2️⃣ TENANT — cria schema + tabelas
-			migrateTenant(account);
+	        log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
+	        return mapToResponse(account);
 
-			
-
-			// 3 cria TENANT_ADMIN no tenant
-			tenantSchemaService.createTenantAdmin(account.getId(), account.getSchemaName(), request.admin());
-
-			log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
-			return mapToResponse(account);
-
-		} catch (Exception e) {
-			log.error("❌ Erro ao criar conta", e);
-			throw e;
-		}
+	    } finally {
+	        TenantContext.unbindTenant(); // <- desbinda uma vez, no final
+	    }
 	}
+
 	
-	
-	
+	@Transactional
+	protected UserTenant createTenantAdminJpa(Long accountId, AdminCreateRequest adminReq) {
+
+	    // valida duplicidade
+	    if (userTenantRepository.existsByUsernameAndAccountId(adminReq.username(), accountId)) {
+	        throw new ApiException("ADMIN_EXISTS", "Já existe usuário com este username", 409);
+	    }
+	    if (userTenantRepository.existsByEmailAndAccountId(adminReq.email(), accountId)) {
+	        throw new ApiException("ADMIN_EXISTS", "Já existe usuário com este email", 409);
+	    }
+
+	    UserTenant u = new UserTenant();
+	    u.setAccountId(accountId);
+	    u.setName("Administrador");
+	    u.setUsername(adminReq.username());
+	    u.setEmail(adminReq.email());
+
+	    // IMPORTANTE: encode a senha aqui (se já tiver PasswordEncoder no projeto)
+	    u.setPassword(adminReq.password());
+
+	    u.setRole(UserTenantRole.TENANT_ADMIN); // ✅ enum, não string
+	    u.setActive(true);
+	    u.setCreatedAt(LocalDateTime.now());
+	    u.setTimezone("America/Sao_Paulo");
+	    u.setLocale("pt_BR");
+
+	    return userTenantRepository.save(u);
+	}
+
 
 	/**
 	 * Verifica se o fluxo de criação está funcionando
@@ -371,25 +394,20 @@ public class AccountService {
 	
 
 	protected void migrateTenant(Account account) {
+	    String schemaName = account.getSchemaName();
+	    log.info("🏗️ Migrando tenant: {}", schemaName);
 
-		String schemaName = account.getSchemaName();
-		log.info("🏗️ Migrando tenant: {}", schemaName);
+	    TenantContext.bindTenant(schemaName);
 
-		TenantContext.bindTenant(schemaName);
+	    if (!validateTenantSchema(schemaName)) {
+	        log.warn("📦 Criando schema {}", schemaName);
+	        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
+	    }
 
-		try {
-			if (!validateTenantSchema(schemaName)) {
-				log.warn("📦 Criando schema {}", schemaName);
-				jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
-			}
-
-			tenantMigrationService.migrateTenant(schemaName);
-			log.info("✅ Tenant migrado com sucesso: {}", schemaName);
-
-		} finally {
-			TenantContext.unbindTenant();
-		}
+	    tenantMigrationService.migrateTenant(schemaName);
+	    log.info("✅ Tenant migrado com sucesso: {}", schemaName);
 	}
+
 
 	@Transactional
 	public void softDeleteAccount(Long accountId) {

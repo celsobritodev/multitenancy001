@@ -74,10 +74,10 @@ public class SchemaMultiTenantConnectionProvider
 
             } else {
 
-                log.info("🏠 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL=SET search_path TO public",
+                log.info("🏠 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL=SET search_path TO public;",
                         threadId, tenantIdentifier, threadTenant);
 
-                stmt.execute("SET search_path TO public");
+                stmt.execute("SET search_path TO public;");
             }
 
             // 🔎 log final (debug)
@@ -142,7 +142,7 @@ public class SchemaMultiTenantConnectionProvider
         if (connection == null || connection.isClosed()) return;
 
         try (Statement stmt = connection.createStatement()) {
-            stmt.execute("SET search_path TO public");
+            stmt.execute("SET search_path TO public;");
             if (log.isDebugEnabled()) {
                 try (ResultSet rs = stmt.executeQuery("SHOW search_path")) {
                     if (rs.next()) {

@@ -47,5 +47,5 @@ CREATE TABLE accounts_users_permissions (
     permission VARCHAR(100) NOT NULL,
     CONSTRAINT fk_user_permissions_user
         FOREIGN KEY (user_id) REFERENCES users_account(id) ON DELETE CASCADE,
-    CONSTRAINT ux_user_permission UNIQUE (user_id, permission)
+    CONSTRAINT ux_user_permission PRIMARY KEY (user_id, permission)
 );
