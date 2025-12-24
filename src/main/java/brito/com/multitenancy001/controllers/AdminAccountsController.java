@@ -13,10 +13,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/accounts")
-@PreAuthorize("hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('TOKEN_ACCOUNT') and hasRole('SUPER_ADMIN')")
 @RequiredArgsConstructor
 @Slf4j
-public class AdminAccountController {
+public class AdminAccountsController {
 
 	private final AccountService accountService;
 
@@ -40,7 +40,7 @@ public class AdminAccountController {
 
 	@GetMapping
 	public ResponseEntity<List<AccountResponse>> listAllAccounts() {
-		return ResponseEntity.ok(accountService.listAllAccountsWithAdmin());
+		return ResponseEntity.ok(accountService.listAllAccounts());
 	}
 
 	//

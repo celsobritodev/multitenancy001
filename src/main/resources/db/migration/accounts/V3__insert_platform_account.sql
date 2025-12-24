@@ -1,4 +1,4 @@
--- V3__insert_plataform_account.sql
+-- V3__insert_platform_account.sql
 SET search_path TO public;
 
 INSERT INTO accounts (
@@ -15,13 +15,13 @@ INSERT INTO accounts (
 )
 SELECT
     true, -- 🔥 Marcada como conta do sistema
-    'Plataforma',
+    'Platform',
     'public',
     'platform',
     'ACTIVE',
     'FREE',
     '00000000000000',
-    'plataforma@sistema.com',
+    'platform@system.com',
     'Brasil',
     false
 WHERE NOT EXISTS (

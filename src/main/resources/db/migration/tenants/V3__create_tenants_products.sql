@@ -1,3 +1,4 @@
+-- V3__create_tenants_products.sql
 CREATE TABLE products (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(150) NOT NULL,

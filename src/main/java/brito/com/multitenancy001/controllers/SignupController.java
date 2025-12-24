@@ -12,15 +12,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/accounts")
+@RequestMapping("/api/signup")
 @RequiredArgsConstructor
-public class AccountController {
+public class SignupController {
     
     private final AccountService accountService;
 
     
     @PostMapping
-    public ResponseEntity<AccountResponse> createAccount(
+    public ResponseEntity<AccountResponse> SignUp(
             @Valid @RequestBody AccountCreateRequest request) {
         AccountResponse response = accountService.createAccount(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

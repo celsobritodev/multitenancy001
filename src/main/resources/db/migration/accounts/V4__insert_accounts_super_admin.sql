@@ -13,7 +13,7 @@ INSERT INTO users_account (
 SELECT
     'Platform Super Admin',
     'superadmin',
-    'admin@plataforma.com',
+    'admin@platform.com',
     '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
     'SUPER_ADMIN',
     true,
@@ -24,5 +24,5 @@ AND NOT EXISTS (
     SELECT 1
     FROM users_account u
    WHERE u.account_id = a.id
-    AND (u.username = 'superadmin' OR u.email = 'admin@plataforma.com')
+    AND (u.username = 'superadmin' OR u.email = 'admin@platform.com')
 );

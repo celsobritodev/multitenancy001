@@ -11,10 +11,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/tenant/auth")
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RequiredArgsConstructor
-public class AuthController {
+public class TenantAuthController {
 
 	private final TenantAuthService tenantAuthService;
 	private final UserTenantService tenantUserService;

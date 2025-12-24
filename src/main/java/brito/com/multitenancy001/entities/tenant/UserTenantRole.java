@@ -5,6 +5,7 @@ import brito.com.multitenancy001.dtos.RoleAuthority;
 public enum UserTenantRole implements RoleAuthority {
     TENANT_ADMIN,
     MANAGER,
+    VIEWER,
     USER;
 
     public boolean isAdmin() {
@@ -16,4 +17,3 @@ public enum UserTenantRole implements RoleAuthority {
         return "ROLE_" + name();
     }
 }
-

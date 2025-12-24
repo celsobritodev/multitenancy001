@@ -22,7 +22,8 @@ public class UserTenantController {
     private final UserTenantService tenantUserService;
     
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+
     public ResponseEntity<UserResponse> createTenantUser(
             @Valid @RequestBody UserCreateRequest request) {
         UserResponse response = tenantUserService.createTenantUser(request);
@@ -30,28 +31,28 @@ public class UserTenantController {
     }
     
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER', 'VIEWER')")
+    @PreAuthorize("hasAnyRole( 'TENANT_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER', 'VIEWER')")
     public ResponseEntity<List<UserResponse>> listTenantUsers() {
         List<UserResponse> users = tenantUserService.listTenantUsers();
         return ResponseEntity.ok(users);
     }
     
     @GetMapping("/active")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER')")
+    @PreAuthorize("hasAnyRole( 'TENANT_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER')")
     public ResponseEntity<List<UserResponse>> listActiveTenantUsers() {
         List<UserResponse> users = tenantUserService.listActiveTenantUsers();
         return ResponseEntity.ok(users);
     }
     
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER')")
+    @PreAuthorize("hasAnyRole( 'TENANT_ADMIN', 'PRODUCT_MANAGER', 'SALES_MANAGER')")
     public ResponseEntity<UserResponse> getTenantUser(@PathVariable Long userId) {
         UserResponse user = tenantUserService.getTenantUser(userId);
         return ResponseEntity.ok(user);
     }
     
     @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole( 'TENANT_ADMIN')")
     public ResponseEntity<UserResponse> updateTenantUserStatus(
             @PathVariable Long userId,
             @RequestParam boolean active) {
@@ -60,21 +61,21 @@ public class UserTenantController {
     }
     
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole( 'TENANT_ADMIN')")
     public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
         tenantUserService.softDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
     }
     
     @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN')")
     public ResponseEntity<UserResponse> restoreTenantUser(@PathVariable Long userId) {
         UserResponse response = tenantUserService.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
     }
     
-    @PatchMapping("/{userId}/reset-password")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PatchMapping("/{userId}/password")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN')")
     public ResponseEntity<UserResponse> resetTenantUserPassword(
             @PathVariable Long userId,
             @RequestParam
@@ -86,7 +87,7 @@ public class UserTenantController {
     }
     
     @DeleteMapping("/{userId}/hard")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
         tenantUserService.hardDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();

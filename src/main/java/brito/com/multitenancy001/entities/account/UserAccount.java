@@ -45,20 +45,7 @@ public class UserAccount {
     @Builder.Default
     private boolean active = true;
 
-	/*
-	 * @ElementCollection
-	 * 
-	 * @CollectionTable( name = "user_account_permissions", // ⚠️ TABELA SEPARADA
-	 * schema = "public", joinColumns = @JoinColumn(name = "user_account_id"),
-	 * uniqueConstraints = @UniqueConstraint(columnNames = {"user_account_id",
-	 * "permission"}) )
-	 * 
-	 * @Column(name = "permission", length = 100)
-	 * 
-	 * @Builder.Default private List<String> permissions = new ArrayList<>();
-	 */
-
-    // 🔐 SEGURANÇA
+	 // 🔐 SEGURANÇA
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -76,10 +63,7 @@ public class UserAccount {
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
-    // ⚠️ CAMPOS SIMPLES - admin não precisa de avatar/phone
-    // SEM avatar_url, phone, created_by, updated_by
-
-    // 🌎 CONFIGURAÇÕES
+     // 🌎 CONFIGURAÇÕES
     @Column(name = "timezone", length = 50)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";

@@ -56,7 +56,7 @@ public class SecurityConfig {
                     "/api/accounts/auth/checkuser",
                     "/api/accounts/auth/forgot-password",
                     "/api/accounts/auth/reset-password",
-                    "/api/accounts"
+                    "/api/signup"
                 ).permitAll()
 
                 // 🔒 PLATFORM (APÓS LOGIN)

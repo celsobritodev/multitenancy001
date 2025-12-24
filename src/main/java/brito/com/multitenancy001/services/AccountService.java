@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,9 +24,7 @@ import java.util.UUID;
 public class AccountService {
 
 	private final AccountRepository accountRepository;
-	private final UserAccountRepository userAccountRepository;
 	private final UserTenantRepository userTenantRepository;
-	private final PasswordEncoder passwordEncoder;
 	private final TenantMigrationService tenantMigrationService;
 	private final TenantSchemaService tenantSchemaService;
 	private final JdbcTemplate jdbcTemplate;
@@ -143,23 +140,33 @@ public class AccountService {
 	}
 
 	public int cancelAccount(Account account) {
-		String tenantSchema = account.getSchemaName();
+	    String tenantSchema = account.getSchemaName();
 
-		log.info("🛑 [cancelAccountTx] INÍCIO | accountId={} | schema={}", account.getId(), tenantSchema);
-		TenantContext.bindTenant(tenantSchema);
-		account.setDeletedAt(LocalDateTime.now());
-		accountRepository.save(account);
+	    log.info("🛑 [cancelAccount] INÍCIO | accountId={} | schema={}", account.getId(), tenantSchema);
 
-		if (!validateTenantSchema(tenantSchema) || !tableExistsInTenant(tenantSchema, "users_tenant")) {
-			log.warn("⚠️ Cancelamento apenas PUBLIC | schema inválido");
-			return 0;
-		}
-		try {
-			return cancelAccountTx(account);
-		} finally {
-			TenantContext.unbindTenant();
-		}
+	    // ✅ 1) SALVA PUBLIC (sem tenant)
+	    TenantContext.unbindTenant();
+	    account.setDeletedAt(LocalDateTime.now());
+	    accountRepository.save(account);
+
+	    // ✅ 2) Se tenant não existe, acabou
+	    if (!validateTenantSchema(tenantSchema) || !tableExistsInTenant(tenantSchema, "users_tenant")) {
+	        log.warn("⚠️ Cancelamento apenas PUBLIC | schema inválido");
+	        return 0;
+	    }
+
+	    // ✅ 3) Agora sim entra no tenant e remove usuários
+	    TenantContext.bindTenant(tenantSchema);
+	    try {
+	        return cancelAccountTx(account);
+	    } finally {
+	        TenantContext.unbindTenant();
+	    }
 	}
+
+	
+	
+	
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public int cancelAccountTx(Account account) {
@@ -250,22 +257,28 @@ public class AccountService {
 		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
 				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-		// Busca admin da conta (platform admin)
-		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
-
-		return mapToResponse(account, admin);
+		
+		return mapToResponse(account);
 	}
 
-	private AccountResponse mapToResponse(Account account, UserAccount admin) {
-		AdminUserResponse adminResponse = admin != null
-				? new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
-				: null;
-
-		return AccountResponse.builder().id(account.getId()).name(account.getName()).schemaName(account.getSchemaName())
-				.status(account.getStatus().name()).createdAt(account.getCreatedAt())
-				.trialEndDate(account.getTrialEndDate()).admin(adminResponse).systemAccount(account.isSystemAccount())
-				.build();
+	private AccountResponse mapToResponse(Account account) {
+	    return AccountResponse.builder()
+	        .id(account.getId())
+	        .name(account.getName())
+	        .schemaName(account.getSchemaName())
+	        .status(account.getStatus().name())
+	        .createdAt(account.getCreatedAt())
+	        .trialEndDate(account.getTrialEndDate())
+	        .systemAccount(account.isSystemAccount())
+	        .admin(null) // ou remova do DTO
+	        .build();
 	}
+
+	
+	
+	
+	
+	
 
 	@Transactional(readOnly = true)
 	public List<AccountResponse> listAllAccounts() {
@@ -282,20 +295,19 @@ public class AccountService {
 
 		try {
 
-			// 1️⃣ PUBLIC — cria account
+			// 1️⃣ PUBLIC — cria account em public
 			Account account = createAccountTx(request);
 
 			// 2️⃣ TENANT — cria schema + tabelas
 			migrateTenant(account);
 
-			// 3️⃣ PUBLIC — cria admin da plataforma
-			UserAccount accountAdmin = createAccountAdminTx(request.admin(), account);
+			
 
-			// 4️⃣ TENANT — cria admin do tenant
+			// 3 cria TENANT_ADMIN no tenant
 			tenantSchemaService.createTenantAdmin(account.getId(), account.getSchemaName(), request.admin());
 
 			log.info("✅ Conta criada com sucesso. AccountId={}", account.getId());
-			return mapToResponse(account, accountAdmin);
+			return mapToResponse(account);
 
 		} catch (Exception e) {
 			log.error("❌ Erro ao criar conta", e);
@@ -355,18 +367,8 @@ public class AccountService {
 		return accountRepository.save(account);
 	}
 
-	@Transactional
-	protected UserAccount createAccountAdminTx(AdminCreateRequest adminReq, Account account) {
 
-		log.debug("👤 Criando admin da conta no PUBLIC");
-		TenantContext.unbindTenant();
-
-		UserAccount admin = UserAccount.builder().name("Administrador").username(adminReq.username().toLowerCase())
-				.email(adminReq.email()).password(passwordEncoder.encode(adminReq.password()))
-				.role(UserAccountRole.PLATFORM_ADMIN).account(account).active(true).build();
-
-		return userAccountRepository.save(admin);
-	}
+	
 
 	protected void migrateTenant(Account account) {
 
@@ -489,60 +491,74 @@ public class AccountService {
 
 	@Transactional(readOnly = true)
 	public List<AccountResponse> listAllAccountsWithAdmin() {
-		TenantContext.unbindTenant();
+	    TenantContext.unbindTenant();
 
-		return accountRepository.findAllByDeletedFalse().stream().map(account -> {
-			UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
-			return mapToResponse(account, admin);
-		}).toList();
+	    return accountRepository.findAllByDeletedFalse().stream()
+	            .map(this::mapToResponse)
+	            .toList();
 	}
+
 
 	@Transactional(readOnly = true)
-	public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
 
-		TenantContext.unbindTenant(); // 🔥 PUBLIC SEMPRE
+    TenantContext.unbindTenant(); // PUBLIC
 
-		Account account = accountRepository.findById(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+    Account account = accountRepository.findById(accountId)
+            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
+    boolean inTrial = account.getStatus() == AccountStatus.FREE_TRIAL;
+    boolean trialExpired = inTrial && account.getTrialEndDate().isBefore(LocalDateTime.now());
 
-		long totalUsers = userAccountRepository.countByAccountIdAndDeletedFalse(account.getId());
+    long daysRemaining = inTrial
+            ? Math.max(0, java.time.Duration.between(LocalDateTime.now(), account.getTrialEndDate()).toDays())
+            : 0;
 
-		boolean inTrial = account.getStatus() == AccountStatus.FREE_TRIAL;
-		boolean trialExpired = inTrial && account.getTrialEndDate().isBefore(LocalDateTime.now());
+    // ✅ NÃO EXISTE MAIS ADMIN DE CONTA no public
+    AdminUserResponse admin = null;
 
-		long daysRemaining = inTrial
-				? Math.max(0, java.time.Duration.between(LocalDateTime.now(), account.getTrialEndDate()).toDays())
-				: 0;
+    // ✅ totalUsers (se quiser) deveria vir do tenant.users_tenant, não do public.users_account
+    long totalUsers = 0;
 
-		return new AccountAdminDetailsResponse(account.getId(), account.getName(), account.getSlug(),
-				account.getSchemaName(), account.getStatus().name(),
+    return new AccountAdminDetailsResponse(
+            account.getId(),
+            account.getName(),
+            account.getSlug(),
+            account.getSchemaName(),
+            account.getStatus().name(),
 
-				account.getCompanyDocument(), account.getCompanyEmail(),
+            account.getCompanyDocument(),
+            account.getCompanyEmail(),
 
-				account.getCreatedAt(), account.getTrialEndDate(), account.getPaymentDueDate(), account.getDeletedAt(),
+            account.getCreatedAt(),
+            account.getTrialEndDate(),
+            account.getPaymentDueDate(),
+            account.getDeletedAt(),
 
-				inTrial, trialExpired, daysRemaining,
+            inTrial,
+            trialExpired,
+            daysRemaining,
 
-				admin != null
-						? new AdminUserResponse(admin.getId(), admin.getUsername(), admin.getEmail(), admin.isActive())
-						: null,
+            admin,
+            totalUsers,
+            !account.isDeleted()
+    );
+}
 
-				totalUsers, !account.isDeleted());
-	}
+	
+	
+	
 
 	@Transactional(readOnly = true)
 	public AccountResponse getAccountByIdWithAdmin(Long accountId) {
 
-		TenantContext.unbindTenant(); // sempre PUBLIC
+	    TenantContext.unbindTenant();
 
-		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+	    Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+	            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-		UserAccount admin = userAccountRepository.findFirstByAccountIdAndDeletedFalse(account.getId()).orElse(null);
-
-		return mapToResponse(account, admin);
+	    return mapToResponse(account);
 	}
+
 
 }

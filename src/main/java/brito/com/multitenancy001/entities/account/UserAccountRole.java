@@ -7,8 +7,8 @@ import brito.com.multitenancy001.dtos.RoleAuthority;
 public enum UserAccountRole implements RoleAuthority {
 
     SUPER_ADMIN(true),
-    PLATFORM_ADMIN(true),
-    SUPPORT(false);
+    SUPPORT(true),
+	STAFF(true);
 
     private final boolean platformRole;
 

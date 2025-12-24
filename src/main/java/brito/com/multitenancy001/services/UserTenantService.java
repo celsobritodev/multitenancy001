@@ -101,11 +101,9 @@ public class UserTenantService {
 
     
    private boolean hasReachedUserLimit(Account account) {
-    long activeUsersCount = userTenantRepository
-        .findByAccountId(account.getId())
-        .stream()
-        .filter(u -> u.isActive() && !u.isDeleted())
-        .count();
+	   long activeUsersCount = userTenantRepository.
+			   countByAccountIdAndActiveTrueAndDeletedFalse(account.getId());
+
 
     return activeUsersCount >= account.getMaxUsers();
 }
