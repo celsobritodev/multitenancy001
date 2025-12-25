@@ -13,7 +13,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/accounts")
-@PreAuthorize("hasAuthority('TOKEN_ACCOUNT') and hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
+
 @RequiredArgsConstructor
 @Slf4j
 public class AdminAccountsController {
