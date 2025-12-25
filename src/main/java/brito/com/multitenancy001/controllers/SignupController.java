@@ -20,7 +20,7 @@ public class SignupController {
 
     
     @PostMapping
-    public ResponseEntity<AccountResponse> SignUp(
+    public ResponseEntity<AccountResponse> createAccount(
             @Valid @RequestBody AccountCreateRequest request) {
         AccountResponse response = accountService.createAccount(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

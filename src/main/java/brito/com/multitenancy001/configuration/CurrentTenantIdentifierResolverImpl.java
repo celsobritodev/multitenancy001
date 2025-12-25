@@ -87,7 +87,7 @@ public class CurrentTenantIdentifierResolverImpl
 
     @Override
     public boolean validateExistingCurrentSessions() {
-        return true;
+        return false;
     }
 
     @Override
