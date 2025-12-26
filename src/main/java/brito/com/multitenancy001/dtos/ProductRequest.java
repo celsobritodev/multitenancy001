@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
-//Record para criação/atualização expandido
+// Record para criação/atualização expandido (com Category/Subcategory por ID)
 public record ProductRequest(
      @NotBlank String name,
      String description,
@@ -16,7 +16,10 @@ public record ProductRequest(
      Integer minStock,
      Integer maxStock,
      BigDecimal costPrice,
-     String category,
+
+     @NotNull Long categoryId,     // ✅ obrigatório
+     Long subcategoryId,           // ✅ opcional
+
      String brand,
      BigDecimal weightKg,
      String dimensions,
@@ -24,12 +27,8 @@ public record ProductRequest(
      Boolean active,
      String supplierId
 ) {
- public ProductRequest {
-     if (stockQuantity == null) {
-         stockQuantity = 0;
-     }
-     if (active == null) {
-         active = true;
-     }
- }
+    public ProductRequest {
+        if (stockQuantity == null) stockQuantity = 0;
+        if (active == null) active = true;
+    }
 }

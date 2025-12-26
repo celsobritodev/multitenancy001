@@ -24,7 +24,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"supplier"})
+@ToString(exclude = {"supplier", "category", "subcategory"})
 public class Product {
     
     @Id
@@ -59,9 +59,32 @@ public class Product {
     @Column(name = "profit_margin", precision = 5, scale = 2)
     private BigDecimal profitMargin;
     
-    @Column(name = "category", length = 100)
-    private String category;
     
+    
+    
+    
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns(
+      foreignKey = @ForeignKey(name = "fk_products_subcategory_category"),
+      value = {
+        @JoinColumn(name = "subcategory_id", referencedColumnName = "id"),
+        @JoinColumn(name = "category_id", referencedColumnName = "category_id")
+      }
+    )
+    private Subcategory subcategory;
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
     @Column(name = "brand", length = 100)
     private String brand;
     

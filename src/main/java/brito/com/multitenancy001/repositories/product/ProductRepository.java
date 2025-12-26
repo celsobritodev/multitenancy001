@@ -17,6 +17,26 @@ import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, String> {
+	
+	List<Product> findByCategory_Id(Long categoryId);
+
+	List<Product> findBySubcategory_Id(Long subcategoryId);
+
+	@Query("""
+	       SELECT p FROM Product p
+	       WHERE p.category.id = :categoryId
+	         AND (:subcategoryId IS NULL OR p.subcategory.id = :subcategoryId)
+	       """)
+	List<Product> findByCategoryAndOptionalSubcategory(
+	        @Param("categoryId") Long categoryId,
+	        @Param("subcategoryId") Long subcategoryId
+	);
+	
+	
+	
+	
+	
+	
     
     List<Product> findByNameContainingIgnoreCase(String name);
     

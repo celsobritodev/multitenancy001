@@ -1,6 +1,5 @@
 package brito.com.multitenancy001.dtos;
 
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -21,26 +20,29 @@ public record ProductDTO(
         Integer maxStock,
         BigDecimal costPrice,
         BigDecimal profitMargin,
-        String category,
+
+        Long categoryId,
+        String categoryName,
+        Long subcategoryId,
+        String subcategoryName,
+
         String brand,
         BigDecimal weightKg,
         String dimensions,
         String barcode,
         Boolean active,
+
         String supplierId,
         String supplierName,
+
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
     public ProductDTO {
-        if (stockQuantity == null) {
-            stockQuantity = 0;
-        }
-        if (active == null) {
-            active = true;
-        }
+        if (stockQuantity == null) stockQuantity = 0;
+        if (active == null) active = true;
     }
-    
+
     public static ProductDTO fromEntity(Product product) {
         return new ProductDTO(
                 product.getId(),
@@ -53,17 +55,23 @@ public record ProductDTO(
                 product.getMaxStock(),
                 product.getCostPrice(),
                 product.getProfitMargin(),
-                product.getCategory(),
+
+                product.getCategory() != null ? product.getCategory().getId() : null,
+                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getSubcategory() != null ? product.getSubcategory().getId() : null,
+                product.getSubcategory() != null ? product.getSubcategory().getName() : null,
+
                 product.getBrand(),
                 product.getWeightKg(),
                 product.getDimensions(),
                 product.getBarcode(),
                 product.getActive(),
+
                 product.getSupplier() != null ? product.getSupplier().getId() : null,
                 product.getSupplier() != null ? product.getSupplier().getName() : null,
+
                 product.getCreatedAt(),
                 product.getUpdatedAt()
         );
     }
 }
-
