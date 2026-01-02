@@ -6,9 +6,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
-import brito.com.multitenancy001.configuration.ValidationPatterns;
-
 import java.util.List;
+
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 @Builder
 public record UserCreateRequest(
@@ -33,8 +33,7 @@ public record UserCreateRequest(
     String password,
     
     @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "ADMIN|PRODUCT_MANAGER|SALES_MANAGER|VIEWER|SUPPORT|FINANCEIRO|OPERACOES", 
-             message = "Role inválida")
+    @Pattern(regexp = "TENANT_ADMIN|MANAGER|VIEWER|USER", message = "Role inválida")
     String role,
     
     List<String> permissions,

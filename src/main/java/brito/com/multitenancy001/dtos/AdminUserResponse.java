@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 
 public record AdminUserResponse(
         Long id,
@@ -9,7 +9,7 @@ public record AdminUserResponse(
         boolean active
 ) {
 
-    public static AdminUserResponse from(UserAccount user) {
+    public static AdminUserResponse from(PlatformUser user) {
         return new AdminUserResponse(
                 user.getId(),
                 user.getUsername(),

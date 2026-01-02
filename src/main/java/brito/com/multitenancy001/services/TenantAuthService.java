@@ -5,14 +5,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.dtos.JwtResponse;
 import brito.com.multitenancy001.dtos.TenantLoginRequest;
-import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.tenant.UserTenant;
+import brito.com.multitenancy001.entities.tenant.TenantUser;
 import brito.com.multitenancy001.exceptions.ApiException;
+import brito.com.multitenancy001.multitenancy.TenantContext;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
 import brito.com.multitenancy001.repositories.AccountRepository;
-import brito.com.multitenancy001.repositories.UserTenantRepository;
+import brito.com.multitenancy001.repositories.TenantUserRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 
@@ -23,14 +23,14 @@ public class TenantAuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final AccountRepository accountRepository;
-    private final UserTenantRepository userTenantRepository;
+    private final TenantUserRepository userTenantRepository;
 
     public JwtResponse loginTenant(TenantLoginRequest request) {
 
         // 1️⃣ PUBLIC — resolve conta
         TenantContext.unbindTenant();
 
-        Account account = accountRepository
+        TenantAccount account = accountRepository
                 .findBySlugAndDeletedFalse(request.slug())
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
@@ -58,7 +58,7 @@ public class TenantAuthService {
                             )
                     );
 
-            UserTenant user = userTenantRepository
+            TenantUser user = userTenantRepository
                     .findByUsernameAndAccountId(
                             request.username(),
                             account.getId()

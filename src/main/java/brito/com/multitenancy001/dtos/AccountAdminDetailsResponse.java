@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -40,8 +40,8 @@ public record AccountAdminDetailsResponse(
 
     // ✅ MÉTODO DE FÁBRICA
     public static AccountAdminDetailsResponse from(
-            Account account,
-            UserAccount admin
+            TenantAccount account,
+            PlatformUser admin
     ) {
 
         LocalDateTime now = LocalDateTime.now();

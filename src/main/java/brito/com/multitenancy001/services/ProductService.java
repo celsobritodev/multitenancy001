@@ -1,9 +1,12 @@
+// ===============================
+// ProductService.java
+// (corrigido: resolveCategoryAndSubcategory sem duplicação,
+//  update limpando subcategory quando vier null,
+//  usando findByIdWithCategory pra validar)
+// ===============================
 package brito.com.multitenancy001.services;
 
-import brito.com.multitenancy001.entities.tenant.Category;
-import brito.com.multitenancy001.entities.tenant.Product;
-import brito.com.multitenancy001.entities.tenant.Subcategory;
-import brito.com.multitenancy001.entities.tenant.Supplier;
+import brito.com.multitenancy001.entities.tenant.*;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.repositories.product.CategoryRepository;
 import brito.com.multitenancy001.repositories.product.ProductRepository;
@@ -11,7 +14,6 @@ import brito.com.multitenancy001.repositories.product.SubcategoryRepository;
 import brito.com.multitenancy001.repositories.supplier.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -41,21 +43,16 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Product findById(String id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
-                        "Produto não encontrado com ID: " + id, 404));
+            .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
+                "Produto não encontrado com ID: " + id, 404));
     }
 
     @Transactional
     public Product create(Product product) {
         validateProduct(product);
 
-        // ✅ resolve categoria/subcategoria
         resolveCategoryAndSubcategory(product);
-
-        // ✅ resolve supplier
         resolveSupplier(product);
-
-        // ✅ valida vínculo subcategoria -> categoria
         validateSubcategoryBelongsToCategory(product);
 
         return productRepository.save(product);
@@ -77,7 +74,7 @@ public class ProductService {
             Optional<Product> productWithSku = productRepository.findBySku(productDetails.getSku());
             if (productWithSku.isPresent() && !productWithSku.get().getId().equals(id)) {
                 throw new ApiException("SKU_ALREADY_EXISTS",
-                        "SKU já cadastrado: " + productDetails.getSku(), 409);
+                    "SKU já cadastrado: " + productDetails.getSku(), 409);
             }
             existingProduct.setSku(productDetails.getSku());
         }
@@ -91,30 +88,29 @@ public class ProductService {
             existingProduct.setStockQuantity(productDetails.getStockQuantity());
         }
 
-        // ✅ categoria/subcategoria (se vier no payload)
+        // ✅ category
         if (productDetails.getCategory() != null && productDetails.getCategory().getId() != null) {
             Category category = categoryRepository.findById(productDetails.getCategory().getId())
-                    .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND",
-                            "Categoria não encontrada", 404));
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
             existingProduct.setCategory(category);
         }
 
+        // ✅ subcategory (se veio ID)
         if (productDetails.getSubcategory() != null && productDetails.getSubcategory().getId() != null) {
-        	Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
-        	        .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND",
-        	                "Subcategoria não encontrada", 404));
-        	existingProduct.setSubcategory(sub);
-
+            Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
+            existingProduct.setSubcategory(sub);
         }
 
-     //productDetails.getSubcategory() == nul
-
+        // ✅ se veio explicitamente subcategory = null -> limpa
+        if (productDetails.getSubcategory() == null) {
+            existingProduct.setSubcategory(null);
+        }
 
         // ✅ supplier
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
             Supplier supplier = supplierRepository.findById(productDetails.getSupplier().getId())
-                    .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
-                            "Fornecedor não encontrado", 404));
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND", "Fornecedor não encontrado", 404));
             existingProduct.setSupplier(supplier);
         }
 
@@ -127,64 +123,43 @@ public class ProductService {
         if (product.getSupplier() != null && product.getSupplier().getId() != null) {
             String supplierId = product.getSupplier().getId();
             Supplier supplier = supplierRepository.findById(supplierId)
-                    .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
-                            "Fornecedor não encontrado com ID: " + supplierId, 404));
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                    "Fornecedor não encontrado com ID: " + supplierId, 404));
             product.setSupplier(supplier);
         }
     }
 
     private void resolveCategoryAndSubcategory(Product product) {
-
-        // ✅ CATEGORY é obrigatória
+        // ✅ category obrigatória
         if (product.getCategory() == null || product.getCategory().getId() == null) {
             throw new ApiException("CATEGORY_REQUIRED", "Categoria é obrigatória", 400);
         }
 
         Category category = categoryRepository.findById(product.getCategory().getId())
-                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND",
-                        "Categoria não encontrada", 404));
+            .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
         product.setCategory(category);
 
-        // ✅ SUBCATEGORY é opcional
+        // ✅ subcategory opcional
         if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
             Subcategory sub = subcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
-                    .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND",
-                            "Subcategoria não encontrada", 404));
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
             product.setSubcategory(sub);
         } else {
             product.setSubcategory(null);
         }
     }
 
-
-        
-        
-        
-        
-
-        // subcategory opcional
-        if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
-            Subcategory sub = subcategoryRepository.findById(product.getSubcategory().getId())
-                    .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND",
-                            "Subcategoria não encontrada", 404));
-            product.setSubcategory(sub);
-        }
-    }
-
     private void validateSubcategoryBelongsToCategory(Product product) {
-        if (product.getSubcategory() == null) {
-            return; // subcategoria é opcional
-        }
+        if (product.getSubcategory() == null) return;
 
         if (product.getCategory() == null || product.getCategory().getId() == null) {
             throw new ApiException("CATEGORY_REQUIRED", "Categoria é obrigatória", 400);
         }
 
         if (product.getSubcategory().getCategory() == null
-                || product.getSubcategory().getCategory().getId() == null) {
-            // por segurança (caso subcategory não venha com category preenchida)
+            || product.getSubcategory().getCategory().getId() == null) {
             throw new ApiException("INVALID_SUBCATEGORY",
-                    "Subcategoria sem categoria associada (cadastro inconsistente)", 409);
+                "Subcategoria sem categoria associada (cadastro inconsistente)", 409);
         }
 
         Long subCatCategoryId = product.getSubcategory().getCategory().getId();
@@ -192,13 +167,11 @@ public class ProductService {
 
         if (!subCatCategoryId.equals(productCategoryId)) {
             throw new ApiException("INVALID_SUBCATEGORY",
-                    "Subcategoria não pertence à categoria informada", 409);
+                "Subcategoria não pertence à categoria informada", 409);
         }
     }
 
-    
-    
-    // ======= métodos seus mantidos / ajustados =======
+    // ======= outros métodos =======
 
     @Transactional(readOnly = true)
     public List<Product> searchProducts(String name, String sku, BigDecimal minPrice,
@@ -264,17 +237,16 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<Product> findByBrand(String brand) {
-        // opcional: criar repo findByBrandIgnoreCase para não filtrar em memória
         return productRepository.findAll().stream()
-                .filter(p -> brand.equals(p.getBrand()))
-                .toList();
+            .filter(p -> brand.equals(p.getBrand()))
+            .toList();
     }
 
     @Transactional(readOnly = true)
     public List<Product> findActiveProducts() {
         return productRepository.findAll().stream()
-                .filter(p -> Boolean.TRUE.equals(p.getActive()) && !Boolean.TRUE.equals(p.getDeleted()))
-                .toList();
+            .filter(p -> Boolean.TRUE.equals(p.getActive()) && !Boolean.TRUE.equals(p.getDeleted()))
+            .toList();
     }
 
     @Transactional

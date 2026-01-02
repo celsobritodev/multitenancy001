@@ -1,12 +1,14 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.account.UserAccount;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+
 import java.time.LocalDateTime;
 
 public record AccountResponse(
     Long id,
     String name,
+    String slug,
     String schemaName,
     String status,
     LocalDateTime createdAt,
@@ -16,10 +18,11 @@ public record AccountResponse(
 ) {
     
     // Método estático para criar a partir da entidade (sem admin)
-    public static AccountResponse fromEntity(Account account) {
+    public static AccountResponse fromEntity(TenantAccount account) {
         return new AccountResponse(
             account.getId(),
             account.getName(),
+            account.getSlug(),
             account.getSchemaName(),
             account.getStatus().name(),
             account.getCreatedAt(),
@@ -30,7 +33,7 @@ public record AccountResponse(
     }
     
     // Método estático para criar a partir da entidade (com admin)
-    public static AccountResponse fromEntity(Account account, UserAccount userAccount) {
+    public static AccountResponse fromEntity(TenantAccount account, PlatformUser userAccount) {
     	AdminUserResponse adminResponse = userAccount != null
     	        ? AdminUserResponse.from(userAccount)
     	        : null;
@@ -38,6 +41,7 @@ public record AccountResponse(
         return new AccountResponse(
             account.getId(),
             account.getName(),
+            account.getSlug(),
             account.getSchemaName(),
             account.getStatus().name(),
             account.getCreatedAt(),
@@ -56,6 +60,7 @@ public record AccountResponse(
     public static class Builder {
         private Long id;
         private String name;
+        private String slug;
         private String schemaName;
         private String status;
         private LocalDateTime createdAt;
@@ -72,6 +77,12 @@ public record AccountResponse(
             this.name = name; 
             return this; 
         }
+        
+        public Builder slug(String slug) { 
+            this.slug = slug; 
+            return this; 
+        }
+        
         
         public Builder schemaName(String schemaName) { 
             this.schemaName = schemaName; 
@@ -105,7 +116,7 @@ public record AccountResponse(
         
         public AccountResponse build() {
             return new AccountResponse(
-                id, name, schemaName, status, 
+                id, name, slug, schemaName, status, 
                 createdAt, trialEndDate, admin, systemAccount
             );
         }

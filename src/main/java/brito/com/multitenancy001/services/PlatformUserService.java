@@ -1,15 +1,15 @@
 package brito.com.multitenancy001.services;
 
-import brito.com.multitenancy001.configuration.TenantContext;
-import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.UserCreateRequest;
 import brito.com.multitenancy001.dtos.UserResponse;
-import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.account.UserAccount;
-import brito.com.multitenancy001.entities.account.UserAccountRole;
 import brito.com.multitenancy001.exceptions.ApiException;
+import brito.com.multitenancy001.multitenancy.TenantContext;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.platform.domain.user.PlatformRole;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.UserAccountRepository;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ public class PlatformUserService {
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
 
-    private Account getPlatformAccount() {
+    private TenantAccount getPlatformAccount() {
         TenantContext.unbindTenant(); // PUBLIC
         return accountRepository.findBySlugAndDeletedFalse("platform")
                 .orElseThrow(() -> new ApiException(
@@ -40,7 +40,7 @@ public class PlatformUserService {
     public UserResponse createPlatformUser(UserCreateRequest request) {
         TenantContext.unbindTenant();
 
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
 
         // validações básicas
         if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
@@ -56,9 +56,9 @@ public class PlatformUserService {
         String username = request.username().toLowerCase().trim();
 
         // role permitida somente plataforma
-        UserAccountRole role;
+        PlatformRole role;
         try {
-            role = UserAccountRole.valueOf(request.role().toUpperCase());
+            role = PlatformRole.valueOf(request.role().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
         }
@@ -76,7 +76,7 @@ public class PlatformUserService {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
         }
 
-        UserAccount user = UserAccount.builder()
+        PlatformUser user = PlatformUser.builder()
                 .name(request.name())
                 .username(username)
                 .email(request.email())
@@ -93,7 +93,7 @@ public class PlatformUserService {
     @Transactional(readOnly = true)
     public List<UserResponse> listPlatformUsers() {
         TenantContext.unbindTenant();
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
         return userAccountRepository.findByAccountId(platformAccount.getId()).stream()
                 .filter(u -> !u.isDeleted())
                 .map(this::mapToResponse)
@@ -103,9 +103,9 @@ public class PlatformUserService {
     @Transactional(readOnly = true)
     public UserResponse getPlatformUser(Long userId) {
         TenantContext.unbindTenant();
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
 
-        UserAccount user = userAccountRepository
+        PlatformUser user = userAccountRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -124,9 +124,9 @@ public class PlatformUserService {
 
     public UserResponse updatePlatformUserStatus(Long userId, boolean active) {
         TenantContext.unbindTenant();
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
 
-        UserAccount user = userAccountRepository
+        PlatformUser user = userAccountRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -142,9 +142,9 @@ public class PlatformUserService {
 
     public void softDeletePlatformUser(Long userId) {
         TenantContext.unbindTenant();
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
 
-        UserAccount user = userAccountRepository
+        PlatformUser user = userAccountRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -159,9 +159,9 @@ public class PlatformUserService {
 
     public UserResponse restorePlatformUser(Long userId) {
         TenantContext.unbindTenant();
-        Account platformAccount = getPlatformAccount();
+        TenantAccount platformAccount = getPlatformAccount();
 
-        UserAccount user = userAccountRepository
+        PlatformUser user = userAccountRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -175,7 +175,7 @@ public class PlatformUserService {
     
     
 
-    private UserResponse mapToResponse(UserAccount user) {
+    private UserResponse mapToResponse(PlatformUser user) {
         return new UserResponse(
                 user.getId(),
                 user.getUsername(),

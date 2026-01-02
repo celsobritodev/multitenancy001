@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.security;
 
-import brito.com.multitenancy001.dtos.RoleAuthority;
-import brito.com.multitenancy001.entities.account.UserAccount;
-import brito.com.multitenancy001.entities.tenant.UserTenant;
+
+import brito.com.multitenancy001.entities.tenant.TenantUser;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -28,7 +28,7 @@ public class CustomUserDetails implements UserDetails {
     private final Collection<? extends GrantedAuthority> authorities;
     
     // Construtor para UserAccount
-    public CustomUserDetails(UserAccount user, String schemaName) {
+    public CustomUserDetails(PlatformUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();
@@ -42,7 +42,7 @@ public class CustomUserDetails implements UserDetails {
 
     
     // Construtor para UserTenant
-    public CustomUserDetails(UserTenant user, String schemaName) {
+    public CustomUserDetails(TenantUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();

@@ -1,12 +1,17 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.configuration.ValidationPatterns;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record AdminCreateRequest(
+		
+		 @NotBlank
+		    @Size(min = 3, max = 50)
+		    String name,
+		
 
 	    @NotBlank
 	    @Size(min = 3, max = 50)

@@ -5,11 +5,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.configuration.TenantContext;
 import brito.com.multitenancy001.dtos.JwtResponse;
 import brito.com.multitenancy001.dtos.SuperAdminLoginRequest;
-import brito.com.multitenancy001.entities.account.UserAccount;
 import brito.com.multitenancy001.exceptions.ApiException;
+import brito.com.multitenancy001.multitenancy.TenantContext;
+import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 import brito.com.multitenancy001.repositories.UserAccountRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ public class AdminAuthService {
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
         TenantContext.unbindTenant();
 
-        UserAccount user = userAccountRepository
+        PlatformUser user = userAccountRepository
                 .findByUsernameAndDeletedFalse(request.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",

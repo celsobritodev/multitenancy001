@@ -58,3 +58,12 @@ WHERE deleted = false;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
 ON accounts (company_email)
 WHERE deleted = false;
+
+-- Índice único para schema
+CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
+ON accounts (schema_name);
+
+-- Índice único para slug
+CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
+ON accounts (slug);
+

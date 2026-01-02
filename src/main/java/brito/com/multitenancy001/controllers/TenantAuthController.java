@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import brito.com.multitenancy001.dtos.JwtResponse;
 import brito.com.multitenancy001.dtos.TenantLoginRequest;
 import brito.com.multitenancy001.services.TenantAuthService;
-import brito.com.multitenancy001.services.UserTenantService;
+import brito.com.multitenancy001.services.TenantUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 public class TenantAuthController {
 
 	private final TenantAuthService tenantAuthService;
-	private final UserTenantService tenantUserService;
+	private final TenantUserService tenantUserService;
 
 	@PostMapping("/login")
 	public ResponseEntity<JwtResponse> loginTenant(@Valid @RequestBody TenantLoginRequest request) {

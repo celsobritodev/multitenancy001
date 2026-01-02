@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.configuration.ValidationPatterns;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 

@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.controllers;
 
-import brito.com.multitenancy001.configuration.ValidationPatterns;
 import brito.com.multitenancy001.dtos.UserCreateRequest;
 import brito.com.multitenancy001.dtos.UserResponse;
-import brito.com.multitenancy001.services.UserTenantService;
+import brito.com.multitenancy001.services.TenantUserService;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserTenantController {
     
-    private final UserTenantService tenantUserService;
+    private final TenantUserService tenantUserService;
     
     @PostMapping
     @PreAuthorize("hasRole('TENANT_ADMIN')")
@@ -27,6 +27,7 @@ public class UserTenantController {
     public ResponseEntity<UserResponse> createTenantUser(
             @Valid @RequestBody UserCreateRequest request) {
         UserResponse response = tenantUserService.createTenantUser(request);
+                                               
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     

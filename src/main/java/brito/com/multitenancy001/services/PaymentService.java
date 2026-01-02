@@ -2,11 +2,11 @@ package brito.com.multitenancy001.services;
 
 import brito.com.multitenancy001.dtos.PaymentRequest;
 import brito.com.multitenancy001.dtos.PaymentResponse;
-import brito.com.multitenancy001.entities.account.Account;
-import brito.com.multitenancy001.entities.account.AccountStatus;
-import brito.com.multitenancy001.entities.account.Payment;
-import brito.com.multitenancy001.entities.account.PaymentStatus;
 import brito.com.multitenancy001.exceptions.ApiException;
+import brito.com.multitenancy001.platform.domain.billing.Payment;
+import brito.com.multitenancy001.platform.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
 import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.PaymentRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,22 +36,22 @@ public class PaymentService {
         log.info("Iniciando verificação de pagamentos...");
         LocalDateTime today = LocalDateTime.now();
 
-        List<Account> expiredTrials = accountRepository
-                .findByStatus(AccountStatus.FREE_TRIAL)
+        List<TenantAccount> expiredTrials = accountRepository
+                .findByStatus(TenantAccountStatus.FREE_TRIAL)
                 .stream()
                 .filter(account -> account.getTrialEndDate() != null &&
                         account.getTrialEndDate().isBefore(today))
                 .collect(Collectors.toList());
 
-        for (Account account : expiredTrials) {
+        for (TenantAccount account : expiredTrials) {
             suspendAccount(account, "Trial expirado");
         }
 
-        List<Account> overdueAccounts = accountRepository
+        List<TenantAccount> overdueAccounts = accountRepository
                 .findByPaymentDueDateBefore(today);
 
-        for (Account account : overdueAccounts) {
-            if (account.getStatus() == AccountStatus.ACTIVE) {
+        for (TenantAccount account : overdueAccounts) {
+            if (account.getStatus() == TenantAccountStatus.ACTIVE) {
                 suspendAccount(account, "Pagamento atrasado");
             }
         }
@@ -59,8 +59,8 @@ public class PaymentService {
         checkExpiredPendingPayments();
     }
 
-    private void suspendAccount(Account account, String reason) {
-        account.setStatus(AccountStatus.SUSPENDED);
+    private void suspendAccount(TenantAccount account, String reason) {
+        account.setStatus(TenantAccountStatus.SUSPENDED);
         accountRepository.save(account);
         sendSuspensionEmail(account, reason);
     }
@@ -80,7 +80,7 @@ public class PaymentService {
     @Transactional
     public PaymentResponse processPayment(PaymentRequest request) {
 
-        Account account = accountRepository.findById(request.accountId())
+        TenantAccount account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
                         "Conta não encontrada",
@@ -138,12 +138,12 @@ public class PaymentService {
         return mapToResponse(payment, "Pagamento concluído manualmente");
     }
 
-    private void completePayment(Payment payment, Account account) {
+    private void completePayment(Payment payment, TenantAccount account) {
         payment.markAsCompleted();
         payment.setTransactionId(generateTransactionId());
         paymentRepository.save(payment);
 
-        account.setStatus(AccountStatus.ACTIVE);
+        account.setStatus(TenantAccountStatus.ACTIVE);
         account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil()));
         accountRepository.save(account);
 
@@ -155,7 +155,7 @@ public class PaymentService {
         paymentRepository.save(payment);
     }
 
-    private void validatePayment(Account account, PaymentRequest request) {
+    private void validatePayment(TenantAccount account, PaymentRequest request) {
 
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ApiException(
@@ -272,11 +272,11 @@ public class PaymentService {
         return mapToResponse(payment);
     }
 
-    private void sendSuspensionEmail(Account account, String reason) {
+    private void sendSuspensionEmail(TenantAccount account, String reason) {
         log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
     }
 
-    private void sendPaymentConfirmationEmail(Account account, Payment payment) {
+    private void sendPaymentConfirmationEmail(TenantAccount account, Payment payment) {
         log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
     }
 

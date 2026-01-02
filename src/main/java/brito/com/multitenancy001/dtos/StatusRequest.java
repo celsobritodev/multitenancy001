@@ -1,11 +1,12 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.entities.account.AccountStatus;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
+
 public record StatusRequest(
-        AccountStatus status,
+        TenantAccountStatus status,
         String reason
 ) {
 
@@ -15,7 +16,7 @@ public record StatusRequest(
     
     @JsonCreator
     public StatusRequest(
-            @JsonProperty("status") AccountStatus status,
+            @JsonProperty("status") TenantAccountStatus status,
             @JsonProperty("reason") String reason
     ) {
         this.status = status;

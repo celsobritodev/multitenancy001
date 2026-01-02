@@ -1,6 +1,5 @@
 package brito.com.multitenancy001.security;
 
-import brito.com.multitenancy001.configuration.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +14,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import brito.com.multitenancy001.multitenancy.TenantContext;
 
 import java.io.IOException;
 

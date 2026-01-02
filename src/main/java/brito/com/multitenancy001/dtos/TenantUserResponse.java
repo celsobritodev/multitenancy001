@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.dtos;
 
-import brito.com.multitenancy001.entities.tenant.UserTenant;
+import brito.com.multitenancy001.entities.tenant.TenantUser;
 
 public record TenantUserResponse(
         Long id,
@@ -10,7 +10,7 @@ public record TenantUserResponse(
         boolean active,
         boolean deleted
 ) {
-    public static TenantUserResponse from(UserTenant user) {
+    public static TenantUserResponse from(TenantUser user) {
         return new TenantUserResponse(
                 user.getId(),
                 user.getUsername(),

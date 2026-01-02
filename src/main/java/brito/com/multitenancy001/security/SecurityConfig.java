@@ -51,11 +51,11 @@ public class SecurityConfig {
 
                 // 🔓 LOGIN / REFRESH (TENANT)
                 .requestMatchers(
-                    "/api/auth/login",
+                		"/api/tenant/auth/login",
                     "/api/auth/refresh",
                     "/api/accounts/auth/checkuser",
-                    "/api/accounts/auth/forgot-password",
-                    "/api/accounts/auth/reset-password",
+                    "/api/tenant/auth/forgot-password",
+                    "/api/tenant/auth/reset-password",
                     "/api/signup"
                 ).permitAll()
 
