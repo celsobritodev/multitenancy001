@@ -10,7 +10,7 @@ import brito.com.multitenancy001.dtos.SuperAdminLoginRequest;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-import brito.com.multitenancy001.repositories.UserAccountRepository;
+import brito.com.multitenancy001.repositories.PlatformUserRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 
@@ -20,7 +20,7 @@ public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
-    private final UserAccountRepository userAccountRepository;
+    private final PlatformUserRepository userAccountRepository;
 
     public JwtResponse loginSuperAdmin(SuperAdminLoginRequest request) {
 

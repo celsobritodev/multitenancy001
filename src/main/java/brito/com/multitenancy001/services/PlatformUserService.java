@@ -8,7 +8,7 @@ import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
 import brito.com.multitenancy001.platform.domain.user.PlatformRole;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 import brito.com.multitenancy001.repositories.AccountRepository;
-import brito.com.multitenancy001.repositories.UserAccountRepository;
+import brito.com.multitenancy001.repositories.PlatformUserRepository;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,7 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PlatformUserService {
 
-    private final UserAccountRepository userAccountRepository;
+    private final PlatformUserRepository userAccountRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
 

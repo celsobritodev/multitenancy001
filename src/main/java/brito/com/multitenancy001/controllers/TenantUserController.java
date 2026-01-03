@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/tenant/users")
 @RequiredArgsConstructor
-public class UserTenantController {
+public class TenantUserController {
     
     private final TenantUserService tenantUserService;
     

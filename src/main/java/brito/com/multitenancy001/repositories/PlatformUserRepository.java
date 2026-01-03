@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UserAccountRepository extends JpaRepository<PlatformUser, Long> {
+public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long> {
 	
 	long countByAccountIdAndDeletedFalse(Long accountId);
 	

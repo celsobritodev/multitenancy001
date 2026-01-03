@@ -5,6 +5,7 @@ import brito.com.multitenancy001.dtos.EnumErrorResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -177,4 +178,28 @@ public class GlobalExceptionHandler {
                 .build()
         );
     }
+    
+    
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
+        
+        List<String> errors = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .toList();
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .error("VALIDATION_ERROR")
+                .message("Erro de validação")
+                .details(errors)
+                .build();
+        
+        return ResponseEntity.badRequest().body(errorResponse);
+    }
+    
+    
+    
 }

@@ -7,7 +7,7 @@ import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 import brito.com.multitenancy001.repositories.TenantUserRepository;
-import brito.com.multitenancy001.repositories.UserAccountRepository;
+import brito.com.multitenancy001.repositories.PlatformUserRepository;
 import brito.com.multitenancy001.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
     
-    private final UserAccountRepository userAccountRepository;
+    private final PlatformUserRepository userAccountRepository;
     private final TenantUserRepository userTenantRepository;
     
     @Override

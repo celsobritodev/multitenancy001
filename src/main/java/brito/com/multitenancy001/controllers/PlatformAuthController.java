@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/auth")
 @RequiredArgsConstructor
-public class AdminAuthController {
+public class PlatformAuthController {
 
 	private final AdminAuthService adminAuthService;
 
