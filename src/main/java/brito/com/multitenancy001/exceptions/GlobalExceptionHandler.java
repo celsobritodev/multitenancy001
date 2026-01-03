@@ -73,7 +73,7 @@ public class GlobalExceptionHandler {
                     .timestamp(LocalDateTime.now())
                     .error("DUPLICATE_CNPJ")
                     .message("Já existe uma conta com o CNPJ " + cnpj)
-                    .field("companyDocument")
+                    .field("companyDocNumber")
                     .invalidValue(cnpj)
                     .build()
             );

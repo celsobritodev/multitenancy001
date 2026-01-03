@@ -8,7 +8,7 @@ import javax.sql.DataSource;
 
 @Service
 @RequiredArgsConstructor
-public class TenantMigrationService {
+public class TenantSchemaMigrationService {
 
     private final DataSource dataSource;
 

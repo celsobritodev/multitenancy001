@@ -13,7 +13,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "users_tenant")
+@Table(
+	    name = "users_tenant",
+	    uniqueConstraints = {
+	        // REMOVER constraint única de email AQUI
+	        // Email pode se repetir entre tenants diferentes
+	        @UniqueConstraint(
+	            name = "uk_user_tenant_account_username", 
+	            columnNames = {"account_id", "username"}
+	        )
+	    }
+	)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,9 +42,6 @@ public class TenantUser {
     @Column(name = "password_reset_expires")
     private LocalDateTime passwordResetExpires;
 
-    
-    
-    
 
     @Column(nullable = false, length = 100)
     private String name;

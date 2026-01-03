@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controllers;
 
 import brito.com.multitenancy001.dtos.*;
-import brito.com.multitenancy001.services.AccountService;
+import brito.com.multitenancy001.services.AccountProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,57 +14,52 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/accounts")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
-
 @RequiredArgsConstructor
 @Slf4j
-public class AdminAccountsController {
+public class PlatformAccountAdminController {
 
-	private final AccountService accountService;
+	private final AccountProvisioningService accountProvisioningService;
 
 	@GetMapping("/{id}/users")
 	public ResponseEntity<List<TenantUserResponse>> listUsersByAccount(@PathVariable Long id) {
-
-		return ResponseEntity.ok(accountService.listTenantUsers(id, false));
+		return ResponseEntity.ok(accountProvisioningService.listTenantUsers(id, false));
 	}
 
 	@GetMapping("/{id}/users/active")
 	public ResponseEntity<List<TenantUserResponse>> listActiveUsersByAccount(@PathVariable Long id) {
-
-		return ResponseEntity.ok(accountService.listTenantUsers(id, true));
+		return ResponseEntity.ok(accountProvisioningService.listTenantUsers(id, true));
 	}
 
 	@PatchMapping("/{id}/status")
 	public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(@PathVariable Long id,
 			@RequestBody StatusRequest req) {
-		return ResponseEntity.ok(accountService.changeAccountStatus(id, req));
+		return ResponseEntity.ok(accountProvisioningService.changeAccountStatus(id, req));
 	}
 
 	@GetMapping
 	public ResponseEntity<List<AccountResponse>> listAllAccounts() {
-		return ResponseEntity.ok(accountService.listAllAccounts());
+		return ResponseEntity.ok(accountProvisioningService.listAllAccounts());
 	}
 
-	//
 	@GetMapping("/{id}")
 	public ResponseEntity<AccountResponse> getAccountById(@PathVariable Long id) {
-		return ResponseEntity.ok(accountService.getAccountByIdWithAdmin(id));
+		return ResponseEntity.ok(accountProvisioningService.getAccountByIdWithAdmin(id));
 	}
 
 	@GetMapping("/{id}/details")
 	public ResponseEntity<AccountAdminDetailsResponse> getAccountByIdDetails(@PathVariable Long id) {
-		return ResponseEntity.ok(accountService.getAccountAdminDetails(id));
+		return ResponseEntity.ok(accountProvisioningService.getAccountAdminDetails(id));
 	}
 
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> softDeleteAccount(@PathVariable Long id) {
-		accountService.softDeleteAccount(id);
+		accountProvisioningService.softDeleteAccount(id);
 		return ResponseEntity.noContent().build();
 	}
 
 	@PostMapping("/{id}/restore")
 	public ResponseEntity<Void> restoreAccount(@PathVariable Long id) {
-		accountService.restoreAccount(id);
+		accountProvisioningService.restoreAccount(id);
 		return ResponseEntity.noContent().build();
-
 	}
 }

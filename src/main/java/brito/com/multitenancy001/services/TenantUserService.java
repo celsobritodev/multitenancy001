@@ -22,8 +22,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
-@Transactional
 @RequiredArgsConstructor
+@Transactional(transactionManager = "tenantTransactionManager") // ✅ Especifica qual TM  
 public class TenantUserService {
 
     private final TenantUserRepository tenantUserRepository;

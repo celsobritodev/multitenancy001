@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/platform-users")
 @RequiredArgsConstructor
-public class PlatformUsersAdminController {
+public class PlatformUserAdminController {
 
     private final PlatformUserService platformUserService;
 

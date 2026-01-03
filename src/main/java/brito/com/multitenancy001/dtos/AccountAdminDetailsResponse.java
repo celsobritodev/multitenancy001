@@ -15,9 +15,9 @@ public record AccountAdminDetailsResponse(
     String schemaName,
     String status,
 
-    // Dados legais
-    String companyDocument,
-    String companyEmail,
+    // Dados legais (sempre em conjunto)
+    DocumentType companyDocType,
+    String companyDocNumber,
 
     // Datas
     LocalDateTime createdAt,
@@ -38,7 +38,6 @@ public record AccountAdminDetailsResponse(
     boolean active
 ) {
 
-    // ✅ MÉTODO DE FÁBRICA
     public static AccountAdminDetailsResponse from(
             TenantAccount account,
             PlatformUser admin
@@ -67,8 +66,8 @@ public record AccountAdminDetailsResponse(
                 account.getSchemaName(),
                 account.getStatus().name(),
 
-                account.getCompanyDocument(),
-                account.getCompanyEmail(),
+                account.getCompanyDocType(),
+                account.getCompanyDocNumber(),
 
                 account.getCreatedAt(),
                 account.getTrialEndDate(),
@@ -79,9 +78,9 @@ public record AccountAdminDetailsResponse(
                 trialExpired,
                 trialDaysRemaining,
 
-                AdminUserResponse.from(admin),
+                admin != null ? AdminUserResponse.from(admin) : null,
 
-                1L, // ⚠️ placeholder (ex: usuários da plataforma)
+                1L, // placeholder
                 account.isActive()
         );
     }

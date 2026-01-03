@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import brito.com.multitenancy001.dtos.DocumentType;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 
 import java.time.LocalDateTime;
@@ -33,9 +34,13 @@ public class TenantAccount {
     @Builder.Default
     private boolean systemAccount = false;
     
-    
+   
     @Column(nullable = false, length = 150)
     private String name;
+    
+    @Column(nullable = false, length = 150)
+    private String companyEmail;
+    
     
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
     private String schemaName;
@@ -77,14 +82,18 @@ public class TenantAccount {
     @Builder.Default
     private Integer maxStorageMb = 100;
     
-    @Column(name = "company_document", nullable = false, length = 20)
-    private String companyDocument;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "company_doc_type", length = 10)
+    private DocumentType companyDocType;
+    
+    @Column(name = "company_doc_number", nullable = true, length = 20)
+    private String companyDocNumber;
     
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
     
-    @Column(name = "company_email", nullable = false, length = 150)
-    private String companyEmail;
+   
     
     @Column(name = "company_address", length = 500)
     private String companyAddress;
@@ -131,6 +140,11 @@ public class TenantAccount {
     @Column(name = "deleted")
     @Builder.Default
     private boolean deleted = false;
+    
+ 
+    
+    
+    
     
     @PrePersist
     protected void onCreate() {

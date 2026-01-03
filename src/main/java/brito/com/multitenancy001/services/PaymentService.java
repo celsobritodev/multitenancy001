@@ -274,7 +274,9 @@ public class PaymentService {
 
     private void sendSuspensionEmail(TenantAccount account, String reason) {
         log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
+ 
     }
+    
 
     private void sendPaymentConfirmationEmail(TenantAccount account, Payment payment) {
         log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());

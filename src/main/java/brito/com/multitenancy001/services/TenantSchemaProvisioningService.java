@@ -16,10 +16,10 @@ import org.springframework.util.StringUtils;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TenantSchemaService {
+public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantMigrationService tenantMigrationService;
+    private final TenantSchemaMigrationService tenantMigrationService;
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
 

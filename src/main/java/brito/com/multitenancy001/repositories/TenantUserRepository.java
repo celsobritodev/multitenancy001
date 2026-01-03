@@ -13,25 +13,18 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 	
 	Optional<TenantUser> findByUsernameAndDeletedFalse(String username);
 	
+	
+	 Optional<TenantUser> findByEmailAndAccountId(String email, Long accountId);
+	
 	Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
 	
 
-
-	
-
-    // ==========================
-    // Login / Auth
-    // ==========================
     Optional<TenantUser> findByUsernameAndAccountId(String username, Long accountId);
 
     // (se você quiser filtrar deletados no login)
     Optional<TenantUser> findByUsernameAndAccountIdAndDeletedFalse(String username, Long accountId);
 
-    Optional<TenantUser> findByEmailAndDeletedFalse(String email);
-
-    // ==========================
-    // Unicidade por conta (tenant)
-    // ==========================
+  
     boolean existsByUsernameAndAccountId(String username, Long accountId);
 
     boolean existsByEmailAndAccountId(String email, Long accountId);

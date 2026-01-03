@@ -3,9 +3,11 @@ package brito.com.multitenancy001.multitenancy.hibernate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.jdbc.connections.spi.AbstractDataSourceBasedMultiTenantConnectionProviderImpl;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -23,6 +25,12 @@ public class SchemaMultiTenantConnectionProvider
     private static final String DEFAULT_TENANT = "public";
 
     private final DataSource dataSource;
+
+    @Qualifier("publicEntityManagerFactory")
+    private final EntityManagerFactory publicEmf;
+    
+    @Qualifier("tenantEntityManagerFactory") 
+    private final EntityManagerFactory tenantEmf;
 
     @Override
     protected DataSource selectAnyDataSource() {
@@ -101,6 +109,20 @@ public class SchemaMultiTenantConnectionProvider
             throw e;
         }
     }
+    
+    
+    public EntityManagerFactory getEntityManagerFactory(String tenantIdentifier) {
+        if (DEFAULT_TENANT.equals(tenantIdentifier)) {
+            return publicEmf;
+        } else {
+            return tenantEmf;
+        }
+    }
+    
+    
+    
+    
+    
 
     /**
      * 🔥 Garante que o schema existe (idempotente) - sem SQL injection

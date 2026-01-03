@@ -20,15 +20,15 @@ import java.util.UUID;
 public class TenantAccountService {
 
     private final AccountRepository tenantAccountRepository;
-    private final TenantSchemaService tenantSchemaService;
+    private final TenantSchemaProvisioningService tenantSchemaService;
 
     @Transactional
-    public TenantAccount createAccount(String name, String companyEmail, String companyDocument,
+    public TenantAccount createAccount(String name, String companyEmail, String companyDocNumber,
                                       String adminUsername, String adminEmail, String adminPassword) {
 
         TenantContext.unbindTenant(); // PUBLIC
 
-        TenantAccount account = createAccountTx(name, companyEmail, companyDocument);
+        TenantAccount account = createAccountTx(name, companyEmail, companyDocNumber);
 
         try {
             // TENANT
@@ -46,7 +46,7 @@ public class TenantAccountService {
     }
 
     @Transactional
-    protected TenantAccount createAccountTx(String name, String companyEmail, String companyDocument) {
+    protected TenantAccount createAccountTx(String name, String companyEmail, String companyDocNumber) {
 
         int maxAttempts = 5;
 
@@ -60,7 +60,7 @@ public class TenantAccountService {
                         .slug(slug)
                         .schemaName(schemaName)
                         .companyEmail(companyEmail)
-                        .companyDocument(companyDocument)
+                        .companyDocNumber(companyDocNumber)
                         .status(TenantAccountStatus.FREE_TRIAL)
                         .createdAt(LocalDateTime.now())
                         .trialEndDate(LocalDateTime.now().plusDays(30))
