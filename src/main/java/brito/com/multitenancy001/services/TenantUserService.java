@@ -5,6 +5,8 @@ import brito.com.multitenancy001.dtos.UserResponse;
 import brito.com.multitenancy001.entities.tenant.TenantUser;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
+import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.repositories.AccountRepository;
 import brito.com.multitenancy001.repositories.TenantUserRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import brito.com.multitenancy001.security.SecurityUtils;
@@ -25,6 +27,7 @@ import java.util.List;
 public class TenantUserService {
 
     private final TenantUserRepository tenantUserRepository;
+    private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
@@ -229,41 +232,53 @@ public class TenantUserService {
        RESET PASSWORD (usado pelo TenantAuthController)
        ========================================================= */
 
-    public String generatePasswordResetToken(String email) {
-        if (!StringUtils.hasText(email)) {
-            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-        }
-
-        Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
-
-        TenantContext.bindTenant(schema);
-        try {
-            String normalizedEmail = email.trim().toLowerCase();
-
-            // ✅ recomendado (se você adicionar no repo):
-            TenantUser user = tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-
-            if (!user.isActive() || user.isDeleted()) {
-                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-            }
-
-            String token = jwtTokenProvider.generatePasswordResetToken(
-                    user.getUsername(),
-                    schema,
-                    accountId
-            );
-
-            user.setPasswordResetToken(token);
-            user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
-            tenantUserRepository.save(user);
-
-            return token;
-        } finally {
-            TenantContext.unbindTenant();
-        }
+   public String generatePasswordResetToken(String slug, String email) {
+    if (!StringUtils.hasText(slug)) {
+        throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
     }
+    if (!StringUtils.hasText(email)) {
+        throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+    }
+
+    // 1) PUBLIC: resolve conta
+    TenantContext.unbindTenant();
+    TenantAccount account = accountRepository.findBySlugAndDeletedFalse(slug)
+            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+    if (!account.isActive()) {
+        throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+    }
+
+    // 2) TENANT: bind no schema do tenant
+    String schema = account.getSchemaName();
+    TenantContext.bindTenant(schema);
+    try {
+        String normalizedEmail = email.trim().toLowerCase();
+
+        TenantUser user = tenantUserRepository
+                .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (!user.isActive() || user.isDeleted()) {
+            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+        }
+
+        String token = jwtTokenProvider.generatePasswordResetToken(
+                user.getUsername(),
+                schema,
+                account.getId()
+        );
+
+        user.setPasswordResetToken(token);
+        user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
+        tenantUserRepository.save(user);
+
+        return token;
+
+    } finally {
+        TenantContext.unbindTenant();
+    }
+}
 
     public void resetPasswordWithToken(String token, String newPassword) {
         if (!StringUtils.hasText(token)) {

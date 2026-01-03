@@ -25,12 +25,17 @@ public interface UserAccountRepository extends JpaRepository<PlatformUser, Long>
     
     List<PlatformUser> findByAccountId(Long accountId);
     
-    @Query("SELECT COUNT(u) > 0 FROM UserAccount u WHERE u.username = :username AND u.account.id = :accountId AND u.deleted = false")
-    boolean existsByUsernameAndAccountId(@Param("username") String username, @Param("accountId") Long accountId);
+    @Query("SELECT (COUNT(u) > 0) FROM PlatformUser u " +
+    	       "WHERE u.username = :username AND u.account.id = :accountId AND u.deleted = false")
+    	boolean existsByUsernameAndAccountId(@Param("username") String username,
+    	                                     @Param("accountId") Long accountId);
     
-    @Query("SELECT COUNT(u) > 0 FROM UserAccount u WHERE u.email = :email AND u.account.id = :accountId AND u.deleted = false")
-    boolean existsByEmailAndAccountId(@Param("email") String email, @Param("accountId") Long accountId);
     
+    
+    @Query("SELECT (COUNT(u) > 0) FROM PlatformUser u " +
+    	       "WHERE u.email = :email AND u.account.id = :accountId AND u.deleted = false")
+    	boolean existsByEmailAndAccountId(@Param("email") String email,
+    	                                  @Param("accountId") Long accountId);    
     Optional<PlatformUser> findByIdAndAccountId(Long id, Long accountId);
     
     Optional<PlatformUser> findByUsernameAndDeletedFalse(String username);

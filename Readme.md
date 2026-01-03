@@ -1,203 +1,155 @@
-# 🧩 Multitenancy SaaS Platform – Architecture Overview
+# Arquitetura — multitenancy001 (Spring Boot + PostgreSQL, multi-tenant por schema)
 
-Este projeto implementa uma **arquitetura SaaS multitenant com isolamento por schema**, utilizando **Spring Boot**, **Spring Security**, **JWT**, **Flyway** e **PostgreSQL**.
+## Visão geral
+O sistema é um **SaaS multi-tenant** com dois “mundos” principais:
 
-O sistema separa claramente:
-- **Gestão da plataforma (Super Admin)**
-- **Gestão de cada tenant (Admin do tenant e usuários internos)**
+1. **Platform / Public (controle da plataforma)**  
+   - Tudo que pertence à plataforma (cadastro de contas, usuários da plataforma, planos, pagamentos).
+   - Vive no **schema `public`** do Postgres.
 
----
+2. **Tenant (dados do cliente)**  
+   - Tudo que pertence ao cliente (usuários do tenant e domínio do negócio: categorias, produtos, etc.).
+   - Vive em **schemas separados por conta** (ex.: `tenant_foton`, `tenant_xxx`).
 
-## 🏗️ Visão Geral da Arquitetura
-
-A arquitetura é baseada em **dois níveis de usuários** e **dois contextos de dados**:
-
-### 🔹 1. Contexto PLATFORM (schema `public`)
-Responsável por:
-- Gerenciar contas (tenants)
-- Autenticar e autorizar usuários da plataforma
-- Controlar status, planos, limites e ciclo de vida das contas
-
-### 🔹 2. Contexto TENANT (schema dinâmico por conta)
-Responsável por:
-- Usuários finais da conta
-- Papéis (roles) e permissões internas
-- Dados isolados por tenant
-
-Cada conta possui **seu próprio schema no banco**.
+A aplicação é **uma só**, mas o Hibernate troca o schema ativo em runtime conforme o tenant.
 
 ---
 
-## 🗄️ Estrutura de Banco de Dados
+## Componentes principais
 
-### 📌 Schema `public` (PLATFORM)
+### 1) Banco de dados (PostgreSQL)
+- **Schema `public` (plataforma)**
+  - `accounts` → cadastro de contas/tenants (inclui `schema_name`, `slug`, status/plano etc.)
+  - `users_account` → usuários administrativos vinculados a uma conta (ex.: superadmin)
+  - `accounts_users_permissions` → permissões específicas de usuários da plataforma
 
-#### `accounts`
-Tabela central que representa cada tenant do sistema.
-
-Principais campos:
-- `id`
-- `name`
-- `slug` (identificador público do tenant)
-- `schema_name` (schema do banco)
-- `status` (FREE_TRIAL, ACTIVE, SUSPENDED, CANCELLED)
-- `max_users`, `max_products`, etc.
-- `is_system_account` (ex: conta da plataforma)
-
-#### `users_account`
-Usuários da **plataforma**, não pertencem a um tenant.
-
-Roles disponíveis:
-- `SUPER_ADMIN`
-- `SUPPORT`
-- `STAFF`
-
-👉 Esses usuários:
-- Logam via `/api/admin/auth/login`
-- Gerenciam todas as contas
-- Nunca acessam dados de tenant diretamente
+- **Schema do tenant (por conta)**
+  - `users_tenant` → usuários do tenant (operadores/usuários do cliente)
+  - `user_tenant_permissions` → permissões por usuário do tenant
+  - `categories`, `subcategories`, `products` (e outros domínios do tenant)
 
 ---
 
-### 📌 Schema do TENANT (ex: `tenant_empresa_xxx`)
+## Migrações (Flyway)
+O projeto separa migrações por contexto:
 
-Criado dinamicamente para cada conta.
+- `db/migration/accounts/*`
+  - Roda no schema `public` (estrutura da plataforma)
+  - Ex.: `V1__create_accounts.sql`, `V2__create_accounts_users.sql`, inserts do platform/superadmin
 
-#### `users_tenant`
-Usuários internos da conta.
+- `db/migration/tenants/*`
+  - Roda em **cada schema de tenant**
+  - Ex.: `V1__create_tenants_users.sql`, `V3__create_categories.sql`, etc.
 
-Principais campos:
-- `account_id`
-- `username`
-- `email`
-- `password`
-- `role`
-- `active`
-- `deleted`
-
-Roles disponíveis:
-- `TENANT_ADMIN`
-- `MANAGER`
-- `VIEWER`
-- `USER`
-
-#### `user_tenant_permissions`
-Permissões específicas atribuídas a cada usuário do tenant.
-
-Relacionamento:
-- `user_tenant_id`
-- `permission`
+### Fluxo típico
+1. Ao subir a aplicação: garante que o **public** está migrado.
+2. Ao criar uma conta:
+   - cria o schema do tenant (`schema_name`)
+   - aplica migrações de tenant naquele schema
 
 ---
 
-## 🔐 Modelo de Autenticação
+## Multi-tenancy (Hibernate SCHEMA)
+O multi-tenant é por **schema** (não por banco e não por tabela compartilhada).
 
-### 🟣 Plataforma (Super Admin)
+### Peças
+- `TenantContext`
+  - guarda o tenant atual (ex.: `public` ou `tenant_xxx`) normalmente via ThreadLocal.
 
-- Endpoint: `/api/admin/auth/login`
-- Autenticação sempre no schema `public`
-- Token JWT com:
-  - `type = ACCOUNT`
-  - `roles = ROLE_SUPER_ADMIN | ROLE_SUPPORT | ROLE_STAFF`
-  - `accountId`
-  - `tenantSchema = public`
+- `CurrentTenantIdentifierResolverImpl`
+  - informa ao Hibernate **qual schema** usar no momento.
 
-### 🔵 Tenant (Usuários da Conta)
+- `SchemaMultiTenantConnectionProvider`
+  - fornece conexão e define o schema no PostgreSQL (`SET search_path`) ou equivalente.
 
-- Endpoint: `/api/auth/login`
-- Fluxo:
-  1. Resolve a conta via `slug` no `public`
-  2. Valida status da conta
-  3. Binda o `TenantContext`
-  4. Autentica no schema do tenant
-
-- Token JWT com:
-  - `type = TENANT`
-  - `roles = ROLE_TENANT_ADMIN | ROLE_MANAGER | ...`
-  - `accountId`
-  - `tenantSchema`
+- `HibernateMultitenancyConfig`
+  - configura o `EntityManagerFactory` com:
+    - `hibernate.multi_tenant = SCHEMA`
+    - connection provider e resolver
 
 ---
 
-## 🔄 Contexto de Tenant (`TenantContext`)
+## Camada de domínio / entidades
+O projeto separa entidades por “mundo”:
 
-O projeto usa um **TenantContext baseado em ThreadLocal**, que define dinamicamente o schema ativo.
+### Platform (schema `public`)
+- `platform.domain.tenant.TenantAccount` → mapeia `accounts`
+- `platform.domain.user.PlatformUser` → mapeia `users_account`
+- `platform.domain.billing.Payment` → mapeia dados de billing
 
-### Regras importantes:
-- Sempre **unbind** antes de acessar o `public`
-- Sempre **bind** antes de acessar dados do tenant
-- Nunca misturar operações de schemas na mesma transação
-
----
-
-## 🚀 Criação de uma Conta (Tenant Lifecycle)
-
-Fluxo completo ao criar uma nova conta:
-
-1. **PUBLIC**
-   - Cria registro em `accounts`
-2. **BANCO**
-   - Cria schema do tenant
-3. **FLYWAY**
-   - Executa migrations do tenant
-4. **TENANT**
-   - Cria automaticamente um usuário `TENANT_ADMIN`
-5. Conta entra em `FREE_TRIAL`
+### Tenant (schema do cliente)
+- `entities.tenant.Category`, `Subcategory`, `Product`, `Sale`, `TenantUser`, etc.
 
 ---
 
-## 🧑‍💼 Responsabilidades por Papel
+## Repositories
+- Repositories de platform acessam **schema `public`**.
+- Repositories de tenant acessam o **schema resolvido no runtime**.
 
-### SUPER_ADMIN (Platform)
-- Criar, suspender, cancelar contas
-- Gerenciar planos, limites e pagamentos
-- Listar usuários de qualquer tenant
-- Restaurar contas e usuários
-
-### TENANT_ADMIN (Tenant)
-- Gerenciar usuários do tenant
-- Criar, editar e remover usuários
-- Definir roles e permissões
-- Administrar dados da própria conta
-
-### Outros roles do tenant
-- Acesso restrito conforme permissões
-- Sem visibilidade de outros tenants
+Exemplo importante (PlatformUser):
+- `PlatformUser` tem `account` (ManyToOne) e não `accountId` no Java
+- Logo, métodos derivados devem usar property path:
+  - `findByAccount_Id(...)`, `countByAccount_IdAndDeletedFalse(...)`
 
 ---
 
-## 🧬 Migrations com Flyway
+## Segurança (JWT)
+A autenticação é feita via **JWT**, com filtro:
 
-### Platform
-- Executadas no schema `public`
-- Criam `accounts` e `users_account`
-- Inserem conta da plataforma e `SUPER_ADMIN`
+- `JwtAuthenticationFilter`
+  - intercepta requisições
+  - valida token
+  - carrega usuário (`CustomUserDetailsService`)
+  - injeta autenticação no contexto do Spring Security
 
-### Tenant
-- Executadas por schema
-- Criam `users_tenant` e `user_tenant_permissions`
-- Totalmente isoladas por tenant
-
-> Em ambiente de desenvolvimento, o banco pode ser dropado sem impacto.
-> Em produção, migrations são incrementais.
+Existem endpoints distintos para:
+- autenticação/admin (plataforma)
+- autenticação/tenant (cliente)
 
 ---
 
-## ✅ Principais Benefícios da Arquitetura
-
-- 🔐 Isolamento total de dados por tenant
-- 🧱 Separação clara entre plataforma e clientes
-- 📈 Escalável para milhares de tenants
-- 🔄 Fácil controle de ciclo de vida da conta
-- 🧠 Modelo alinhado com SaaS comerciais reais
+## Controllers (API)
+Principais controladores:
+- `AdminAccountsController` → gestão de contas (platform/admin)
+- `PlatformUsersAdminController` → usuários da plataforma (ex.: super admin)
+- `SignupController` → criação de contas / onboarding
+- `AdminAuthController` e `TenantAuthController` → login/token por contexto
+- `UserTenantController`, `ProductController` → operações dentro do tenant
 
 ---
 
-## 📌 Observação Final
+## Services (regras e orquestração)
+- `AccountService` / `TenantAccountService` → criação/gestão de contas e schemas
+- `TenantSchemaService` / `TenantMigrationService` → criação de schema + migração tenant
+- `TenantUserService` → usuários do tenant
+- `PlatformUserService` → usuários da plataforma
+- `ProductService` → domínio de produto no tenant
+- `UsernameGeneratorService` / `UsernameUniquenessService` → geração e validação de usernames
 
-Este projeto segue boas práticas de:
-- Multi-tenancy por schema
-- Segurança com JWT
-- Separação de responsabilidades
-- Evolução futura para billing, métricas e auditoria
+---
 
+## Fluxos essenciais
+
+### 1) Criação de conta (tenant)
+1. Request chega no endpoint de signup
+2. Cria registro em `public.accounts`
+3. Cria schema do tenant (`schema_name`)
+4. Executa migrações `db/migration/tenants` nesse schema
+5. (Opcional) cria usuário inicial do tenant
+
+### 2) Request comum (tenant)
+1. Filtro/Interceptor determina tenant (header/host/subdomínio)
+2. `TenantContext` é setado com `schema_name`
+3. Hibernate usa schema correto automaticamente
+4. Repositories/Services operam no schema do tenant
+
+---
+
+## Padrões e decisões
+- Multi-tenant por schema (isolamento forte por cliente)
+- Public schema para metadados/controle de plataforma
+- Flyway separando migrações de plataforma e tenant
+- JWT para autenticação, com controllers e serviços por contexto
+- Soft delete em várias tabelas (`deleted`, `deleted_at`)
+
+---

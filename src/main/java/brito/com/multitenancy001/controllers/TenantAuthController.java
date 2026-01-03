@@ -3,7 +3,9 @@ package brito.com.multitenancy001.controllers;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import brito.com.multitenancy001.dtos.ForgotPasswordRequest;
 import brito.com.multitenancy001.dtos.JwtResponse;
+import brito.com.multitenancy001.dtos.ResetPasswordRequest;
 import brito.com.multitenancy001.dtos.TenantLoginRequest;
 import brito.com.multitenancy001.services.TenantAuthService;
 import brito.com.multitenancy001.services.TenantUserService;
@@ -27,15 +29,14 @@ public class TenantAuthController {
 	}
 
 	@PostMapping("/forgot-password")
-	public ResponseEntity<String> forgotPassword(@RequestParam String email) {
-		tenantUserService.generatePasswordResetToken(email);
-		return ResponseEntity.ok("Token gerado");
+	public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+	    tenantUserService.generatePasswordResetToken(req.slug(), req.email());
+	    return ResponseEntity.ok("Token gerado");
 	}
 
 	@PostMapping("/reset-password")
-	public ResponseEntity<String> resetPassword(@RequestParam String token, @RequestParam String newPassword) {
-
-		tenantUserService.resetPasswordWithToken(token, newPassword);
-		return ResponseEntity.ok("Senha redefinida com sucesso");
+	public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+	    tenantUserService.resetPasswordWithToken(req.token(), req.newPassword());
+	    return ResponseEntity.ok("Senha redefinida com sucesso");
 	}
 }
