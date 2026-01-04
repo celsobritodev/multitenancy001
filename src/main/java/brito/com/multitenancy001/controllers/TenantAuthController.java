@@ -33,10 +33,13 @@ public class TenantAuthController {
 	    tenantUserService.generatePasswordResetToken(req.slug(), req.email());
 	    return ResponseEntity.ok("Token gerado");
 	}
-
+	
+	
 	@PostMapping("/reset-password")
 	public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
 	    tenantUserService.resetPasswordWithToken(req.token(), req.newPassword());
 	    return ResponseEntity.ok("Senha redefinida com sucesso");
 	}
+
+
 }

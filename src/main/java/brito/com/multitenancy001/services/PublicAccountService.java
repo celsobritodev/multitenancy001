@@ -19,12 +19,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(transactionManager = "publicTransactionManager")
 public class PublicAccountService {
 
     private final AccountRepository accountRepository;
 
 
-    @Transactional(transactionManager = "publicTransactionManager")
+  
     public TenantAccount createAccountFromSignup(SignupRequest request) {
     	 TenantContext.unbindTenant();
 

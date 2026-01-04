@@ -349,7 +349,7 @@ public class AccountProvisioningService {
     }
 
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public int cancelAccountTx(TenantAccount account) {
         List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
         users.forEach(TenantUser::softDelete);
