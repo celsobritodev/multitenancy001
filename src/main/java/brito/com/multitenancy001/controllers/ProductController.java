@@ -6,7 +6,7 @@ import brito.com.multitenancy001.entities.tenant.Category;
 import brito.com.multitenancy001.entities.tenant.Product;
 import brito.com.multitenancy001.entities.tenant.Subcategory;
 import brito.com.multitenancy001.entities.tenant.Supplier;
-import brito.com.multitenancy001.services.ProductService;
+import brito.com.multitenancy001.services.TenantProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,14 +24,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProductController {
 
-	private final ProductService productService;
+	private final TenantProductService tenantProductService;
 
 	// Novos endpoints para os campos adicionais
 
 	@GetMapping("/category/{categoryId}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
 	public ResponseEntity<List<ProductDTO>> getProductsByCategory(@PathVariable Long categoryId) {
-	    List<Product> products = productService.findByCategoryId(categoryId);
+	    List<Product> products = tenantProductService.findByCategoryId(categoryId);
 	    List<ProductDTO> dtos = products.stream().map(ProductDTO::fromEntity).toList();
 	    return ResponseEntity.ok(dtos);
 	}
@@ -40,7 +40,7 @@ public class ProductController {
 	@GetMapping("/brand/{brand}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
 	public ResponseEntity<List<ProductDTO>> getProductsByBrand(@PathVariable String brand) {
-		List<Product> products = productService.findByBrand(brand);
+		List<Product> products = tenantProductService.findByBrand(brand);
 		List<ProductDTO> productDTOs = products.stream().map(ProductDTO::fromEntity).collect(Collectors.toList());
 		return ResponseEntity.ok(productDTOs);
 	}
@@ -48,7 +48,7 @@ public class ProductController {
 	@GetMapping("/active")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
 	public ResponseEntity<List<ProductDTO>> getActiveProducts() {
-		List<Product> products = productService.findActiveProducts();
+		List<Product> products = tenantProductService.findActiveProducts();
 		List<ProductDTO> productDTOs = products.stream().map(ProductDTO::fromEntity).collect(Collectors.toList());
 		return ResponseEntity.ok(productDTOs);
 	}
@@ -57,14 +57,14 @@ public class ProductController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
 	public ResponseEntity<ProductDTO> updateCostPrice(@PathVariable UUID id, @RequestParam BigDecimal costPrice) {
 
-		Product updatedProduct = productService.updateCostPrice(id, costPrice);
+		Product updatedProduct = tenantProductService.updateCostPrice(id, costPrice);
 		return ResponseEntity.ok(ProductDTO.fromEntity(updatedProduct));
 	}
 
 	@GetMapping("/inventory-value")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
 	public ResponseEntity<BigDecimal> getTotalInventoryValue() {
-		BigDecimal value = productService.calculateTotalInventoryValue();
+		BigDecimal value = tenantProductService.calculateTotalInventoryValue();
 		return ResponseEntity.ok(value != null ? value : BigDecimal.ZERO);
 	}
 
@@ -72,16 +72,16 @@ public class ProductController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
 	public ResponseEntity<Long> countLowStockProducts(@RequestParam(defaultValue = "10") Integer threshold) {
 
-		Long count = productService.countLowStockProducts(threshold);
+		Long count = tenantProductService.countLowStockProducts(threshold);
 		return ResponseEntity.ok(count != null ? count : 0L);
 	}
 
 	@PatchMapping("/{id}/toggle-active")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
 	public ResponseEntity<ProductDTO> toggleActive(@PathVariable UUID id) {
-		Product product = productService.findById(id);
+		Product product = tenantProductService.findById(id);
 		product.setActive(!Boolean.TRUE.equals(product.getActive()));
-		productService.create(product); // Reutiliza o método save
+		tenantProductService.create(product); // Reutiliza o método save
 		return ResponseEntity.ok(ProductDTO.fromEntity(product));
 	}
 
@@ -123,7 +123,7 @@ public class ProductController {
 			product.setSupplier(supplier);
 		}
 
-		Product savedProduct = productService.create(product);
+		Product savedProduct = tenantProductService.create(product);
 		return ResponseEntity.status(HttpStatus.CREATED).body(ProductDTO.fromEntity(savedProduct));
 	}
 

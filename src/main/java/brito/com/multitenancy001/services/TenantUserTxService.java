@@ -16,30 +16,53 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(transactionManager = "tenantTransactionManager")
 public class TenantUserTxService {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Transactional(transactionManager = "tenantTransactionManager")
-    public TenantUser createTenantUser(Long accountId, String name, String username, String email,
-                                       String rawPassword, String role, String phone, String avatarUrl,
-                                       List<String> permissions) {
+    // =========================
+    // CREATE
+    // =========================
+    public TenantUser createTenantUser(
+            Long accountId,
+            String name,
+            String username,
+            String email,
+            String rawPassword,
+            String role,
+            String phone,
+            String avatarUrl,
+            List<String> permissions
+    ) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
 
-        if (tenantUserRepository.existsByUsernameAndAccountId(username, accountId)) {
+        if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome obrigatório", 400);
+        if (!StringUtils.hasText(username)) throw new ApiException("INVALID_USERNAME", "Username obrigatório", 400);
+        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email obrigatório", 400);
+
+        if (!StringUtils.hasText(rawPassword) || !rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
+        }
+
+        String u = username.trim().toLowerCase();
+        String e = email.trim().toLowerCase();
+
+        if (tenantUserRepository.existsByUsernameAndAccountId(u, accountId)) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe nesta conta", 409);
         }
-        if (tenantUserRepository.existsByEmailAndAccountId(email, accountId)) {
+        if (tenantUserRepository.existsByEmailAndAccountId(e, accountId)) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
         TenantRole parsedRole = parseTenantRole(role);
-
+        
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
-                .name(name)
-                .username(username)
-                .email(email)
+                .name(name.trim())
+                .username(u)
+                .email(e)
                 .password(passwordEncoder.encode(rawPassword))
                 .role(parsedRole)
                 .active(true)
@@ -50,6 +73,7 @@ public class TenantUserTxService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
+        // se quiser respeitar permissions do request (opcional)
         if (permissions != null && !permissions.isEmpty()) {
             user.setPermissions(permissions);
         }
@@ -57,23 +81,47 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
+    // =========================
+    // LIST / GET
+    // =========================
+    @Transactional(readOnly = true)
     public List<TenantUser> listUsers(Long accountId) {
         return tenantUserRepository.findByAccountIdAndDeletedFalse(accountId);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public List<TenantUser> listActiveUsers(Long accountId) {
         return tenantUserRepository.findByAccountIdAndActiveTrueAndDeletedFalse(accountId);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public TenantUser getUser(Long userId, Long accountId) {
         return tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager")
+    // usado em login/validações (sem deleted=true)
+    @Transactional(readOnly = true)
+    public TenantUser getByUsername(Long accountId, String username) {
+        return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+    }
+
+    // ✅ isto substitui seu "getByEmailActive"
+    @Transactional(readOnly = true)
+    public TenantUser getByEmailActive(Long accountId, String email) {
+        TenantUser user = tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (!Boolean.TRUE.equals(user.isActive())) {
+            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+        }
+        return user;
+    }
+
+    // =========================
+    // UPDATE STATUS / DELETE / RESTORE
+    // =========================
     public TenantUser updateStatus(Long userId, Long accountId, boolean active) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -85,7 +133,6 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager")
     public void softDelete(Long userId, Long accountId) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -97,7 +144,6 @@ public class TenantUserTxService {
         tenantUserRepository.save(user);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager")
     public TenantUser restore(Long userId, Long accountId) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -109,7 +155,15 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager")
+    public void hardDelete(Long userId, Long accountId) {
+        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+        tenantUserRepository.delete(user);
+    }
+
+    // =========================
+    // RESET PASSWORD (ADMIN / USERID)
+    // =========================
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
@@ -126,28 +180,14 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    @Transactional(transactionManager = "tenantTransactionManager")
-    public void hardDelete(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-        tenantUserRepository.delete(user);
-    }
-    
-    
-    @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
-    public TenantUser getByEmailActive(Long accountId, String email) {
-        return tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(email, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-    }
-
-    @Transactional(transactionManager = "tenantTransactionManager")
-    public TenantUser save(TenantUser user) {
-        return tenantUserRepository.save(user);
-    }
-    
-    
-    @Transactional(transactionManager = "tenantTransactionManager")
+    // =========================
+    // RESET PASSWORD (TOKEN)
+    // =========================
     public void resetPasswordWithToken(Long accountId, String username, String token, String newPassword) {
+        if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
+        }
+
         TenantUser user = tenantUserRepository.findByUsernameAndAccountId(username, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
@@ -164,17 +204,22 @@ public class TenantUserTxService {
 
         user.setPasswordResetToken(null);
         user.setPasswordResetExpires(null);
-        user.setUpdatedAt(LocalDateTime.now());
 
+        user.setUpdatedAt(LocalDateTime.now());
         tenantUserRepository.save(user);
     }
- 
-    
 
-    
+    // usado no generatePasswordResetToken
+    public TenantUser save(TenantUser user) {
+        user.setUpdatedAt(LocalDateTime.now());
+        return tenantUserRepository.save(user);
+    }
 
     private TenantRole parseTenantRole(String role) {
+        if (!StringUtils.hasText(role)) throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
+
         String r = role.trim().toUpperCase();
+
         return switch (r) {
             case "TENANT_ADMIN", "ADMIN" -> TenantRole.TENANT_ADMIN;
             case "MANAGER", "PRODUCT_MANAGER", "SALES_MANAGER" -> TenantRole.MANAGER;

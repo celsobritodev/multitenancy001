@@ -9,6 +9,9 @@ import java.util.Optional;
 
 @Repository
 public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
+	
+	Optional<TenantUser> findByPasswordResetTokenAndAccountId(String passwordResetToken, Long accountId);
+
 
 	Optional<TenantUser> findByUsernameAndDeletedFalse(String username);
 
