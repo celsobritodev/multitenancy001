@@ -2,7 +2,7 @@ package brito.com.multitenancy001.services;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.repositories.TenantUserRepository;
+import brito.com.multitenancy001.repositories.tenant.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service

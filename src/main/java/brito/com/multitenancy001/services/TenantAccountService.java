@@ -4,7 +4,7 @@ import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.repositories.AccountRepository;
+import brito.com.multitenancy001.repositories.publicdb.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;

@@ -10,7 +10,7 @@ import brito.com.multitenancy001.dtos.SuperAdminLoginRequest;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-import brito.com.multitenancy001.repositories.PlatformUserRepository;
+import brito.com.multitenancy001.repositories.publicdb.PlatformUserRepository;
 import brito.com.multitenancy001.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 

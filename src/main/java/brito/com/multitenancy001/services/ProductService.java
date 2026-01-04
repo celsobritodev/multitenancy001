@@ -8,10 +8,10 @@ package brito.com.multitenancy001.services;
 
 import brito.com.multitenancy001.entities.tenant.*;
 import brito.com.multitenancy001.exceptions.ApiException;
-import brito.com.multitenancy001.repositories.product.CategoryRepository;
-import brito.com.multitenancy001.repositories.product.ProductRepository;
-import brito.com.multitenancy001.repositories.product.SubcategoryRepository;
-import brito.com.multitenancy001.repositories.supplier.SupplierRepository;
+import brito.com.multitenancy001.repositories.tenant.CategoryRepository;
+import brito.com.multitenancy001.repositories.tenant.ProductRepository;
+import brito.com.multitenancy001.repositories.tenant.SubcategoryRepository;
+import brito.com.multitenancy001.repositories.tenant.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

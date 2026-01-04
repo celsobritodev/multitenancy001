@@ -8,7 +8,8 @@ INSERT INTO accounts (
     slug,
     status,
     subscription_plan,
-    company_document,
+    company_doc_type,
+    company_doc_number,
     company_email,
     company_country,
     deleted
@@ -20,6 +21,7 @@ SELECT
     'platform',
     'ACTIVE',
     'FREE',
+    'CNPJ',
     '00000000000000',
     'platform@system.com',
     'Brasil',

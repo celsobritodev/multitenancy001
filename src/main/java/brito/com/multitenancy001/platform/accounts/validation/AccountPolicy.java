@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.repositories.AccountRepository;
+import brito.com.multitenancy001.repositories.publicdb.AccountRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component

@@ -38,8 +38,7 @@ public class TenantAccount {
     @Column(nullable = false, length = 150)
     private String name;
     
-    @Column(nullable = false, length = 150)
-    private String companyEmail;
+   
     
     
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
@@ -82,9 +81,11 @@ public class TenantAccount {
     @Builder.Default
     private Integer maxStorageMb = 100;
     
+    @Column(name = "company_email", nullable = false, length = 150)
+    private String companyEmail;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "company_doc_type", length = 10)
+    @Column(name = "company_doc_type", nullable = false, length = 10)
     private DocumentType companyDocType;
     
     @Column(name = "company_doc_number", nullable = true, length = 20)

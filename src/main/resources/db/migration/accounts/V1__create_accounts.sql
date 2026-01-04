@@ -22,7 +22,8 @@ CREATE TABLE accounts (
     max_storage_mb INTEGER DEFAULT 100,
 
     -- Identidade da empresa (🔑 CRÍTICO)
-    company_document VARCHAR(20) NOT NULL,
+    company_doc_type VARCHAR(10) NOT NULL,
+    company_doc_number VARCHAR(20) NOT NULL,
     company_email VARCHAR(150) NOT NULL,
 
     company_phone VARCHAR(20),
@@ -51,7 +52,7 @@ CREATE TABLE accounts (
 
 -- Índice único para documento (somente contas ativas)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_document_active
-ON accounts (company_document)
+ON accounts (company_doc_number)
 WHERE deleted = false;
 
 -- Índice único para email (somente contas ativas)

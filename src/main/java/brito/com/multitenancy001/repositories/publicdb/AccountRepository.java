@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.repositories;
+package brito.com.multitenancy001.repositories.publicdb;
 
 import brito.com.multitenancy001.dtos.DocumentType;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;

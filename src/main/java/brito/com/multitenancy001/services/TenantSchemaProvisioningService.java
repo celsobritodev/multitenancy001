@@ -4,7 +4,7 @@ import brito.com.multitenancy001.entities.tenant.TenantUser;
 import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.repositories.TenantUserRepository;
+import brito.com.multitenancy001.repositories.tenant.TenantUserRepository;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

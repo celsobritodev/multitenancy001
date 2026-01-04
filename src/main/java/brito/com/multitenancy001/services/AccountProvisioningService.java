@@ -6,12 +6,11 @@ import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.multitenancy.TenantContext;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.repositories.AccountRepository;
-import brito.com.multitenancy001.repositories.TenantUserRepository;
+import brito.com.multitenancy001.repositories.publicdb.AccountRepository;
+import brito.com.multitenancy001.repositories.tenant.TenantUserRepository;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,18 +19,19 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(transactionManager = "publicTransactionManager") // ✅ Especifica qual TM
+
 public class AccountProvisioningService {
 
     private final AccountRepository accountRepository;
     private final TenantUserRepository userTenantRepository;
     private final TenantSchemaProvisioningService tenantSchemaService;
     private final PasswordEncoder passwordEncoder;
+    private final PublicAccountService publicAccountService;
+
 
     /* =========================================================
        1. CRIAÇÃO DE CONTA (SIGNUP SIMPLIFICADO)
@@ -39,33 +39,60 @@ public class AccountProvisioningService {
 
     public AccountResponse createAccount(SignupRequest request) {
         validateSignupRequest(request);
-        
+
         TenantContext.unbindTenant(); // garante PUBLIC
-        TenantAccount account = createAccountFromSignup(request);
-        
+
+        // A) cria no PUBLIC e COMMITA (transação do publicAccountService)
+        TenantAccount account = publicAccountService.createAccountFromSignup(request);
+
+        // B) cria schema + roda flyway do tenant (sem transação JPA public aberta)
+        tenantSchemaService.ensureSchemaAndMigrate(account.getSchemaName());
+
+        // C) cria admin no TENANT com tenantTransactionManager
+        createTenantAdminInTenant(account, request);
+
+        log.info("✅ Account criada | accountId={} | schema={} | slug={}",
+                account.getId(), account.getSchemaName(), account.getSlug());
+
+        return AccountResponse.fromEntity(account);
+    }
+
+    @Transactional(transactionManager = "tenantTransactionManager")
+    public TenantUser createTenantAdminInTenant(TenantAccount account, SignupRequest request) {
+        TenantContext.bindTenant(account.getSchemaName());
         try {
-            migrateTenant(account);
-            TenantContext.bindTenant(account.getSchemaName());
-            
-            // Criar admin mas não usar na resposta
-            createTenantAdminFromSignup(account.getId(), request);
+            String username = generateUsernameFromEmail(request.companyEmail());
 
-            log.info("✅ Account criada | accountId={} | schema={} | slug={}", 
-                    account.getId(), account.getSchemaName(), account.getSlug());
-            
-            return AccountResponse.fromEntity(account); // ✅ Sem admin
+            boolean usernameExists = userTenantRepository.existsByUsernameAndAccountId(username, account.getId());
+            boolean emailExists = userTenantRepository.existsByEmailAndAccountId(request.companyEmail(), account.getId());
 
-        } catch (Exception e) {
-            log.error("💥 Erro criando conta | name={}", request.name(), e);
-            throw e;
+            if (usernameExists) {
+                username = ensureUniqueUsername(username, account.getId());
+            }
+            if (emailExists) {
+                throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
+            }
+
+            TenantUser u = new TenantUser();
+            u.setAccountId(account.getId());
+            u.setName("Administrador");
+            u.setUsername(username);
+            u.setEmail(request.companyEmail());
+            u.setPassword(passwordEncoder.encode(request.password()));
+            u.setRole(TenantRole.TENANT_ADMIN);
+            u.setActive(true);
+            u.setCreatedAt(LocalDateTime.now());
+            u.setTimezone("America/Sao_Paulo");
+            u.setLocale("pt_BR");
+
+            return userTenantRepository.save(u);
+
         } finally {
             TenantContext.unbindTenant();
         }
     }
 
-    /* =========================================================
-       2. LISTAGEM DE CONTAS (ADMIN)
-       ========================================================= */
+    
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
@@ -224,7 +251,7 @@ public class AccountProvisioningService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
     protected List<TenantUserResponse> listTenantUsersTx(Long accountId, boolean onlyActive) {
         List<TenantUser> users = onlyActive
                 ? userTenantRepository.findByAccountIdAndActiveTrueAndDeletedFalse(accountId)
@@ -237,61 +264,12 @@ public class AccountProvisioningService {
        MÉTODOS AUXILIARES (PRIVADOS)
        ========================================================= */
 
-   @Transactional
-protected TenantAccount createAccountFromSignup(SignupRequest request) {
-    TenantContext.unbindTenant();
-
-    int maxAttempts = 5;
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        String slug = generateSlug(request.name());
-        String schemaName = generateSchemaName(request.name());
-
-        try {
-            TenantAccount account = new TenantAccount();
-            account.setName(request.name());
-            account.setSlug(slug);
-            account.setSchemaName(schemaName);
-
-            account.setCompanyEmail(request.companyEmail());
-
-            // ✅ novos campos (sempre em conjunto)
-            account.setCompanyDocType(request.companyDocType());
-            account.setCompanyDocNumber(request.companyDocNumber());
-
-            account.setCreatedAt(LocalDateTime.now());
-            account.setTrialEndDate(LocalDateTime.now().plusDays(30));
-            account.setStatus(TenantAccountStatus.FREE_TRIAL);
-            account.setSystemAccount(false);
-
-            // Defaults
-            account.setSubscriptionPlan("FREE");
-            account.setMaxUsers(5);
-            account.setMaxProducts(100);
-            account.setMaxStorageMb(100);
-            account.setCompanyCountry("Brasil");
-            account.setTimezone("America/Sao_Paulo");
-            account.setLocale("pt_BR");
-            account.setCurrency("BRL");
-
-            return accountRepository.save(account);
-
-        } catch (DataIntegrityViolationException e) {
-            if (!isSlugOrSchemaUniqueViolation(e)) throw e;
-            log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
-                    attempt, maxAttempts, slug, schemaName);
-        }
-    }
-
-    throw new ApiException("ACCOUNT_CREATE_FAILED",
-            "Não foi possível criar conta (colisão de identificadores). Tente novamente.", 409);
-}
-
     
     
     
     
     
-    @Transactional
+   @Transactional(transactionManager = "tenantTransactionManager")
     protected TenantUser createTenantAdminFromSignup(Long accountId, SignupRequest request) {
         String username = generateUsernameFromEmail(request.companyEmail());
         
@@ -338,25 +316,38 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
     }
 
     public int cancelAccount(TenantAccount account) {
-        String schema = account.getSchemaName();
-
         // 1) PUBLIC
-        TenantContext.unbindTenant();
-        account.setDeletedAt(LocalDateTime.now());
-        accountRepository.save(account);
+        cancelAccountPublicTx(account);
 
         // 2) TENANT (se existir)
+        String schema = account.getSchemaName();
         boolean schemaOk = tenantSchemaService.validateTenantSchema(schema);
         boolean tableOk = schemaOk && tenantSchemaService.tableExists(schema, "users_tenant");
         if (!tableOk) return 0;
 
         TenantContext.bindTenant(schema);
         try {
-            return cancelAccountTx(account);
+            return cancelAccountTenantTx(account);
         } finally {
             TenantContext.unbindTenant();
         }
     }
+
+    @Transactional(transactionManager = "publicTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    protected void cancelAccountPublicTx(TenantAccount account) {
+        TenantContext.unbindTenant();
+        account.setDeletedAt(LocalDateTime.now());
+        accountRepository.save(account);
+    }
+
+    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    protected int cancelAccountTenantTx(TenantAccount account) {
+        List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+        users.forEach(TenantUser::softDelete);
+        userTenantRepository.saveAll(users);
+        return users.size();
+    }
+
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int cancelAccountTx(TenantAccount account) {
@@ -366,7 +357,7 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
         return users.size();
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "tenantTransactionManager")
     public int suspendTenantUsersTx(TenantAccount account) {
         String schema = account.getSchemaName();
 
@@ -385,7 +376,7 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
         }
     }
 
-    @Transactional
+    @Transactional(transactionManager = "tenantTransactionManager")
     protected void softDeleteTenantUsersTx(Long accountId) {
         TenantContext.unbindTenant();
         TenantAccount account = getAccountById(accountId);
@@ -403,7 +394,7 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
         }
     }
 
-    @Transactional
+    @Transactional(transactionManager = "tenantTransactionManager")
     protected void restoreTenantUsersTx(Long accountId) {
         TenantContext.unbindTenant();
         TenantAccount account = getAccountById(accountId);
@@ -438,25 +429,8 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
         }
     }
 
-    private String generateSlug(String name) {
-        String base = (name == null ? "conta" : name.toLowerCase())
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
-
-        String slug = base;
-        int i = 1;
-
-        while (accountRepository.findBySlugAndDeletedFalse(slug).isPresent()) {
-            slug = base + "-" + (i++);
-        }
-        return slug;
-    }
-
-    private String generateSchemaName(String name) {
-        String base = (name == null ? "tenant" : name.toLowerCase())
-                .replaceAll("[^a-z0-9]", "_");
-        return "tenant_" + base + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
+    
+   
 
     private String generateUsernameFromEmail(String email) {
         String base = email.split("@")[0].toLowerCase();
@@ -524,16 +498,5 @@ protected TenantAccount createAccountFromSignup(SignupRequest request) {
 }
 
 
-    private boolean isSlugOrSchemaUniqueViolation(Throwable e) {
-        Throwable t = e;
-        while (t.getCause() != null) t = t.getCause();
-        String msg = (t.getMessage() == null) ? "" : t.getMessage().toLowerCase();
-
-        return msg.contains("ux_accounts_slug_active")
-                || msg.contains("uk_accounts_slug")
-                || msg.contains("uk_accounts_schema_name")
-                || msg.contains("accounts_slug_key")
-                || msg.contains("accounts_schema_name_key")
-                || msg.contains("company_email");
-    }
+   
 }
