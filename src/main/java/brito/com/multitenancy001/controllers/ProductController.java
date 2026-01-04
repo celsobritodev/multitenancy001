@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -54,7 +55,7 @@ public class ProductController {
 
 	@PatchMapping("/{id}/cost-price")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<ProductDTO> updateCostPrice(@PathVariable String id, @RequestParam BigDecimal costPrice) {
+	public ResponseEntity<ProductDTO> updateCostPrice(@PathVariable UUID id, @RequestParam BigDecimal costPrice) {
 
 		Product updatedProduct = productService.updateCostPrice(id, costPrice);
 		return ResponseEntity.ok(ProductDTO.fromEntity(updatedProduct));
@@ -77,7 +78,7 @@ public class ProductController {
 
 	@PatchMapping("/{id}/toggle-active")
 	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<ProductDTO> toggleActive(@PathVariable String id) {
+	public ResponseEntity<ProductDTO> toggleActive(@PathVariable UUID id) {
 		Product product = productService.findById(id);
 		product.setActive(!Boolean.TRUE.equals(product.getActive()));
 		productService.create(product); // Reutiliza o método save
@@ -118,7 +119,7 @@ public class ProductController {
 		// Supplier (como você já fazia)
 		if (request.supplierId() != null) {
 			Supplier supplier = new Supplier();
-			supplier.setId(request.supplierId());
+			 supplier.setId(UUID.fromString(request.supplierId()));
 			product.setSupplier(supplier);
 		}
 

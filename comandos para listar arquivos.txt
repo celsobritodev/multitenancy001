@@ -1,0 +1,14 @@
+listar estrutura com o nome e path de todas as pastas
+find "$PWD" -type f > estrutura.txt
+
+find src -type f \( -name "*.java" -o -name "*.sql" \) -exec cat {} + > fontes.txt
+
+
+lista o conteudo de todas as classes
+Usuario@SANDESK-MICRO MINGW64 ~/eclipse-workspace/multitenancy001 (main)
+$ find src -type f \( -name "*.java" -o -name "*.sql" \) -exec cat {} + > fontes.txt
+
+lista o conteudo de todas migrations
+find src/main/resources/db/migration -type f -name "*.sql" > migrations.txt
+
+find src/main/resources/db/migration -type f -name "*.sql" -exec sh -c 'echo -e "\n\n-- =========================================="; echo "-- FILE: $1"; cat "$1"' _ {} \; > migrations.txt

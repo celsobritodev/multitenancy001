@@ -29,7 +29,7 @@ public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    private UUID id;
 
     @Column(nullable = false, length = 200)
     private String name;
@@ -119,7 +119,7 @@ public class Product {
 
     @PrePersist
     protected void onCreate() {
-        if (this.id == null) this.id = UUID.randomUUID().toString();
+       
         if (this.stockQuantity == null) this.stockQuantity = 0;
         if (this.active == null) this.active = true;
         calculateProfitMargin();

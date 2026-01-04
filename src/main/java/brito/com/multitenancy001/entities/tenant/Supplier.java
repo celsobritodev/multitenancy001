@@ -28,7 +28,7 @@ public class Supplier {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    private UUID id;
     
     @Column(nullable = false, length = 200)
     private String name;
@@ -84,12 +84,7 @@ public class Supplier {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
     
-    @PrePersist
-    protected void onCreate() {
-        if (this.id == null) {
-            this.id = UUID.randomUUID().toString();
-        }
-    }
+   
     
     @PreUpdate
     protected void onUpdate() {

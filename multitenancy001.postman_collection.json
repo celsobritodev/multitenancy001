@@ -25,6 +25,9 @@
 				}
 			],
 			"request": {
+				"auth": {
+					"type": "noauth"
+				},
 				"method": "GET",
 				"header": [],
 				"body": {
@@ -76,7 +79,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"foton\",\n    \"companyEmail\": \"sales@foton.com\",\n    \"companyDocument\": \"425457235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@foton.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n  \"name\": \"Foton Devices\",\n  \"companyEmail\": \"vendas@fotondevices.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"12345678000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -99,6 +102,53 @@
 		},
 		{
 			"name": "signupAccount3",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"unadoc\",\n    \"companyEmail\": \"support@unadoc.com\",\n    \"companyDocument\": \"4498227712\",\n    \"admin\": {\n        \"username\": \"main\",\n        \"email\": \"main@unadoc.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/signup",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"signup"
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		},
+		{
+			"name": "signupAccount4",
 			"event": [
 				{
 					"listen": "test",
@@ -170,7 +220,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"opta\",\n    \"companyEmail\": \"optashop@optashop.com\",\n    \"companyDocument\": \"449823235667712\",\n    \"admin\": {\n        \"username\": \"master\",\n        \"email\": \"main@optashop.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n  \"name\": \"Opta\",\n  \"companyEmail\": \"vendas@optashop.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"1672s8000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -335,7 +385,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDkwNTU5LCJleHAiOjE3NjY0OTQxNTl9.zJ4A5G7Eexn4yiHHjsWh52W2x_JlYt1PopjarO3bPdYqbzXXCBOILh1lAj7m699RZo2i-CRdDMODav2FAQiiFw",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
 							"type": "string"
 						}
 					]
@@ -392,7 +442,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwidHlwZSI6IlJFRlJFU0giLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJpYXQiOjE3NjY0NTc1NzUsImV4cCI6MTc2NzA2MjM3NX0.e0Pg_rLHQorCe7eQfUhB2a2IgdMiv8tF-ik4QBPFj8Qlh5RjHxTujr6gdGD0HtvSg3RCM7ZRTpKUmisb_xVdJA",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
 							"type": "string"
 						}
 					]
@@ -447,7 +497,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDQyODA0LCJleHAiOjE3NjY0NDY0MDR9.6Z952fs8M4H5YNAE-VLRTOn6oRMWSDfpd6e7cfjzaXVkLZKa1g2cNrNKYQBEa5InuEVIl4UbbFC0G2CNnnj4Rw",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwidHlwZSI6IlJFRlJFU0giLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJpYXQiOjE3NjY2Nzk4ODYsImV4cCI6MTc2NzI4NDY4Nn0.MUMySamxF39LwxL86YBOTVQ6HNHpUoICd5UyB-rIlLlHv1h7PIHaFUFDqhGRrPcwAAsdn12gR_qjQ5TsbBDH3g",
 							"type": "string"
 						}
 					]
@@ -503,7 +553,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDUwNDk5LCJleHAiOjE3NjY0NTQwOTl9.PGWwneLZavcsnZao0soj8wxzqtF7pjAA-FJPuOyc5guK7AL0clGtr33uH4HFTf4hMdznX6LjnxaLx6FaIMqjDw",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
 							"type": "string"
 						}
 					]
@@ -520,7 +570,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2/details",
+					"raw": "{{base_url}}/api/admin/accounts/7/details",
 					"host": [
 						"{{base_url}}"
 					],
@@ -528,7 +578,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"2",
+						"7",
 						"details"
 					]
 				},
@@ -560,7 +610,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2MTQ1MDY5LCJleHAiOjE3NjYxNDg2Njl9.6A4jumUjn3B4iqivREB7Q6cgacW2FVdEg7A2fBVovVRexdNWcERRzm2CQxOFJ04Yt9chJg5PPLM_0IFQUEJK-w",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
 							"type": "string"
 						}
 					]
@@ -569,7 +619,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Pagamento confirmado\"\n}\n",
+					"raw": "\n{\n  \"status\": \"SUSPENDED\",\n  \n  \"reason\": \"Teste\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -577,7 +627,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/1/status",
+					"raw": "{{base_url}}/api/admin/accounts/2/status",
 					"host": [
 						"{{base_url}}"
 					],
@@ -585,7 +635,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"1",
+						"2",
 						"status"
 					]
 				},
@@ -617,7 +667,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2NDUwNDk5LCJleHAiOjE3NjY0NTQwOTl9.PGWwneLZavcsnZao0soj8wxzqtF7pjAA-FJPuOyc5guK7AL0clGtr33uH4HFTf4hMdznX6LjnxaLx6FaIMqjDw",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
 							"type": "string"
 						}
 					]
@@ -652,7 +702,7 @@
 			"response": []
 		},
 		{
-			"name": "loginAccount",
+			"name": "loginTenant",
 			"event": [
 				{
 					"listen": "test",
@@ -677,7 +727,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"$2a$10$wHq7p2n2YQhYF8k8y8y9xeJ6n9mT9KcXyZ1XxkYtYwHh6xXcYpK9S\"\n}\n",
+					"raw": "{\n  \"slug\": \"tandyshop\",\n  \"username\": \"master\",\n  \"password\": \"main123456\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -685,12 +735,13 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/auth/login",
+					"raw": "{{base_url}}/api/tenant/auth/login",
 					"host": [
 						"{{base_url}}"
 					],
 					"path": [
 						"api",
+						"tenant",
 						"auth",
 						"login"
 					]

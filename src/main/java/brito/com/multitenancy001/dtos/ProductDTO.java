@@ -6,11 +6,12 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import brito.com.multitenancy001.entities.tenant.Product;
 
 public record ProductDTO(
-        String id,
+        UUID id,
         @NotBlank String name,
         String description,
         String sku,
@@ -32,7 +33,7 @@ public record ProductDTO(
         String barcode,
         Boolean active,
 
-        String supplierId,
+        UUID supplierId,
         String supplierName,
 
         LocalDateTime createdAt,

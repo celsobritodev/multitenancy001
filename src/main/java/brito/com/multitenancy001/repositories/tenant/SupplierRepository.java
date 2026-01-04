@@ -8,9 +8,10 @@ import brito.com.multitenancy001.entities.tenant.Supplier;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface SupplierRepository extends JpaRepository<Supplier, String> {
+public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     
     Optional<Supplier> findByDocument(String document);
     

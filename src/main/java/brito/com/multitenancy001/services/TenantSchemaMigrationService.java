@@ -17,6 +17,7 @@ public class TenantSchemaMigrationService {
                 .dataSource(dataSource)
                 .schemas(schemaName)
                 .defaultSchema(schemaName) // 🔥 ESSENCIAL
+                .createSchemas(false)
                 .locations("classpath:db/migration/tenants")
                 .baselineOnMigrate(true)
                 .load();

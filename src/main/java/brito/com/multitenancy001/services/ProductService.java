@@ -23,6 +23,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +42,7 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Product findById(String id) {
+    public Product findById(UUID id) {
         return productRepository.findById(id)
             .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
                 "Produto não encontrado com ID: " + id, 404));
@@ -59,7 +60,7 @@ public class ProductService {
     }
 
     @Transactional
-    public Product update(String id, Product productDetails) {
+    public Product update(UUID id, Product productDetails) {
         Product existingProduct = findById(id);
 
         if (StringUtils.hasText(productDetails.getName())) {
@@ -121,13 +122,14 @@ public class ProductService {
 
     private void resolveSupplier(Product product) {
         if (product.getSupplier() != null && product.getSupplier().getId() != null) {
-            String supplierId = product.getSupplier().getId();
-            Supplier supplier = supplierRepository.findById(supplierId)
+            UUID supplierId = product.getSupplier().getId();
+            Supplier supplier = supplierRepository.findById(product.getSupplier().getId())
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
                     "Fornecedor não encontrado com ID: " + supplierId, 404));
             product.setSupplier(supplier);
         }
     }
+
 
     private void resolveCategoryAndSubcategory(Product product) {
         // ✅ category obrigatória
@@ -185,7 +187,7 @@ public class ProductService {
     }
 
     @Transactional
-    public Product updateStock(String id, Integer quantityChange) {
+    public Product updateStock(UUID id, Integer quantityChange) {
         Product product = findById(id);
         if (quantityChange > 0) product.addToStock(quantityChange);
         else if (quantityChange < 0) product.removeFromStock(Math.abs(quantityChange));
@@ -193,7 +195,7 @@ public class ProductService {
     }
 
     @Transactional
-    public Product updatePrice(String id, BigDecimal newPrice) {
+    public Product updatePrice(UUID id, BigDecimal newPrice) {
         validatePrice(newPrice);
         Product product = findById(id);
         product.updatePrice(newPrice);
@@ -201,7 +203,7 @@ public class ProductService {
     }
 
     @Transactional
-    public void delete(String id) {
+    public void delete(UUID id) {
         Product product = findById(id);
         product.softDelete();
         productRepository.save(product);
@@ -250,7 +252,7 @@ public class ProductService {
     }
 
     @Transactional
-    public Product updateCostPrice(String id, BigDecimal costPrice) {
+    public Product updateCostPrice(UUID id, BigDecimal costPrice) {
         Product product = findById(id);
         product.updateCostPrice(costPrice);
         return productRepository.save(product);
