@@ -20,14 +20,14 @@ public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
-    private final PlatformUserRepository userAccountRepository;
+    private final PlatformUserRepository platformUserRepository;
 
     public JwtResponse loginSuperAdmin(SuperAdminLoginRequest request) {
 
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
         TenantContext.unbindTenant();
 
-        PlatformUser user = userAccountRepository
+        PlatformUser user = platformUserRepository
                 .findByUsernameAndDeletedFalse(request.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
@@ -51,7 +51,7 @@ public class AdminAuthService {
                 )
         );
 
-        String accessToken = tokenProvider.generateAccountToken(
+        String accessToken = tokenProvider.generatePlatformToken(
                 authentication,
                 user.getAccount().getId(),
                 "public"

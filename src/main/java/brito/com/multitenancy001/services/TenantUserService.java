@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserService {
 
-    private final TenantUserTxService tx; // ✅ novo
+    private final TenantUserTxService tenantUserTxService; // ✅ novo
     private final AccountRepository accountRepository; // PUBLIC
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
@@ -58,7 +58,7 @@ public class TenantUserService {
         String email = request.email().trim().toLowerCase();
 
         return runInTenant(schema, () -> toUserResponse(
-                tx.createTenantUser(
+                tenantUserTxService.createTenantUser(
                         accountId,
                         request.name().trim(),
                         username,
@@ -76,56 +76,56 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> tx.listUsers(accountId).stream().map(this::toUserResponse).toList());
+        return runInTenant(schema, () -> tenantUserTxService.listUsers(accountId).stream().map(this::toUserResponse).toList());
     }
 
     public List<UserResponse> listActiveTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> tx.listActiveUsers(accountId).stream().map(this::toUserResponse).toList());
+        return runInTenant(schema, () -> tenantUserTxService.listActiveUsers(accountId).stream().map(this::toUserResponse).toList());
     }
 
     public UserResponse getTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toUserResponse(tx.getUser(userId, accountId)));
+        return runInTenant(schema, () -> toUserResponse(tenantUserTxService.getUser(userId, accountId)));
     }
 
     public UserResponse updateTenantUserStatus(Long userId, boolean active) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toUserResponse(tx.updateStatus(userId, accountId, active)));
+        return runInTenant(schema, () -> toUserResponse(tenantUserTxService.updateStatus(userId, accountId, active)));
     }
 
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        runInTenant(schema, () -> tx.softDelete(userId, accountId));
+        runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
     }
 
     public UserResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toUserResponse(tx.restore(userId, accountId)));
+        return runInTenant(schema, () -> toUserResponse(tenantUserTxService.restore(userId, accountId)));
     }
 
     public UserResponse resetTenantUserPassword(Long userId, String newPassword) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toUserResponse(tx.resetPassword(userId, accountId, newPassword)));
+        return runInTenant(schema, () -> toUserResponse(tenantUserTxService.resetPassword(userId, accountId, newPassword)));
     }
 
     public void hardDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        runInTenant(schema, () -> tx.hardDelete(userId, accountId));
+        runInTenant(schema, () -> tenantUserTxService.hardDelete(userId, accountId));
     }
 
     // ===== PASSWORD RESET (PUBLIC + TENANT) =====
@@ -148,7 +148,7 @@ public class TenantUserService {
 //                    .filter(u -> normalizedEmail.equals(u.getEmail()) && !u.isDeleted())
 //                    .findFirst()
 //                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-            TenantUser user = tx.getByEmailActive(account.getId(), normalizedEmail);
+            TenantUser user = tenantUserTxService.getByEmailActive(account.getId(), normalizedEmail);
 
             if (!user.isActive() || user.isDeleted()) throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
 
@@ -162,7 +162,7 @@ public class TenantUserService {
             user.setPasswordResetToken(token);
             user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
 
-            tx.save(user);
+            tenantUserTxService.save(user);
             return token;
         });
     }
@@ -180,7 +180,7 @@ public class TenantUserService {
             throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
         }
 
-        String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
+        String schema = jwtTokenProvider.getContextFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
         String username = jwtTokenProvider.getUsernameFromToken(token);
 
@@ -190,7 +190,7 @@ public class TenantUserService {
 
         // ✅ bind antes da TX (por isso usamos runInTenant)
         runInTenant(schema, () -> {
-            tx.resetPasswordWithToken(accountId, username, token, newPassword);
+            tenantUserTxService.resetPasswordWithToken(accountId, username, token, newPassword);
         });
     }
  

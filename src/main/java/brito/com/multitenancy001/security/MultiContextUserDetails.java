@@ -12,7 +12,7 @@ import java.util.Collection;
 import java.util.List;
 
 @Getter
-public class CustomUserDetails implements UserDetails {
+public class MultiContextUserDetails implements UserDetails {
     
     /**
 	 * 
@@ -28,7 +28,7 @@ public class CustomUserDetails implements UserDetails {
     private final Collection<? extends GrantedAuthority> authorities;
     
     // Construtor para UserAccount
-    public CustomUserDetails(PlatformUser user, String schemaName) {
+    public MultiContextUserDetails(PlatformUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();
@@ -42,7 +42,7 @@ public class CustomUserDetails implements UserDetails {
 
     
     // Construtor para UserTenant
-    public CustomUserDetails(TenantUser user, String schemaName) {
+    public MultiContextUserDetails(TenantUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();

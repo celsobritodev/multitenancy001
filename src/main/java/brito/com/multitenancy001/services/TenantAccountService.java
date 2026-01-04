@@ -19,8 +19,8 @@ import java.util.UUID;
 @Slf4j
 public class TenantAccountService {
 
-    private final AccountRepository tenantAccountRepository;
-    private final TenantSchemaProvisioningService tenantSchemaService;
+    private final AccountRepository accountRepository;
+    private final TenantSchemaProvisioningService tenantSchemaProvisionService;
 
     @Transactional
     public TenantAccount createAccount(String name, String companyEmail, String companyDocNumber,
@@ -33,10 +33,10 @@ public class TenantAccountService {
         try {
             // TENANT
             TenantContext.bindTenant(account.getSchemaName());
-            tenantSchemaService.ensureSchemaAndMigrate(account.getSchemaName());
+            tenantSchemaProvisionService.ensureSchemaAndMigrate(account.getSchemaName());
 
             // cria admin com JPA no schema bindado
-            tenantSchemaService.createTenantAdmin(account, adminUsername, adminEmail, adminPassword);
+            tenantSchemaProvisionService.createTenantAdmin(account, adminUsername, adminEmail, adminPassword);
 
             return account;
 
@@ -67,7 +67,7 @@ public class TenantAccountService {
                         .systemAccount(false)
                         .build();
 
-                return tenantAccountRepository.save(account);
+                return accountRepository.save(account);
 
             } catch (DataIntegrityViolationException e) {
                 log.warn("⚠️ collision attempt {}/{} | slug={} schema={}", attempt, maxAttempts, slug, schemaName);

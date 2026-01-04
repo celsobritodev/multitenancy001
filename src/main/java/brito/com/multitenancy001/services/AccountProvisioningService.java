@@ -27,7 +27,7 @@ import java.util.List;
 public class AccountProvisioningService {
 
     private final AccountRepository accountRepository;
-    private final TenantUserRepository userTenantRepository;
+    private final TenantUserRepository tenantUserRepository;
     private final TenantSchemaProvisioningService tenantSchemaService;
     private final PasswordEncoder passwordEncoder;
     private final PublicAccountService publicAccountService;
@@ -63,8 +63,8 @@ public class AccountProvisioningService {
         try {
             String username = generateUsernameFromEmail(request.companyEmail());
 
-            boolean usernameExists = userTenantRepository.existsByUsernameAndAccountId(username, account.getId());
-            boolean emailExists = userTenantRepository.existsByEmailAndAccountId(request.companyEmail(), account.getId());
+            boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());
+            boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(request.companyEmail(), account.getId());
 
             if (usernameExists) {
                 username = ensureUniqueUsername(username, account.getId());
@@ -85,7 +85,7 @@ public class AccountProvisioningService {
             u.setTimezone("America/Sao_Paulo");
             u.setLocale("pt_BR");
 
-            return userTenantRepository.save(u);
+            return tenantUserRepository.save(u);
 
         } finally {
             TenantContext.unbindTenant();
@@ -254,8 +254,8 @@ public class AccountProvisioningService {
     @Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
     protected List<TenantUserResponse> listTenantUsersTx(Long accountId, boolean onlyActive) {
         List<TenantUser> users = onlyActive
-                ? userTenantRepository.findByAccountIdAndActiveTrueAndDeletedFalse(accountId)
-                : userTenantRepository.findByAccountId(accountId);
+                ? tenantUserRepository.findByAccountIdAndActiveTrueAndDeletedFalse(accountId)
+                : tenantUserRepository.findByAccountId(accountId);
 
         return users.stream().map(TenantUserResponse::from).toList();
     }
@@ -273,8 +273,8 @@ public class AccountProvisioningService {
     protected TenantUser createTenantAdminFromSignup(Long accountId, SignupRequest request) {
         String username = generateUsernameFromEmail(request.companyEmail());
         
-        boolean usernameExists = userTenantRepository.existsByUsernameAndAccountId(username, accountId);
-        boolean emailExists = userTenantRepository.existsByEmailAndAccountId(request.companyEmail(), accountId);
+        boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, accountId);
+        boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(request.companyEmail(), accountId);
 
         if (usernameExists) {
             username = ensureUniqueUsername(username, accountId);
@@ -296,7 +296,7 @@ public class AccountProvisioningService {
         u.setTimezone("America/Sao_Paulo");
         u.setLocale("pt_BR");
 
-        return userTenantRepository.save(u);
+        return tenantUserRepository.save(u);
     }
 
     private AccountStatusChangeResponse buildStatusChangeResponse(
@@ -342,18 +342,18 @@ public class AccountProvisioningService {
 
     @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
     protected int cancelAccountTenantTx(TenantAccount account) {
-        List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+        List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
         users.forEach(TenantUser::softDelete);
-        userTenantRepository.saveAll(users);
+        tenantUserRepository.saveAll(users);
         return users.size();
     }
 
 
     @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public int cancelAccountTx(TenantAccount account) {
-        List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+        List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
         users.forEach(TenantUser::softDelete);
-        userTenantRepository.saveAll(users);
+        tenantUserRepository.saveAll(users);
         return users.size();
     }
 
@@ -367,9 +367,9 @@ public class AccountProvisioningService {
 
         TenantContext.bindTenant(schema);
         try {
-            List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
             users.forEach(u -> u.setActive(false));
-            userTenantRepository.saveAll(users);
+            tenantUserRepository.saveAll(users);
             return users.size();
         } finally {
             TenantContext.unbindTenant();
@@ -386,9 +386,9 @@ public class AccountProvisioningService {
 
         TenantContext.bindTenant(account.getSchemaName());
         try {
-            List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
             users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-            userTenantRepository.saveAll(users);
+            tenantUserRepository.saveAll(users);
         } finally {
             TenantContext.unbindTenant();
         }
@@ -404,9 +404,9 @@ public class AccountProvisioningService {
 
         TenantContext.bindTenant(account.getSchemaName());
         try {
-            List<TenantUser> users = userTenantRepository.findByAccountId(account.getId());
+            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
             users.forEach(u -> { if (u.isDeleted()) u.restore(); });
-            userTenantRepository.saveAll(users);
+            tenantUserRepository.saveAll(users);
         } finally {
             TenantContext.unbindTenant();
         }
@@ -443,7 +443,7 @@ public class AccountProvisioningService {
         String username = baseUsername;
         int counter = 1;
         
-        while (userTenantRepository.existsByUsernameAndAccountId(username, accountId)) {
+        while (tenantUserRepository.existsByUsernameAndAccountId(username, accountId)) {
             username = baseUsername + counter;
             counter++;
         }

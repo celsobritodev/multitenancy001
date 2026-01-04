@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class UsernameUniquenessService {
 
-    private final TenantUserRepository userTenantRepository;
+    private final TenantUserRepository tenantUserRepository;
 
     public String ensureUniqueUsername(
             String baseUsername,
@@ -18,7 +18,7 @@ public class UsernameUniquenessService {
         String username = baseUsername;
         int counter = 1;
 
-        while (userTenantRepository
+        while (tenantUserRepository
                 .existsByUsernameAndAccountId(username, accountId)) {
             username = baseUsername + counter;
             counter++;

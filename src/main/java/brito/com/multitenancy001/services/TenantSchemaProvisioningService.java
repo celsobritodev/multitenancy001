@@ -19,7 +19,7 @@ import org.springframework.util.StringUtils;
 public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantSchemaMigrationService tenantMigrationService;
+    private final TenantSchemaMigrationService tenantSchemaMigrationService;
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -58,7 +58,7 @@ public class TenantSchemaProvisioningService {
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", schemaName);
-        tenantMigrationService.migrateTenant(schemaName);
+        tenantSchemaMigrationService.migrateTenant(schemaName);
     }
 
     /**

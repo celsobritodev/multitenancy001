@@ -5,7 +5,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -40,22 +39,22 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN ACCOUNT (para usuários do sistema account)
+       TOKEN PLATFORM (para usuários da plataforma)
        ========================= */
-    public String generateAccountToken(
+    public String generatePlatformToken(
             Authentication authentication,
             Long accountId,
-            String tenantSchema
+            String context
     ) {
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
+        MultiContextUserDetails user = (MultiContextUserDetails) authentication.getPrincipal();
 
         return Jwts.builder()
             .subject(user.getUsername())
             .claim("roles", user.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(",")))
-            .claim("type", "ACCOUNT")
-            .claim("tenantSchema", tenantSchema)
+            .claim("type", "PLATFORM")  // Renomeado de ACCOUNT para PLATFORM
+            .claim("context", context)
             .claim("accountId", accountId)
             .claim("userId", user.getUserId())
             .issuedAt(new Date())
@@ -65,14 +64,14 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN TENANT
+       TOKEN TENANT (para usuários dentro de um tenant)
        ========================= */
     public String generateTenantToken(
             Authentication authentication,
             Long accountId,
-            String tenantSchema
+            String context
     ) {
-        CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
+        MultiContextUserDetails user = (MultiContextUserDetails) authentication.getPrincipal();
 
         return Jwts.builder()
             .subject(user.getUsername())
@@ -80,7 +79,7 @@ public class JwtTokenProvider {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(",")))
             .claim("type", "TENANT")
-            .claim("tenantSchema", tenantSchema)
+            .claim("context", context)
             .claim("accountId", accountId)
             .claim("userId", user.getUserId())
             .issuedAt(new Date())
@@ -92,11 +91,11 @@ public class JwtTokenProvider {
     /* =========================
        REFRESH TOKEN (JWT)
        ========================= */
-    public String generateRefreshToken(String username, String tenantSchema) {
+    public String generateRefreshToken(String username, String context) {
         return Jwts.builder()
             .subject(username)
             .claim("type", "REFRESH")
-            .claim("tenantSchema", tenantSchema)
+            .claim("context", context)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
             .signWith(key, Jwts.SIG.HS512)
@@ -108,13 +107,13 @@ public class JwtTokenProvider {
        ========================= */
     public String generatePasswordResetToken(
             String username,
-            String tenantSchema,
+            String context,
             Long accountId
     ) {
         return Jwts.builder()
             .subject(username)
             .claim("type", "PASSWORD_RESET")
-            .claim("tenantSchema", tenantSchema)
+            .claim("context", context)
             .claim("accountId", accountId)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
@@ -137,8 +136,28 @@ public class JwtTokenProvider {
         return getAllClaimsFromToken(token).getSubject();
     }
 
+    /**
+     * Obtém o contexto do token (antigo tenantSchema)
+     * Mantém compatibilidade retornando "tenantSchema" se "context" não existir
+     */
+    public String getContextFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        
+        // Tenta obter pelo novo nome "context"
+        String context = claims.get("context", String.class);
+        if (context != null) {
+            return context;
+        }
+        
+        // Fallback para compatibilidade com tokens antigos
+        return claims.get("tenantSchema", String.class);
+    }
+    
+    /**
+     * Método para compatibilidade (chama getContextFromToken)
+     */
     public String getTenantSchemaFromToken(String token) {
-        return getAllClaimsFromToken(token).get("tenantSchema", String.class);
+        return getContextFromToken(token);
     }
 
     public Long getAccountIdFromToken(String token) {
@@ -175,8 +194,8 @@ public class JwtTokenProvider {
     /* =========================
        MÉTODOS AUXILIARES
        ========================= */
-    public boolean isAccountToken(String token) {
-        return "ACCOUNT".equals(getTokenType(token));
+    public boolean isPlatformToken(String token) {
+        return "PLATFORM".equals(getTokenType(token));
     }
 
     public boolean isTenantToken(String token) {
@@ -189,5 +208,21 @@ public class JwtTokenProvider {
 
     public boolean isPasswordResetToken(String token) {
         return "PASSWORD_RESET".equals(getTokenType(token));
+    }
+    
+    /**
+     * Verifica se o token é de um contexto específico
+     */
+    public boolean isTokenInContext(String token, String expectedContext) {
+        String actualContext = getContextFromToken(token);
+        return expectedContext.equals(actualContext);
+    }
+    
+    /**
+     * Verifica se o token é do contexto da plataforma (public)
+     */
+    public boolean isPlatformContextToken(String token) {
+        String context = getContextFromToken(token);
+        return "public".equals(context);
     }
 }

@@ -16,7 +16,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import brito.com.multitenancy001.multitenancy.TenantContext;
-
 import java.io.IOException;
 
 @Component
@@ -24,7 +23,7 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final UserDetailsService userDetailsService;
+    private final UserDetailsService userDetailsService; // ✅ Mantém interface
 
     @Override
     protected void doFilterInternal(

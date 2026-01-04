@@ -12,8 +12,8 @@ public class SecurityUtils {
     
     public Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails) {
-            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        if (authentication != null && authentication.getPrincipal() instanceof MultiContextUserDetails) {
+            MultiContextUserDetails userDetails = (MultiContextUserDetails) authentication.getPrincipal();
             return userDetails.getUserId();
         }
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -21,8 +21,8 @@ public class SecurityUtils {
     
     public Long getCurrentAccountId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails) {
-            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        if (authentication != null && authentication.getPrincipal() instanceof MultiContextUserDetails) {
+            MultiContextUserDetails userDetails = (MultiContextUserDetails) authentication.getPrincipal();
             return userDetails.getAccountId();
         }
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -30,8 +30,8 @@ public class SecurityUtils {
     
     public String getCurrentSchema() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails) {
-            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        if (authentication != null && authentication.getPrincipal() instanceof MultiContextUserDetails) {
+            MultiContextUserDetails userDetails = (MultiContextUserDetails) authentication.getPrincipal();
             return userDetails.getSchemaName();
         }
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -39,8 +39,8 @@ public class SecurityUtils {
     
     public String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof CustomUserDetails) {
-            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        if (authentication != null && authentication.getPrincipal() instanceof MultiContextUserDetails) {
+            MultiContextUserDetails userDetails = (MultiContextUserDetails) authentication.getPrincipal();
             return userDetails.getUsername();
         }
         return authentication != null ? authentication.getName() : null;

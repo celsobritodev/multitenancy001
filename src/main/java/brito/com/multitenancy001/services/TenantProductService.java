@@ -32,7 +32,6 @@ public class TenantProductService {
 
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
-
     private final CategoryRepository categoryRepository;
     private final SubcategoryRepository subcategoryRepository;
 

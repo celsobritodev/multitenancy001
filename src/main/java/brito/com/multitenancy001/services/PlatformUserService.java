@@ -23,7 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PlatformUserService {
 
-    private final PlatformUserRepository userAccountRepository;
+    private final PlatformUserRepository platformUserRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -69,10 +69,10 @@ public class PlatformUserService {
         }
 
         // unicidade por account (platform)
-        if (userAccountRepository.existsByUsernameAndAccountId(username, platformAccount.getId())) {
+        if (platformUserRepository.existsByUsernameAndAccountId(username, platformAccount.getId())) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
         }
-        if (userAccountRepository.existsByEmailAndAccountId(request.email(), platformAccount.getId())) {
+        if (platformUserRepository.existsByEmailAndAccountId(request.email(), platformAccount.getId())) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
         }
 
@@ -87,14 +87,14 @@ public class PlatformUserService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return mapToResponse(userAccountRepository.save(user));
+        return mapToResponse(platformUserRepository.save(user));
     }
 
     @Transactional(readOnly = true)
     public List<UserResponse> listPlatformUsers() {
         TenantContext.unbindTenant();
         TenantAccount platformAccount = getPlatformAccount();
-        return userAccountRepository.findByAccountId(platformAccount.getId()).stream()
+        return platformUserRepository.findByAccountId(platformAccount.getId()).stream()
                 .filter(u -> !u.isDeleted())
                 .map(this::mapToResponse)
                 .toList();
@@ -105,7 +105,7 @@ public class PlatformUserService {
         TenantContext.unbindTenant();
         TenantAccount platformAccount = getPlatformAccount();
 
-        PlatformUser user = userAccountRepository
+        PlatformUser user = platformUserRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -126,13 +126,13 @@ public class PlatformUserService {
         TenantContext.unbindTenant();
         TenantAccount platformAccount = getPlatformAccount();
 
-        PlatformUser user = userAccountRepository
+        PlatformUser user = platformUserRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
         user.setActive(active);
         user.setUpdatedAt(LocalDateTime.now());
-        return mapToResponse(userAccountRepository.save(user));
+        return mapToResponse(platformUserRepository.save(user));
     }
     
     
@@ -144,7 +144,7 @@ public class PlatformUserService {
         TenantContext.unbindTenant();
         TenantAccount platformAccount = getPlatformAccount();
 
-        PlatformUser user = userAccountRepository
+        PlatformUser user = platformUserRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -153,7 +153,7 @@ public class PlatformUserService {
         }
 
         user.softDelete();
-        userAccountRepository.save(user);
+        platformUserRepository.save(user);
     }
     
 
@@ -161,7 +161,7 @@ public class PlatformUserService {
         TenantContext.unbindTenant();
         TenantAccount platformAccount = getPlatformAccount();
 
-        PlatformUser user = userAccountRepository
+        PlatformUser user = platformUserRepository
                 .findByIdAndAccountId(userId, platformAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
@@ -170,7 +170,7 @@ public class PlatformUserService {
         }
 
         user.restore();
-        return mapToResponse(userAccountRepository.save(user));
+        return mapToResponse(platformUserRepository.save(user));
     }
     
     

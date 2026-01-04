@@ -23,7 +23,7 @@ public class TenantAuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final AccountRepository accountRepository;
-    private final TenantUserRepository userTenantRepository;
+    private final TenantUserRepository tenantUserRepository;
 
     public JwtResponse loginTenant(TenantLoginRequest request) {
 
@@ -58,7 +58,7 @@ public class TenantAuthService {
                             )
                     );
 
-            TenantUser user = userTenantRepository
+            TenantUser user = tenantUserRepository
                     .findByUsernameAndAccountId(
                             request.username(),
                             account.getId()
