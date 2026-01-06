@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.domain.user;
 
-import brito.com.multitenancy001.security.RoleAuthority;
+import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum TenantRole implements RoleAuthority {
     TENANT_ADMIN,

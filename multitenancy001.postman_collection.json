@@ -126,7 +126,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"unadoc\",\n    \"companyEmail\": \"support@unadoc.com\",\n    \"companyDocument\": \"4498227712\",\n    \"admin\": {\n        \"username\": \"main\",\n        \"email\": \"main@unadoc.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n  \"name\": \"Unadoc\",\n  \"companyEmail\": \"contact@unadoc.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"12545455445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -173,7 +173,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"name\": \"unadoc\",\n    \"companyEmail\": \"support@unadoc.com\",\n    \"companyDocument\": \"4498227712\",\n    \"admin\": {\n        \"username\": \"main\",\n        \"email\": \"main@unadoc.com\",\n        \"password\": \"main123456\",\n        \"confirmPassword\": \"main123456\"\n    }\n}",
+					"raw": "{\n  \"name\": \"TandyShop\",\n  \"companyEmail\": \"tandy@tshop.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"232554545445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -385,7 +385,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]
@@ -402,7 +402,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2/users",
+					"raw": "{{base_url}}/api/admin/accounts/3/users",
 					"host": [
 						"{{base_url}}"
 					],
@@ -410,7 +410,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"2",
+						"3",
 						"users"
 					]
 				},
@@ -442,7 +442,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]
@@ -497,7 +497,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwidHlwZSI6IlJFRlJFU0giLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJpYXQiOjE3NjY2Nzk4ODYsImV4cCI6MTc2NzI4NDY4Nn0.MUMySamxF39LwxL86YBOTVQ6HNHpUoICd5UyB-rIlLlHv1h7PIHaFUFDqhGRrPcwAAsdn12gR_qjQ5TsbBDH3g",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]
@@ -514,7 +514,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2",
+					"raw": "{{base_url}}/api/admin/accounts/3",
 					"host": [
 						"{{base_url}}"
 					],
@@ -522,7 +522,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"2"
+						"3"
 					]
 				},
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
@@ -553,7 +553,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]
@@ -570,7 +570,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/7/details",
+					"raw": "{{base_url}}/api/admin/accounts/3/details",
 					"host": [
 						"{{base_url}}"
 					],
@@ -578,7 +578,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"7",
+						"3",
 						"details"
 					]
 				},
@@ -610,7 +610,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]
@@ -619,7 +619,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "\n{\n  \"status\": \"SUSPENDED\",\n  \n  \"reason\": \"Teste\"\n}",
+					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \n  \"reason\": \"Teste\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -667,7 +667,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IkFDQ09VTlQiLCJ0ZW5hbnRTY2hlbWEiOiJwdWJsaWMiLCJhY2NvdW50SWQiOjEsInVzZXJJZCI6MSwiaWF0IjoxNzY2Nzg2MDc5LCJleHAiOjE3NjY3ODk2Nzl9.fvGn4sAUqOX1NCftfR7LMYcdOF_1upgXnEliPyGSu03bhhfB-oPRRY3g709SWWANjZdGkvQdYKwUmRLdiLNvSQ",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
 							"type": "string"
 						}
 					]

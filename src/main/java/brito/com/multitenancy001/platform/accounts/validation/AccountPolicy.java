@@ -2,9 +2,9 @@ package brito.com.multitenancy001.platform.accounts.validation;
 
 import org.springframework.stereotype.Component;
 
-import brito.com.multitenancy001.exceptions.ApiException;
 import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.repositories.publicdb.AccountRepository;
+import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 
 @Component

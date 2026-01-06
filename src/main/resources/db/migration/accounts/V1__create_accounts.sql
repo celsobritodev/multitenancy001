@@ -51,7 +51,7 @@ CREATE TABLE accounts (
 );
 
 -- Índice único para documento (somente contas ativas)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_document_active
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_number_active
 ON accounts (company_doc_number)
 WHERE deleted = false;
 

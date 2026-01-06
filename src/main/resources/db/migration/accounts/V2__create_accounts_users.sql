@@ -12,7 +12,9 @@ CREATE TABLE users_account (
     role VARCHAR(50) NOT NULL,
 
     account_id BIGINT NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT true,
+    
+    suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
+    suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
     last_login TIMESTAMP,
     failed_login_attempts INTEGER DEFAULT 0,

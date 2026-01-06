@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.platform.domain.user;
 
-import brito.com.multitenancy001.security.RoleAuthority;
+import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum PlatformRole implements RoleAuthority {
 

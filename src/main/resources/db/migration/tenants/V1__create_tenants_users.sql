@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS users_tenant (
 
     -- 👤 Perfil
     role VARCHAR(50) NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT true,
+    
+    
+    suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
+    suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
     -- 🔐 Segurança / autenticação
     last_login TIMESTAMP,
@@ -53,5 +56,4 @@ CREATE TABLE IF NOT EXISTS users_tenant (
 CREATE INDEX idx_users_tenant_account_id ON users_tenant(account_id);
 CREATE INDEX idx_users_tenant_username ON users_tenant(username);
 CREATE INDEX idx_users_tenant_email ON users_tenant(email);
-CREATE INDEX idx_users_tenant_active ON users_tenant(active) WHERE active = true;
 CREATE INDEX idx_users_tenant_deleted ON users_tenant(deleted) WHERE deleted = false;

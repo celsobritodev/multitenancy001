@@ -12,7 +12,7 @@ import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users_account", schema = "public")  // ⚠️ NOME DIFERENTE
+@Table(name = "users_account", schema = "public")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = { "account", "password" })
 public class PlatformUser {
@@ -38,16 +38,20 @@ public class PlatformUser {
     @Column(nullable = false, length = 50)
     private PlatformRole role;
 
-    // ✅ FK COMPLETA no ACCOUNT
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private TenantAccount account;
 
-    @Column(nullable = false)
+    @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
-    private boolean active = true;
+    private boolean suspendedByAccount = false;
 
-	 // 🔐 SEGURANÇA
+    // ✅ NOVO
+    @Column(name = "suspended_by_admin", nullable = false)
+    @Builder.Default
+    private boolean suspendedByAdmin = false;
+
+    // 🔐 SEGURANÇA
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -65,15 +69,6 @@ public class PlatformUser {
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
-     // 🌎 CONFIGURAÇÕES
-    @Column(name = "timezone", length = 50)
-    @Builder.Default
-    private String timezone = "America/Sao_Paulo";
-
-    @Column(name = "locale", length = 10)
-    @Builder.Default
-    private String locale = "pt_BR";
-
     // 🧾 AUDITORIA
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -90,54 +85,29 @@ public class PlatformUser {
     @Builder.Default
     private boolean deleted = false;
 
-    @Column(name = "password_reset_token")
-    private String passwordResetToken;
-
-    @Column(name = "password_reset_expires")
-    private LocalDateTime passwordResetExpires;
-
-   
-
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
 
-   
+    // ✅ regra única para login
+    public boolean isEnabledForLogin() {
+        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) return false;
+        return !deleted && !suspendedByAccount && !suspendedByAdmin;
+    }
 
-    /**
-     * MÉTODOS DA ENTIDADE ORIGINAL (adaptados)
-     */
+    // se você usa esse método em algum lugar, deixe coerente:
     public boolean isAccountNonLocked() {
-        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) {
-            return false;
-        }
-        return active && !deleted;
+        return isEnabledForLogin();
     }
-
-    public void incrementFailedLoginAttempts() {
-        this.failedLoginAttempts++;
-        if (this.failedLoginAttempts >= 5) {
-            this.lockedUntil = LocalDateTime.now().plusMinutes(30);
-        }
-    }
-
-    public void resetFailedLoginAttempts() {
-        this.failedLoginAttempts = 0;
-        this.lockedUntil = null;
-        this.lastLogin = LocalDateTime.now();
-    }
-
-   
-
-   
-
-  
 
     public void softDelete() {
         this.deleted = true;
         this.deletedAt = LocalDateTime.now();
-        this.active = false;
+        // deletado sempre bloqueia login
+        this.suspendedByAccount = true;
+        this.suspendedByAdmin = true;
+
         var timestamp = System.currentTimeMillis();
         this.username = "deleted_" + this.username + "_" + timestamp;
         this.email = "deleted_" + this.email + "_" + timestamp;
@@ -146,31 +116,9 @@ public class PlatformUser {
     public void restore() {
         this.deleted = false;
         this.deletedAt = null;
-        this.active = true;
 
-        if (this.username.startsWith("deleted_")) {
-            String original = this.username.substring("deleted_".length());
-            original = original.replaceFirst("_[0-9]+$", "");
-            this.username = original;
-        }
-
-        if (this.email.startsWith("deleted_")) {
-            String original = this.email.substring("deleted_".length());
-            original = original.replaceFirst("_[0-9]+$", "");
-            this.email = original;
-        }
+        // restaurar não “des-suspende” admin por padrão — mas como é plataforma, você decide.
+        this.suspendedByAccount = false;
+        this.suspendedByAdmin = false;
     }
-
-    public void changePassword(String newPassword) {
-        this.password = newPassword;
-        this.passwordChangedAt = LocalDateTime.now();
-        this.mustChangePassword = false;
-    }
-
-    public boolean isPasswordExpired() {
-        if (this.passwordChangedAt == null) return true;
-        return this.passwordChangedAt.plusDays(90).isBefore(LocalDateTime.now());
-    }
-    
-  
 }

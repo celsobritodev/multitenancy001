@@ -5,7 +5,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import brito.com.multitenancy001.dtos.DocumentType;
 import brito.com.multitenancy001.platform.domain.user.PlatformUser;
 
 import java.time.LocalDateTime;

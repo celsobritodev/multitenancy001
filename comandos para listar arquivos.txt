@@ -1,7 +1,8 @@
 listar estrutura com o nome e path de todas as pastas
-find "$PWD" -type f > estrutura.txt
+find "$PWD" -type f > path_and_name.txt
 
-find src -type f \( -name "*.java" -o -name "*.sql" \) -exec cat {} + > fontes.txt
+lista todo o conteudo dos arquivos
+find . -type f \( -name "*.java" -o -name "*.sql" \) -exec cat {} + > all_content.txt
 
 
 lista o conteudo de todas as classes
@@ -9,6 +10,7 @@ Usuario@SANDESK-MICRO MINGW64 ~/eclipse-workspace/multitenancy001 (main)
 $ find src -type f \( -name "*.java" -o -name "*.sql" \) -exec cat {} + > fontes.txt
 
 lista o nome e path de de todas migrations
-find src/main/resources/db/migration -type f -name "*.sql" > migrations.txt
+find src/main/resources/db/migration -type f -name "*.sql" > migrations_path.txt
 
-find src/main/resources/db/migration -type f -name "*.sql" -exec sh -c 'echo -e "\n\n-- =========================================="; echo "-- FILE: $1"; cat "$1"' _ {} \; > migrations.txt
+lista o conteudo de todas as migrations
+find src/main/resources/db/migration -type f -name "*.sql" -exec sh -c 'echo -e "\n\n-- ==="; echo "-- FILE: $1"; cat "$1"' _ {} \; > migrations_content.txt
