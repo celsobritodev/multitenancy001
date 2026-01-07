@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.user.api;
+package brito.com.multitenancy001.controlplane.api.user;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;

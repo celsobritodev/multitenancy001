@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.domain.billing;
+package brito.com.multitenancy001.controlplane.billing.domain;
 
 
 

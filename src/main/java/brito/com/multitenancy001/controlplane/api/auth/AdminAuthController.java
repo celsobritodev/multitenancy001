@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.auth.api;
+package brito.com.multitenancy001.controlplane.api.auth;
 
 import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
 import brito.com.multitenancy001.controlplane.application.AdminAuthService;

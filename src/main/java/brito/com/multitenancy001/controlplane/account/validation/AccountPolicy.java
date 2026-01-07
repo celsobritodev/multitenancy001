@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.accounts.validation;
+package brito.com.multitenancy001.controlplane.account.validation;
 
 import org.springframework.stereotype.Component;
 

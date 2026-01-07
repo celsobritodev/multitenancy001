@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.persistence.publicdb;
+package brito.com.multitenancy001.controlplane.billing.persistence;
 
 
 
@@ -9,8 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.controlplane.domain.billing.Payment;
-import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.controlplane.billing.domain.Payment;
+import brito.com.multitenancy001.controlplane.billing.domain.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

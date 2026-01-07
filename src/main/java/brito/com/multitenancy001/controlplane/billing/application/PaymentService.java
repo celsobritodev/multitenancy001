@@ -1,13 +1,13 @@
-package brito.com.multitenancy001.controlplane.application;
+package brito.com.multitenancy001.controlplane.billing.application;
 
 import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.controlplane.billing.domain.Payment;
+import brito.com.multitenancy001.controlplane.billing.domain.PaymentStatus;
+import brito.com.multitenancy001.controlplane.billing.persistence.PaymentRepository;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
-import brito.com.multitenancy001.controlplane.domain.billing.Payment;
-import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
-import brito.com.multitenancy001.controlplane.persistence.publicdb.PaymentRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
