@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.tenant.application;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.shared.security.SecurityUtils;
@@ -28,7 +28,7 @@ public class TenantUserService {
 
     // ===== helpers =====
     private <T> T runInTenant(String schema, java.util.concurrent.Callable<T> action) {
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             return action.call();
         } catch (RuntimeException e) {
@@ -36,16 +36,16 @@ public class TenantUserService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
     private void runInTenant(String schema, Runnable action) {
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             action.run();
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -165,8 +165,8 @@ public class TenantUserService {
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
 
         // PUBLIC (sem @Transactional tenant)
-        SchemaContext.unbindSchema();
-        TenantAccount account = accountRepository.findBySlugAndDeletedFalse(slug)
+        TenantSchemaContext.clearTenantSchema();
+        Account account = accountRepository.findBySlugAndDeletedFalse(slug)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
         if (!account.isActive()) throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
 

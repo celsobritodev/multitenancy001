@@ -5,15 +5,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -28,9 +28,9 @@ public class TenantAuthService {
     public JwtResponse loginTenant(TenantLoginRequest request) {
 
         // 1️⃣ PUBLIC — resolve conta
-        SchemaContext.unbindSchema();
+        TenantSchemaContext.clearTenantSchema();
 
-        TenantAccount account = accountRepository
+        Account account = accountRepository
                 .findBySlugAndDeletedFalse(request.slug())
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
@@ -47,7 +47,7 @@ public class TenantAuthService {
         }
 
         // 2️⃣ TENANT — bind correto
-        SchemaContext.bindSchema(account.getSchemaName());
+        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
 
         try {
             Authentication authentication =
@@ -100,7 +100,7 @@ public class TenantAuthService {
             );
 
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 }

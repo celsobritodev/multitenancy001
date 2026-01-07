@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.api.users.admin;
 
-import brito.com.multitenancy001.platform.application.AccountLifecycleService;
+import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
 import brito.com.multitenancy001.shared.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.tenant.api.dto.users.admin.TenantUserAdminSuspendRequest;
 import lombok.RequiredArgsConstructor;

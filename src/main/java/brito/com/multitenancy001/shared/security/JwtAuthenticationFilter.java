@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 
 import java.io.IOException;
 
@@ -51,7 +51,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 2) extrai tenantSchema e binda ANTES de qualquer JPA
             final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
-            SchemaContext.bindSchema(tenantSchema);
+            TenantSchemaContext.bindTenantSchema(tenantSchema);
 
             // 3) autenticação
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
@@ -74,7 +74,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } finally {
             // 4) limpa sempre (anti vazamento)
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 }

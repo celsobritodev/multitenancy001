@@ -12,6 +12,6 @@ public class TenantProvisioningService {
     private final TenantSchemaProvisioningService tenantSchemaService;
 
     public void createSchemaAndMigrate(String schemaName) {
-        tenantSchemaService.ensureSchemaAndMigrate(schemaName);
+        tenantSchemaService.schemaMigrationService(schemaName);
     }
 }

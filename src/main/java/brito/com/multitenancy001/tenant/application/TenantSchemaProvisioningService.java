@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.tenant.application;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,7 +47,7 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-    public void ensureSchemaAndMigrate(String schemaName) {
+    public void schemaMigrationService(String schemaName) {
         if (!StringUtils.hasText(schemaName) || "public".equals(schemaName)) {
             throw new ApiException("INVALID_SCHEMA", "Schema inválido", 400);
         }
@@ -64,8 +64,8 @@ public class TenantSchemaProvisioningService {
     /**
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
-    public TenantUser createTenantAdmin(TenantAccount account, String username, String email, String rawPassword) {
-        String bound = SchemaContext.getCurrentSchema();
+    public TenantUser tenantAdminBootstrapService(Account account, String username, String email, String rawPassword) {
+        String bound = TenantSchemaContext.getCurrentTenantSchema();
         if (bound == null || !bound.equals(account.getSchemaName())) {
             throw new ApiException("TENANT_NOT_BOUND", "Tenant não está bindado no schema esperado", 500);
         }

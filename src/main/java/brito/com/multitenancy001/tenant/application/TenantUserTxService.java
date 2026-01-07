@@ -4,7 +4,7 @@ import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

@@ -1,512 +1,10 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import lombok.extern.slf4j.Slf4j;
-import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
-@Slf4j
-@Component
-public class CurrentSchemaIdentifierResolverImpl
-        implements CurrentTenantIdentifierResolver<String> {
-
-    private static final String DEFAULT_SCHEMA = "public";
-    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
-
-    /**
-     * Bind do tenant na thread atual.
-     * - Se vier vazio/nulo: remove o tenant (fica "sem tenant", e o resolver decide fallback).
-     * - Se vier preenchido: seta no ThreadLocal.
-     */
-    public static void bindTenantToCurrentThread(String tenantId) {
-        String previous = TENANT_THREAD_LOCAL.get();
-
-        String normalized = (tenantId != null ? tenantId.trim() : null);
-
-        if (StringUtils.hasText(normalized)) {
-            TENANT_THREAD_LOCAL.set(normalized);
-            if (!normalized.equals(previous)) {
-                log.info("🔄 Tenant bindado à thread: {} -> {}", previous, normalized);
-            } else {
-                log.debug("🔄 Tenant já estava bindado: {}", normalized);
-            }
-        } else {
-            TENANT_THREAD_LOCAL.remove();
-            if (previous != null) {
-                log.info("🧹 Tenant removido da thread (anterior: {})", previous);
-            } else {
-                log.debug("🧹 Tenant já estava vazio (nada para remover)");
-            }
-        }
-    }
-
-    /**
-     * Retorna o tenant REALMENTE bindado.
-     * ✅ Importante: aqui retornamos null quando não há tenant,
-     * pra não mascarar estado e facilitar debug.
-     */
-    public static String resolveBoundTenantOrNull() {
-        String t = TENANT_THREAD_LOCAL.get();
-        return StringUtils.hasText(t) ? t : null;
-    }
-
-    /**
-     * Mantém compatibilidade com seu código atual (ex.: logs do provider).
-     * Use isso somente quando você quer um fallback explícito para public.
-     */
-    public static String resolveBoundTenantOrDefault() {
-        String t = resolveBoundTenantOrNull();
-        return (t != null ? t : DEFAULT_SCHEMA);
-    }
-
-    public static void unbindTenantFromCurrentThread() {
-        String previous = TENANT_THREAD_LOCAL.get();
-        TENANT_THREAD_LOCAL.remove();
-        if (previous != null) {
-            log.info("🧹 Tenant desbindado da thread (anterior: {})", previous);
-        } else {
-            log.debug("🧹 Tenant desbindado (já estava vazio)");
-        }
-    }
-
-    /**
-     * O Hibernate sempre precisa de um tenant válido.
-     * ✅ Aqui sim a gente aplica fallback para DEFAULT_TENANT.
-     */
-    @Override
-    public String resolveCurrentTenantIdentifier() {
-        String tenant = resolveBoundTenantOrNull();
-        String resolved = (tenant != null ? tenant : DEFAULT_SCHEMA);
-
-        if (log.isDebugEnabled()) {
-            log.debug("🏷️ Hibernate resolveu tenant={} (bound={}, default={})",
-                    resolved, tenant, DEFAULT_SCHEMA);
-        }
-        return resolved;
-    }
-
-    @Override
-    public boolean validateExistingCurrentSessions() {
-        return false;
-    }
-
-    @Override
-    public boolean isRoot(String tenantIdentifier) {
-        return DEFAULT_SCHEMA.equals(tenantIdentifier);
-    }
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
-import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-
-import javax.sql.DataSource;
-import java.util.HashMap;
-import java.util.Map;
-
-@Configuration
-@RequiredArgsConstructor
-public class HibernateMultitenancyConfig {
-
-    private final DataSource dataSource;
-    private final SchemaMultiTenantConnectionProvider multiTenantConnectionProvider;
-    private final CurrentSchemaIdentifierResolverImpl tenantResolver;
-
-    @Bean(name = "publicEntityManagerFactory")
-    @Primary
-    public LocalContainerEntityManagerFactoryBean publicEntityManagerFactory() {
-        var emf = new LocalContainerEntityManagerFactoryBean();
-        emf.setDataSource(dataSource);
-        emf.setPackagesToScan("brito.com.multitenancy001.platform.domain");
-        emf.setPersistenceUnitName("PUBLIC_PU");
-        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-
-        Map<String, Object> props = new HashMap<>();
-
-        props.put("hibernate.hbm2ddl.auto", "none");
-        props.put("hibernate.show_sql", true);
-        props.put("hibernate.format_sql", true);
-        props.put("hibernate.default_schema", "public");
-
-        emf.setJpaPropertyMap(props);
-        return emf;
-    }
-
-    @Bean(name = "tenantEntityManagerFactory")
-    public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
-        var emf = new LocalContainerEntityManagerFactoryBean();
-        emf.setDataSource(dataSource);
-        emf.setPackagesToScan("brito.com.multitenancy001.tenant.model");
-
- 
-        emf.setPersistenceUnitName("TENANT_PU");
-        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-
-        Map<String, Object> props = new HashMap<>();
-  
-        props.put("hibernate.hbm2ddl.auto", "none");
-        props.put("hibernate.show_sql", true);
-        props.put("hibernate.format_sql", true);
-
-        // ✅ multi-tenant via string keys (compatível)
-        props.put("hibernate.multiTenancy", "SCHEMA");
-        props.put("hibernate.multi_tenant_connection_provider", multiTenantConnectionProvider);
-        props.put("hibernate.tenant_identifier_resolver", tenantResolver);
-
-        emf.setJpaPropertyMap(props);
-        return emf;
-    }
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import jakarta.persistence.EntityManagerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-
-@Configuration
-@EnableJpaRepositories(
-    basePackages = "brito.com.multitenancy001.platform.persistence.publicdb",
-    entityManagerFactoryRef = "publicEntityManagerFactory",
-    transactionManagerRef = "publicTransactionManager"
-)
-public class PublicPersistenceConfig {
-
-    @Bean(name = "publicTransactionManager")
-    @Primary
-    public PlatformTransactionManager publicTransactionManager(
-            @Qualifier("publicEntityManagerFactory") EntityManagerFactory emf) {
-        return new JpaTransactionManager(emf);
-    }
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.hibernate.engine.jdbc.connections.spi.AbstractDataSourceBasedMultiTenantConnectionProviderImpl;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
-import javax.sql.DataSource;
-import java.sql.*;
-
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class SchemaMultiTenantConnectionProvider
-        extends AbstractDataSourceBasedMultiTenantConnectionProviderImpl<String> {
-
-    private static final long serialVersionUID = 1L;
-    private static final String DEFAULT_TENANT = "public";
-
-    private final DataSource dataSource;
-
-    @Override
-    protected DataSource selectAnyDataSource() {
-        return dataSource;
-    }
-
-    @Override
-    protected DataSource selectDataSource(String tenantIdentifier) {
-        return dataSource;
-    }
-
-    @Override
-    public Connection getConnection(String tenantIdentifier) throws SQLException {
-
-        long threadId = Thread.currentThread().threadId();
-        String threadTenant = CurrentSchemaIdentifierResolverImpl.resolveBoundTenantOrDefault();
-
-        String effectiveTenant = StringUtils.hasText(tenantIdentifier)
-                ? tenantIdentifier
-                : DEFAULT_TENANT;
-
-        if (!StringUtils.hasText(tenantIdentifier)) {
-            log.warn("⚠️ [MT] tenantIdentifier vazio → usando DEFAULT ({}) | threadTenant={}",
-                    DEFAULT_TENANT, threadTenant);
-        }
-
-        validateSchemaName(effectiveTenant);
-
-        Connection connection = dataSource.getConnection();
-
-        try (Statement stmt = connection.createStatement()) {
-
-            if (!DEFAULT_TENANT.equals(effectiveTenant)) {
-                ensureSchemaExists(connection, effectiveTenant);
-
-                String quotedTenant = quoteIdentifier(effectiveTenant);
-
-                String setSearchPath = "SET search_path TO " + quotedTenant + ", public";
-                log.info("🎯 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL={}",
-                        threadId, tenantIdentifier, threadTenant, setSearchPath);
-
-                stmt.execute(setSearchPath);
-
-            } else {
-                log.info("🏠 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL=SET search_path TO public;",
-                        threadId, tenantIdentifier, threadTenant);
-
-                stmt.execute("SET search_path TO public;");
-            }
-
-            return connection;
-
-        } catch (SQLException e) {
-            log.error("❌ [MT] Erro configurando conexão | effectiveTenant={}", effectiveTenant, e);
-            try { connection.close(); } catch (SQLException ignore) {}
-            throw e;
-        }
-    }
-
-    @Override
-    public void releaseConnection(String tenantIdentifier, Connection connection) throws SQLException {
-        if (connection == null || connection.isClosed()) return;
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("SET search_path TO public;");
-        } finally {
-            connection.close();
-        }
-    }
-
-    private void ensureSchemaExists(Connection connection, String schemaName) throws SQLException {
-        String quotedSchema = quoteIdentifier(schemaName);
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("CREATE SCHEMA IF NOT EXISTS " + quotedSchema);
-        }
-
-        try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT 1 FROM information_schema.schemata WHERE schema_name = ?")) {
-            ps.setString(1, schemaName);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    throw new SQLException("Schema " + schemaName + " não encontrado após CREATE");
-                }
-            }
-        }
-    }
-
-    private void validateSchemaName(String schemaName) {
-        if (!StringUtils.hasText(schemaName)) {
-            throw new IllegalArgumentException("schemaName vazio");
-        }
-        if (!schemaName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            throw new IllegalArgumentException("schemaName inválido: " + schemaName);
-        }
-    }
-
-    private String quoteIdentifier(String identifier) {
-        return "\"" + identifier + "\"";
-    }
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import jakarta.persistence.EntityManagerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-
-@Configuration
-@EnableJpaRepositories(
-    basePackages = "brito.com.multitenancy001.tenant.persistence",
-    entityManagerFactoryRef = "tenantEntityManagerFactory",
-    transactionManagerRef = "tenantTransactionManager"
-)
-public class TenantPersistenceConfig {
-
-    @Bean(name = "tenantTransactionManager")
-    public PlatformTransactionManager tenantTransactionManager(
-            @Qualifier("tenantEntityManagerFactory") EntityManagerFactory emf) {
-        return new JpaTransactionManager(emf);
-    }
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
-
-import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
-
-@Configuration
-@EnableTransactionManagement
-public class TransactionManagementConfig {
-}
-package brito.com.multitenancy001.infrastructure.multitenancy.observability;
-
-import lombok.extern.slf4j.Slf4j;
-import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.Around;
-import org.aspectj.lang.annotation.Aspect;
-import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-
-@Aspect
-@Component
-@Slf4j
-public class TenantContextMonitor {
-    
-    @Around("@within(org.springframework.stereotype.Service)")
-    public Object monitorServiceMethods(ProceedingJoinPoint joinPoint) throws Throwable {
-        String methodName = joinPoint.getSignature().toShortString();
-        String currentTenant = SchemaContext.getCurrentSchema();
-        
-        log.debug("🏁 INÍCIO {} - Tenant: {}", methodName, currentTenant);
-        
-        try {
-            Object result = joinPoint.proceed();
-            log.debug("✅ FIM {} - Tenant: {}", methodName, SchemaContext.getCurrentSchema());
-            return result;
-        } catch (Exception e) {
-            log.error("❌ ERRO {} - Tenant: {} - Erro: {}", 
-                     methodName, currentTenant, e.getMessage());
-            throw e;
-        }
-    }
-}package brito.com.multitenancy001.infrastructure.multitenancy;
-
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.util.StringUtils;
-
-import brito.com.multitenancy001.infrastructure.multitenancy.hibernate.CurrentSchemaIdentifierResolverImpl;
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
-public class SchemaContext {
-
-
-
-    /**
-     * Retorna o tenant atual (com fallback para public)
-     */
-    public static String getCurrentSchema() {
-        // ✅ usando o método compatível com fallback
-        return CurrentSchemaIdentifierResolverImpl.resolveBoundTenantOrDefault();
-    }
-
-    /**
-     * Bind do tenant à thread atual.
-     * ⚠️ Deve ser chamado ANTES de qualquer operação transacional.
-     */
-    public static void bindSchema(String tenantId) {
-
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            log.error("🔥 ERRO GRAVE: bindTenant chamado DENTRO de transação! tenant={}", tenantId);
-        }
-
-        String normalized = (tenantId != null ? tenantId.trim() : null);
-
-        // Se vier vazio/nulo, remove (estado real fica sem tenant)
-        if (!StringUtils.hasText(normalized)) {
-            CurrentSchemaIdentifierResolverImpl.bindTenantToCurrentThread(null);
-            log.info("🔄 Tenant limpo (sem tenant) | thread={}", Thread.currentThread().threadId());
-            return;
-        }
-
-        CurrentSchemaIdentifierResolverImpl.bindTenantToCurrentThread(normalized);
-
-        log.info("🔄 Tenant bindado | thread={} | tenant={}",
-                Thread.currentThread().threadId(),
-                normalized);
-    }
-
-    /**
-     * Remove o tenant da thread atual.
-     * ⚠️ Deve ser chamado no finally do filtro/interceptor.
-     */
-    public static void unbindSchema() {
-        CurrentSchemaIdentifierResolverImpl.unbindTenantFromCurrentThread();
-        log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
-    }
-
-    /**
-     * (Opcional) alias pra compatibilidade, se você usar "clear()" em algum lugar.
-     */
-    public static void clear() {
-        unbindSchema();
-    }
-}
-package brito.com.multitenancy001;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-@SpringBootApplication
-//@EnableCaching
-@EnableScheduling
-public class Multitenancy001Application {
-
-	public static void main(String[] args) {
-		SpringApplication.run(Multitenancy001Application.class, args);
-	}
-
-}
-package brito.com.multitenancy001.platform.accounts.validation;
-
-import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import lombok.RequiredArgsConstructor;
-
-@Component
-@RequiredArgsConstructor
-public class AccountPolicy {
-    
-    private final AccountRepository accountRepository;
-    
-    /**
-     * Valida se a conta pode ser gerenciada (não é conta do sistema)
-     */
-    public void validateNotSystemAccount(Long accountId) {
-        TenantAccount account = accountRepository.findById(accountId)
-            .orElseThrow(() -> new ApiException(
-                "ACCOUNT_NOT_FOUND",
-                "Conta não encontrada",
-                404
-            ));
-        
-        if (account.isSystemAccount()) {
-            throw new ApiException(
-                "SYSTEM_ACCOUNT_PROTECTED",
-                "Operação não permitida para contas do sistema",
-                403
-            );
-        }
-    }
-    
-    /**
-     * Valida se a conta pode ser gerenciada (não é conta do sistema)
-     */
-    public void validateNotSystemAccount(TenantAccount account) {
-        if (account.isSystemAccount()) {
-            throw new ApiException(
-                "SYSTEM_ACCOUNT_PROTECTED",
-                "Operação não permitida para contas do sistema",
-                403
-            );
-        }
-    }
-}package brito.com.multitenancy001.platform.api.accounts;
-
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountResponse;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountStatusChangeRequest;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.platform.application.AccountLifecycleService;
+package brito.com.multitenancy001.controlplane.account.api;
+
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
+import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -522,7 +20,7 @@ import java.util.List;
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 @RequiredArgsConstructor
 @Slf4j
-public class PlatformAccountAdminController {
+public class AccountAdminController {
 
 	private final AccountLifecycleService accountProvisioningService;
 	
@@ -569,37 +67,232 @@ public class PlatformAccountAdminController {
 		accountProvisioningService.restoreAccount(id);
 		return ResponseEntity.noContent().build();
 	}
-}package brito.com.multitenancy001.platform.api.auth;
+}// src/main/java/brito/com/multitenancy001/controllers/SignupController.java
+package brito.com.multitenancy001.controlplane.account.api;
 
-import brito.com.multitenancy001.platform.api.dto.auth.PlatformAdminLoginRequest;
-import brito.com.multitenancy001.platform.application.AdminAuthService;
-import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/admin/auth")
+@RequestMapping("/api/signup")
 @RequiredArgsConstructor
-public class PlatformAuthController {
+public class AccountSignupController {
+    
+    private final AccountLifecycleService accountProvisioningService;
 
-	private final AdminAuthService adminAuthService;
+    @PostMapping
+    public ResponseEntity<AccountResponse> signup(
+            @Valid @RequestBody SignupRequest request) {
+        AccountResponse response = accountProvisioningService.createAccount( request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+}package brito.com.multitenancy001.controlplane.account.application;
 
-	@PostMapping("/login")
-	public ResponseEntity<JwtResponse> loginSuperAdmin(@Valid @RequestBody PlatformAdminLoginRequest request) {
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.application.TenantSchemaProvisioningService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-		JwtResponse response = adminAuthService.loginSuperAdmin(request);
-		return ResponseEntity.ok(response);
-	}
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AccountProvisioningService {
+
+    private final AccountRepository accountRepository;
+    private final TenantSchemaProvisioningService tenantSchemaProvisionService;
+
+    @Transactional
+    public Account createAccount(String name, String companyEmail, String companyDocNumber,
+                                      String adminUsername, String adminEmail, String adminPassword) {
+
+        TenantSchemaContext.clearTenantSchema(); // PUBLIC
+
+        Account account = createAccountTx(name, companyEmail, companyDocNumber);
+
+        try {
+            // TENANT
+            TenantSchemaContext.bindTenantSchema(account.getSchemaName());
+            tenantSchemaProvisionService.schemaMigrationService(account.getSchemaName());
+
+            // cria admin com JPA no schema bindado
+            tenantSchemaProvisionService.tenantAdminBootstrapService(account, adminUsername, adminEmail, adminPassword);
+
+            return account;
+
+        } finally {
+            TenantSchemaContext.clearTenantSchema();
+        }
+    }
+
+    @Transactional
+    protected Account createAccountTx(String name, String companyEmail, String companyDocNumber) {
+
+        int maxAttempts = 5;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            String slug = generateSlug(name);
+            String schemaName = generateSchemaName(slug);
+
+            try {
+                Account account = Account.builder()
+                        .name(name)
+                        .slug(slug)
+                        .schemaName(schemaName)
+                        .companyEmail(companyEmail)
+                        .companyDocNumber(companyDocNumber)
+                        .status(AccountStatus.FREE_TRIAL)
+                        .createdAt(LocalDateTime.now())
+                        .trialEndDate(LocalDateTime.now().plusDays(30))
+                        .systemAccount(false)
+                        .build();
+
+                return accountRepository.save(account);
+
+            } catch (DataIntegrityViolationException e) {
+                log.warn("⚠️ collision attempt {}/{} | slug={} schema={}", attempt, maxAttempts, slug, schemaName);
+                if (attempt == maxAttempts) {
+                    throw new ApiException("ACCOUNT_CREATE_FAILED",
+                            "Não foi possível criar conta (colisão). Tente novamente.", 409);
+                }
+            }
+        }
+
+        throw new ApiException("ACCOUNT_CREATE_FAILED", "Falha inesperada ao criar conta.", 500);
+    }
+
+    private String generateSlug(String name) {
+        String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        return base.isBlank() ? "tenant" : base;
+    }
+
+    private String generateSchemaName(String slug) {
+        return "tenant_" + slug.replace("-", "_") + "_" + UUID.randomUUID().toString().substring(0, 8);
+    }
 }
-package brito.com.multitenancy001.platform.api.dto.accounts;
+package brito.com.multitenancy001.controlplane.account.persistence;
 
-import brito.com.multitenancy001.platform.api.dto.users.PlatformAdminUserSummaryResponse;
-import brito.com.multitenancy001.platform.domain.tenant.DocumentType;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface AccountRepository extends JpaRepository<Account, Long> {
+
+    boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
+
+    // ✅ docType + docNumber juntos
+    boolean existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(DocumentType companyDocType, String companyDocNumber);
+
+    List<Account> findAllByDeletedFalse();
+    List<Account> findByDeletedFalseOrderByCreatedAtDesc();
+
+    Optional<Account> findBySlugAndDeletedFalse(String slug);
+    Optional<Account> findByIdAndDeletedFalse(Long id);
+
+    List<Account> findByStatus(AccountStatus status);
+    List<Account> findByStatusAndDeletedFalse(AccountStatus status);
+    List<Account> findByPaymentDueDateBefore(LocalDateTime date);
+
+    @Query("SELECT a FROM Account a WHERE a.trialEndDate <= :date AND a.status = :status")
+    List<Account> findExpiredTrials(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
+
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false")
+    Long countActiveAccounts();
+
+    @Query("SELECT a FROM Account a WHERE a.status = :status AND a.paymentDueDate < :today")
+    List<Account> findOverdueAccounts(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
+
+    boolean existsByNameAndDeletedFalse(String name);
+    boolean existsBySchemaNameAndDeletedFalse(String schemaName);
+
+    @Query("SELECT a FROM Account a WHERE a.createdAt BETWEEN :startDate AND :endDate")
+    List<Account> findAccountsCreatedBetween(@Param("startDate") LocalDateTime startDate,
+                                                   @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
+    List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
+
+    @Query("SELECT a FROM Account a WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) AND a.deleted = false")
+    List<Account> searchByName(@Param("searchTerm") String searchTerm);
+}
+package brito.com.multitenancy001.controlplane.accounts.validation;
+
+import org.springframework.stereotype.Component;
+
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import lombok.RequiredArgsConstructor;
+
+@Component
+@RequiredArgsConstructor
+public class AccountPolicy {
+    
+    private final AccountRepository accountRepository;
+    
+    /**
+     * Valida se a conta pode ser gerenciada (não é conta do sistema)
+     */
+    public void validateNotSystemAccount(Long accountId) {
+        Account account = accountRepository.findById(accountId)
+            .orElseThrow(() -> new ApiException(
+                "ACCOUNT_NOT_FOUND",
+                "Conta não encontrada",
+                404
+            ));
+        
+        if (account.isSystemAccount()) {
+            throw new ApiException(
+                "SYSTEM_ACCOUNT_PROTECTED",
+                "Operação não permitida para contas do sistema",
+                403
+            );
+        }
+    }
+    
+    /**
+     * Valida se a conta pode ser gerenciada (não é conta do sistema)
+     */
+    public void validateNotSystemAccount(Account account) {
+        if (account.isSystemAccount()) {
+            throw new ApiException(
+                "SYSTEM_ACCOUNT_PROTECTED",
+                "Operação não permitida para contas do sistema",
+                403
+            );
+        }
+    }
+}package brito.com.multitenancy001.controlplane.api.dto.accounts;
+
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -629,7 +322,7 @@ public record AccountAdminDetailsResponse(
     long trialDaysRemaining,
 
     // Admin da conta
-    PlatformAdminUserSummaryResponse admin,
+    ControlPlaneAdminUserSummaryResponse admin,
 
     // Indicadores
     long totalPlatformUsers,
@@ -637,8 +330,8 @@ public record AccountAdminDetailsResponse(
 ) {
 
     public static AccountAdminDetailsResponse from(
-            TenantAccount account,
-            PlatformUser admin
+            Account account,
+            ControlPlaneUser admin
     ) {
 
         LocalDateTime now = LocalDateTime.now();
@@ -676,18 +369,18 @@ public record AccountAdminDetailsResponse(
                 trialExpired,
                 trialDaysRemaining,
 
-                admin != null ? PlatformAdminUserSummaryResponse.from(admin) : null,
+                admin != null ? ControlPlaneAdminUserSummaryResponse.from(admin) : null,
 
                 1L, // placeholder
                 account.isActive()
         );
     }
 }
-package brito.com.multitenancy001.platform.api.dto.accounts;
+package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
-import brito.com.multitenancy001.platform.api.dto.users.PlatformAdminUserSummaryResponse;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 
 import java.time.LocalDateTime;
 
@@ -699,12 +392,12 @@ public record AccountResponse(
     String status,
     LocalDateTime createdAt,
     LocalDateTime trialEndDate,
-    PlatformAdminUserSummaryResponse admin,
+    ControlPlaneAdminUserSummaryResponse admin,
     boolean systemAccount
 ) {
     
     // Método estático para criar a partir da entidade (sem admin)
-    public static AccountResponse fromEntity(TenantAccount account) {
+    public static AccountResponse fromEntity(Account account) {
         return new AccountResponse(
             account.getId(),
             account.getName(),
@@ -719,9 +412,9 @@ public record AccountResponse(
     }
     
     // Método estático para criar a partir da entidade (com admin)
-    public static AccountResponse fromEntity(TenantAccount account, PlatformUser userAccount) {
-    	PlatformAdminUserSummaryResponse adminResponse = userAccount != null
-    	        ? PlatformAdminUserSummaryResponse.from(userAccount)
+    public static AccountResponse fromEntity(Account account, ControlPlaneUser userAccount) {
+    	ControlPlaneAdminUserSummaryResponse adminResponse = userAccount != null
+    	        ? ControlPlaneAdminUserSummaryResponse.from(userAccount)
     	        : null;
             
         return new AccountResponse(
@@ -751,7 +444,7 @@ public record AccountResponse(
         private String status;
         private LocalDateTime createdAt;
         private LocalDateTime trialEndDate;
-        private PlatformAdminUserSummaryResponse admin;
+        private ControlPlaneAdminUserSummaryResponse admin;
         private boolean systemAccount;
         
         public Builder id(Long id) { 
@@ -790,7 +483,7 @@ public record AccountResponse(
             return this; 
         }
         
-        public Builder admin(PlatformAdminUserSummaryResponse admin) { 
+        public Builder admin(ControlPlaneAdminUserSummaryResponse admin) { 
             this.admin = admin; 
             return this; 
         }
@@ -807,15 +500,15 @@ public record AccountResponse(
             );
         }
     }
-}package brito.com.multitenancy001.platform.api.dto.accounts;
+}package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 
 public record AccountStatusChangeRequest(
-        TenantAccountStatus status,
+        AccountStatus status,
         String reason
 ) {    }
-package brito.com.multitenancy001.platform.api.dto.accounts;
+package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import java.time.LocalDateTime;
 
@@ -833,14 +526,14 @@ public record AccountStatusChangeResponse(
             int tenantUsersCount
     ) {}
 }
-package brito.com.multitenancy001.platform.api.dto.auth;
+package brito.com.multitenancy001.controlplane.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record PlatformAdminLoginRequest(
+public record ControlPlaneAdminLoginRequest(
 	    @NotBlank String username,
 	    @NotBlank String password
-	) {}package brito.com.multitenancy001.platform.api.dto.billing;
+	) {}package brito.com.multitenancy001.controlplane.api.dto.billing;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -854,7 +547,7 @@ public record PaymentRequest(
     String paymentGateway,
     String description,
     String cardToken
-) {}package brito.com.multitenancy001.platform.api.dto.billing;
+) {}package brito.com.multitenancy001.controlplane.api.dto.billing;
 
 
 
@@ -876,14 +569,14 @@ public record PaymentResponse(
 	    LocalDateTime updatedAt
 	) {}
 // src/main/java/brito/com/multitenancy001/dtos/SignupRequest.java
-package brito.com.multitenancy001.platform.api.dto.signup;
+package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import brito.com.multitenancy001.platform.domain.tenant.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 public record SignupRequest(
@@ -918,11 +611,11 @@ public record SignupRequest(
         }
     }
 }
-package brito.com.multitenancy001.platform.api.dto.users;
+package brito.com.multitenancy001.controlplane.api.dto.users;
 
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 
-public record PlatformAdminUserSummaryResponse(
+public record ControlPlaneAdminUserSummaryResponse(
         Long id,
         String username,
         String email,
@@ -930,9 +623,9 @@ public record PlatformAdminUserSummaryResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {
-    public static PlatformAdminUserSummaryResponse from(PlatformUser user) {
+    public static ControlPlaneAdminUserSummaryResponse from(ControlPlaneUser user) {
         boolean enabled = user.isEnabledForLogin();
-        return new PlatformAdminUserSummaryResponse(
+        return new ControlPlaneAdminUserSummaryResponse(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -942,7 +635,7 @@ public record PlatformAdminUserSummaryResponse(
         );
     }
 }
-package brito.com.multitenancy001.platform.api.dto.users;
+package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -955,7 +648,7 @@ import java.util.List;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 @Builder
-public record PlatformUserCreateRequest(
+public record ControlPlaneUserCreateRequest(
     
     @NotBlank(message = "Nome é obrigatório")
     @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
@@ -993,7 +686,7 @@ public record PlatformUserCreateRequest(
     
 ) {
     
-    public PlatformUserCreateRequest {
+    public ControlPlaneUserCreateRequest {
         if (phone != null) {
             phone = phone.trim();
         }
@@ -1001,14 +694,14 @@ public record PlatformUserCreateRequest(
             avatarUrl = avatarUrl.trim();
         }
     }
-}package brito.com.multitenancy001.platform.api.dto.users;
+}package brito.com.multitenancy001.controlplane.api.dto.users;
 
 
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record PlatformUserDetailsResponse(
+public record ControlPlaneUserDetailsResponse(
     Long id,
     String username,
     String name,
@@ -1021,114 +714,28 @@ public record PlatformUserDetailsResponse(
     Long accountId,
     List<String> permissions
 ) {
-    public PlatformUserDetailsResponse {
+    public ControlPlaneUserDetailsResponse {
         if (permissions == null) {
             permissions = List.of();
         }
     }
-}// src/main/java/brito/com/multitenancy001/controllers/SignupController.java
-package brito.com.multitenancy001.platform.api.signup;
+}package brito.com.multitenancy001.controlplane.application;
 
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountResponse;
-import brito.com.multitenancy001.platform.api.dto.signup.SignupRequest;
-import brito.com.multitenancy001.platform.application.AccountLifecycleService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/api/signup")
-@RequiredArgsConstructor
-public class SignupController {
-    
-    private final AccountLifecycleService accountProvisioningService;
-
-    @PostMapping
-    public ResponseEntity<AccountResponse> signup(
-            @Valid @RequestBody SignupRequest request) {
-        AccountResponse response = accountProvisioningService.createAccount( request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-}package brito.com.multitenancy001.platform.api.users;
-
-import brito.com.multitenancy001.platform.api.dto.users.PlatformUserCreateRequest;
-import brito.com.multitenancy001.platform.api.dto.users.PlatformUserDetailsResponse;
-import brito.com.multitenancy001.platform.application.PlatformUserService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-
-@RestController
-@RequestMapping("/api/admin/platform-users")
-@RequiredArgsConstructor
-public class PlatformUserAdminController {
-
-    private final PlatformUserService platformUserService;
-
-    @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
-    public ResponseEntity<PlatformUserDetailsResponse> createPlatformUser(@Valid @RequestBody PlatformUserCreateRequest request) {
-    	PlatformUserDetailsResponse response = platformUserService.createPlatformUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
-    public ResponseEntity<List<PlatformUserDetailsResponse>> listPlatformUsers() {
-        return ResponseEntity.ok(platformUserService.listPlatformUsers());
-    }
-
-    @GetMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
-    public ResponseEntity<PlatformUserDetailsResponse> getPlatformUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(platformUserService.getPlatformUser(userId));
-    }
-
-    @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
-    public ResponseEntity<PlatformUserDetailsResponse> updatePlatformUserStatus(
-            @PathVariable Long userId,
-            @RequestParam boolean active) {
-        return ResponseEntity.ok(platformUserService.updatePlatformUserStatus(userId, active));
-    }
-
-    @DeleteMapping("/{userId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Void> deletePlatformUser(@PathVariable Long userId) {
-        platformUserService.softDeletePlatformUser(userId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<PlatformUserDetailsResponse> restorePlatformUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(platformUserService.restorePlatformUser(userId));
-    }
-}
-package brito.com.multitenancy001.platform.application;
-
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountResponse;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountStatusChangeRequest;
-import brito.com.multitenancy001.platform.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.platform.api.dto.signup.SignupRequest;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.application.TenantSchemaProvisioningService;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -1160,13 +767,13 @@ public class AccountLifecycleService {
     public AccountResponse createAccount(SignupRequest request) {
         validateSignupRequest(request);
 
-        SchemaContext.unbindSchema(); // garante PUBLIC
+        TenantSchemaContext.clearTenantSchema(); // garante PUBLIC
 
         // A) cria no PUBLIC e COMMITA (transação do publicAccountService)
-        TenantAccount account = publicAccountService.createAccountFromSignup(request);
+        Account account = publicAccountService.createAccountFromSignup(request);
 
         // B) cria schema + roda flyway do tenant (sem transação JPA public aberta)
-        tenantSchemaService.ensureSchemaAndMigrate(account.getSchemaName());
+        tenantSchemaService.schemaMigrationService(account.getSchemaName());
 
         // C) cria admin no TENANT com tenantTransactionManager
         createTenantAdminInTenant(account, request);
@@ -1178,8 +785,8 @@ public class AccountLifecycleService {
     }
 
     @Transactional(transactionManager = "tenantTransactionManager")
-    public TenantUser createTenantAdminInTenant(TenantAccount account, SignupRequest request) {
-        SchemaContext.bindSchema(account.getSchemaName());
+    public TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
+        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
         try {
             String username = generateUsernameFromEmail(request.companyEmail());
 
@@ -1209,7 +816,7 @@ public class AccountLifecycleService {
             return tenantUserRepository.save(u);
 
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -1217,7 +824,7 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
-        SchemaContext.unbindSchema();
+        TenantSchemaContext.clearTenantSchema();
         return accountRepository.findAllByDeletedFalse()
                 .stream()
                 .map(AccountResponse::fromEntity)
@@ -1226,16 +833,16 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountByIdWithAdmin(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = accountRepository.findByIdAndDeletedFalse(accountId)
+        TenantSchemaContext.clearTenantSchema();
+        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
         return AccountResponse.fromEntity(account);
     }
 
     @Transactional(readOnly = true)
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = accountRepository.findById(accountId)
+        TenantSchemaContext.clearTenantSchema();
+        Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
        
@@ -1250,9 +857,9 @@ public class AccountLifecycleService {
        ========================================================= */
 
   public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-    SchemaContext.unbindSchema();
+    TenantSchemaContext.clearTenantSchema();
 
-    TenantAccount account = accountRepository.findById(accountId)
+    Account account = accountRepository.findById(accountId)
             .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
     if (account.isSystemAccount()) {
@@ -1260,26 +867,26 @@ public class AccountLifecycleService {
                 "Contas do sistema não podem ter seu status alterado", 403);
     }
 
-    TenantAccountStatus previous = account.getStatus();
-    TenantAccountStatus next = req.status();
+    AccountStatus previous = account.getStatus();
+    AccountStatus next = req.status();
 
     if (previous == next) {
         return buildStatusChangeResponse(account, previous, false, "NONE", 0);
     }
 
-    if (previous == TenantAccountStatus.CANCELLED) {
+    if (previous == AccountStatus.CANCELLED) {
         throw new ApiException("ACCOUNT_CANCELLED",
                 "Conta cancelada não pode ter status alterado", 409);
     }
 
-    if (next == TenantAccountStatus.FREE_TRIAL && previous != TenantAccountStatus.FREE_TRIAL) {
+    if (next == AccountStatus.FREE_TRIAL && previous != AccountStatus.FREE_TRIAL) {
         throw new ApiException("INVALID_STATUS_TRANSITION",
                 "Não é permitido voltar para FREE_TRIAL", 409);
     }
 
     // 1) grava em PUBLIC
     account.setStatus(next);
-    if (next == TenantAccountStatus.ACTIVE) account.setDeletedAt(null);
+    if (next == AccountStatus.ACTIVE) account.setDeletedAt(null);
     accountRepository.save(account);
 
     // 2) side-effects no tenant
@@ -1287,16 +894,16 @@ public class AccountLifecycleService {
     boolean applied = false;
     String action = "NONE";
 
-    if (next == TenantAccountStatus.SUSPENDED) {
+    if (next == AccountStatus.SUSPENDED) {
         affected = suspendTenantUsersByAccount(account);
         applied = true;
         action = "SUSPEND_BY_ACCOUNT";
-    } else if (next == TenantAccountStatus.ACTIVE) {
+    } else if (next == AccountStatus.ACTIVE) {
         // ✅ reativar todos por conta, mantendo suspensosByAdmin
         affected = unsuspendTenantUsersByAccount(account);
         applied = true;
         action = "UNSUSPEND_BY_ACCOUNT";
-    } else if (next == TenantAccountStatus.CANCELLED) {
+    } else if (next == AccountStatus.CANCELLED) {
         affected = cancelAccount(account);
         applied = true;
         action = "CANCELLED";
@@ -1310,36 +917,36 @@ public class AccountLifecycleService {
 
    
    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-   protected int suspendTenantUsersByAccount(TenantAccount account) {
+   protected int suspendTenantUsersByAccount(Account account) {
        String schema = account.getSchemaName();
 
        if ("public".equals(schema)) return 0;
        if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
        if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
 
-       SchemaContext.bindSchema(schema);
+       TenantSchemaContext.bindTenantSchema(schema);
        try {
            // ✅ UPDATE em massa: suspendedByAccount = true, preserva suspendedByAdmin
            return tenantUserRepository.suspendAllByAccount(account.getId());
        } finally {
-           SchemaContext.unbindSchema();
+           TenantSchemaContext.clearTenantSchema();
        }
    }
 
    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-   protected int unsuspendTenantUsersByAccount(TenantAccount account) {
+   protected int unsuspendTenantUsersByAccount(Account account) {
        String schema = account.getSchemaName();
 
        if ("public".equals(schema)) return 0;
        if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
        if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
 
-       SchemaContext.bindSchema(schema);
+       TenantSchemaContext.bindTenantSchema(schema);
        try {
            // ✅ UPDATE em massa: suspendedByAccount = false, preserva suspendedByAdmin
            return tenantUserRepository.unsuspendAllByAccount(account.getId());
        } finally {
-           SchemaContext.unbindSchema();
+           TenantSchemaContext.clearTenantSchema();
        }
    }
 
@@ -1352,8 +959,8 @@ public class AccountLifecycleService {
 
     @Transactional
     public void softDeleteAccount(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
 
         if (account.isSystemAccount()) {
             throw new ApiException("SYSTEM_ACCOUNT_PROTECTED", 
@@ -1366,15 +973,15 @@ public class AccountLifecycleService {
 
     @Transactional
     protected void softDeleteAccountTx(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
         account.softDelete();
         accountRepository.save(account);
     }
 
     public void restoreAccount(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
 
         if (account.isSystemAccount() && account.isDeleted()) {
             throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
@@ -1387,8 +994,8 @@ public class AccountLifecycleService {
 
     @Transactional
     protected void restoreAccountTx(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
         account.restore();
         accountRepository.save(account);
     }
@@ -1399,8 +1006,8 @@ public class AccountLifecycleService {
 
     public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
         // resolve conta em PUBLIC
-        SchemaContext.unbindSchema();
-        TenantAccount account = accountRepository.findByIdAndDeletedFalse(accountId)
+        TenantSchemaContext.clearTenantSchema();
+        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
         String schema = account.getSchemaName();
@@ -1412,11 +1019,11 @@ public class AccountLifecycleService {
             throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela users_tenant não existe no tenant", 404);
         }
 
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             return listTenantUsersTx(account.getId(), onlyActive);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -1474,8 +1081,8 @@ public class AccountLifecycleService {
     }
 
    private AccountStatusChangeResponse buildStatusChangeResponse(
-	        TenantAccount account,
-	        TenantAccountStatus previous,
+	        Account account,
+	        AccountStatus previous,
 	        boolean tenantUsersUpdated,
 	        String action,
 	        int count
@@ -1491,7 +1098,7 @@ public class AccountLifecycleService {
 	}
 
 
-    public int cancelAccount(TenantAccount account) {
+    public int cancelAccount(Account account) {
         // 1) PUBLIC
         cancelAccountPublicTx(account);
 
@@ -1501,23 +1108,23 @@ public class AccountLifecycleService {
         boolean tableOk = schemaOk && tenantSchemaService.tableExists(schema, "users_tenant");
         if (!tableOk) return 0;
 
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             return cancelAccountTenantTx(account);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
     @Transactional(transactionManager = "publicTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    protected void cancelAccountPublicTx(TenantAccount account) {
-        SchemaContext.unbindSchema();
+    protected void cancelAccountPublicTx(Account account) {
+        TenantSchemaContext.clearTenantSchema();
         account.setDeletedAt(LocalDateTime.now());
         accountRepository.save(account);
     }
 
     @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    protected int cancelAccountTenantTx(TenantAccount account) {
+    protected int cancelAccountTenantTx(Account account) {
         List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
         users.forEach(TenantUser::softDelete);
         tenantUserRepository.saveAll(users);
@@ -1526,7 +1133,7 @@ public class AccountLifecycleService {
 
 
     @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    public int cancelAccountTx(TenantAccount account) {
+    public int cancelAccountTx(Account account) {
         List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
         users.forEach(TenantUser::softDelete);
         tenantUserRepository.saveAll(users);
@@ -1534,14 +1141,14 @@ public class AccountLifecycleService {
     }
 
     @Transactional(transactionManager = "tenantTransactionManager")
-    public int suspendTenantUsersTx(TenantAccount account) {
+    public int suspendTenantUsersTx(Account account) {
         String schema = account.getSchemaName();
 
         if ("public".equals(schema)) return 0;
         if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
         if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
 
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             List<TenantUser> users = tenantUserRepository.findByAccountIdAndDeletedFalse(account.getId());
 
@@ -1551,20 +1158,20 @@ public class AccountLifecycleService {
             tenantUserRepository.saveAll(users);
             return users.size();
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
     
     
     @Transactional(transactionManager = "tenantTransactionManager")
-    public int resumeTenantUsersTx(TenantAccount account) {
+    public int resumeTenantUsersTx(Account account) {
         String schema = account.getSchemaName();
 
         if ("public".equals(schema)) return 0;
         if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
         if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
 
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             List<TenantUser> users = tenantUserRepository.findByAccountIdAndDeletedFalse(account.getId());
 
@@ -1575,7 +1182,7 @@ public class AccountLifecycleService {
             tenantUserRepository.saveAll(users);
             return users.size();
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -1585,54 +1192,54 @@ public class AccountLifecycleService {
     
     @Transactional(transactionManager = "tenantTransactionManager")
     protected void softDeleteTenantUsersTx(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
 
         if (!tenantSchemaService.validateTenantSchema(account.getSchemaName())) return;
         if (!tenantSchemaService.tableExists(account.getSchemaName(), "users_tenant")) return;
 
-        SchemaContext.bindSchema(account.getSchemaName());
+        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
         try {
             List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
             users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
             tenantUserRepository.saveAll(users);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
     @Transactional(transactionManager = "tenantTransactionManager")
     protected void restoreTenantUsersTx(Long accountId) {
-        SchemaContext.unbindSchema();
-        TenantAccount account = getAccountById(accountId);
+        TenantSchemaContext.clearTenantSchema();
+        Account account = getAccountById(accountId);
 
         if (!tenantSchemaService.validateTenantSchema(account.getSchemaName())) return;
         if (!tenantSchemaService.tableExists(account.getSchemaName(), "users_tenant")) return;
 
-        SchemaContext.bindSchema(account.getSchemaName());
+        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
         try {
             List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
             users.forEach(u -> { if (u.isDeleted()) u.restore(); });
             tenantUserRepository.saveAll(users);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
     @Transactional(readOnly = true)
-    public TenantAccount getAccountById(Long accountId) {
-        SchemaContext.unbindSchema();
+    public Account getAccountById(Long accountId) {
+        TenantSchemaContext.clearTenantSchema();
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-    protected void migrateTenant(TenantAccount account) {
+    protected void migrateTenant(Account account) {
         String schemaName = account.getSchemaName();
-        SchemaContext.bindSchema(schemaName);
+        TenantSchemaContext.bindTenantSchema(schemaName);
         try {
-            tenantSchemaService.ensureSchemaAndMigrate(schemaName);
+            tenantSchemaService.schemaMigrationService(schemaName);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -1706,10 +1313,10 @@ public class AccountLifecycleService {
 
    @Transactional(transactionManager = "tenantTransactionManager")
    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-       SchemaContext.unbindSchema();
+       TenantSchemaContext.clearTenantSchema();
 
        // resolve schema no PUBLIC
-       TenantAccount account = accountRepository.findByIdAndDeletedFalse(accountId)
+       Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
        String schema = account.getSchemaName();
@@ -1717,29 +1324,29 @@ public class AccountLifecycleService {
            throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant inválido", 404);
        }
 
-       SchemaContext.bindSchema(schema);
+       TenantSchemaContext.bindTenantSchema(schema);
        try {
            int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
            if (updated == 0) {
                throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
            }
        } finally {
-           SchemaContext.unbindSchema();
+           TenantSchemaContext.clearTenantSchema();
        }
    }
 
    
-}package brito.com.multitenancy001.platform.application;
+}package brito.com.multitenancy001.controlplane.application;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.api.dto.auth.PlatformAdminLoginRequest;
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-import brito.com.multitenancy001.platform.persistence.publicdb.PlatformUserRepository;
+import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.user.persistence.ControlPlaneUserRepository;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
@@ -1751,14 +1358,14 @@ public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
-    private final PlatformUserRepository platformUserRepository;
+    private final ControlPlaneUserRepository platformUserRepository;
 
-    public JwtResponse loginSuperAdmin(PlatformAdminLoginRequest request) {
+    public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
 
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
-        SchemaContext.unbindSchema();
+        TenantSchemaContext.clearTenantSchema();
 
-        PlatformUser user = platformUserRepository
+        ControlPlaneUser user = platformUserRepository
                 .findByUsernameAndDeletedFalse(request.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
@@ -1805,16 +1412,16 @@ public class AdminAuthService {
         );
     }
 }
-package brito.com.multitenancy001.platform.application;
+package brito.com.multitenancy001.controlplane.application;
 
-import brito.com.multitenancy001.platform.api.dto.billing.PaymentRequest;
-import brito.com.multitenancy001.platform.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.platform.domain.billing.Payment;
-import brito.com.multitenancy001.platform.domain.billing.PaymentStatus;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
-import brito.com.multitenancy001.platform.persistence.publicdb.PaymentRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
+import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.domain.billing.Payment;
+import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.controlplane.persistence.publicdb.PaymentRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -1843,22 +1450,22 @@ public class PaymentService {
         log.info("Iniciando verificação de pagamentos...");
         LocalDateTime today = LocalDateTime.now();
 
-        List<TenantAccount> expiredTrials = accountRepository
-                .findByStatus(TenantAccountStatus.FREE_TRIAL)
+        List<Account> expiredTrials = accountRepository
+                .findByStatus(AccountStatus.FREE_TRIAL)
                 .stream()
                 .filter(account -> account.getTrialEndDate() != null &&
                         account.getTrialEndDate().isBefore(today))
                 .collect(Collectors.toList());
 
-        for (TenantAccount account : expiredTrials) {
+        for (Account account : expiredTrials) {
             suspendAccount(account, "Trial expirado");
         }
 
-        List<TenantAccount> overdueAccounts = accountRepository
+        List<Account> overdueAccounts = accountRepository
                 .findByPaymentDueDateBefore(today);
 
-        for (TenantAccount account : overdueAccounts) {
-            if (account.getStatus() == TenantAccountStatus.ACTIVE) {
+        for (Account account : overdueAccounts) {
+            if (account.getStatus() == AccountStatus.ACTIVE) {
                 suspendAccount(account, "Pagamento atrasado");
             }
         }
@@ -1866,8 +1473,8 @@ public class PaymentService {
         checkExpiredPendingPayments();
     }
 
-    private void suspendAccount(TenantAccount account, String reason) {
-        account.setStatus(TenantAccountStatus.SUSPENDED);
+    private void suspendAccount(Account account, String reason) {
+        account.setStatus(AccountStatus.SUSPENDED);
         accountRepository.save(account);
         sendSuspensionEmail(account, reason);
     }
@@ -1887,7 +1494,7 @@ public class PaymentService {
     @Transactional
     public PaymentResponse processPayment(PaymentRequest request) {
 
-        TenantAccount account = accountRepository.findById(request.accountId())
+        Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
                         "Conta não encontrada",
@@ -1945,12 +1552,12 @@ public class PaymentService {
         return mapToResponse(payment, "Pagamento concluído manualmente");
     }
 
-    private void completePayment(Payment payment, TenantAccount account) {
+    private void completePayment(Payment payment, Account account) {
         payment.markAsCompleted();
         payment.setTransactionId(generateTransactionId());
         paymentRepository.save(payment);
 
-        account.setStatus(TenantAccountStatus.ACTIVE);
+        account.setStatus(AccountStatus.ACTIVE);
         account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil()));
         accountRepository.save(account);
 
@@ -1962,7 +1569,7 @@ public class PaymentService {
         paymentRepository.save(payment);
     }
 
-    private void validatePayment(TenantAccount account, PaymentRequest request) {
+    private void validatePayment(Account account, PaymentRequest request) {
 
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ApiException(
@@ -2079,13 +1686,13 @@ public class PaymentService {
         return mapToResponse(payment);
     }
 
-    private void sendSuspensionEmail(TenantAccount account, String reason) {
+    private void sendSuspensionEmail(Account account, String reason) {
         log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
  
     }
     
 
-    private void sendPaymentConfirmationEmail(TenantAccount account, Payment payment) {
+    private void sendPaymentConfirmationEmail(Account account, Payment payment) {
         log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
     }
 
@@ -2125,203 +1732,7 @@ public class PaymentService {
     
     
 }
-package brito.com.multitenancy001.platform.application;
-
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.api.dto.users.PlatformUserCreateRequest;
-import brito.com.multitenancy001.platform.api.dto.users.PlatformUserDetailsResponse;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.user.PlatformRole;
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
-import brito.com.multitenancy001.platform.persistence.publicdb.PlatformUserRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-@Service
-@Transactional
-@RequiredArgsConstructor
-public class PlatformUserService {
-
-    private final PlatformUserRepository platformUserRepository;
-    private final AccountRepository accountRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    private TenantAccount getPlatformAccount() {
-        SchemaContext.unbindSchema(); // PUBLIC
-        return accountRepository.findBySlugAndDeletedFalse("platform")
-                .orElseThrow(() -> new ApiException(
-                        "PLATFORM_ACCOUNT_NOT_FOUND",
-                        "Conta platform não encontrada. Rode a migration V3__insert_platform_account.sql",
-                        500
-                ));
-    }
-
-    public PlatformUserDetailsResponse createPlatformUser(PlatformUserCreateRequest request) {
-        SchemaContext.unbindSchema();
-
-        TenantAccount platformAccount = getPlatformAccount();
-
-        // validações básicas
-        if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("INVALID_PASSWORD", "A senha não atende aos requisitos de segurança", 400);
-        }
-        if (request.username() == null || request.username().isBlank()) {
-            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
-        }
-        if (!request.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
-            throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
-        }
-
-        String username = request.username().toLowerCase().trim();
-
-        // role permitida somente plataforma
-        PlatformRole role;
-        try {
-            role = PlatformRole.valueOf(request.role().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
-        }
-
-        // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
-        if (!role.isPlatformRole()) {
-            throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
-        }
-
-        // unicidade por account (platform)
-        if (platformUserRepository.existsByUsernameAndAccountId(username, platformAccount.getId())) {
-            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
-        }
-        if (platformUserRepository.existsByEmailAndAccountId(request.email(), platformAccount.getId())) {
-            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
-        }
-
-        PlatformUser user = PlatformUser.builder()
-                .name(request.name())
-                .username(username)
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .role(role)
-                .account(platformAccount) // ✅ SEMPRE PLATFORM
-                .suspendedByAccount(false)
-                .suspendedByAdmin(false)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        return mapToResponse(platformUserRepository.save(user));
-    }
-
-    @Transactional(readOnly = true)
-    public List<PlatformUserDetailsResponse> listPlatformUsers() {
-        SchemaContext.unbindSchema();
-        TenantAccount platformAccount = getPlatformAccount();
-        return platformUserRepository.findByAccountId(platformAccount.getId()).stream()
-                .filter(u -> !u.isDeleted())
-                .map(this::mapToResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public PlatformUserDetailsResponse getPlatformUser(Long userId) {
-        SchemaContext.unbindSchema();
-        TenantAccount platformAccount = getPlatformAccount();
-
-        PlatformUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
-
-        if (user.isDeleted()) {
-            throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
-        }
-
-        return mapToResponse(user);
-    }
-    
-    
-    
-    
-    
-    
-    public PlatformUserDetailsResponse updatePlatformUserStatus(Long userId, boolean active) {
-        SchemaContext.unbindSchema();
-        TenantAccount platformAccount = getPlatformAccount();
-
-        PlatformUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
-
-        if (user.isDeleted()) {
-            throw new ApiException("USER_DELETED", "Usuário está removido", 409);
-        }
-
-        // ✅ ação manual do admin da plataforma
-        user.setSuspendedByAdmin(!active);
-        user.setUpdatedAt(LocalDateTime.now());
-        return mapToResponse(platformUserRepository.save(user));
-    }
-
-    
-    
-
-    public void softDeletePlatformUser(Long userId) {
-        SchemaContext.unbindSchema();
-        TenantAccount platformAccount = getPlatformAccount();
-
-        PlatformUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
-
-        if (user.isDeleted()) {
-            throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
-        }
-
-        user.softDelete();
-        platformUserRepository.save(user);
-    }
-    
-
-    public PlatformUserDetailsResponse restorePlatformUser(Long userId) {
-        SchemaContext.unbindSchema();
-        TenantAccount platformAccount = getPlatformAccount();
-
-        PlatformUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
-
-        if (!user.isDeleted()) {
-            throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
-        }
-
-        user.restore();
-        return mapToResponse(platformUserRepository.save(user));
-    }
-    
-    
-
-    private PlatformUserDetailsResponse mapToResponse(PlatformUser user) {
-        return new PlatformUserDetailsResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getName(),
-                user.getEmail(),
-                user.getRole().name(),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin(),
-                user.getCreatedAt(),
-                user.getUpdatedAt(),
-                user.getAccount().getId(),
-                List.of()
-        );
-    }
-}
-package brito.com.multitenancy001.platform.application;
+package brito.com.multitenancy001.controlplane.application;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -2329,11 +1740,11 @@ import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.api.dto.signup.SignupRequest;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -2350,8 +1761,8 @@ public class PublicAccountService {
 
 
   
-    public TenantAccount createAccountFromSignup(SignupRequest request) {
-    	 SchemaContext.unbindSchema();
+    public Account createAccountFromSignup(SignupRequest request) {
+    	 TenantSchemaContext.clearTenantSchema();
 
     	    int maxAttempts = 5;
     	    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -2359,7 +1770,7 @@ public class PublicAccountService {
     	        String schemaName = generateSchemaName(request.name());
 
     	        try {
-    	            TenantAccount account = new TenantAccount();
+    	            Account account = new Account();
     	            account.setName(request.name());
     	            account.setSlug(slug);
     	            account.setSchemaName(schemaName);
@@ -2372,7 +1783,7 @@ public class PublicAccountService {
 
     	            account.setCreatedAt(LocalDateTime.now());
     	            account.setTrialEndDate(LocalDateTime.now().plusDays(30));
-    	            account.setStatus(TenantAccountStatus.FREE_TRIAL);
+    	            account.setStatus(AccountStatus.FREE_TRIAL);
     	            account.setSystemAccount(false);
 
     	            // Defaults
@@ -2437,7 +1848,7 @@ public class PublicAccountService {
     }
 
 }
-package brito.com.multitenancy001.platform.application;
+package brito.com.multitenancy001.controlplane.application;
 
 import java.util.UUID;
 
@@ -2516,11 +1927,11 @@ public class UsernameGeneratorService {
                 .replaceAll("^_|_$", "");
     }
 }
-package brito.com.multitenancy001.platform.application;
+package brito.com.multitenancy001.controlplane.application;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -2546,7 +1957,32 @@ public class UsernameUniquenessService {
     }
 }
 
-package brito.com.multitenancy001.platform.db;
+package brito.com.multitenancy001.controlplane.auth.api;
+
+import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
+import brito.com.multitenancy001.controlplane.application.AdminAuthService;
+import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/admin/auth")
+@RequiredArgsConstructor
+public class AdminAuthController {
+
+	private final AdminAuthService adminAuthService;
+
+	@PostMapping("/login")
+	public ResponseEntity<JwtResponse> loginSuperAdmin(@Valid @RequestBody ControlPlaneAdminLoginRequest request) {
+
+		JwtResponse response = adminAuthService.loginSuperAdmin(request);
+		return ResponseEntity.ok(response);
+	}
+}
+package brito.com.multitenancy001.controlplane.db;
 
 import javax.sql.DataSource;
 
@@ -2572,7 +2008,7 @@ public class FlywayPublicSchemaConfig {
         return flyway;
     }
 }
-package brito.com.multitenancy001.platform.db;
+package brito.com.multitenancy001.controlplane.db;
 
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.ApplicationArguments;
@@ -2601,7 +2037,7 @@ public class FlywayPublicSchemaRunner implements ApplicationRunner {
         flywayAccount.migrate();
     }
 }
-package brito.com.multitenancy001.platform.db;
+package brito.com.multitenancy001.controlplane.db;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -2640,14 +2076,329 @@ public class PublicSchemaVerifier {
             log.error("⚠️ Aviso na verificação: {}", e.getMessage());
         }
     }
-}package brito.com.multitenancy001.platform.domain.billing;
+}package brito.com.multitenancy001.controlplane.domain.account;
 
 
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(
+		name = "accounts", uniqueConstraints = {
+    @UniqueConstraint(columnNames = "slug"),
+    @UniqueConstraint(columnNames = "schema_name")
+})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Account {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(name = "is_system_account", nullable = false)
+    @Builder.Default
+    private boolean systemAccount = false;
+    
+   
+    @Column(nullable = false, length = 150)
+    private String name;
+    
+   
+    
+    
+    @Column(name = "schema_name", nullable = false, unique = true, length = 100)
+    private String schemaName;
+    
+    @Column(name = "slug", nullable = false, unique = true, length = 50)
+    private String slug;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    @Builder.Default
+    private AccountStatus status = AccountStatus.FREE_TRIAL;
+    
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreationTimestamp
+    private LocalDateTime createdAt; // ✅ LocalDate
+    
+    @Column(name = "trial_end_date")
+    private LocalDateTime trialEndDate; // ✅ LocalDate
+    
+    @Column(name = "payment_due_date")
+    private LocalDateTime paymentDueDate; // ✅ LocalDate
+    
+    @Column(name = "next_billing_date")
+    private LocalDateTime nextBillingDate; // ✅ LocalDate
+    
+    @Column(name = "subscription_plan", length = 50)
+    @Builder.Default
+    private String subscriptionPlan = "FREE";
+    
+    @Column(name = "max_users")
+    @Builder.Default
+    private Integer maxUsers = 5;
+    
+    @Column(name = "max_products")
+    @Builder.Default
+    private Integer maxProducts = 100;
+    
+    @Column(name = "max_storage_mb")
+    @Builder.Default
+    private Integer maxStorageMb = 100;
+    
+    @Column(name = "company_email", nullable = false, length = 150)
+    private String companyEmail;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "company_doc_type", nullable = false, length = 10)
+    private DocumentType companyDocType;
+    
+    @Column(name = "company_doc_number", nullable = true, length = 20)
+    private String companyDocNumber;
+    
+    @Column(name = "company_phone", length = 20)
+    private String companyPhone;
+    
+   
+    
+    @Column(name = "company_address", length = 500)
+    private String companyAddress;
+    
+    @Column(name = "company_city", length = 100)
+    private String companyCity;
+    
+    @Column(name = "company_state", length = 50)
+    private String companyState;
+    
+    @Column(name = "company_country", length = 50)
+    @Builder.Default
+    private String companyCountry = "Brasil";
+    
+    @Column(name = "timezone", length = 50)
+    @Builder.Default
+    private String timezone = "America/Sao_Paulo";
+    
+    @Column(name = "locale", length = 10)
+    @Builder.Default
+    private String locale = "pt_BR";
+    
+    @Column(name = "currency", length = 3)
+    @Builder.Default
+    private String currency = "BRL";
+    
+    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @ToString.Exclude
+    private List<ControlPlaneUser> userAccount = new ArrayList<>();
+    
+    
+    
+    
+    @Column(name = "settings_json", columnDefinition = "TEXT")
+    private String settingsJson;
+    
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    private String metadataJson;
+    
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt; // ✅ LocalDateTime para auditoria
+    
+    @Column(name = "deleted")
+    @Builder.Default
+    private boolean deleted = false;
+    
+ 
+    
+    
+    
+    
+    @PrePersist
+    protected void onCreate() {
+
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+
+        // 🔹 Gera slug automaticamente se não vier preenchido
+        if (this.slug == null || this.slug.isBlank()) {
+            this.slug = this.name.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        }
+
+        // 🔹 Gera schemaName automaticamente se não vier preenchido
+        if (this.schemaName == null) {
+            this.schemaName =
+                "tenant_" +
+                this.slug.replace("-", "_") +
+                "_" +
+                UUID.randomUUID().toString().substring(0, 8);
+        }
+
+        // 🔹 Define trial automaticamente
+        if (this.trialEndDate == null) {
+            this.trialEndDate = this.createdAt.plusDays(30);
+        }
+    }
+    
+    
+    
+
+    @PreUpdate
+    protected void onUpdate() {
+        // Método para lógica de atualização se necessário
+    }
+    
+    /**
+     * Verifica se a conta está em trial ativo
+     */
+    public boolean isTrialActive() {
+        return this.status == AccountStatus.FREE_TRIAL && 
+               this.trialEndDate != null && 
+               this.trialEndDate.isAfter(LocalDateTime.now());
+    }
+    
+    /**
+     * Verifica se a conta está ativa
+     */
+    public boolean isActive() {
+        return this.status == AccountStatus.ACTIVE || 
+               (this.status == AccountStatus.FREE_TRIAL && isTrialActive());
+    }
+    
+    /**
+     * Verifica se o pagamento está atrasado
+     */
+    public boolean isPaymentOverdue() {
+        return this.paymentDueDate != null && 
+               this.paymentDueDate.isBefore(LocalDateTime.now());
+    }
+    
+    /**
+     * Dias restantes no trial
+     */
+    public long getDaysRemainingInTrial() {
+        if (this.trialEndDate == null || !isTrialActive()) {
+            return 0;
+        }
+        return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
+    }
+    
+   /**
+ * Soft delete da conta
+ */
+public void softDelete() {
+    if (!this.deleted) {
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+        this.status = AccountStatus.CANCELLED;
+    }
+}
+
+    
+    /**
+     * Restaura a conta (undo soft delete)
+     */
+    public void restore() {
+        if (this.deleted) {
+            this.deleted = false;
+            this.deletedAt = null;
+
+            // Regra de negócio: ao restaurar, volta para ACTIVE
+            this.status = AccountStatus.ACTIVE;
+        }
+    }
+    
+    public boolean isSystemAccount() {
+        return this.systemAccount || "public".equals(this.schemaName);
+    }
+    
+
+    
+}package brito.com.multitenancy001.controlplane.domain.account;
+
+public enum AccountStatus {
+    FREE_TRIAL("Trial Gratuito"),
+    ACTIVE("Ativa"),
+    SUSPENDED("Suspensa"),
+    CANCELLED("Cancelada"),
+    EXPIRED("Expirada");
+    
+    private final String description;
+    
+    AccountStatus(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    /**
+     * Verifica se o status permite operações
+     */
+    public boolean isOperational() {
+        return this == FREE_TRIAL || this == ACTIVE;
+    }
+    
+    /**
+     * Verifica se o status está em trial
+     */
+    public boolean isTrial() {
+        return this == FREE_TRIAL;
+    }
+    
+    /**
+     * Verifica se o status está ativo
+     */
+    public boolean isActive() {
+        return this == ACTIVE;
+    }
+    
+    /**
+     * Verifica se o status está suspenso
+     */
+    public boolean isSuspended() {
+        return this == SUSPENDED;
+    }
+    
+    /**
+     * Verifica se o status está cancelado
+     */
+    public boolean isCancelled() {
+        return this == CANCELLED || this == EXPIRED;
+    }
+}package brito.com.multitenancy001.controlplane.domain.account;
+
+import lombok.Getter;
+
+@Getter
+public enum DocumentType {
+    CPF,
+    CNPJ;
+
+   
+    }
+package brito.com.multitenancy001.controlplane.domain.billing;
+
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -2673,7 +2424,7 @@ public class Payment {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = true)
-    private TenantAccount account;
+    private Account account;
     
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
@@ -2825,7 +2576,7 @@ public class Payment {
                this.refundedAt == null &&
                this.paymentDate.isAfter(LocalDateTime.now().minusDays(90)); // Reembolso até 90 dias
     }
-}package brito.com.multitenancy001.platform.domain.billing;
+}package brito.com.multitenancy001.controlplane.domain.billing;
 
 
 
@@ -2874,326 +2625,11 @@ public enum PaymentStatus {
             return PENDING;
         }
     }
-}package brito.com.multitenancy001.platform.domain.tenant;
-
-import lombok.Getter;
-
-@Getter
-public enum DocumentType {
-    CPF,
-    CNPJ;
-
-   
-    }
-package brito.com.multitenancy001.platform.domain.tenant;
-
-
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-@Entity
-@Table(
-		name = "accounts", uniqueConstraints = {
-    @UniqueConstraint(columnNames = "slug"),
-    @UniqueConstraint(columnNames = "schema_name")
-})
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class TenantAccount {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    @Column(name = "is_system_account", nullable = false)
-    @Builder.Default
-    private boolean systemAccount = false;
-    
-   
-    @Column(nullable = false, length = 150)
-    private String name;
-    
-   
-    
-    
-    @Column(name = "schema_name", nullable = false, unique = true, length = 100)
-    private String schemaName;
-    
-    @Column(name = "slug", nullable = false, unique = true, length = 50)
-    private String slug;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
-    @Builder.Default
-    private TenantAccountStatus status = TenantAccountStatus.FREE_TRIAL;
-    
-    @Column(name = "created_at", nullable = false, updatable = false)
-    @CreationTimestamp
-    private LocalDateTime createdAt; // ✅ LocalDate
-    
-    @Column(name = "trial_end_date")
-    private LocalDateTime trialEndDate; // ✅ LocalDate
-    
-    @Column(name = "payment_due_date")
-    private LocalDateTime paymentDueDate; // ✅ LocalDate
-    
-    @Column(name = "next_billing_date")
-    private LocalDateTime nextBillingDate; // ✅ LocalDate
-    
-    @Column(name = "subscription_plan", length = 50)
-    @Builder.Default
-    private String subscriptionPlan = "FREE";
-    
-    @Column(name = "max_users")
-    @Builder.Default
-    private Integer maxUsers = 5;
-    
-    @Column(name = "max_products")
-    @Builder.Default
-    private Integer maxProducts = 100;
-    
-    @Column(name = "max_storage_mb")
-    @Builder.Default
-    private Integer maxStorageMb = 100;
-    
-    @Column(name = "company_email", nullable = false, length = 150)
-    private String companyEmail;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(name = "company_doc_type", nullable = false, length = 10)
-    private DocumentType companyDocType;
-    
-    @Column(name = "company_doc_number", nullable = true, length = 20)
-    private String companyDocNumber;
-    
-    @Column(name = "company_phone", length = 20)
-    private String companyPhone;
-    
-   
-    
-    @Column(name = "company_address", length = 500)
-    private String companyAddress;
-    
-    @Column(name = "company_city", length = 100)
-    private String companyCity;
-    
-    @Column(name = "company_state", length = 50)
-    private String companyState;
-    
-    @Column(name = "company_country", length = 50)
-    @Builder.Default
-    private String companyCountry = "Brasil";
-    
-    @Column(name = "timezone", length = 50)
-    @Builder.Default
-    private String timezone = "America/Sao_Paulo";
-    
-    @Column(name = "locale", length = 10)
-    @Builder.Default
-    private String locale = "pt_BR";
-    
-    @Column(name = "currency", length = 3)
-    @Builder.Default
-    private String currency = "BRL";
-    
-    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    @ToString.Exclude
-    private List<PlatformUser> userAccount = new ArrayList<>();
-    
-    
-    
-    
-    @Column(name = "settings_json", columnDefinition = "TEXT")
-    private String settingsJson;
-    
-    @Column(name = "metadata_json", columnDefinition = "TEXT")
-    private String metadataJson;
-    
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt; // ✅ LocalDateTime para auditoria
-    
-    @Column(name = "deleted")
-    @Builder.Default
-    private boolean deleted = false;
-    
- 
-    
-    
-    
-    
-    @PrePersist
-    protected void onCreate() {
-
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
-        }
-
-        // 🔹 Gera slug automaticamente se não vier preenchido
-        if (this.slug == null || this.slug.isBlank()) {
-            this.slug = this.name.toLowerCase()
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
-        }
-
-        // 🔹 Gera schemaName automaticamente se não vier preenchido
-        if (this.schemaName == null) {
-            this.schemaName =
-                "tenant_" +
-                this.slug.replace("-", "_") +
-                "_" +
-                UUID.randomUUID().toString().substring(0, 8);
-        }
-
-        // 🔹 Define trial automaticamente
-        if (this.trialEndDate == null) {
-            this.trialEndDate = this.createdAt.plusDays(30);
-        }
-    }
-    
-    
-    
-
-    @PreUpdate
-    protected void onUpdate() {
-        // Método para lógica de atualização se necessário
-    }
-    
-    /**
-     * Verifica se a conta está em trial ativo
-     */
-    public boolean isTrialActive() {
-        return this.status == TenantAccountStatus.FREE_TRIAL && 
-               this.trialEndDate != null && 
-               this.trialEndDate.isAfter(LocalDateTime.now());
-    }
-    
-    /**
-     * Verifica se a conta está ativa
-     */
-    public boolean isActive() {
-        return this.status == TenantAccountStatus.ACTIVE || 
-               (this.status == TenantAccountStatus.FREE_TRIAL && isTrialActive());
-    }
-    
-    /**
-     * Verifica se o pagamento está atrasado
-     */
-    public boolean isPaymentOverdue() {
-        return this.paymentDueDate != null && 
-               this.paymentDueDate.isBefore(LocalDateTime.now());
-    }
-    
-    /**
-     * Dias restantes no trial
-     */
-    public long getDaysRemainingInTrial() {
-        if (this.trialEndDate == null || !isTrialActive()) {
-            return 0;
-        }
-        return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
-    }
-    
-   /**
- * Soft delete da conta
- */
-public void softDelete() {
-    if (!this.deleted) {
-        this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
-        this.status = TenantAccountStatus.CANCELLED;
-    }
-}
-
-    
-    /**
-     * Restaura a conta (undo soft delete)
-     */
-    public void restore() {
-        if (this.deleted) {
-            this.deleted = false;
-            this.deletedAt = null;
-
-            // Regra de negócio: ao restaurar, volta para ACTIVE
-            this.status = TenantAccountStatus.ACTIVE;
-        }
-    }
-    
-    public boolean isSystemAccount() {
-        return this.systemAccount || "public".equals(this.schemaName);
-    }
-    
-
-    
-}package brito.com.multitenancy001.platform.domain.tenant;
-
-public enum TenantAccountStatus {
-    FREE_TRIAL("Trial Gratuito"),
-    ACTIVE("Ativa"),
-    SUSPENDED("Suspensa"),
-    CANCELLED("Cancelada"),
-    EXPIRED("Expirada");
-    
-    private final String description;
-    
-    TenantAccountStatus(String description) {
-        this.description = description;
-    }
-    
-    public String getDescription() {
-        return description;
-    }
-    
-    /**
-     * Verifica se o status permite operações
-     */
-    public boolean isOperational() {
-        return this == FREE_TRIAL || this == ACTIVE;
-    }
-    
-    /**
-     * Verifica se o status está em trial
-     */
-    public boolean isTrial() {
-        return this == FREE_TRIAL;
-    }
-    
-    /**
-     * Verifica se o status está ativo
-     */
-    public boolean isActive() {
-        return this == ACTIVE;
-    }
-    
-    /**
-     * Verifica se o status está suspenso
-     */
-    public boolean isSuspended() {
-        return this == SUSPENDED;
-    }
-    
-    /**
-     * Verifica se o status está cancelado
-     */
-    public boolean isCancelled() {
-        return this == CANCELLED || this == EXPIRED;
-    }
-}package brito.com.multitenancy001.platform.domain.user;
+}package brito.com.multitenancy001.controlplane.domain.user;
 
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 
-public enum PlatformRole implements RoleAuthority {
+public enum ControlPlaneRole implements RoleAuthority {
 
     SUPER_ADMIN(true),
     SUPPORT(true),
@@ -3201,7 +2637,7 @@ public enum PlatformRole implements RoleAuthority {
 
     private final boolean platformRole;
 
-    PlatformRole(boolean platformRole) {
+    ControlPlaneRole(boolean platformRole) {
         this.platformRole = platformRole;
     }
 
@@ -3220,7 +2656,7 @@ public enum PlatformRole implements RoleAuthority {
         return this == SUPER_ADMIN;
     }
 }
-package brito.com.multitenancy001.platform.domain.user;
+package brito.com.multitenancy001.controlplane.domain.user;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
@@ -3228,7 +2664,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -3237,7 +2673,7 @@ import java.time.LocalDateTime;
 @Table(name = "users_account", schema = "public")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = { "account", "password" })
-public class PlatformUser {
+public class ControlPlaneUser {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -3258,11 +2694,11 @@ public class PlatformUser {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private PlatformRole role;
+    private ControlPlaneRole role;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
-    private TenantAccount account;
+    private Account account;
 
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
@@ -3344,61 +2780,7 @@ public class PlatformUser {
         this.suspendedByAdmin = false;
     }
 }
-package brito.com.multitenancy001.platform.persistence.publicdb;
-
-import brito.com.multitenancy001.platform.domain.tenant.DocumentType;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
-@Repository
-public interface AccountRepository extends JpaRepository<TenantAccount, Long> {
-
-    boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
-
-    // ✅ docType + docNumber juntos
-    boolean existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(DocumentType companyDocType, String companyDocNumber);
-
-    List<TenantAccount> findAllByDeletedFalse();
-    List<TenantAccount> findByDeletedFalseOrderByCreatedAtDesc();
-
-    Optional<TenantAccount> findBySlugAndDeletedFalse(String slug);
-    Optional<TenantAccount> findByIdAndDeletedFalse(Long id);
-
-    List<TenantAccount> findByStatus(TenantAccountStatus status);
-    List<TenantAccount> findByStatusAndDeletedFalse(TenantAccountStatus status);
-    List<TenantAccount> findByPaymentDueDateBefore(LocalDateTime date);
-
-    @Query("SELECT a FROM TenantAccount a WHERE a.trialEndDate <= :date AND a.status = :status")
-    List<TenantAccount> findExpiredTrials(@Param("date") LocalDateTime date, @Param("status") TenantAccountStatus status);
-
-    @Query("SELECT COUNT(a) FROM TenantAccount a WHERE a.deleted = false")
-    Long countActiveAccounts();
-
-    @Query("SELECT a FROM TenantAccount a WHERE a.status = :status AND a.paymentDueDate < :today")
-    List<TenantAccount> findOverdueAccounts(@Param("status") TenantAccountStatus status, @Param("today") LocalDateTime today);
-
-    boolean existsByNameAndDeletedFalse(String name);
-    boolean existsBySchemaNameAndDeletedFalse(String schemaName);
-
-    @Query("SELECT a FROM TenantAccount a WHERE a.createdAt BETWEEN :startDate AND :endDate")
-    List<TenantAccount> findAccountsCreatedBetween(@Param("startDate") LocalDateTime startDate,
-                                                   @Param("endDate") LocalDateTime endDate);
-
-    @Query("SELECT a FROM TenantAccount a WHERE a.deleted = false AND a.status IN :statuses")
-    List<TenantAccount> findByStatuses(@Param("statuses") List<TenantAccountStatus> statuses);
-
-    @Query("SELECT a FROM TenantAccount a WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) AND a.deleted = false")
-    List<TenantAccount> searchByName(@Param("searchTerm") String searchTerm);
-}
-package brito.com.multitenancy001.platform.persistence.publicdb;
+package brito.com.multitenancy001.controlplane.persistence.publicdb;
 
 
 
@@ -3409,8 +2791,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.platform.domain.billing.Payment;
-import brito.com.multitenancy001.platform.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.controlplane.domain.billing.Payment;
+import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -3457,7 +2839,264 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
                                       @Param("endDate") LocalDateTime endDate);
     
     boolean existsByTransactionId(String transactionId);
-}package brito.com.multitenancy001.platform.persistence.publicdb;
+}package brito.com.multitenancy001.controlplane.user.api;
+
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.user.application.ControlPlaneUserService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/admin/platform-users")
+@RequiredArgsConstructor
+public class ControlPlaneUserAdminController {
+
+    private final ControlPlaneUserService platformUserService;
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> createPlatformUser(@Valid @RequestBody ControlPlaneUserCreateRequest request) {
+    	ControlPlaneUserDetailsResponse response = platformUserService.createPlatformUser(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
+    public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listPlatformUsers() {
+        return ResponseEntity.ok(platformUserService.listPlatformUsers());
+    }
+
+    @GetMapping("/{userId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> getPlatformUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(platformUserService.getPlatformUser(userId));
+    }
+
+    @PatchMapping("/{userId}/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> updatePlatformUserStatus(
+            @PathVariable Long userId,
+            @RequestParam boolean active) {
+        return ResponseEntity.ok(platformUserService.updatePlatformUserStatus(userId, active));
+    }
+
+    @DeleteMapping("/{userId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> deletePlatformUser(@PathVariable Long userId) {
+        platformUserService.softDeletePlatformUser(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{userId}/restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> restorePlatformUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(platformUserService.restorePlatformUser(userId));
+    }
+}
+package brito.com.multitenancy001.controlplane.user.application;
+
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneRole;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.user.persistence.ControlPlaneUserRepository;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@Transactional
+@RequiredArgsConstructor
+public class ControlPlaneUserService {
+
+    private final ControlPlaneUserRepository platformUserRepository;
+    private final AccountRepository accountRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    private Account getControlPlaneAccount() {
+        TenantSchemaContext.clearTenantSchema(); // PUBLIC
+        return accountRepository.findBySlugAndDeletedFalse("platform")
+                .orElseThrow(() -> new ApiException(
+                        "PLATFORM_ACCOUNT_NOT_FOUND",
+                        "Conta platform não encontrada. Rode a migration V3__insert_platform_account.sql",
+                        500
+                ));
+    }
+
+    public ControlPlaneUserDetailsResponse createPlatformUser(ControlPlaneUserCreateRequest request) {
+        TenantSchemaContext.clearTenantSchema();
+
+        Account platformAccount = getControlPlaneAccount();
+
+        // validações básicas
+        if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException("INVALID_PASSWORD", "A senha não atende aos requisitos de segurança", 400);
+        }
+        if (request.username() == null || request.username().isBlank()) {
+            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+        }
+        if (!request.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
+            throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
+        }
+
+        String username = request.username().toLowerCase().trim();
+
+        // role permitida somente plataforma
+        ControlPlaneRole role;
+        try {
+            role = ControlPlaneRole.valueOf(request.role().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
+        }
+
+        // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
+        if (!role.isPlatformRole()) {
+            throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
+        }
+
+        // unicidade por account (platform)
+        if (platformUserRepository.existsByUsernameAndAccountId(username, platformAccount.getId())) {
+            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
+        }
+        if (platformUserRepository.existsByEmailAndAccountId(request.email(), platformAccount.getId())) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+        }
+
+        ControlPlaneUser user = ControlPlaneUser.builder()
+                .name(request.name())
+                .username(username)
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .role(role)
+                .account(platformAccount) // ✅ SEMPRE PLATFORM
+                .suspendedByAccount(false)
+                .suspendedByAdmin(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        return mapToResponse(platformUserRepository.save(user));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ControlPlaneUserDetailsResponse> listPlatformUsers() {
+        TenantSchemaContext.clearTenantSchema();
+        Account platformAccount = getControlPlaneAccount();
+        return platformUserRepository.findByAccountId(platformAccount.getId()).stream()
+                .filter(u -> !u.isDeleted())
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ControlPlaneUserDetailsResponse getPlatformUser(Long userId) {
+        TenantSchemaContext.clearTenantSchema();
+        Account platformAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = platformUserRepository
+                .findByIdAndAccountId(userId, platformAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+
+        if (user.isDeleted()) {
+            throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
+        }
+
+        return mapToResponse(user);
+    }
+    
+    
+    
+    
+    
+    
+    public ControlPlaneUserDetailsResponse updatePlatformUserStatus(Long userId, boolean active) {
+        TenantSchemaContext.clearTenantSchema();
+        Account platformAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = platformUserRepository
+                .findByIdAndAccountId(userId, platformAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+
+        if (user.isDeleted()) {
+            throw new ApiException("USER_DELETED", "Usuário está removido", 409);
+        }
+
+        // ✅ ação manual do admin da plataforma
+        user.setSuspendedByAdmin(!active);
+        user.setUpdatedAt(LocalDateTime.now());
+        return mapToResponse(platformUserRepository.save(user));
+    }
+
+    
+    
+
+    public void softDeletePlatformUser(Long userId) {
+        TenantSchemaContext.clearTenantSchema();
+        Account platformAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = platformUserRepository
+                .findByIdAndAccountId(userId, platformAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+
+        if (user.isDeleted()) {
+            throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
+        }
+
+        user.softDelete();
+        platformUserRepository.save(user);
+    }
+    
+
+    public ControlPlaneUserDetailsResponse restorePlatformUser(Long userId) {
+        TenantSchemaContext.clearTenantSchema();
+        Account platformAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = platformUserRepository
+                .findByIdAndAccountId(userId, platformAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+
+        if (!user.isDeleted()) {
+            throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
+        }
+
+        user.restore();
+        return mapToResponse(platformUserRepository.save(user));
+    }
+    
+    
+
+    private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
+        return new ControlPlaneUserDetailsResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getName(),
+                user.getEmail(),
+                user.getRole().name(),
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.getCreatedAt(),
+                user.getUpdatedAt(),
+                user.getAccount().getId(),
+                List.of()
+        );
+    }
+}
+package brito.com.multitenancy001.controlplane.user.persistence;
 
 
 
@@ -3466,23 +3105,23 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long> {
+public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
 	
 	long countByAccountIdAndDeletedFalse(Long accountId);
 	
-	Optional<PlatformUser> findFirstByAccountIdAndDeletedFalse(Long accountId);
+	Optional<ControlPlaneUser> findFirstByAccountIdAndDeletedFalse(Long accountId);
     
-    Optional<PlatformUser> findByUsername(String username);
+    Optional<ControlPlaneUser> findByUsername(String username);
     
-    Optional<PlatformUser> findByEmail(String email);
+    Optional<ControlPlaneUser> findByEmail(String email);
     
-    List<PlatformUser> findByAccountId(Long accountId);
+    List<ControlPlaneUser> findByAccountId(Long accountId);
     
     @Query("SELECT (COUNT(u) > 0) FROM PlatformUser u " +
     	       "WHERE u.username = :username AND u.account.id = :accountId AND u.deleted = false")
@@ -3495,12 +3134,462 @@ public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long
     	       "WHERE u.email = :email AND u.account.id = :accountId AND u.deleted = false")
     	boolean existsByEmailAndAccountId(@Param("email") String email,
     	                                  @Param("accountId") Long accountId);    
-    Optional<PlatformUser> findByIdAndAccountId(Long id, Long accountId);
+    Optional<ControlPlaneUser> findByIdAndAccountId(Long id, Long accountId);
     
-    Optional<PlatformUser> findByUsernameAndDeletedFalse(String username);
+    Optional<ControlPlaneUser> findByUsernameAndDeletedFalse(String username);
     
-    Optional<PlatformUser> findByEmailAndDeletedFalse(String email);
-}package brito.com.multitenancy001.shared.api.dto.auth;
+    Optional<ControlPlaneUser> findByEmailAndDeletedFalse(String email);
+}package brito.com.multitenancy001.multitenancy.hibernate;
+
+import jakarta.persistence.EntityManagerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+
+@Configuration
+@EnableJpaRepositories(
+    basePackages =  "brito.com.multitenancy001.controlplane",
+    entityManagerFactoryRef = "publicEntityManagerFactory",
+    transactionManagerRef = "publicTransactionManager"
+)
+public class ControlPlanePersistenceConfig {
+
+    @Bean(name = "publicTransactionManager")
+    @Primary
+    public PlatformTransactionManager publicTransactionManager(
+            @Qualifier("publicEntityManagerFactory") EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+}
+package brito.com.multitenancy001.multitenancy.hibernate;
+
+import lombok.extern.slf4j.Slf4j;
+import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Slf4j
+@Component
+public class CurrentTenantSchemaResolver
+        implements CurrentTenantIdentifierResolver<String> {
+
+    private static final String DEFAULT_SCHEMA = "public";
+    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
+
+    /**
+     * Bind do tenant na thread atual.
+     * - Se vier vazio/nulo: remove o tenant (fica "sem tenant", e o resolver decide fallback).
+     * - Se vier preenchido: seta no ThreadLocal.
+     */
+    public static void bindTenantToCurrentThread(String tenantId) {
+        String previous = TENANT_THREAD_LOCAL.get();
+
+        String normalized = (tenantId != null ? tenantId.trim() : null);
+
+        if (StringUtils.hasText(normalized)) {
+            TENANT_THREAD_LOCAL.set(normalized);
+            if (!normalized.equals(previous)) {
+                log.info("🔄 Tenant bindado à thread: {} -> {}", previous, normalized);
+            } else {
+                log.debug("🔄 Tenant já estava bindado: {}", normalized);
+            }
+        } else {
+            TENANT_THREAD_LOCAL.remove();
+            if (previous != null) {
+                log.info("🧹 Tenant removido da thread (anterior: {})", previous);
+            } else {
+                log.debug("🧹 Tenant já estava vazio (nada para remover)");
+            }
+        }
+    }
+
+    /**
+     * Retorna o tenant REALMENTE bindado.
+     * ✅ Importante: aqui retornamos null quando não há tenant,
+     * pra não mascarar estado e facilitar debug.
+     */
+    public static String resolveBoundTenantOrNull() {
+        String t = TENANT_THREAD_LOCAL.get();
+        return StringUtils.hasText(t) ? t : null;
+    }
+
+    /**
+     * Mantém compatibilidade com seu código atual (ex.: logs do provider).
+     * Use isso somente quando você quer um fallback explícito para public.
+     */
+    public static String resolveBoundTenantOrDefault() {
+        String t = resolveBoundTenantOrNull();
+        return (t != null ? t : DEFAULT_SCHEMA);
+    }
+
+    public static void unbindTenantFromCurrentThread() {
+        String previous = TENANT_THREAD_LOCAL.get();
+        TENANT_THREAD_LOCAL.remove();
+        if (previous != null) {
+            log.info("🧹 Tenant desbindado da thread (anterior: {})", previous);
+        } else {
+            log.debug("🧹 Tenant desbindado (já estava vazio)");
+        }
+    }
+
+    /**
+     * O Hibernate sempre precisa de um tenant válido.
+     * ✅ Aqui sim a gente aplica fallback para DEFAULT_TENANT.
+     */
+    @Override
+    public String resolveCurrentTenantIdentifier() {
+        String tenant = resolveBoundTenantOrNull();
+        String resolved = (tenant != null ? tenant : DEFAULT_SCHEMA);
+
+        if (log.isDebugEnabled()) {
+            log.debug("🏷️ Hibernate resolveu tenant={} (bound={}, default={})",
+                    resolved, tenant, DEFAULT_SCHEMA);
+        }
+        return resolved;
+    }
+
+    @Override
+    public boolean validateExistingCurrentSessions() {
+        return false;
+    }
+
+    @Override
+    public boolean isRoot(String tenantIdentifier) {
+        return DEFAULT_SCHEMA.equals(tenantIdentifier);
+    }
+}
+package brito.com.multitenancy001.multitenancy.hibernate;
+
+import jakarta.persistence.EntityManagerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+
+@Configuration
+@EnableJpaRepositories(
+		basePackages = "brito.com.multitenancy001.tenant",
+    entityManagerFactoryRef = "tenantEntityManagerFactory",
+    transactionManagerRef = "tenantTransactionManager"
+)
+public class TenantPlanePersistenceConfig {
+
+    @Bean(name = "tenantTransactionManager")
+    public PlatformTransactionManager tenantTransactionManager(
+            @Qualifier("tenantEntityManagerFactory") EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+}
+package brito.com.multitenancy001.multitenancy.hibernate;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.hibernate.engine.jdbc.connections.spi.AbstractDataSourceBasedMultiTenantConnectionProviderImpl;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import javax.sql.DataSource;
+import java.sql.*;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class TenantSchemaConnectionProvider
+        extends AbstractDataSourceBasedMultiTenantConnectionProviderImpl<String> {
+
+    private static final long serialVersionUID = 1L;
+    private static final String DEFAULT_TENANT = "public";
+
+    private final DataSource dataSource;
+
+    @Override
+    protected DataSource selectAnyDataSource() {
+        return dataSource;
+    }
+
+    @Override
+    protected DataSource selectDataSource(String tenantIdentifier) {
+        return dataSource;
+    }
+
+    @Override
+    public Connection getConnection(String tenantIdentifier) throws SQLException {
+
+        long threadId = Thread.currentThread().threadId();
+        String threadTenant = CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
+
+        String effectiveTenant = StringUtils.hasText(tenantIdentifier)
+                ? tenantIdentifier
+                : DEFAULT_TENANT;
+
+        if (!StringUtils.hasText(tenantIdentifier)) {
+            log.warn("⚠️ [MT] tenantIdentifier vazio → usando DEFAULT ({}) | threadTenant={}",
+                    DEFAULT_TENANT, threadTenant);
+        }
+
+        validateSchemaName(effectiveTenant);
+
+        Connection connection = dataSource.getConnection();
+
+        try (Statement stmt = connection.createStatement()) {
+
+            if (!DEFAULT_TENANT.equals(effectiveTenant)) {
+                ensureSchemaExists(connection, effectiveTenant);
+
+                String quotedTenant = quoteIdentifier(effectiveTenant);
+
+                String setSearchPath = "SET search_path TO " + quotedTenant + ", public";
+                log.info("🎯 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL={}",
+                        threadId, tenantIdentifier, threadTenant, setSearchPath);
+
+                stmt.execute(setSearchPath);
+
+            } else {
+                log.info("🏠 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL=SET search_path TO public;",
+                        threadId, tenantIdentifier, threadTenant);
+
+                stmt.execute("SET search_path TO public;");
+            }
+
+            return connection;
+
+        } catch (SQLException e) {
+            log.error("❌ [MT] Erro configurando conexão | effectiveTenant={}", effectiveTenant, e);
+            try { connection.close(); } catch (SQLException ignore) {}
+            throw e;
+        }
+    }
+
+    @Override
+    public void releaseConnection(String tenantIdentifier, Connection connection) throws SQLException {
+        if (connection == null || connection.isClosed()) return;
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("SET search_path TO public;");
+        } finally {
+            connection.close();
+        }
+    }
+
+    private void ensureSchemaExists(Connection connection, String schemaName) throws SQLException {
+        String quotedSchema = quoteIdentifier(schemaName);
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS " + quotedSchema);
+        }
+
+        try (PreparedStatement ps = connection.prepareStatement(
+                "SELECT 1 FROM information_schema.schemata WHERE schema_name = ?")) {
+            ps.setString(1, schemaName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new SQLException("Schema " + schemaName + " não encontrado após CREATE");
+                }
+            }
+        }
+    }
+
+    private void validateSchemaName(String schemaName) {
+        if (!StringUtils.hasText(schemaName)) {
+            throw new IllegalArgumentException("schemaName vazio");
+        }
+        if (!schemaName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("schemaName inválido: " + schemaName);
+        }
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return "\"" + identifier + "\"";
+    }
+}
+package brito.com.multitenancy001.multitenancy.hibernate;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+
+import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration
+@RequiredArgsConstructor
+public class TenantSchemaHibernateConfig {
+
+    private final DataSource dataSource;
+    private final TenantSchemaConnectionProvider multiTenantConnectionProvider;
+    private final CurrentTenantSchemaResolver tenantResolver;
+
+    @Bean(name = "publicEntityManagerFactory")
+    @Primary
+    public LocalContainerEntityManagerFactoryBean publicEntityManagerFactory() {
+        var emf = new LocalContainerEntityManagerFactoryBean();
+        emf.setDataSource(dataSource);
+        emf.setPackagesToScan("brito.com.multitenancy001.controlplane.domain");
+        emf.setPersistenceUnitName("PUBLIC_PU");
+        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
+        Map<String, Object> props = new HashMap<>();
+
+        props.put("hibernate.hbm2ddl.auto", "none");
+        props.put("hibernate.show_sql", true);
+        props.put("hibernate.format_sql", true);
+        props.put("hibernate.default_schema", "public");
+
+        emf.setJpaPropertyMap(props);
+        return emf;
+    }
+
+    @Bean(name = "tenantEntityManagerFactory")
+    public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
+        var emf = new LocalContainerEntityManagerFactoryBean();
+        emf.setDataSource(dataSource);
+        emf.setPackagesToScan("brito.com.multitenancy001.tenant.model");
+
+ 
+        emf.setPersistenceUnitName("TENANT_PU");
+        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
+        Map<String, Object> props = new HashMap<>();
+  
+        props.put("hibernate.hbm2ddl.auto", "none");
+        props.put("hibernate.show_sql", true);
+        props.put("hibernate.format_sql", true);
+
+        // ✅ multi-tenant via string keys (compatível)
+        props.put("hibernate.multiTenancy", "SCHEMA");
+        props.put("hibernate.multi_tenant_connection_provider", multiTenantConnectionProvider);
+        props.put("hibernate.tenant_identifier_resolver", tenantResolver);
+
+        emf.setJpaPropertyMap(props);
+        return emf;
+    }
+}
+package brito.com.multitenancy001.multitenancy.hibernate;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+@Configuration
+@EnableTransactionManagement
+public class TransactionManagementConfig {
+}
+package brito.com.multitenancy001.multitenancy.observability;
+
+import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.springframework.stereotype.Component;
+
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+
+@Aspect
+@Component
+@Slf4j
+public class TenantSchemaContextMonitor {
+    
+    @Around("@within(org.springframework.stereotype.Service)")
+    public Object monitorServiceMethods(ProceedingJoinPoint joinPoint) throws Throwable {
+        String methodName = joinPoint.getSignature().toShortString();
+        String currentTenant = TenantSchemaContext.getCurrentTenantSchema();
+        
+        log.debug("🏁 INÍCIO {} - Tenant: {}", methodName, currentTenant);
+        
+        try {
+            Object result = joinPoint.proceed();
+            log.debug("✅ FIM {} - Tenant: {}", methodName, TenantSchemaContext.getCurrentTenantSchema());
+            return result;
+        } catch (Exception e) {
+            log.error("❌ ERRO {} - Tenant: {} - Erro: {}", 
+                     methodName, currentTenant, e.getMessage());
+            throw e;
+        }
+    }
+}package brito.com.multitenancy001.multitenancy;
+
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
+
+import brito.com.multitenancy001.multitenancy.hibernate.CurrentTenantSchemaResolver;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+public class TenantSchemaContext {
+
+
+
+    /**
+     * Retorna o tenant atual (com fallback para public)
+     */
+    public static String getCurrentTenantSchema() {
+        // ✅ usando o método compatível com fallback
+        return CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
+    }
+
+    /**
+     * Bind do tenant à thread atual.
+     * ⚠️ Deve ser chamado ANTES de qualquer operação transacional.
+     */
+    public static void bindTenantSchema(String tenantId) {
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.error("🔥 ERRO GRAVE: bindTenant chamado DENTRO de transação! tenant={}", tenantId);
+        }
+
+        String normalized = (tenantId != null ? tenantId.trim() : null);
+
+        // Se vier vazio/nulo, remove (estado real fica sem tenant)
+        if (!StringUtils.hasText(normalized)) {
+            CurrentTenantSchemaResolver.bindTenantToCurrentThread(null);
+            log.info("🔄 Tenant limpo (sem tenant) | thread={}", Thread.currentThread().threadId());
+            return;
+        }
+
+        CurrentTenantSchemaResolver.bindTenantToCurrentThread(normalized);
+
+        log.info("🔄 Tenant bindado | thread={} | tenant={}",
+                Thread.currentThread().threadId(),
+                normalized);
+    }
+
+    /**
+     * Remove o tenant da thread atual.
+     * ⚠️ Deve ser chamado no finally do filtro/interceptor.
+     */
+    public static void clearTenantSchema() {
+        CurrentTenantSchemaResolver.unbindTenantFromCurrentThread();
+        log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
+    }
+
+
+}
+package brito.com.multitenancy001;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+//@EnableCaching
+@EnableScheduling
+public class Multitenancy001Application {
+
+	public static void main(String[] args) {
+		SpringApplication.run(Multitenancy001Application.class, args);
+	}
+
+}
+package brito.com.multitenancy001.shared.api.dto.auth;
 
 
 
@@ -3823,7 +3912,7 @@ public class GlobalExceptionHandler {
     
 }package brito.com.multitenancy001.shared.security;
 
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.tenant.model.TenantUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -3850,7 +3939,7 @@ public class AuthenticatedUserContext implements UserDetails {
     private final String schemaName;
     private final Collection<? extends GrantedAuthority> authorities;
 
-    public AuthenticatedUserContext(PlatformUser user, String schemaName) {
+    public AuthenticatedUserContext(ControlPlaneUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();
@@ -3902,7 +3991,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 
 import java.io.IOException;
 
@@ -3938,7 +4027,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 2) extrai tenantSchema e binda ANTES de qualquer JPA
             final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
-            SchemaContext.bindSchema(tenantSchema);
+            TenantSchemaContext.bindTenantSchema(tenantSchema);
 
             // 3) autenticação
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
@@ -3961,7 +4050,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } finally {
             // 4) limpa sempre (anti vazamento)
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 }
@@ -4196,12 +4285,12 @@ public class JwtTokenProvider {
 
 
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
-import brito.com.multitenancy001.platform.persistence.publicdb.PlatformUserRepository;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.user.persistence.ControlPlaneUserRepository;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -4212,17 +4301,17 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MultiContextUserDetailsService implements UserDetailsService {
     
-    private final PlatformUserRepository platformUserRepository;
+    private final ControlPlaneUserRepository platformUserRepository;
     private final TenantUserRepository tenantUserRepository;
     
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         // Determinar se estamos buscando no account ou tenant
-        String currentSchema = SchemaContext.getCurrentSchema();
+        String currentSchema = TenantSchemaContext.getCurrentTenantSchema();
         
         if ("public".equals(currentSchema) || currentSchema == null) {
             // Buscar no account
-            PlatformUser user = platformUserRepository.findByUsernameAndDeletedFalse(username)
+            ControlPlaneUser user = platformUserRepository.findByUsernameAndDeletedFalse(username)
                     .orElseThrow(() -> new ApiException(
                             "USER_NOT_FOUND",
                             "Usuário account não encontrado",
@@ -4247,7 +4336,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     
     public UserDetails loadUserByUsernameAndSchema(String username, String schema) {
         if ("public".equals(schema)) {
-            PlatformUser user = platformUserRepository.findByUsernameAndDeletedFalse(username)
+            ControlPlaneUser user = platformUserRepository.findByUsernameAndDeletedFalse(username)
                     .orElseThrow(() -> new ApiException(
                             "USER_NOT_FOUND",
                             "Usuário account não encontrado",
@@ -4966,7 +5055,7 @@ public class TenantProductController {
 
 }package brito.com.multitenancy001.tenant.api.users.admin;
 
-import brito.com.multitenancy001.platform.application.AccountLifecycleService;
+import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
 import brito.com.multitenancy001.shared.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.tenant.api.dto.users.admin.TenantUserAdminSuspendRequest;
 import lombok.RequiredArgsConstructor;
@@ -5090,112 +5179,20 @@ public class TenantUserController {
     }
 }package brito.com.multitenancy001.tenant.application;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccountStatus;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class TenantAccountService {
-
-    private final AccountRepository accountRepository;
-    private final TenantSchemaProvisioningService tenantSchemaProvisionService;
-
-    @Transactional
-    public TenantAccount createAccount(String name, String companyEmail, String companyDocNumber,
-                                      String adminUsername, String adminEmail, String adminPassword) {
-
-        SchemaContext.unbindSchema(); // PUBLIC
-
-        TenantAccount account = createAccountTx(name, companyEmail, companyDocNumber);
-
-        try {
-            // TENANT
-            SchemaContext.bindSchema(account.getSchemaName());
-            tenantSchemaProvisionService.ensureSchemaAndMigrate(account.getSchemaName());
-
-            // cria admin com JPA no schema bindado
-            tenantSchemaProvisionService.createTenantAdmin(account, adminUsername, adminEmail, adminPassword);
-
-            return account;
-
-        } finally {
-            SchemaContext.unbindSchema();
-        }
-    }
-
-    @Transactional
-    protected TenantAccount createAccountTx(String name, String companyEmail, String companyDocNumber) {
-
-        int maxAttempts = 5;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            String slug = generateSlug(name);
-            String schemaName = generateSchemaName(slug);
-
-            try {
-                TenantAccount account = TenantAccount.builder()
-                        .name(name)
-                        .slug(slug)
-                        .schemaName(schemaName)
-                        .companyEmail(companyEmail)
-                        .companyDocNumber(companyDocNumber)
-                        .status(TenantAccountStatus.FREE_TRIAL)
-                        .createdAt(LocalDateTime.now())
-                        .trialEndDate(LocalDateTime.now().plusDays(30))
-                        .systemAccount(false)
-                        .build();
-
-                return accountRepository.save(account);
-
-            } catch (DataIntegrityViolationException e) {
-                log.warn("⚠️ collision attempt {}/{} | slug={} schema={}", attempt, maxAttempts, slug, schemaName);
-                if (attempt == maxAttempts) {
-                    throw new ApiException("ACCOUNT_CREATE_FAILED",
-                            "Não foi possível criar conta (colisão). Tente novamente.", 409);
-                }
-            }
-        }
-
-        throw new ApiException("ACCOUNT_CREATE_FAILED", "Falha inesperada ao criar conta.", 500);
-    }
-
-    private String generateSlug(String name) {
-        String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
-        return base.isBlank() ? "tenant" : base;
-    }
-
-    private String generateSchemaName(String slug) {
-        return "tenant_" + slug.replace("-", "_") + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
-}
-package brito.com.multitenancy001.tenant.application;
-
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -5210,9 +5207,9 @@ public class TenantAuthService {
     public JwtResponse loginTenant(TenantLoginRequest request) {
 
         // 1️⃣ PUBLIC — resolve conta
-        SchemaContext.unbindSchema();
+        TenantSchemaContext.clearTenantSchema();
 
-        TenantAccount account = accountRepository
+        Account account = accountRepository
                 .findBySlugAndDeletedFalse(request.slug())
                 .orElseThrow(() -> new ApiException(
                         "ACCOUNT_NOT_FOUND",
@@ -5229,7 +5226,7 @@ public class TenantAuthService {
         }
 
         // 2️⃣ TENANT — bind correto
-        SchemaContext.bindSchema(account.getSchemaName());
+        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
 
         try {
             Authentication authentication =
@@ -5282,7 +5279,7 @@ public class TenantAuthService {
             );
 
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 }
@@ -5572,7 +5569,7 @@ public class TenantProvisioningService {
     private final TenantSchemaProvisioningService tenantSchemaService;
 
     public void createSchemaAndMigrate(String schemaName) {
-        tenantSchemaService.ensureSchemaAndMigrate(schemaName);
+        tenantSchemaService.schemaMigrationService(schemaName);
     }
 }
 package brito.com.multitenancy001.tenant.application;
@@ -5604,12 +5601,12 @@ public class TenantSchemaMigrationService {
 }
 package brito.com.multitenancy001.tenant.application;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -5651,7 +5648,7 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-    public void ensureSchemaAndMigrate(String schemaName) {
+    public void schemaMigrationService(String schemaName) {
         if (!StringUtils.hasText(schemaName) || "public".equals(schemaName)) {
             throw new ApiException("INVALID_SCHEMA", "Schema inválido", 400);
         }
@@ -5668,8 +5665,8 @@ public class TenantSchemaProvisioningService {
     /**
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
-    public TenantUser createTenantAdmin(TenantAccount account, String username, String email, String rawPassword) {
-        String bound = SchemaContext.getCurrentSchema();
+    public TenantUser tenantAdminBootstrapService(Account account, String username, String email, String rawPassword) {
+        String bound = TenantSchemaContext.getCurrentTenantSchema();
         if (bound == null || !bound.equals(account.getSchemaName())) {
             throw new ApiException("TENANT_NOT_BOUND", "Tenant não está bindado no schema esperado", 500);
         }
@@ -5708,9 +5705,9 @@ public class TenantSchemaProvisioningService {
 }
 package brito.com.multitenancy001.tenant.application;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.SchemaContext;
-import brito.com.multitenancy001.platform.domain.tenant.TenantAccount;
-import brito.com.multitenancy001.platform.persistence.publicdb.AccountRepository;
+import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.shared.security.SecurityUtils;
@@ -5736,7 +5733,7 @@ public class TenantUserService {
 
     // ===== helpers =====
     private <T> T runInTenant(String schema, java.util.concurrent.Callable<T> action) {
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             return action.call();
         } catch (RuntimeException e) {
@@ -5744,16 +5741,16 @@ public class TenantUserService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
     private void runInTenant(String schema, Runnable action) {
-        SchemaContext.bindSchema(schema);
+        TenantSchemaContext.bindTenantSchema(schema);
         try {
             action.run();
         } finally {
-            SchemaContext.unbindSchema();
+            TenantSchemaContext.clearTenantSchema();
         }
     }
 
@@ -5873,8 +5870,8 @@ public class TenantUserService {
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
 
         // PUBLIC (sem @Transactional tenant)
-        SchemaContext.unbindSchema();
-        TenantAccount account = accountRepository.findBySlugAndDeletedFalse(slug)
+        TenantSchemaContext.clearTenantSchema();
+        Account account = accountRepository.findBySlugAndDeletedFalse(slug)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
         if (!account.isActive()) throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
 
@@ -5946,7 +5943,7 @@ import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -6939,7 +6936,7 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     List<Supplier> findByNameContainingIgnoreCase(String name);
     
     List<Supplier> findByEmail(String email);
-}package brito.com.multitenancy001.tenant.persistence;
+}package brito.com.multitenancy001.tenant.user.persistence;
 
 import jakarta.transaction.Transactional;
 

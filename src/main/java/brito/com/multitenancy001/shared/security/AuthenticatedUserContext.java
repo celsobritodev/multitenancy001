@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.shared.security;
 
-import brito.com.multitenancy001.platform.domain.user.PlatformUser;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.tenant.model.TenantUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -27,7 +27,7 @@ public class AuthenticatedUserContext implements UserDetails {
     private final String schemaName;
     private final Collection<? extends GrantedAuthority> authorities;
 
-    public AuthenticatedUserContext(PlatformUser user, String schemaName) {
+    public AuthenticatedUserContext(ControlPlaneUser user, String schemaName) {
         this.userId = user.getId();
         this.username = user.getUsername();
         this.email = user.getEmail();
