@@ -27,12 +27,13 @@ public class PublicSchemaVerifier {
             );
             
             Integer usersCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users_account'", 
-                Integer.class
-            );
+            	    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'controlplane_users'",
+            	    Integer.class
+            	);
+
             
-            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, users={}", accountsCount, usersCount);
-            
+            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, controlplane_users={}", accountsCount, usersCount);
+
         } catch (Exception e) {
             log.error("⚠️ Aviso na verificação: {}", e.getMessage());
         }

@@ -7,8 +7,8 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.user.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.controlplane.persistence.account.ControlPlaneUserRepository;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
@@ -20,14 +20,14 @@ public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
-    private final ControlPlaneUserRepository platformUserRepository;
+    private final ControlPlaneUserRepository controlPlaneUserRepository;
 
     public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
 
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
         TenantSchemaContext.clearTenantSchema();
 
-        ControlPlaneUser user = platformUserRepository
+        ControlPlaneUser user = controlPlaneUserRepository
                 .findByUsernameAndDeletedFalse(request.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
@@ -36,7 +36,7 @@ public class AdminAuthService {
                 ));
 
         // 🔒 Regras de negócio
-        if (user.isSuspendedByAccount() || !user.getRole().isPlatformRole()) {
+        if (user.isSuspendedByAccount() || !user.getRole().isControlPlaneRole()) {
             throw new ApiException(
                     "ACCESS_DENIED",
                     "Usuário não autorizado",
@@ -51,7 +51,7 @@ public class AdminAuthService {
                 )
         );
 
-        String accessToken = tokenProvider.generatePlatformToken(
+        String accessToken = tokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
                 "public"

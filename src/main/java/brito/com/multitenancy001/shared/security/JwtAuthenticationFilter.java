@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 
 import java.io.IOException;
 

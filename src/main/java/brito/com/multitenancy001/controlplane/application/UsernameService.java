@@ -4,7 +4,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 

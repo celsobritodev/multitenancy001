@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.controlplane.account.application;
 
-import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
-import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.application.TenantSchemaProvisioningService;
+import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;

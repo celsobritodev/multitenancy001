@@ -1,13 +1,13 @@
 package brito.com.multitenancy001.controlplane.user.application;
 
-import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneRole;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.user.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.controlplane.persistence.account.ControlPlaneUserRepository;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
@@ -23,24 +23,24 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
 
-    private final ControlPlaneUserRepository platformUserRepository;
+    private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
 
     private Account getControlPlaneAccount() {
         TenantSchemaContext.clearTenantSchema(); // PUBLIC
-        return accountRepository.findBySlugAndDeletedFalse("platform")
+        return accountRepository.findBySlugAndDeletedFalse("controlplane")
                 .orElseThrow(() -> new ApiException(
-                        "PLATFORM_ACCOUNT_NOT_FOUND",
-                        "Conta platform não encontrada. Rode a migration V3__insert_platform_account.sql",
+                        "CONTROLPLANE_ACCOUNT_NOT_FOUND",
+                        "Conta controlplane não encontrada. Rode a migration V3__insert_controlplane_account.sql",
                         500
                 ));
     }
 
-    public ControlPlaneUserDetailsResponse createPlatformUser(ControlPlaneUserCreateRequest request) {
+    public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
         TenantSchemaContext.clearTenantSchema();
 
-        Account platformAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
         // validações básicas
         if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
@@ -64,15 +64,15 @@ public class ControlPlaneUserService {
         }
 
         // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
-        if (!role.isPlatformRole()) {
+        if (!role.isControlPlaneRole()) {
             throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
         }
 
-        // unicidade por account (platform)
-        if (platformUserRepository.existsByUsernameAndAccountId(username, platformAccount.getId())) {
+        
+        if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
         }
-        if (platformUserRepository.existsByEmailAndAccountId(request.email(), platformAccount.getId())) {
+        if (controlPlaneUserRepository.existsByEmailAndAccountId(request.email(), controlPlaneAccount.getId())) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
         }
 
@@ -82,32 +82,32 @@ public class ControlPlaneUserService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .role(role)
-                .account(platformAccount) // ✅ SEMPRE PLATFORM
+                .account(controlPlaneAccount) 
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return mapToResponse(platformUserRepository.save(user));
+        return mapToResponse(controlPlaneUserRepository.save(user));
     }
 
     @Transactional(readOnly = true)
-    public List<ControlPlaneUserDetailsResponse> listPlatformUsers() {
+    public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
         TenantSchemaContext.clearTenantSchema();
-        Account platformAccount = getControlPlaneAccount();
-        return platformUserRepository.findByAccountId(platformAccount.getId()).stream()
+        Account controlPlaneAccount = getControlPlaneAccount();
+        return controlPlaneUserRepository.findByAccountId(controlPlaneAccount.getId()).stream()
                 .filter(u -> !u.isDeleted())
                 .map(this::mapToResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public ControlPlaneUserDetailsResponse getPlatformUser(Long userId) {
+    public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
         TenantSchemaContext.clearTenantSchema();
-        Account platformAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
         if (user.isDeleted()) {
@@ -122,12 +122,12 @@ public class ControlPlaneUserService {
     
     
     
-    public ControlPlaneUserDetailsResponse updatePlatformUserStatus(Long userId, boolean active) {
+    public ControlPlaneUserDetailsResponse updateControlPlaneUserStatus(Long userId, boolean active) {
         TenantSchemaContext.clearTenantSchema();
-        Account platformAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
         if (user.isDeleted()) {
@@ -137,18 +137,18 @@ public class ControlPlaneUserService {
         // ✅ ação manual do admin da plataforma
         user.setSuspendedByAdmin(!active);
         user.setUpdatedAt(LocalDateTime.now());
-        return mapToResponse(platformUserRepository.save(user));
+        return mapToResponse(controlPlaneUserRepository.save(user));
     }
 
     
     
 
-    public void softDeletePlatformUser(Long userId) {
+    public void softDeleteControlPlaneUser(Long userId) {
         TenantSchemaContext.clearTenantSchema();
-        Account platformAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
         if (user.isDeleted()) {
@@ -156,16 +156,16 @@ public class ControlPlaneUserService {
         }
 
         user.softDelete();
-        platformUserRepository.save(user);
+        controlPlaneUserRepository.save(user);
     }
     
 
-    public ControlPlaneUserDetailsResponse restorePlatformUser(Long userId) {
+    public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
         TenantSchemaContext.clearTenantSchema();
-        Account platformAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = platformUserRepository
-                .findByIdAndAccountId(userId, platformAccount.getId())
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
         if (!user.isDeleted()) {
@@ -173,7 +173,7 @@ public class ControlPlaneUserService {
         }
 
         user.restore();
-        return mapToResponse(platformUserRepository.save(user));
+        return mapToResponse(controlPlaneUserRepository.save(user));
     }
     
     

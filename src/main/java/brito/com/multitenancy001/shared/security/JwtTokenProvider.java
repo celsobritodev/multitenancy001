@@ -39,9 +39,9 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN PLATFORM (para usuários da plataforma)
+       TOKEN CONTROLPLANE (para usuários da CONTROLPLANE)
        ========================= */
-    public String generatePlatformToken(
+    public String generateControlPlaneToken(
             Authentication authentication,
             Long accountId,
             String context
@@ -53,7 +53,7 @@ public class JwtTokenProvider {
             .claim("roles", user.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(",")))
-            .claim("type", "PLATFORM")  // Renomeado de ACCOUNT para PLATFORM
+            .claim("type", "CONTROLPLANE") 
             .claim("context", context)
             .claim("accountId", accountId)
             .claim("userId", user.getUserId())
@@ -194,8 +194,8 @@ public class JwtTokenProvider {
     /* =========================
        MÉTODOS AUXILIARES
        ========================= */
-    public boolean isPlatformToken(String token) {
-        return "PLATFORM".equals(getTokenType(token));
+    public boolean isControlPlaneToken(String token) {
+        return "CONTROLPLANEM".equals(getTokenType(token));
     }
 
     public boolean isTenantToken(String token) {
@@ -221,7 +221,7 @@ public class JwtTokenProvider {
     /**
      * Verifica se o token é do contexto da plataforma (public)
      */
-    public boolean isPlatformContextToken(String token) {
+    public boolean isControlPlaneContextToken(String token) {
         String context = getContextFromToken(token);
         return "public".equals(context);
     }

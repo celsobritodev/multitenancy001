@@ -8,10 +8,10 @@ public enum ControlPlaneRole implements RoleAuthority {
     SUPPORT(true),
 	STAFF(true);
 
-    private final boolean platformRole;
+    private final boolean controlPlaneRole;
 
-    ControlPlaneRole(boolean platformRole) {
-        this.platformRole = platformRole;
+    ControlPlaneRole(boolean newControPlaneRole) {
+        this.controlPlaneRole = newControPlaneRole;
     }
 
     @Override
@@ -20,8 +20,8 @@ public enum ControlPlaneRole implements RoleAuthority {
     }
 
     // ✅ MÉTODO QUE FALTAVA
-    public boolean isPlatformRole() {
-        return platformRole;
+    public boolean isControlPlaneRole() {
+        return controlPlaneRole;
     }
 
     // (Opcional, mas elegante)

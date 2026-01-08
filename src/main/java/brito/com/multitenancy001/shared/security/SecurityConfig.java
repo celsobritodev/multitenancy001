@@ -43,7 +43,7 @@ public class SecurityConfig {
                 // 🔓 ACTUATOR HEALTH (PUBLIC)
                 .requestMatchers("/actuator/health").permitAll()
 
-                // 🔓 LOGIN / REFRESH (PLATFORM)
+                // 🔓 LOGIN / REFRESH (CONTROLPLANE)
                 .requestMatchers(
                     "/api/admin/auth/login",
                     "/api/admin/auth/refresh"
@@ -59,7 +59,7 @@ public class SecurityConfig {
                     "/api/signup"
                 ).permitAll()
 
-                // 🔒 PLATFORM (APÓS LOGIN)
+                // 🔒 CONTROLPLANE(APÓS LOGIN)
                 .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
 
                 .anyRequest().authenticated()

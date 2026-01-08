@@ -1,17 +1,17 @@
 -- V1__create_accounts.sql
 SET search_path TO public;
 
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
 
-    -- 🔥 NOVO: Flag para identificar contas do sistema
+    -- Flag para identificar contas do sistema
     is_system_account BOOLEAN NOT NULL DEFAULT false,
 
     name VARCHAR(150) NOT NULL,
 
     -- Infra
-    schema_name VARCHAR(100) NOT NULL UNIQUE,
-    slug VARCHAR(50) NOT NULL UNIQUE,
+    schema_name VARCHAR(100) NOT NULL,
+    slug VARCHAR(50) NOT NULL,
 
     -- Status / Plano
     status VARCHAR(50) NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE accounts (
     max_products INTEGER DEFAULT 100,
     max_storage_mb INTEGER DEFAULT 100,
 
-    -- Identidade da empresa (🔑 CRÍTICO)
+    -- Identidade da empresa (CRÍTICO)
     company_doc_type VARCHAR(10) NOT NULL,
     company_doc_number VARCHAR(20) NOT NULL,
     company_email VARCHAR(150) NOT NULL,
@@ -46,25 +46,25 @@ CREATE TABLE accounts (
     settings_json TEXT,
     metadata_json TEXT,
 
-    deleted BOOLEAN DEFAULT false,
+    deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP
 );
 
--- Índice único para documento (somente contas ativas)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_number_active
-ON accounts (company_doc_number)
+-- Unicidade de documento por conta ativa
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active
+ON accounts (company_doc_type, company_doc_number)
 WHERE deleted = false;
 
--- Índice único para email (somente contas ativas)
+-- Unicidade de email por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
 ON accounts (company_email)
 WHERE deleted = false;
 
--- Índice único para schema
+-- Unicidade de schema (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
 ON accounts (schema_name);
 
--- Índice único para slug
+-- Unicidade de slug (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
 

@@ -5,15 +5,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.controlplane.account.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
 import brito.com.multitenancy001.tenant.model.TenantUser;
-import brito.com.multitenancy001.tenant.user.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service

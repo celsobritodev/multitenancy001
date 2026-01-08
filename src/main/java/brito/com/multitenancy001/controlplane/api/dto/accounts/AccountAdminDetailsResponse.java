@@ -36,7 +36,7 @@ public record AccountAdminDetailsResponse(
     ControlPlaneAdminUserSummaryResponse admin,
 
     // Indicadores
-    long totalPlatformUsers,
+    long totalControlPlaneUsers,
     boolean active
 ) {
 
