@@ -7,7 +7,7 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.billing.Payment;
 import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.controlplane.persistence.account.PaymentRepository;
+import brito.com.multitenancy001.controlplane.persistence.billing.PaymentRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

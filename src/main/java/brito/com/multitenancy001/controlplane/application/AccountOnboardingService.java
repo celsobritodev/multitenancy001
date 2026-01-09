@@ -8,11 +8,12 @@ import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.exec.PublicExecutor;
-import brito.com.multitenancy001.infra.exec.TenantExecutor;
-import brito.com.multitenancy001.infra.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
@@ -27,7 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 	
-	  
+	private final AccountApiMapper accountApiMapper;
+	
 	private final PublicExecutor publicExec;
 	private final TxExecutor tx;
 	private final TenantExecutor tenantExec;
@@ -59,7 +61,7 @@ public class AccountOnboardingService {
 		    log.info("✅ Account criada | accountId={} | schema={} | slug={}",
 		            account.getId(), account.getSchemaName(), account.getSlug());
 
-		    return AccountResponse.fromEntity(account);
+		    return accountApiMapper.toResponse(account);
 		}
 
     

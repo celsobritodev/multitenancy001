@@ -9,17 +9,28 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetai
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.api.mapper.AccountAdminDetailsApiMapper;
+import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.exec.PublicExecutor;
+import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
+import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class AccountLifecycleService {
+	
+	private final ControlPlaneUserRepository controlPlaneUserRepository;
+
+	
+	private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
+
+	
+	private final AccountApiMapper accountApiMapper;
 	
 	private final PublicExecutor publicExec;
 
@@ -48,7 +59,7 @@ public class AccountLifecycleService {
         return publicExec.run(() ->
             accountRepository.findAllByDeletedFalse()
                 .stream()
-                .map(AccountResponse::fromEntity)
+                .map(accountApiMapper::toResponse)
                 .toList()
         );
     }
@@ -59,19 +70,23 @@ public class AccountLifecycleService {
         return publicExec.run(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-            return AccountResponse.fromEntity(account);
+            return accountApiMapper.toResponse(account);
         });
     }
 
 
-    @Transactional(readOnly = true)
-    public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        return publicExec.run(() -> {
-            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-            return AccountAdminDetailsResponse.from(account, null);
-        });
-    }
+   @Transactional(readOnly = true)
+public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+    return publicExec.run(() -> {
+        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+        long totalUsers = controlPlaneUserRepository.countByAccountIdAndDeletedFalse(accountId);
+
+        return accountAdminDetailsApiMapper.toResponse(account, null, totalUsers);
+    });
+}
+
 
 
     /* =========================================================
@@ -94,7 +109,7 @@ public class AccountLifecycleService {
        4. TENANT USERS (ADMIN)
        ========================================================= */
 
-    public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+    public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
         return tenantUserService.listTenantUsers(accountId, onlyActive);
     }
 

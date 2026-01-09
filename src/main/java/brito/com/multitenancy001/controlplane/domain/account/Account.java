@@ -87,7 +87,7 @@ public class Account {
     @Column(name = "company_doc_type", nullable = false, length = 10)
     private DocumentType companyDocType;
     
-    @Column(name = "company_doc_number", nullable = true, length = 20)
+    @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
     
     @Column(name = "company_phone", length = 20)

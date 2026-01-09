@@ -7,11 +7,11 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.persistence.account.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.security.JwtTokenProvider;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -25,7 +25,7 @@ public class AdminAuthService {
     public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
 
         // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
-        TenantSchemaContext.clearTenantSchema();
+        TenantContext.clear();
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByUsernameAndDeletedFalse(request.username())

@@ -10,8 +10,8 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.context.TenantContext;
 
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ public class PublicAccountService {
 
   
     public Account createAccountFromSignup(SignupRequest request) {
-    	 TenantSchemaContext.clearTenantSchema();
+    	 TenantContext.clear();
 
     	    int maxAttempts = 5;
     	    for (int attempt = 1; attempt <= maxAttempts; attempt++) {

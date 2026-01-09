@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<EnumErrorResponse> handleNotReadable(HttpMessageNotReadableException ex) {
+    public ResponseEntity<ApiEnumErrorResponse> handleNotReadable(HttpMessageNotReadableException ex) {
         
         Throwable cause = ex.getCause();
         
@@ -35,7 +35,7 @@ public class GlobalExceptionHandler {
                     .toList();
                 
                 return ResponseEntity.badRequest().body(
-                    EnumErrorResponse.builder()
+                    ApiEnumErrorResponse.builder()
                         .timestamp(LocalDateTime.now())
                         .error("INVALID_ENUM")
                         .message("Valor inválido para o campo " + fieldName)
@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
         }
         
         return ResponseEntity.badRequest().body(
-            EnumErrorResponse.builder()
+            ApiEnumErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .error("INVALID_REQUEST_BODY")
                 .message("Corpo da requisição inválido")
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<EnumErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+    public ResponseEntity<ApiEnumErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         
         String errorMessage = ex.getMostSpecificCause().getMessage();
         
@@ -69,7 +69,7 @@ public class GlobalExceptionHandler {
         if (errorMessage.contains("company_doc_number")) {
             String cnpj = extractValue(errorMessage, "company_doc_number");
             return ResponseEntity.status(409).body(
-                EnumErrorResponse.builder()
+                ApiEnumErrorResponse.builder()
                     .timestamp(LocalDateTime.now())
                     .error("DUPLICATE_CNPJ")
                     .message("Já existe uma conta com o CNPJ " + cnpj)
@@ -82,7 +82,7 @@ public class GlobalExceptionHandler {
         if (errorMessage.contains("company_email")) {
             String email = extractValue(errorMessage, "company_email");
             return ResponseEntity.status(409).body(
-                EnumErrorResponse.builder()
+                ApiEnumErrorResponse.builder()
                     .timestamp(LocalDateTime.now())
                     .error("DUPLICATE_EMAIL")
                     .message("Já existe uma conta com o email " + email)
@@ -95,7 +95,7 @@ public class GlobalExceptionHandler {
         if (errorMessage.contains("slug")) {
             String slug = extractValue(errorMessage, "slug");
             return ResponseEntity.status(409).body(
-                EnumErrorResponse.builder()
+                ApiEnumErrorResponse.builder()
                     .timestamp(LocalDateTime.now())
                     .error("DUPLICATE_SLUG")
                     .message("Já existe uma conta com o slug " + slug)
@@ -108,7 +108,7 @@ public class GlobalExceptionHandler {
         if (errorMessage.contains("schema_name")) {
             String schema = extractValue(errorMessage, "schema_name");
             return ResponseEntity.status(409).body(
-                EnumErrorResponse.builder()
+                ApiEnumErrorResponse.builder()
                     .timestamp(LocalDateTime.now())
                     .error("DUPLICATE_SCHEMA")
                     .message("Erro interno: schema " + schema + " já existe")
@@ -118,7 +118,7 @@ public class GlobalExceptionHandler {
         
         // Caso genérico
         return ResponseEntity.status(409).body(
-            EnumErrorResponse.builder()
+            ApiEnumErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .error("DUPLICATE_ENTRY")
                 .message("Registro duplicado. Verifique os dados informados.")
@@ -152,9 +152,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<EnumErrorResponse> handleApi(ApiException ex) {
+    public ResponseEntity<ApiEnumErrorResponse> handleApi(ApiException ex) {
         return ResponseEntity.status(ex.getStatus()).body(
-            EnumErrorResponse.builder()
+            ApiEnumErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .error(ex.getError())
                 .message(ex.getMessage())
@@ -163,7 +163,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<EnumErrorResponse> handleGeneric(Exception ex) {
+    public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
         // 🔥 REMOVA os logs de debug do handler genérico
         // System.out.println("=== DEBUG Generic Exception ===");
         // System.out.println("Exception type: " + ex.getClass().getName());
@@ -171,7 +171,7 @@ public class GlobalExceptionHandler {
         // ex.printStackTrace();
         
         return ResponseEntity.internalServerError().body(
-            EnumErrorResponse.builder()
+            ApiEnumErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .error("INTERNAL_SERVER_ERROR")
                 .message("Erro interno inesperado. Contate o suporte.")
@@ -181,7 +181,7 @@ public class GlobalExceptionHandler {
     
     
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(
+    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex) {
         
         List<String> errors = ex.getBindingResult()
@@ -190,7 +190,7 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
         
-        ErrorResponse errorResponse = ErrorResponse.builder()
+        ApiErrorResponse errorResponse = ApiErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .error("VALIDATION_ERROR")
                 .message("Erro de validação")

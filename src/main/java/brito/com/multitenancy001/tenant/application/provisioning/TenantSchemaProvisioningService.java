@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.tenant.application.provisioning;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -65,7 +65,7 @@ public class TenantSchemaProvisioningService {
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
     public TenantUser tenantAdminBootstrapService(Account account, String username, String email, String rawPassword) {
-        String bound = TenantSchemaContext.getCurrentTenantSchema();
+        String bound = TenantContext.getOrNull();
         if (bound == null || !bound.equals(account.getSchemaName())) {
             throw new ApiException("TENANT_NOT_BOUND", "Tenant não está bindado no schema esperado", 500);
         }

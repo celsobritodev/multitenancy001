@@ -156,11 +156,11 @@ public class TenantUser {
         }
     }
 
-    // ✅ Login permitido se não está suspenso por conta nem por admin
-    public boolean isEnabledForLogin() {
-        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) return false;
+    public boolean isEnabledForLogin(LocalDateTime now) {
+        if (lockedUntil != null && lockedUntil.isAfter(now)) return false;
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
+
 
     public void softDelete() {
         if (deleted) return;

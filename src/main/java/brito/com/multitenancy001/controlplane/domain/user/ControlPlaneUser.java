@@ -85,33 +85,31 @@ public class ControlPlaneUser {
     @Builder.Default
     private boolean deleted = false;
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 
-    // ✅ regra única para login
-    public boolean isEnabledForLogin() {
-        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) return false;
+    public boolean isEnabledForLogin(LocalDateTime now) {
+        if (lockedUntil != null && lockedUntil.isAfter(now)) return false;
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
+
     // se você usa esse método em algum lugar, deixe coerente:
-    public boolean isAccountNonLocked() {
-        return isEnabledForLogin();
+    public boolean isAccountNonLocked(LocalDateTime now) {
+        return isEnabledForLogin(now);
     }
 
-    public void softDelete() {
-        this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
-        // deletado sempre bloqueia login
-        this.suspendedByAccount = true;
-        this.suspendedByAdmin = true;
+    public void softDelete(LocalDateTime now, long uniqueSuffix) {
+        if (deleted) return;
+        deleted = true;
+        deletedAt = now;
 
-        var timestamp = System.currentTimeMillis();
-        this.username = "deleted_" + this.username + "_" + timestamp;
-        this.email = "deleted_" + this.email + "_" + timestamp;
+        suspendedByAccount = true;
+        suspendedByAdmin = true;
+
+        username = "deleted_" + username + "_" + uniqueSuffix;
+        email = "deleted_" + email + "_" + uniqueSuffix;
     }
+
+
 
     public void restore() {
         this.deleted = false;

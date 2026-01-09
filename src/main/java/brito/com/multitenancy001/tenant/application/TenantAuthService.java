@@ -7,10 +7,10 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.security.JwtTokenProvider;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -28,7 +28,7 @@ public class TenantAuthService {
     public JwtResponse loginTenant(TenantLoginRequest request) {
 
         // 1️⃣ PUBLIC — resolve conta
-        TenantSchemaContext.clearTenantSchema();
+        TenantContext.clear();
 
         Account account = accountRepository
                 .findBySlugAndDeletedFalse(request.slug())
@@ -47,7 +47,7 @@ public class TenantAuthService {
         }
 
         // 2️⃣ TENANT — bind correto
-        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
+        TenantContext.bind(account.getSchemaName());
 
         try {
             Authentication authentication =
@@ -100,7 +100,7 @@ public class TenantAuthService {
             );
 
         } finally {
-            TenantSchemaContext.clearTenantSchema();
+            TenantContext.clear();
         }
     }
 }

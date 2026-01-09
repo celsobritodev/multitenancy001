@@ -10,9 +10,9 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.exec.PublicExecutor;
-import brito.com.multitenancy001.infra.exec.TenantExecutor;
-import brito.com.multitenancy001.infra.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;

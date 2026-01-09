@@ -4,13 +4,13 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.exec.PublicExecutor;
-import brito.com.multitenancy001.infra.exec.TenantExecutor;
-import brito.com.multitenancy001.infra.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ public class AccountTenantUserService {
     private final AccountRepository accountRepository;
     private final TenantUserRepository tenantUserRepository;
 
-    public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+    public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
 
         Account account = publicExec.run(() ->
             accountRepository.findByIdAndDeletedFalse(accountId)
@@ -41,7 +41,7 @@ public class AccountTenantUserService {
                     ? tenantUserRepository.findActiveUsersByAccount(account.getId())
                     : tenantUserRepository.findByAccountId(account.getId());
 
-                return users.stream().map(TenantUserSummaryResponse::from).toList();
+                return users.stream().map(AccountUserSummaryResponse::from).toList();
             })
         );
     }

@@ -1,14 +1,14 @@
 package brito.com.multitenancy001.tenant.application;
 
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.security.JwtTokenProvider;
-import brito.com.multitenancy001.shared.security.SecurityUtils;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,7 @@ public class TenantUserService {
 
     // ===== helpers =====
     private <T> T runInTenant(String schema, java.util.concurrent.Callable<T> action) {
-        TenantSchemaContext.bindTenantSchema(schema);
+        TenantContext.bind(schema);
         try {
             return action.call();
         } catch (RuntimeException e) {
@@ -36,16 +36,16 @@ public class TenantUserService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            TenantSchemaContext.clearTenantSchema();
+            TenantContext.clear();
         }
     }
 
     private void runInTenant(String schema, Runnable action) {
-        TenantSchemaContext.bindTenantSchema(schema);
+        TenantContext.bind(schema);
         try {
             action.run();
         } finally {
-            TenantSchemaContext.clearTenantSchema();
+            TenantContext.clear();
         }
     }
 
@@ -74,7 +74,7 @@ public class TenantUserService {
 }
 
 
-   public List<TenantUserSummaryResponse> listTenantUsers() {
+   public List<AccountUserSummaryResponse> listTenantUsers() {
 	    Long accountId = securityUtils.getCurrentAccountId();
 	    String schema = securityUtils.getCurrentSchema();
 
@@ -88,7 +88,7 @@ public class TenantUserService {
     
     
 
-    public List<TenantUserSummaryResponse> listActiveTenantUsers() {
+    public List<AccountUserSummaryResponse> listActiveTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
@@ -109,8 +109,8 @@ public class TenantUserService {
 
     
     
-    private TenantUserSummaryResponse toSummary(TenantUser u) {
-        return TenantUserSummaryResponse.from(u);
+    private AccountUserSummaryResponse toSummary(TenantUser u) {
+        return AccountUserSummaryResponse.from(u);
     }
 
     private TenantUserDetailsResponse toDetails(TenantUser u) {
@@ -118,7 +118,7 @@ public class TenantUserService {
     }
     
 
-    public TenantUserSummaryResponse updateTenantUserStatus(Long userId, boolean active) {
+    public AccountUserSummaryResponse updateTenantUserStatus(Long userId, boolean active) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
@@ -133,7 +133,7 @@ public class TenantUserService {
         runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
     }
 
-    public TenantUserSummaryResponse restoreTenantUser(Long userId) {
+    public AccountUserSummaryResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
         return runInTenant(schema, () -> toSummary(
@@ -142,7 +142,7 @@ public class TenantUserService {
 
     }
 
-    public TenantUserSummaryResponse resetTenantUserPassword(Long userId, String newPassword) {
+    public AccountUserSummaryResponse resetTenantUserPassword(Long userId, String newPassword) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
@@ -165,7 +165,7 @@ public class TenantUserService {
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
 
         // PUBLIC (sem @Transactional tenant)
-        TenantSchemaContext.clearTenantSchema();
+        TenantContext.clear();
         Account account = accountRepository.findBySlugAndDeletedFalse(slug)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
         if (!account.isActive()) throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);

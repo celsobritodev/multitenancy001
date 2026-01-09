@@ -3,8 +3,8 @@ package brito.com.multitenancy001.controlplane.application;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,14 +26,15 @@ public class AccountProvisioningService {
     @Transactional
     public Account createAccount(String name, String companyEmail, String companyDocNumber,
                                       String adminUsername, String adminEmail, String adminPassword) {
+    	log.info("provisionando");
 
-        TenantSchemaContext.clearTenantSchema(); // PUBLIC
+        TenantContext.clear(); // PUBLIC
 
         Account account = createAccountTx(name, companyEmail, companyDocNumber);
 
         try {
             // TENANT
-            TenantSchemaContext.bindTenantSchema(account.getSchemaName());
+            TenantContext.bind(account.getSchemaName());
             tenantSchemaProvisionService.schemaMigrationService(account.getSchemaName());
 
             // cria admin com JPA no schema bindado
@@ -42,7 +43,7 @@ public class AccountProvisioningService {
             return account;
 
         } finally {
-            TenantSchemaContext.clearTenantSchema();
+            TenantContext.clear();
         }
     }
 
