@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TenantUserAdminController {
 
-    private final AccountLifecycleService accountProvisioningService;
+    private final AccountLifecycleService accountLifecycleService;
 
     @PatchMapping("/{userId}/suspend")
     public ResponseEntity<Void> suspendUser(
@@ -23,7 +23,7 @@ public class TenantUserAdminController {
             @RequestBody TenantUserAdminSuspendRequest req,
             @AuthenticationPrincipal AuthenticatedUserContext me
     ) {
-        accountProvisioningService.setUserSuspendedByAdmin(me.getAccountId(), userId, req.suspended());
+        accountLifecycleService.setUserSuspendedByAdmin(me.getAccountId(), userId, req.suspended());
         return ResponseEntity.noContent().build();
     }
 }

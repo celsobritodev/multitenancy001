@@ -1,6 +1,7 @@
 // src/main/java/brito/com/multitenancy001/dtos/SignupRequest.java
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -34,10 +35,11 @@ public record SignupRequest(
 
     @NotBlank(message = "Confirmação de senha é obrigatória")
     String confirmPassword
-) {
-    public SignupRequest {
-        if (password != null && confirmPassword != null && !password.equals(confirmPassword)) {
-            throw new IllegalArgumentException("As senhas não coincidem");
-        }
-    }
+) 
+	{
+		   @AssertTrue(message = "As senhas não coincidem")
+		   public boolean isPasswordMatching() {
+		      if (password == null || confirmPassword == null) return true; // deixa @NotBlank fazer o trabalho
+		      return password.equals(confirmPassword);
+		   }
 }

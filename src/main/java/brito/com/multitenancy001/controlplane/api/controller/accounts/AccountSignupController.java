@@ -1,4 +1,4 @@
-// src/main/java/brito/com/multitenancy001/controllers/SignupController.java
+
 package brito.com.multitenancy001.controlplane.api.controller.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;

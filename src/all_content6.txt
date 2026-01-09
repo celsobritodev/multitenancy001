@@ -6,6 +6,7 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +28,7 @@ public class AccountAdminController {
 
 	@GetMapping("/{id}/users")
 	public ResponseEntity<List<AccountUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
+		log.info("Listando Usuários por conta");
 		return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
 	}
 
@@ -36,13 +38,15 @@ public class AccountAdminController {
 	}
 
 	@PatchMapping("/{id}/status")
-	public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(@PathVariable Long id,
-			@RequestBody AccountStatusChangeRequest req) {
-		return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, req));
+	public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(
+	        @PathVariable Long id,
+	        @Valid @RequestBody AccountStatusChangeRequest req) {
+	    return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, req));
 	}
 
 	@GetMapping
 	public ResponseEntity<List<AccountResponse>> listAllAccounts() {
+		log.info("Listando todas as contas");
 		return ResponseEntity.ok(accountLifecycleService.listAllAccounts());
 	}
 
@@ -67,7 +71,7 @@ public class AccountAdminController {
 		accountLifecycleService.restoreAccount(id);
 		return ResponseEntity.noContent().build();
 	}
-}// src/main/java/brito/com/multitenancy001/controllers/SignupController.java
+}
 package brito.com.multitenancy001.controlplane.api.controller.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
@@ -84,12 +88,12 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AccountSignupController {
     
-    private final AccountLifecycleService accountProvisioningService;
+    private final AccountLifecycleService accountLifecycleService;
 
     @PostMapping
     public ResponseEntity<AccountResponse> signup(
             @Valid @RequestBody SignupRequest request) {
-        AccountResponse response = accountProvisioningService.createAccount( request);
+        AccountResponse response = accountLifecycleService.createAccount( request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }package brito.com.multitenancy001.controlplane.api.controller.auth;
@@ -238,82 +242,17 @@ public record AccountResponse(
    
   
     
-    // Método para criar com builder pattern (opcional)
-    public static Builder builder() {
-        return new Builder();
-    }
-    
-    // Builder para facilitar a construção
-    public static class Builder {
-        private Long id;
-        private String name;
-        private String slug;
-        private String schemaName;
-        private String status;
-        private LocalDateTime createdAt;
-        private LocalDateTime trialEndDate;
-        private ControlPlaneAdminUserSummaryResponse admin;
-        private boolean systemAccount;
-        
-        public Builder id(Long id) { 
-            this.id = id; 
-            return this; 
-        }
-        
-        public Builder name(String name) { 
-            this.name = name; 
-            return this; 
-        }
-        
-        public Builder slug(String slug) { 
-            this.slug = slug; 
-            return this; 
-        }
-        
-        
-        public Builder schemaName(String schemaName) { 
-            this.schemaName = schemaName; 
-            return this; 
-        }
-        
-        public Builder status(String status) { 
-            this.status = status; 
-            return this; 
-        }
-        
-        public Builder createdAt(LocalDateTime createdAt) { 
-            this.createdAt = createdAt; 
-            return this; 
-        }
-        
-        public Builder trialEndDate(LocalDateTime trialEndDate) { 
-            this.trialEndDate = trialEndDate; 
-            return this; 
-        }
-        
-        public Builder admin(ControlPlaneAdminUserSummaryResponse admin) { 
-            this.admin = admin; 
-            return this; 
-        }
-        
-        public Builder systemAccount(boolean systemAccount) { 
-            this.systemAccount = systemAccount; 
-            return this; 
-        }
-        
-        public AccountResponse build() {
-            return new AccountResponse(
-                id, name, slug, schemaName, status, 
-                createdAt, trialEndDate, admin, systemAccount
-            );
-        }
-    }
+  
 }package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public record AccountStatusChangeRequest(
+		@NotNull(message = "status é obrigatório")
         AccountStatus status,
+        @Size(max = 255, message = "reason deve ter no máximo 255 caracteres")
         String reason
 ) {    }
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
@@ -336,28 +275,14 @@ public record AccountStatusChangeResponse(
 }
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-
 public record AccountUserSummaryResponse(
-	    Long id,
-	    String username,
-	    String email,
-	    boolean suspendedByAccount,
-	    boolean suspendedByAdmin,
-	    boolean enabled
-	) {
-	    public static AccountUserSummaryResponse from(TenantUser u) {
-	        boolean enabled = !u.isDeleted() && !u.isSuspendedByAccount() && !u.isSuspendedByAdmin();
-	        return new AccountUserSummaryResponse(
-	            u.getId(),
-	            u.getUsername(),
-	            u.getEmail(),
-	            u.isSuspendedByAccount(),
-	            u.isSuspendedByAdmin(),
-	            enabled
-	        );
-	    }
-	}
+        Long id,
+        String username,
+        String email,
+        boolean suspendedByAccount,
+        boolean suspendedByAdmin,
+        boolean enabled
+) {}
 package brito.com.multitenancy001.controlplane.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
@@ -403,6 +328,7 @@ public record PaymentResponse(
 // src/main/java/brito/com/multitenancy001/dtos/SignupRequest.java
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -436,12 +362,13 @@ public record SignupRequest(
 
     @NotBlank(message = "Confirmação de senha é obrigatória")
     String confirmPassword
-) {
-    public SignupRequest {
-        if (password != null && confirmPassword != null && !password.equals(confirmPassword)) {
-            throw new IllegalArgumentException("As senhas não coincidem");
-        }
-    }
+) 
+	{
+		   @AssertTrue(message = "As senhas não coincidem")
+		   public boolean isPasswordMatching() {
+		      if (password == null || confirmPassword == null) return true; // deixa @NotBlank fazer o trabalho
+		      return password.equals(confirmPassword);
+		   }
 }
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
@@ -542,6 +469,7 @@ public record ControlPlaneUserDetailsResponse(
 }package brito.com.multitenancy001.controlplane.api.mapper;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -566,17 +494,19 @@ public class AccountAdminDetailsApiMapper {
 
 
    public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
-    LocalDateTime now = LocalDateTime.now(clock);
+	   LocalDateTime now = LocalDateTime.now(clock);
+	   LocalDate today = now.toLocalDate();
+	   LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;  
+	   
+	   
+
 
     boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
     boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
 
     long trialDaysRemaining = 0;
     if (inTrial) {
-        trialDaysRemaining = ChronoUnit.DAYS.between(
-            now.toLocalDate(),
-            account.getTrialEndDate().toLocalDate()
-        );
+        trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
     }
 
     return new AccountAdminDetailsResponse(
@@ -616,16 +546,15 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import lombok.RequiredArgsConstructor;
 
 @Component
+@RequiredArgsConstructor
 public class AccountApiMapper {
 	
 	private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
 	
-	public AccountApiMapper(ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
-
-	    this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
-	}
+	
 
     public AccountResponse toResponse(Account account) {
         return new AccountResponse(
@@ -691,6 +620,31 @@ public class ControlPlaneUserApiMapper {
         );
     }
 }
+package brito.com.multitenancy001.controlplane.api.mapper;
+
+import org.springframework.stereotype.Component;
+
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+
+@Component
+public class TenantUserApiMapper {
+
+    public AccountUserSummaryResponse toAccountUserSummary(TenantUser u) {
+        boolean enabled = !u.isDeleted()
+                && !u.isSuspendedByAccount()
+                && !u.isSuspendedByAdmin();
+
+        return new AccountUserSummaryResponse(
+                u.getId(),
+                u.getUsername(),
+                u.getEmail(),
+                u.isSuspendedByAccount(),
+                u.isSuspendedByAdmin(),
+                enabled
+        );
+    }
+}
 package brito.com.multitenancy001.controlplane.application;
 
 import java.util.List;
@@ -732,8 +686,8 @@ public class AccountLifecycleService {
     private final AccountRepository accountRepository;
 
     private final AccountOnboardingService onboardingService;
-    private final AccountStatusService statusService;
-    private final AccountTenantUserService tenantUserService;
+    private final AccountStatusService accountStatusService;
+    private final AccountTenantUserService accountTenantUserService;
 
     /* =========================================================
        1. ONBOARDING / SIGNUP
@@ -787,15 +741,15 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
        ========================================================= */
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return statusService.changeAccountStatus(accountId, req);
+        return accountStatusService.changeAccountStatus(accountId, req);
     }
 
     public void softDeleteAccount(Long accountId) {
-        statusService.softDeleteAccount(accountId);
+        accountStatusService.softDeleteAccount(accountId);
     }
 
     public void restoreAccount(Long accountId) {
-        statusService.restoreAccount(accountId);
+        accountStatusService.restoreAccount(accountId);
     }
 
     /* =========================================================
@@ -803,11 +757,11 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
        ========================================================= */
 
     public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-        return tenantUserService.listTenantUsers(accountId, onlyActive);
+        return accountTenantUserService.listTenantUsers(accountId, onlyActive);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        tenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
+        accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
     }
 }
 package brito.com.multitenancy001.controlplane.application;
@@ -843,13 +797,13 @@ public class AccountOnboardingService {
 	private final AccountApiMapper accountApiMapper;
 	
 	private final PublicExecutor publicExec;
-	private final TxExecutor tx;
-	private final TenantExecutor tenantExec;
+	private final TxExecutor txExecutor;
+	private final TenantExecutor tenantExecutor;
 
 	
 	
 	private final PublicAccountService publicAccountService;
-	  private final TenantSchemaProvisioningService tenantSchemaService;
+	  private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 	  private final TenantUserRepository tenantUserRepository;
 	  private final PasswordEncoder passwordEncoder;
 	   private final AccountRepository accountRepository;
@@ -862,11 +816,11 @@ public class AccountOnboardingService {
 	   public AccountResponse createAccount(SignupRequest request) {
 		    validateSignupRequest(request);
 
-		    Account account = tx.publicTx(() ->
+		    Account account = txExecutor.publicTx(() ->
 		        publicExec.run(() -> publicAccountService.createAccountFromSignup(request))
 		    );
 
-		    tenantSchemaService.schemaMigrationService(account.getSchemaName());
+		    tenantSchemaProvisioningService.schemaMigrationService(account.getSchemaName());
 
 		    createTenantAdminInTenant(account, request);
 
@@ -878,8 +832,8 @@ public class AccountOnboardingService {
 
     
    protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
-    return tenantExec.run(account.getSchemaName(), () ->
-        tx.tenantTx(() -> {
+    return tenantExecutor.run(account.getSchemaName(), () ->
+        txExecutor.tenantTx(() -> {
             String username = generateUsernameFromEmail(request.companyEmail());
 
             boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());
@@ -1019,6 +973,7 @@ public class AccountProvisioningService {
     @Transactional
     public Account createAccount(String name, String companyEmail, String companyDocNumber,
                                       String adminUsername, String adminEmail, String adminPassword) {
+    	log.info("provisionando");
 
         TenantContext.clear(); // PUBLIC
 
@@ -1110,15 +1065,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusService {
 
-    private final PublicExecutor publicExec;
-    private final TenantExecutor tenantExec;
-    private final TxExecutor tx;
+    private final PublicExecutor publicExecutor;
+    private final TenantExecutor tenantExecutor;
+    private final TxExecutor txExecutor;
 
     private final AccountRepository accountRepository;
     private final TenantUserRepository tenantUserRepository;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return tx.publicTx(() -> publicExec.run(() -> {
+        return txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -1157,17 +1112,17 @@ public class AccountStatusService {
 
     private int cancelAccount(Account account) {
         // 1) PUBLIC (REQUIRES_NEW)
-        tx.publicRequiresNew(() -> publicExec.run(() -> {
+        txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
             account.setDeletedAt(LocalDateTime.now());
             accountRepository.save(account);
             return null;
         }));
 
         // 2) TENANT (REQUIRES_NEW), best-effort (retorna 0 se schema/tabela não existir)
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> {
+            () -> txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(TenantUser::softDelete);
                 tenantUserRepository.saveAll(users);
@@ -1178,25 +1133,25 @@ public class AccountStatusService {
     }
 
     protected int suspendTenantUsersByAccount(Account account) {
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
+            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
             0
         );
     }
 
     protected int unsuspendTenantUsersByAccount(Account account) {
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
+            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
             0
         );
     }
 
     public void softDeleteAccount(Long accountId) {
-        tx.publicTx(() -> publicExec.run(() -> {
+        txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -1215,7 +1170,7 @@ public class AccountStatusService {
     }
 
     public void restoreAccount(Long accountId) {
-        tx.publicTx(() -> publicExec.run(() -> {
+        txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -1239,10 +1194,10 @@ public class AccountStatusService {
     }
 
     private void softDeleteTenantUsers(Long accountId) {
-        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
+        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
 
-        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            tx.tenantRequiresNew(() -> {
+        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
                 tenantUserRepository.saveAll(users);
@@ -1253,10 +1208,10 @@ public class AccountStatusService {
     }
 
     private void restoreTenantUsers(Long accountId) {
-        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
+        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
 
-        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            tx.tenantRequiresNew(() -> {
+        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(u -> { if (u.isDeleted()) u.restore(); });
                 tenantUserRepository.saveAll(users);
@@ -1290,6 +1245,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
@@ -1305,41 +1261,44 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class AccountTenantUserService {
+	
+	private final TenantUserApiMapper tenantUserApiMapper;
 
-    private final PublicExecutor publicExec;
-    private final TenantExecutor tenantExec;
-    private final TxExecutor tx;
+
+    private final PublicExecutor publicExecutor;
+    private final TenantExecutor tenantExecutor;
+    private final TxExecutor txExecutor;
 
     private final AccountRepository accountRepository;
     private final TenantUserRepository tenantUserRepository;
 
     public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
 
-        Account account = publicExec.run(() ->
+        Account account = publicExecutor.run(() ->
             accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        return tenantExec.runOrThrow(account.getSchemaName(), "users_tenant", () ->
-            tx.tenantReadOnlyTx(() -> {
+        return tenantExecutor.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+            txExecutor.tenantReadOnlyTx(() -> {
                 List<TenantUser> users = onlyActive
                     ? tenantUserRepository.findActiveUsersByAccount(account.getId())
                     : tenantUserRepository.findByAccountId(account.getId());
 
-                return users.stream().map(AccountUserSummaryResponse::from).toList();
+                return users.stream().map(tenantUserApiMapper::toAccountUserSummary).toList();
             })
         );
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
-        Account account = publicExec.run(() ->
+        Account account = publicExecutor.run(() ->
             accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        tenantExec.runOrThrow(account.getSchemaName(), "users_tenant", () ->
-            tx.tenantTx(() -> {
+        tenantExecutor.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+            txExecutor.tenantTx(() -> {
                 int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
                 if (updated == 0) {
                     throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
@@ -1370,7 +1329,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
     public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
@@ -1402,13 +1361,13 @@ public class AdminAuthService {
                 )
         );
 
-        String accessToken = tokenProvider.generateControlPlaneToken(
+        String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
                 "public"
         );
 
-        String refreshToken = tokenProvider.generateRefreshToken(
+        String refreshToken = jwtTokenProvider.generateRefreshToken(
                 user.getUsername(),
                 "public"
         );
@@ -2073,6 +2032,7 @@ public class ControlPlaneUserService {
 
      
         user.softDelete(now, suffix);
+        controlPlaneUserRepository.save(user);
 
     }
     
@@ -5048,7 +5008,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TenantUserAdminController {
 
-    private final AccountLifecycleService accountProvisioningService;
+    private final AccountLifecycleService accountLifecycleService;
 
     @PatchMapping("/{userId}/suspend")
     public ResponseEntity<Void> suspendUser(
@@ -5056,7 +5016,7 @@ public class TenantUserAdminController {
             @RequestBody TenantUserAdminSuspendRequest req,
             @AuthenticationPrincipal AuthenticatedUserContext me
     ) {
-        accountProvisioningService.setUserSuspendedByAdmin(me.getAccountId(), userId, req.suspended());
+        accountLifecycleService.setUserSuspendedByAdmin(me.getAccountId(), userId, req.suspended());
         return ResponseEntity.noContent().build();
     }
 }
@@ -5944,6 +5904,7 @@ public class TenantProductService {
 package brito.com.multitenancy001.tenant.application;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -5964,6 +5925,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserService {
 
+	private final TenantUserApiMapper tenantUserApiMapper;
+
+	
     private final TenantUserTxService tenantUserTxService; // ✅ novo
     private final AccountRepository accountRepository; // PUBLIC
     private final JwtTokenProvider jwtTokenProvider;
@@ -6053,8 +6017,10 @@ public class TenantUserService {
     
     
     private AccountUserSummaryResponse toSummary(TenantUser u) {
-        return AccountUserSummaryResponse.from(u);
+        return tenantUserApiMapper.toAccountUserSummary(u);
     }
+
+
 
     private TenantUserDetailsResponse toDetails(TenantUser u) {
         return TenantUserDetailsResponse.from(u);

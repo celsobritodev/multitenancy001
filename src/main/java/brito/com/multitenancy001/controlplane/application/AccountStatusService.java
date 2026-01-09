@@ -24,15 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusService {
 
-    private final PublicExecutor publicExec;
-    private final TenantExecutor tenantExec;
-    private final TxExecutor tx;
+    private final PublicExecutor publicExecutor;
+    private final TenantExecutor tenantExecutor;
+    private final TxExecutor txExecutor;
 
     private final AccountRepository accountRepository;
     private final TenantUserRepository tenantUserRepository;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return tx.publicTx(() -> publicExec.run(() -> {
+        return txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -71,17 +71,17 @@ public class AccountStatusService {
 
     private int cancelAccount(Account account) {
         // 1) PUBLIC (REQUIRES_NEW)
-        tx.publicRequiresNew(() -> publicExec.run(() -> {
+        txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
             account.setDeletedAt(LocalDateTime.now());
             accountRepository.save(account);
             return null;
         }));
 
         // 2) TENANT (REQUIRES_NEW), best-effort (retorna 0 se schema/tabela não existir)
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> {
+            () -> txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(TenantUser::softDelete);
                 tenantUserRepository.saveAll(users);
@@ -92,25 +92,25 @@ public class AccountStatusService {
     }
 
     protected int suspendTenantUsersByAccount(Account account) {
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
+            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
             0
         );
     }
 
     protected int unsuspendTenantUsersByAccount(Account account) {
-        return tenantExec.runIfReady(
+        return tenantExecutor.runIfReady(
             account.getSchemaName(),
             "users_tenant",
-            () -> tx.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
+            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
             0
         );
     }
 
     public void softDeleteAccount(Long accountId) {
-        tx.publicTx(() -> publicExec.run(() -> {
+        txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -129,7 +129,7 @@ public class AccountStatusService {
     }
 
     public void restoreAccount(Long accountId) {
-        tx.publicTx(() -> publicExec.run(() -> {
+        txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -153,10 +153,10 @@ public class AccountStatusService {
     }
 
     private void softDeleteTenantUsers(Long accountId) {
-        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
+        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
 
-        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            tx.tenantRequiresNew(() -> {
+        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
                 tenantUserRepository.saveAll(users);
@@ -167,10 +167,10 @@ public class AccountStatusService {
     }
 
     private void restoreTenantUsers(Long accountId) {
-        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
+        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
 
-        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            tx.tenantRequiresNew(() -> {
+        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            txExecutor.tenantRequiresNew(() -> {
                 List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
                 users.forEach(u -> { if (u.isDeleted()) u.restore(); });
                 tenantUserRepository.saveAll(users);

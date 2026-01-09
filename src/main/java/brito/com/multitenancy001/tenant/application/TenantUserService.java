@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.tenant.application;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -21,6 +22,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserService {
 
+	private final TenantUserApiMapper tenantUserApiMapper;
+
+	
     private final TenantUserTxService tenantUserTxService; // ✅ novo
     private final AccountRepository accountRepository; // PUBLIC
     private final JwtTokenProvider jwtTokenProvider;
@@ -110,8 +114,10 @@ public class TenantUserService {
     
     
     private AccountUserSummaryResponse toSummary(TenantUser u) {
-        return AccountUserSummaryResponse.from(u);
+        return tenantUserApiMapper.toAccountUserSummary(u);
     }
+
+
 
     private TenantUserDetailsResponse toDetails(TenantUser u) {
         return TenantUserDetailsResponse.from(u);

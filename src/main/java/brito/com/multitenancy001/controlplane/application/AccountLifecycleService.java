@@ -39,8 +39,8 @@ public class AccountLifecycleService {
     private final AccountRepository accountRepository;
 
     private final AccountOnboardingService onboardingService;
-    private final AccountStatusService statusService;
-    private final AccountTenantUserService tenantUserService;
+    private final AccountStatusService accountStatusService;
+    private final AccountTenantUserService accountTenantUserService;
 
     /* =========================================================
        1. ONBOARDING / SIGNUP
@@ -94,15 +94,15 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
        ========================================================= */
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return statusService.changeAccountStatus(accountId, req);
+        return accountStatusService.changeAccountStatus(accountId, req);
     }
 
     public void softDeleteAccount(Long accountId) {
-        statusService.softDeleteAccount(accountId);
+        accountStatusService.softDeleteAccount(accountId);
     }
 
     public void restoreAccount(Long accountId) {
-        statusService.restoreAccount(accountId);
+        accountStatusService.restoreAccount(accountId);
     }
 
     /* =========================================================
@@ -110,10 +110,10 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
        ========================================================= */
 
     public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-        return tenantUserService.listTenantUsers(accountId, onlyActive);
+        return accountTenantUserService.listTenantUsers(accountId, onlyActive);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        tenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
+        accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
     }
 }

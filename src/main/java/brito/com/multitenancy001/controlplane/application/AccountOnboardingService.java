@@ -31,13 +31,13 @@ public class AccountOnboardingService {
 	private final AccountApiMapper accountApiMapper;
 	
 	private final PublicExecutor publicExec;
-	private final TxExecutor tx;
-	private final TenantExecutor tenantExec;
+	private final TxExecutor txExecutor;
+	private final TenantExecutor tenantExecutor;
 
 	
 	
 	private final PublicAccountService publicAccountService;
-	  private final TenantSchemaProvisioningService tenantSchemaService;
+	  private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 	  private final TenantUserRepository tenantUserRepository;
 	  private final PasswordEncoder passwordEncoder;
 	   private final AccountRepository accountRepository;
@@ -50,11 +50,11 @@ public class AccountOnboardingService {
 	   public AccountResponse createAccount(SignupRequest request) {
 		    validateSignupRequest(request);
 
-		    Account account = tx.publicTx(() ->
+		    Account account = txExecutor.publicTx(() ->
 		        publicExec.run(() -> publicAccountService.createAccountFromSignup(request))
 		    );
 
-		    tenantSchemaService.schemaMigrationService(account.getSchemaName());
+		    tenantSchemaProvisioningService.schemaMigrationService(account.getSchemaName());
 
 		    createTenantAdminInTenant(account, request);
 
@@ -66,8 +66,8 @@ public class AccountOnboardingService {
 
     
    protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
-    return tenantExec.run(account.getSchemaName(), () ->
-        tx.tenantTx(() -> {
+    return tenantExecutor.run(account.getSchemaName(), () ->
+        txExecutor.tenantTx(() -> {
             String username = generateUsernameFromEmail(request.companyEmail());
 
             boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());

@@ -6,16 +6,15 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import lombok.RequiredArgsConstructor;
 
 @Component
+@RequiredArgsConstructor
 public class AccountApiMapper {
 	
 	private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
 	
-	public AccountApiMapper(ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
-
-	    this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
-	}
+	
 
     public AccountResponse toResponse(Account account) {
         return new AccountResponse(

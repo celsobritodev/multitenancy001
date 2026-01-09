@@ -163,6 +163,7 @@ public class ControlPlaneUserService {
 
      
         user.softDelete(now, suffix);
+        controlPlaneUserRepository.save(user);
 
     }
     

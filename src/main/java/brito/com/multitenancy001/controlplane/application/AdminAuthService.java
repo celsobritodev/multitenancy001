@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminAuthService {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
     public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
@@ -51,13 +51,13 @@ public class AdminAuthService {
                 )
         );
 
-        String accessToken = tokenProvider.generateControlPlaneToken(
+        String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
                 "public"
         );
 
-        String refreshToken = tokenProvider.generateRefreshToken(
+        String refreshToken = jwtTokenProvider.generateRefreshToken(
                 user.getUsername(),
                 "public"
         );
