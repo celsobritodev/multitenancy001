@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.account.application;
+package brito.com.multitenancy001.controlplane.application;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;

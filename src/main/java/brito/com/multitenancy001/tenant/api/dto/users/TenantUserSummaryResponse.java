@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.api.dto.users;
 
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 public record TenantUserSummaryResponse(
 	    Long id,

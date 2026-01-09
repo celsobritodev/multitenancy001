@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.shared.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

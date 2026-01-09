@@ -12,7 +12,7 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +20,10 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AccountLifecycleService {
+	
+	private final PublicExecutor publicExec;
+
+	
 
     private final AccountRepository accountRepository;
 
@@ -41,30 +45,34 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
-        TenantSchemaContext.clearTenantSchema();
-        return accountRepository.findAllByDeletedFalse()
+        return publicExec.run(() ->
+            accountRepository.findAllByDeletedFalse()
                 .stream()
                 .map(AccountResponse::fromEntity)
-                .toList();
+                .toList()
+        );
     }
+
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountByIdWithAdmin(Long accountId) {
-        TenantSchemaContext.clearTenantSchema();
-        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+        return publicExec.run(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-        return AccountResponse.fromEntity(account);
+            return AccountResponse.fromEntity(account);
+        });
     }
+
 
     @Transactional(readOnly = true)
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        TenantSchemaContext.clearTenantSchema();
-        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+        return publicExec.run(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-        // (Se você ainda não tem lookup do admin do tenant, mantém null)
-        return AccountAdminDetailsResponse.from(account, null);
+            return AccountAdminDetailsResponse.from(account, null);
+        });
     }
+
 
     /* =========================================================
        3. STATUS / SOFT DELETE / RESTORE

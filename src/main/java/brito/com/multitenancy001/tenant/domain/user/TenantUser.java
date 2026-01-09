@@ -1,7 +1,6 @@
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.user;
 
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;

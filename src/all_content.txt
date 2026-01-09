@@ -1,96 +1,3 @@
-package brito.com.multitenancy001.controlplane.account.application;
-
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class AccountProvisioningService {
-
-    private final AccountRepository accountRepository;
-    private final TenantSchemaProvisioningService tenantSchemaProvisionService;
-
-    @Transactional
-    public Account createAccount(String name, String companyEmail, String companyDocNumber,
-                                      String adminUsername, String adminEmail, String adminPassword) {
-
-        TenantSchemaContext.clearTenantSchema(); // PUBLIC
-
-        Account account = createAccountTx(name, companyEmail, companyDocNumber);
-
-        try {
-            // TENANT
-            TenantSchemaContext.bindTenantSchema(account.getSchemaName());
-            tenantSchemaProvisionService.schemaMigrationService(account.getSchemaName());
-
-            // cria admin com JPA no schema bindado
-            tenantSchemaProvisionService.tenantAdminBootstrapService(account, adminUsername, adminEmail, adminPassword);
-
-            return account;
-
-        } finally {
-            TenantSchemaContext.clearTenantSchema();
-        }
-    }
-
-    @Transactional
-    protected Account createAccountTx(String name, String companyEmail, String companyDocNumber) {
-
-        int maxAttempts = 5;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            String slug = generateSlug(name);
-            String schemaName = generateSchemaName(slug);
-
-            try {
-                Account account = Account.builder()
-                        .name(name)
-                        .slug(slug)
-                        .schemaName(schemaName)
-                        .companyEmail(companyEmail)
-                        .companyDocNumber(companyDocNumber)
-                        .status(AccountStatus.FREE_TRIAL)
-                        .createdAt(LocalDateTime.now())
-                        .trialEndDate(LocalDateTime.now().plusDays(30))
-                        .systemAccount(false)
-                        .build();
-
-                return accountRepository.save(account);
-
-            } catch (DataIntegrityViolationException e) {
-                log.warn("⚠️ collision attempt {}/{} | slug={} schema={}", attempt, maxAttempts, slug, schemaName);
-                if (attempt == maxAttempts) {
-                    throw new ApiException("ACCOUNT_CREATE_FAILED",
-                            "Não foi possível criar conta (colisão). Tente novamente.", 409);
-                }
-            }
-        }
-
-        throw new ApiException("ACCOUNT_CREATE_FAILED", "Falha inesperada ao criar conta.", 500);
-    }
-
-    private String generateSlug(String name) {
-        String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
-        return base.isBlank() ? "tenant" : base;
-    }
-
-    private String generateSchemaName(String slug) {
-        return "tenant_" + slug.replace("-", "_") + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
-}
 package brito.com.multitenancy001.controlplane.api.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
@@ -717,7 +624,7 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import lombok.RequiredArgsConstructor;
@@ -725,6 +632,10 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AccountLifecycleService {
+	
+	private final PublicExecutor publicExec;
+
+	
 
     private final AccountRepository accountRepository;
 
@@ -746,30 +657,34 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
-        TenantSchemaContext.clearTenantSchema();
-        return accountRepository.findAllByDeletedFalse()
+        return publicExec.run(() ->
+            accountRepository.findAllByDeletedFalse()
                 .stream()
                 .map(AccountResponse::fromEntity)
-                .toList();
+                .toList()
+        );
     }
+
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountByIdWithAdmin(Long accountId) {
-        TenantSchemaContext.clearTenantSchema();
-        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+        return publicExec.run(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-        return AccountResponse.fromEntity(account);
+            return AccountResponse.fromEntity(account);
+        });
     }
+
 
     @Transactional(readOnly = true)
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        TenantSchemaContext.clearTenantSchema();
-        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+        return publicExec.run(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-        // (Se você ainda não tem lookup do admin do tenant, mantém null)
-        return AccountAdminDetailsResponse.from(account, null);
+            return AccountAdminDetailsResponse.from(account, null);
+        });
     }
+
 
     /* =========================================================
        3. STATUS / SOFT DELETE / RESTORE
@@ -805,18 +720,19 @@ import java.time.LocalDateTime;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
+import brito.com.multitenancy001.infra.exec.TenantExecutor;
+import brito.com.multitenancy001.infra.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -827,7 +743,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 	
-	  private final PublicAccountService publicAccountService;
+	  
+	private final PublicExecutor publicExec;
+	private final TxExecutor tx;
+	private final TenantExecutor tenantExec;
+
+	
+	
+	private final PublicAccountService publicAccountService;
 	  private final TenantSchemaProvisioningService tenantSchemaService;
 	  private final TenantUserRepository tenantUserRepository;
 	  private final PasswordEncoder passwordEncoder;
@@ -838,31 +761,27 @@ public class AccountOnboardingService {
        1. CRIAÇÃO DE CONTA 
        ========================================================= */
 
-    public AccountResponse createAccount(SignupRequest request) {
-        validateSignupRequest(request);
+	   public AccountResponse createAccount(SignupRequest request) {
+		    validateSignupRequest(request);
 
-        TenantSchemaContext.clearTenantSchema(); // garante PUBLIC
+		    Account account = tx.publicTx(() ->
+		        publicExec.run(() -> publicAccountService.createAccountFromSignup(request))
+		    );
 
-        // A) cria no PUBLIC e COMMITA (transação do publicAccountService)
-        Account account = publicAccountService.createAccountFromSignup(request);
+		    tenantSchemaService.schemaMigrationService(account.getSchemaName());
 
-        // B) cria schema + roda flyway do tenant (sem transação JPA public aberta)
-        tenantSchemaService.schemaMigrationService(account.getSchemaName());
+		    createTenantAdminInTenant(account, request);
 
-        // C) cria admin no TENANT com tenantTransactionManager
-        createTenantAdminInTenant(account, request);
+		    log.info("✅ Account criada | accountId={} | schema={} | slug={}",
+		            account.getId(), account.getSchemaName(), account.getSlug());
 
-        log.info("✅ Account criada | accountId={} | schema={} | slug={}",
-                account.getId(), account.getSchemaName(), account.getSlug());
+		    return AccountResponse.fromEntity(account);
+		}
 
-        return AccountResponse.fromEntity(account);
-    }
     
-    
-    @Transactional(transactionManager = "tenantTransactionManager")
-    protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
-        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
-        try {
+   protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
+    return tenantExec.run(account.getSchemaName(), () ->
+        tx.tenantTx(() -> {
             String username = generateUsernameFromEmail(request.companyEmail());
 
             boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());
@@ -889,11 +808,10 @@ public class AccountOnboardingService {
             u.setLocale("pt_BR");
 
             return tenantUserRepository.save(u);
+        })
+    );
+}
 
-        } finally {
-            TenantSchemaContext.clearTenantSchema();
-        }
-    }
     
     
   
@@ -977,294 +895,310 @@ public class AccountOnboardingService {
 
 package brito.com.multitenancy001.controlplane.application;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AccountProvisioningService {
+
+    private final AccountRepository accountRepository;
+    private final TenantSchemaProvisioningService tenantSchemaProvisionService;
+
+    @Transactional
+    public Account createAccount(String name, String companyEmail, String companyDocNumber,
+                                      String adminUsername, String adminEmail, String adminPassword) {
+
+        TenantSchemaContext.clearTenantSchema(); // PUBLIC
+
+        Account account = createAccountTx(name, companyEmail, companyDocNumber);
+
+        try {
+            // TENANT
+            TenantSchemaContext.bindTenantSchema(account.getSchemaName());
+            tenantSchemaProvisionService.schemaMigrationService(account.getSchemaName());
+
+            // cria admin com JPA no schema bindado
+            tenantSchemaProvisionService.tenantAdminBootstrapService(account, adminUsername, adminEmail, adminPassword);
+
+            return account;
+
+        } finally {
+            TenantSchemaContext.clearTenantSchema();
+        }
+    }
+
+    @Transactional
+    protected Account createAccountTx(String name, String companyEmail, String companyDocNumber) {
+
+        int maxAttempts = 5;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            String slug = generateSlug(name);
+            String schemaName = generateSchemaName(slug);
+
+            try {
+                Account account = Account.builder()
+                        .name(name)
+                        .slug(slug)
+                        .schemaName(schemaName)
+                        .companyEmail(companyEmail)
+                        .companyDocNumber(companyDocNumber)
+                        .status(AccountStatus.FREE_TRIAL)
+                        .createdAt(LocalDateTime.now())
+                        .trialEndDate(LocalDateTime.now().plusDays(30))
+                        .systemAccount(false)
+                        .build();
+
+                return accountRepository.save(account);
+
+            } catch (DataIntegrityViolationException e) {
+                log.warn("⚠️ collision attempt {}/{} | slug={} schema={}", attempt, maxAttempts, slug, schemaName);
+                if (attempt == maxAttempts) {
+                    throw new ApiException("ACCOUNT_CREATE_FAILED",
+                            "Não foi possível criar conta (colisão). Tente novamente.", 409);
+                }
+            }
+        }
+
+        throw new ApiException("ACCOUNT_CREATE_FAILED", "Falha inesperada ao criar conta.", 500);
+    }
+
+    private String generateSlug(String name) {
+        String base = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        return base.isBlank() ? "tenant" : base;
+    }
+
+    private String generateSchemaName(String slug) {
+        return "tenant_" + slug.replace("-", "_") + "_" + UUID.randomUUID().toString().substring(0, 8);
+    }
+}
+package brito.com.multitenancy001.controlplane.application;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
+import brito.com.multitenancy001.infra.exec.TenantExecutor;
+import brito.com.multitenancy001.infra.exec.TxExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AccountStatusService {
-	
-	 private final AccountRepository accountRepository;
-	 
-	 private final TenantSchemaProvisioningService tenantSchemaService;
-	  private final TenantUserRepository tenantUserRepository;
-	
-	  @Transactional(transactionManager = "publicTransactionManager")
-	  public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-	    TenantSchemaContext.clearTenantSchema();
 
-	    Account account = accountRepository.findById(accountId)
-	            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+    private final PublicExecutor publicExec;
+    private final TenantExecutor tenantExec;
+    private final TxExecutor tx;
 
-	    if (account.isSystemAccount()) {
-	        throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
-	                "Contas do sistema não podem ter seu status alterado", 403);
-	    }
+    private final AccountRepository accountRepository;
+    private final TenantUserRepository tenantUserRepository;
 
-	    AccountStatus previous = account.getStatus();
-	    AccountStatus next = req.status();
+    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
+        return tx.publicTx(() -> publicExec.run(() -> {
 
-	    if (previous == next) {
-	        return buildStatusChangeResponse(account, previous, false, "NONE", 0);
-	    }
+            Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-	    if (previous == AccountStatus.CANCELLED) {
-	        throw new ApiException("ACCOUNT_CANCELLED",
-	                "Conta cancelada não pode ter status alterado", 409);
-	    }
+            AccountStatus previous = account.getStatus(); // ✅ captura antes de alterar
 
-	    if (next == AccountStatus.FREE_TRIAL && previous != AccountStatus.FREE_TRIAL) {
-	        throw new ApiException("INVALID_STATUS_TRANSITION",
-	                "Não é permitido voltar para FREE_TRIAL", 409);
-	    }
+            // ... mantenha aqui suas regras de transição, validações, etc ...
 
-	    // 1) grava em PUBLIC
-	    account.setStatus(next);
-	    if (next == AccountStatus.ACTIVE) account.setDeletedAt(null);
-	    accountRepository.save(account);
+            account.setStatus(req.status());
+            if (req.status() == AccountStatus.ACTIVE) {
+                account.setDeletedAt(null);
+            }
+            accountRepository.save(account);
 
-	    // 2) side-effects no tenant
-	    int affected = 0;
-	    boolean applied = false;
-	    String action = "NONE";
+            int affected = 0;
+            boolean applied = false;
+            String action = "NONE";
 
-	    if (next == AccountStatus.SUSPENDED) {
-	        affected = suspendTenantUsersByAccount(account);
-	        applied = true;
-	        action = "SUSPEND_BY_ACCOUNT";
-	    } else if (next == AccountStatus.ACTIVE) {
-	        // ✅ reativar todos por conta, mantendo suspensosByAdmin
-	        affected = unsuspendTenantUsersByAccount(account);
-	        applied = true;
-	        action = "UNSUSPEND_BY_ACCOUNT";
-	    } else if (next == AccountStatus.CANCELLED) {
-	        affected = cancelAccount(account);
-	        applied = true;
-	        action = "CANCELLED";
-	    }
+            if (req.status() == AccountStatus.SUSPENDED) {
+                affected = suspendTenantUsersByAccount(account);
+                applied = true;
+                action = "SUSPEND_BY_ACCOUNT";
+            } else if (req.status() == AccountStatus.ACTIVE) {
+                affected = unsuspendTenantUsersByAccount(account);
+                applied = true;
+                action = "UNSUSPEND_BY_ACCOUNT";
+            } else if (req.status() == AccountStatus.CANCELLED) {
+                affected = cancelAccount(account);
+                applied = true;
+                action = "CANCELLED";
+            }
 
-	    return buildStatusChangeResponse(account, previous, applied, action, affected);
-	}
-	  
-	  
+            return buildStatusChangeResponse(account, previous, applied, action, affected);
+        }));
+    }
 
-	    private int cancelAccount(Account account) {
-	        // 1) PUBLIC
-	        cancelAccountPublicTx(account);
+    private int cancelAccount(Account account) {
+        // 1) PUBLIC (REQUIRES_NEW)
+        tx.publicRequiresNew(() -> publicExec.run(() -> {
+            account.setDeletedAt(LocalDateTime.now());
+            accountRepository.save(account);
+            return null;
+        }));
 
-	        // 2) TENANT (se existir)
-	        String schema = account.getSchemaName();
-	        boolean schemaOk = tenantSchemaService.validateTenantSchema(schema);
-	        boolean tableOk = schemaOk && tenantSchemaService.tableExists(schema, "users_tenant");
-	        if (!tableOk) return 0;
+        // 2) TENANT (REQUIRES_NEW), best-effort (retorna 0 se schema/tabela não existir)
+        return tenantExec.runIfReady(
+            account.getSchemaName(),
+            "users_tenant",
+            () -> tx.tenantRequiresNew(() -> {
+                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
+                users.forEach(TenantUser::softDelete);
+                tenantUserRepository.saveAll(users);
+                return users.size();
+            }),
+            0
+        );
+    }
 
-	        TenantSchemaContext.bindTenantSchema(schema);
-	        try {
-	            return cancelAccountTenantTx(account);
-	        } finally {
-	            TenantSchemaContext.clearTenantSchema();
-	        }
-	    }
-	    
+    protected int suspendTenantUsersByAccount(Account account) {
+        return tenantExec.runIfReady(
+            account.getSchemaName(),
+            "users_tenant",
+            () -> tx.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
+            0
+        );
+    }
 
-	    @Transactional(transactionManager = "publicTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected void cancelAccountPublicTx(Account account) {
-	        TenantSchemaContext.clearTenantSchema();
-	        account.setDeletedAt(LocalDateTime.now());
-	        accountRepository.save(account);
-	    }
-	    
-	    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected int cancelAccountTenantTx(Account account) {
-	        List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-	        users.forEach(TenantUser::softDelete);
-	        tenantUserRepository.saveAll(users);
-	        return users.size();
-	    }
+    protected int unsuspendTenantUsersByAccount(Account account) {
+        return tenantExec.runIfReady(
+            account.getSchemaName(),
+            "users_tenant",
+            () -> tx.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
+            0
+        );
+    }
 
+    public void softDeleteAccount(Long accountId) {
+        tx.publicTx(() -> publicExec.run(() -> {
 
+            Account account = getAccountByIdRaw(accountId);
 
+            if (account.isSystemAccount()) {
+                throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
+                        "Não é permitido excluir contas do sistema", 403);
+            }
 
-	    private AccountStatusChangeResponse buildStatusChangeResponse(
-	 	        Account account,
-	 	        AccountStatus previous,
-	 	        boolean tenantUsersUpdated,
-	 	        String action,
-	 	        int count
-	 	) {
-	 	    return new AccountStatusChangeResponse(
-	 	            account.getId(),
-	 	            account.getStatus().name(),
-	 	            previous.name(),
-	 	            LocalDateTime.now(),
-	 	            account.getSchemaName(),
-	 	            new AccountStatusChangeResponse.SideEffects(tenantUsersUpdated, action, count)
-	 	    );
-	 	}
-	    
-	    
-	    
-	    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected int suspendTenantUsersByAccount(Account account) {
-	        String schema = account.getSchemaName();
+            account.softDelete();
+            accountRepository.save(account);
 
-	        if ("public".equals(schema)) return 0;
-	        if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
-	        if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
+            softDeleteTenantUsers(accountId);
 
-	        TenantSchemaContext.bindTenantSchema(schema);
-	        try {
-	            // ✅ UPDATE em massa: suspendedByAccount = true, preserva suspendedByAdmin
-	            return tenantUserRepository.suspendAllByAccount(account.getId());
-	        } finally {
-	            TenantSchemaContext.clearTenantSchema();
-	        }
-	    }
+            return null;
+        }));
+    }
 
-	    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected int unsuspendTenantUsersByAccount(Account account) {
-	        String schema = account.getSchemaName();
+    public void restoreAccount(Long accountId) {
+        tx.publicTx(() -> publicExec.run(() -> {
 
-	        if ("public".equals(schema)) return 0;
-	        if (!tenantSchemaService.validateTenantSchema(schema)) return 0;
-	        if (!tenantSchemaService.tableExists(schema, "users_tenant")) return 0;
+            Account account = getAccountByIdRaw(accountId);
 
-	        TenantSchemaContext.bindTenantSchema(schema);
-	        try {
-	            // ✅ UPDATE em massa: suspendedByAccount = false, preserva suspendedByAdmin
-	            return tenantUserRepository.unsuspendAllByAccount(account.getId());
-	        } finally {
-	            TenantSchemaContext.clearTenantSchema();
-	        }
-	    }
-	    
+            if (account.isSystemAccount() && account.isDeleted()) {
+                throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
+                        "Contas do sistema não podem ser restauradas via este endpoint", 403);
+            }
 
-	    @Transactional(transactionManager = "publicTransactionManager")
-	    public void softDeleteAccount(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
+            account.restore();
+            accountRepository.save(account);
 
-	        if (account.isSystemAccount()) {
-	            throw new ApiException("SYSTEM_ACCOUNT_PROTECTED", 
-	                    "Não é permitido excluir contas do sistema", 403);
-	        }
+            restoreTenantUsers(accountId);
 
-	        softDeleteAccountTx(accountId);
-	        softDeleteTenantUsersTx(accountId);
-	    }
+            return null;
+        }));
+    }
 
-	    @Transactional(transactionManager = "publicTransactionManager")
-	    protected void softDeleteAccountTx(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
-	        account.softDelete();
-	        accountRepository.save(account);
-	    }
+    private Account getAccountByIdRaw(Long accountId) {
+        return accountRepository.findById(accountId)
+            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+    }
 
-	    @Transactional(transactionManager = "publicTransactionManager")
-	    public void restoreAccount(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
+    private void softDeleteTenantUsers(Long accountId) {
+        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
 
-	        if (account.isSystemAccount() && account.isDeleted()) {
-	            throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
-	                    "Contas do sistema não podem ser restauradas via este endpoint", 403);
-	        }
+        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            tx.tenantRequiresNew(() -> {
+                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
+                users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
+                tenantUserRepository.saveAll(users);
+                return null;
+            });
+            return null;
+        }, null);
+    }
 
-	        restoreAccountTx(accountId);
-	        restoreTenantUsersTx(accountId);
-	    }
+    private void restoreTenantUsers(Long accountId) {
+        Account account = tx.publicReadOnlyTx(() -> publicExec.run(() -> getAccountByIdRaw(accountId)));
 
-	    @Transactional(transactionManager = "publicTransactionManager")
-	    protected void restoreAccountTx(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
-	        account.restore();
-	        accountRepository.save(account);
-	    }
-	    
-	    @Transactional(transactionManager = "publicTransactionManager", readOnly = true)
-	    public Account getAccountById(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        return accountRepository.findById(accountId)
-	                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-	    }
-	    
-	    
-	    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected void softDeleteTenantUsersTx(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
+        tenantExec.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+            tx.tenantRequiresNew(() -> {
+                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
+                users.forEach(u -> { if (u.isDeleted()) u.restore(); });
+                tenantUserRepository.saveAll(users);
+                return null;
+            });
+            return null;
+        }, null);
+    }
 
-	        if (!tenantSchemaService.validateTenantSchema(account.getSchemaName())) return;
-	        if (!tenantSchemaService.tableExists(account.getSchemaName(), "users_tenant")) return;
-
-	        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
-	        try {
-	            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-	            users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-	            tenantUserRepository.saveAll(users);
-	        } finally {
-	            TenantSchemaContext.clearTenantSchema();
-	        }
-	    }
-
-	    @Transactional(transactionManager = "tenantTransactionManager", propagation = Propagation.REQUIRES_NEW)
-	    protected void restoreTenantUsersTx(Long accountId) {
-	        TenantSchemaContext.clearTenantSchema();
-	        Account account = getAccountById(accountId);
-
-	        if (!tenantSchemaService.validateTenantSchema(account.getSchemaName())) return;
-	        if (!tenantSchemaService.tableExists(account.getSchemaName(), "users_tenant")) return;
-
-	        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
-	        try {
-	            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-	            users.forEach(u -> { if (u.isDeleted()) u.restore(); });
-	            tenantUserRepository.saveAll(users);
-	        } finally {
-	            TenantSchemaContext.clearTenantSchema();
-	        }
-	    }
-
-
-
-
-
+    private AccountStatusChangeResponse buildStatusChangeResponse(
+            Account account,
+            AccountStatus previous,
+            boolean tenantUsersUpdated,
+            String action,
+            int count
+    ) {
+        return new AccountStatusChangeResponse(
+                account.getId(),
+                account.getStatus().name(),
+                previous.name(),
+                LocalDateTime.now(),
+                account.getSchemaName(),
+                new AccountStatusChangeResponse.SideEffects(tenantUsersUpdated, action, count)
+        );
+    }
 }
 package brito.com.multitenancy001.controlplane.application;
 
 import java.util.List;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
+import brito.com.multitenancy001.infra.exec.TenantExecutor;
+import brito.com.multitenancy001.infra.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
-import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -1274,75 +1208,48 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountTenantUserService {
 
-	private final AccountRepository accountRepository;
-	private final TenantSchemaProvisioningService tenantSchemaService;
-	private final TenantUserRepository tenantUserRepository;
+    private final PublicExecutor publicExec;
+    private final TenantExecutor tenantExec;
+    private final TxExecutor tx;
 
-	public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-		// resolve conta em PUBLIC
-		TenantSchemaContext.clearTenantSchema();
-		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+    private final AccountRepository accountRepository;
+    private final TenantUserRepository tenantUserRepository;
 
-		String schema = account.getSchemaName();
+    public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
 
-		if (!tenantSchemaService.validateTenantSchema(schema)) {
-			throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant não existe", 404);
-		}
-		if (!tenantSchemaService.tableExists(schema, "users_tenant")) {
-			throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela users_tenant não existe no tenant", 404);
-		}
+        Account account = publicExec.run(() ->
+            accountRepository.findByIdAndDeletedFalse(accountId)
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+        );
 
-		TenantSchemaContext.bindTenantSchema(schema);
-		try {
-			return listTenantUsersTx(account.getId(), onlyActive);
-		} finally {
-			TenantSchemaContext.clearTenantSchema();
-		}
-	}
+        return tenantExec.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+            tx.tenantReadOnlyTx(() -> {
+                List<TenantUser> users = onlyActive
+                    ? tenantUserRepository.findActiveUsersByAccount(account.getId())
+                    : tenantUserRepository.findByAccountId(account.getId());
 
-	@Transactional(transactionManager = "tenantTransactionManager", readOnly = true)
-	protected List<TenantUserSummaryResponse> listTenantUsersTx(Long accountId, boolean onlyActive) {
-		List<TenantUser> users;
+                return users.stream().map(TenantUserSummaryResponse::from).toList();
+            })
+        );
+    }
 
-		if (onlyActive) {
-			// Use o novo método customizado
-			users = tenantUserRepository.findActiveUsersByAccount(accountId);
-		} else {
-			users = tenantUserRepository.findByAccountId(accountId);
-		}
-		return users.stream().map(TenantUserSummaryResponse::from).toList();
+    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
-	}
+        Account account = publicExec.run(() ->
+            accountRepository.findByIdAndDeletedFalse(accountId)
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+        );
 
-	public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-		TenantSchemaContext.clearTenantSchema();
-
-		// resolve schema no PUBLIC
-		Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-		String schema = account.getSchemaName();
-		if (!tenantSchemaService.validateTenantSchema(schema)
-				|| !tenantSchemaService.tableExists(schema, "users_tenant")) {
-			throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant inválido", 404);
-		}
-
-		TenantSchemaContext.bindTenantSchema(schema);
-		try {
-			setUserSuspendedByAdminTx(accountId, userId, suspended);
-		} finally {
-			TenantSchemaContext.clearTenantSchema();
-		}
-	}
-
-	@Transactional(transactionManager = "tenantTransactionManager")
-	protected void setUserSuspendedByAdminTx(Long accountId, Long userId, boolean suspended) {
-		int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
-		if (updated == 0) {
-			throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
-		}
-	}
+        tenantExec.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+            tx.tenantTx(() -> {
+                int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
+                if (updated == 0) {
+                    throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
+                }
+                return null;
+            })
+        );
+    }
 }
 package brito.com.multitenancy001.controlplane.application;
 
@@ -2043,12 +1950,13 @@ public class PublicSchemaVerifier {
             );
             
             Integer usersCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users_account'", 
-                Integer.class
-            );
+            	    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'controlplane_users'",
+            	    Integer.class
+            	);
+
             
-            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, users={}", accountsCount, usersCount);
-            
+            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, controlplane_users={}", accountsCount, usersCount);
+
         } catch (Exception e) {
             log.error("⚠️ Aviso na verificação: {}", e.getMessage());
         }
@@ -3157,7 +3065,219 @@ public class AccountPolicy {
             );
         }
     }
-}package brito.com.multitenancy001.infra.multitenancy.hibernate;
+}package brito.com.multitenancy001.infra.exec;
+
+import java.util.function.Supplier;
+import org.springframework.stereotype.Component;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+
+@Component
+public class PublicExecutor {
+
+	public <T> T run(Supplier<T> fn) {
+	    TenantSchemaContext.bindTenantSchema("public"); // garante PUBLIC explicitamente
+	    try {
+	        return fn.get();
+	    } finally {
+	        TenantSchemaContext.clearTenantSchema();
+	    }
+	}
+
+	public void run(Runnable fn) {
+	    TenantSchemaContext.bindTenantSchema("public");
+	    try {
+	        fn.run();
+	    } finally {
+	        TenantSchemaContext.clearTenantSchema();
+	    }
+	}
+
+}
+package brito.com.multitenancy001.infra.exec;
+
+import java.util.function.Supplier;
+import org.springframework.stereotype.Component;
+import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
+
+@Component
+public class TenantExecutor {
+
+    private final TenantSchemaProvisioningService tenantSchemaService;
+
+    public TenantExecutor(TenantSchemaProvisioningService tenantSchemaService) {
+        this.tenantSchemaService = tenantSchemaService;
+    }
+
+    public <T> T run(String schema, Supplier<T> fn) {
+        TenantSchemaContext.bindTenantSchema(schema);
+        try {
+            return fn.get();
+        } finally {
+            TenantSchemaContext.clearTenantSchema();
+        }
+    }
+
+    public void run(String schema, Runnable fn) {
+    	if (schema == null || "public".equals(schema)) {
+    		   throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+    		}
+
+        run(schema, () -> { fn.run(); return null; });
+    }
+
+    /** Retorna defaultValue se schema/tabela não existir (bom p/ side-effects). */
+    public <T> T runIfReady(String schema, String requiredTable, Supplier<T> fn, T defaultValue) {
+        if (schema == null || "public".equals(schema)) return defaultValue;
+        if (!tenantSchemaService.validateTenantSchema(schema)) return defaultValue;
+        if (requiredTable != null && !tenantSchemaService.tableExists(schema, requiredTable)) return defaultValue;
+        return run(schema, fn);
+    }
+
+    /** Lança ApiException se schema/tabela não existir (bom p/ endpoints admin). */
+    public void assertReadyOrThrow(String schema, String requiredTable) {
+        if (schema == null || "public".equals(schema)) {
+            throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+        }
+        if (!tenantSchemaService.validateTenantSchema(schema)) {
+            throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant não existe", 404);
+        }
+        if (requiredTable != null && !tenantSchemaService.tableExists(schema, requiredTable)) {
+            throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela " + requiredTable + " não existe no tenant", 404);
+        }
+    }
+
+    public <T> T runOrThrow(String schema, String requiredTable, Supplier<T> fn) {
+        assertReadyOrThrow(schema, requiredTable);
+        return run(schema, fn);
+    }
+}
+package brito.com.multitenancy001.infra.exec;
+
+import java.util.function.Supplier;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@Component
+public class TxExecutor {
+
+    private final TransactionTemplate publicTx;
+    private final TransactionTemplate publicRequiresNew;
+
+    private final TransactionTemplate publicReadOnlyTx;
+    private final TransactionTemplate publicRequiresNewReadOnly;
+
+    private final TransactionTemplate tenantTx;
+    private final TransactionTemplate tenantRequiresNew;
+
+    private final TransactionTemplate tenantReadOnlyTx;
+    private final TransactionTemplate tenantRequiresNewReadOnly;
+
+    public TxExecutor(
+            @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
+            @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
+    ) {
+        // PUBLIC - REQUIRED
+        this.publicTx = new TransactionTemplate(publicTm);
+        this.publicTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
+        // PUBLIC - REQUIRES_NEW
+        this.publicRequiresNew = new TransactionTemplate(publicTm);
+        this.publicRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        // PUBLIC - REQUIRED READONLY
+        this.publicReadOnlyTx = new TransactionTemplate(publicTm);
+        this.publicReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.publicReadOnlyTx.setReadOnly(true);
+
+        // PUBLIC - REQUIRES_NEW READONLY
+        this.publicRequiresNewReadOnly = new TransactionTemplate(publicTm);
+        this.publicRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.publicRequiresNewReadOnly.setReadOnly(true);
+
+        // TENANT - REQUIRED
+        this.tenantTx = new TransactionTemplate(tenantTm);
+        this.tenantTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
+        // TENANT - REQUIRES_NEW
+        this.tenantRequiresNew = new TransactionTemplate(tenantTm);
+        this.tenantRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        // TENANT - REQUIRED READONLY
+        this.tenantReadOnlyTx = new TransactionTemplate(tenantTm);
+        this.tenantReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.tenantReadOnlyTx.setReadOnly(true);
+
+        // TENANT - REQUIRES_NEW READONLY
+        this.tenantRequiresNewReadOnly = new TransactionTemplate(tenantTm);
+        this.tenantRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.tenantRequiresNewReadOnly.setReadOnly(true);
+    }
+
+    // ---------- PUBLIC ----------
+    public <T> T publicTx(Supplier<T> fn) {
+        return publicTx.execute(status -> fn.get());
+    }
+    public void publicTx(Runnable fn) {
+        publicTx.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T publicRequiresNew(Supplier<T> fn) {
+        return publicRequiresNew.execute(status -> fn.get());
+    }
+    public void publicRequiresNew(Runnable fn) {
+        publicRequiresNew.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T publicReadOnlyTx(Supplier<T> fn) {
+        return publicReadOnlyTx.execute(status -> fn.get());
+    }
+    public void publicReadOnlyTx(Runnable fn) {
+        publicReadOnlyTx.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T publicRequiresNewReadOnly(Supplier<T> fn) {
+        return publicRequiresNewReadOnly.execute(status -> fn.get());
+    }
+    public void publicRequiresNewReadOnly(Runnable fn) {
+        publicRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
+    }
+
+    // ---------- TENANT ----------
+    public <T> T tenantTx(Supplier<T> fn) {
+        return tenantTx.execute(status -> fn.get());
+    }
+    public void tenantTx(Runnable fn) {
+        tenantTx.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T tenantRequiresNew(Supplier<T> fn) {
+        return tenantRequiresNew.execute(status -> fn.get());
+    }
+    public void tenantRequiresNew(Runnable fn) {
+        tenantRequiresNew.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T tenantReadOnlyTx(Supplier<T> fn) {
+        return tenantReadOnlyTx.execute(status -> fn.get());
+    }
+    public void tenantReadOnlyTx(Runnable fn) {
+        tenantReadOnlyTx.executeWithoutResult(status -> fn.run());
+    }
+
+    public <T> T tenantRequiresNewReadOnly(Supplier<T> fn) {
+        return tenantRequiresNewReadOnly.execute(status -> fn.get());
+    }
+    public void tenantRequiresNewReadOnly(Runnable fn) {
+        tenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
+    }
+}
+package brito.com.multitenancy001.infra.multitenancy.hibernate;
 
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -3930,7 +4050,7 @@ public class GlobalExceptionHandler {
 }package brito.com.multitenancy001.shared.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -4306,7 +4426,7 @@ import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.account.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -4876,10 +4996,10 @@ public record TenantUserCreateRequest(
     }
 }package brito.com.multitenancy001.tenant.api.dto.users;
 
-import brito.com.multitenancy001.tenant.model.TenantUser;
-
 import java.time.LocalDateTime;
 import java.util.List;
+
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 public record TenantUserDetailsResponse(
         Long id,
@@ -4919,7 +5039,7 @@ public record TenantUserDetailsResponse(
 }
 package brito.com.multitenancy001.tenant.api.dto.users;
 
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 public record TenantUserSummaryResponse(
 	    Long id,
@@ -5244,7 +5364,7 @@ import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -5356,7 +5476,7 @@ import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.JwtTokenProvider;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -5731,7 +5851,7 @@ import brito.com.multitenancy001.shared.security.SecurityUtils;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -5959,7 +6079,7 @@ package brito.com.multitenancy001.tenant.application;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -6226,6 +6346,195 @@ public enum TenantRole implements RoleAuthority {
     @Override
     public String asAuthority() {
         return "ROLE_" + name();
+    }
+}
+package brito.com.multitenancy001.tenant.domain.user;
+
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Pattern;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(
+    name = "users_tenant",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_user_tenant_account_username",
+            columnNames = {"account_id", "username"}
+        )
+    }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString(exclude = "password")
+public class TenantUser {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "password_reset_token", length = 255)
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_expires")
+    private LocalDateTime passwordResetExpires;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    @Column(nullable = false, length = 100)
+    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido.")
+    private String username;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false, length = 150)
+    private String email;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private TenantRole role;
+
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;
+
+    // ✅ NOVO: suspensão por conta (status da conta)
+    @Column(name = "suspended_by_account", nullable = false)
+    @Builder.Default
+    private boolean suspendedByAccount = false;
+
+    // ✅ NOVO: suspensão manual por admin do tenant
+    @Column(name = "suspended_by_admin", nullable = false)
+    @Builder.Default
+    private boolean suspendedByAdmin = false;
+
+    @ElementCollection
+    @CollectionTable(
+        name = "user_tenant_permissions",
+        joinColumns = @JoinColumn(name = "user_tenant_id")
+    )
+    @Column(name = "permission", length = 100)
+    @Builder.Default
+    private List<String> permissions = new ArrayList<>();
+
+    @Column(name = "last_login")
+    private LocalDateTime lastLogin;
+
+    @Column(name = "failed_login_attempts")
+    @Builder.Default
+    private Integer failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
+    @Column(name = "must_change_password")
+    @Builder.Default
+    private Boolean mustChangePassword = false;
+
+    @Column(name = "password_changed_at")
+    private LocalDateTime passwordChangedAt;
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "timezone", length = 50)
+    @Builder.Default
+    private String timezone = "America/Sao_Paulo";
+
+    @Column(name = "locale", length = 10)
+    @Builder.Default
+    private String locale = "pt_BR";
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted")
+    @Builder.Default
+    private boolean deleted = false;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "updated_by")
+    private Long updatedBy;
+
+    @PrePersist
+    protected void onCreate() {
+        if (username != null) username = username.toLowerCase().trim();
+        if (permissions == null) permissions = new ArrayList<>();
+        if (permissions.isEmpty()) addDefaultPermissions();
+    }
+
+    private void addDefaultPermissions() {
+        switch (role) {
+            case TENANT_ADMIN -> permissions.addAll(List.of(
+                "USER_CREATE","USER_UPDATE","USER_DELETE","USER_VIEW",
+                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_DELETE","PRODUCT_VIEW",
+                "SALE_CREATE","SALE_UPDATE","SALE_DELETE","SALE_VIEW",
+                "REPORT_VIEW","SETTINGS_MANAGE"
+            ));
+            case MANAGER -> permissions.addAll(List.of(
+                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_VIEW",
+                "SALE_CREATE","SALE_VIEW","REPORT_VIEW"
+            ));
+            case VIEWER -> permissions.addAll(List.of(
+                "USER_VIEW","PRODUCT_VIEW","SALE_VIEW","REPORT_VIEW"
+            ));
+            case USER -> permissions.add("VIEW_BASIC");
+        }
+    }
+
+    // ✅ Login permitido se não está suspenso por conta nem por admin
+    public boolean isEnabledForLogin() {
+        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) return false;
+        return !deleted && !suspendedByAccount && !suspendedByAdmin;
+    }
+
+    public void softDelete() {
+        if (deleted) return;
+        deleted = true;
+        deletedAt = LocalDateTime.now();
+
+        // ✅ deletado sempre bloqueia login
+        suspendedByAccount = true;
+        suspendedByAdmin = true;
+
+        long ts = System.currentTimeMillis();
+        username = "deleted_" + username + "_" + ts;
+        email = "deleted_" + email + "_" + ts;
+    }
+
+    public void restore() {
+        if (!deleted) return;
+        deleted = false;
+        deletedAt = null;
+
+        // ✅ ao restaurar: volta “desbloqueado” pela lógica normal
+        // (conta ativa vai controlar suspendedByAccount; admin controla suspendedByAdmin)
+        suspendedByAdmin = false;
+        // não força false em suspendedByAccount aqui — quem manda é o status da conta
     }
 }
 // ===============================
@@ -6654,197 +6963,7 @@ public class Supplier {
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
-}package brito.com.multitenancy001.tenant.model;
-
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Pattern;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-
-@Entity
-@Table(
-    name = "users_tenant",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_user_tenant_account_username",
-            columnNames = {"account_id", "username"}
-        )
-    }
-)
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@ToString(exclude = "password")
-public class TenantUser {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(name = "password_reset_token", length = 255)
-    private String passwordResetToken;
-
-    @Column(name = "password_reset_expires")
-    private LocalDateTime passwordResetExpires;
-
-    @Column(nullable = false, length = 100)
-    private String name;
-
-    @Column(nullable = false, length = 100)
-    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido.")
-    private String username;
-
-    @Column(nullable = false)
-    private String password;
-
-    @Column(nullable = false, length = 150)
-    private String email;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
-    private TenantRole role;
-
-    @Column(name = "account_id", nullable = false)
-    private Long accountId;
-
-    // ✅ NOVO: suspensão por conta (status da conta)
-    @Column(name = "suspended_by_account", nullable = false)
-    @Builder.Default
-    private boolean suspendedByAccount = false;
-
-    // ✅ NOVO: suspensão manual por admin do tenant
-    @Column(name = "suspended_by_admin", nullable = false)
-    @Builder.Default
-    private boolean suspendedByAdmin = false;
-
-    @ElementCollection
-    @CollectionTable(
-        name = "user_tenant_permissions",
-        joinColumns = @JoinColumn(name = "user_tenant_id")
-    )
-    @Column(name = "permission", length = 100)
-    @Builder.Default
-    private List<String> permissions = new ArrayList<>();
-
-    @Column(name = "last_login")
-    private LocalDateTime lastLogin;
-
-    @Column(name = "failed_login_attempts")
-    @Builder.Default
-    private Integer failedLoginAttempts = 0;
-
-    @Column(name = "locked_until")
-    private LocalDateTime lockedUntil;
-
-    @Column(name = "must_change_password")
-    @Builder.Default
-    private Boolean mustChangePassword = false;
-
-    @Column(name = "password_changed_at")
-    private LocalDateTime passwordChangedAt;
-
-    @Column(name = "phone", length = 20)
-    private String phone;
-
-    @Column(name = "avatar_url", length = 500)
-    private String avatarUrl;
-
-    @Column(name = "timezone", length = 50)
-    @Builder.Default
-    private String timezone = "America/Sao_Paulo";
-
-    @Column(name = "locale", length = 10)
-    @Builder.Default
-    private String locale = "pt_BR";
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @Column(name = "deleted")
-    @Builder.Default
-    private boolean deleted = false;
-
-    @Column(name = "created_by")
-    private Long createdBy;
-
-    @Column(name = "updated_by")
-    private Long updatedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        if (username != null) username = username.toLowerCase().trim();
-        if (permissions == null) permissions = new ArrayList<>();
-        if (permissions.isEmpty()) addDefaultPermissions();
-    }
-
-    private void addDefaultPermissions() {
-        switch (role) {
-            case TENANT_ADMIN -> permissions.addAll(List.of(
-                "USER_CREATE","USER_UPDATE","USER_DELETE","USER_VIEW",
-                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_DELETE","PRODUCT_VIEW",
-                "SALE_CREATE","SALE_UPDATE","SALE_DELETE","SALE_VIEW",
-                "REPORT_VIEW","SETTINGS_MANAGE"
-            ));
-            case MANAGER -> permissions.addAll(List.of(
-                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_VIEW",
-                "SALE_CREATE","SALE_VIEW","REPORT_VIEW"
-            ));
-            case VIEWER -> permissions.addAll(List.of(
-                "USER_VIEW","PRODUCT_VIEW","SALE_VIEW","REPORT_VIEW"
-            ));
-            case USER -> permissions.add("VIEW_BASIC");
-        }
-    }
-
-    // ✅ Login permitido se não está suspenso por conta nem por admin
-    public boolean isEnabledForLogin() {
-        if (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now())) return false;
-        return !deleted && !suspendedByAccount && !suspendedByAdmin;
-    }
-
-    public void softDelete() {
-        if (deleted) return;
-        deleted = true;
-        deletedAt = LocalDateTime.now();
-
-        // ✅ deletado sempre bloqueia login
-        suspendedByAccount = true;
-        suspendedByAdmin = true;
-
-        long ts = System.currentTimeMillis();
-        username = "deleted_" + username + "_" + ts;
-        email = "deleted_" + email + "_" + ts;
-    }
-
-    public void restore() {
-        if (!deleted) return;
-        deleted = false;
-        deletedAt = null;
-
-        // ✅ ao restaurar: volta “desbloqueado” pela lógica normal
-        // (conta ativa vai controlar suspendedByAccount; admin controla suspendedByAdmin)
-        suspendedByAdmin = false;
-        // não força false em suspendedByAccount aqui — quem manda é o status da conta
-    }
-}
-package brito.com.multitenancy001.tenant.persistence;
+}package brito.com.multitenancy001.tenant.persistence;
 
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -6963,7 +7082,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 import java.util.List;
 import java.util.Optional;
@@ -7073,17 +7192,17 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 }-- V1__create_accounts.sql
 SET search_path TO public;
 
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
 
-    -- 🔥 NOVO: Flag para identificar contas do sistema
+    -- Flag para identificar contas do sistema
     is_system_account BOOLEAN NOT NULL DEFAULT false,
 
     name VARCHAR(150) NOT NULL,
 
     -- Infra
-    schema_name VARCHAR(100) NOT NULL UNIQUE,
-    slug VARCHAR(50) NOT NULL UNIQUE,
+    schema_name VARCHAR(100) NOT NULL,
+    slug VARCHAR(50) NOT NULL,
 
     -- Status / Plano
     status VARCHAR(50) NOT NULL,
@@ -7093,7 +7212,7 @@ CREATE TABLE accounts (
     max_products INTEGER DEFAULT 100,
     max_storage_mb INTEGER DEFAULT 100,
 
-    -- Identidade da empresa (🔑 CRÍTICO)
+    -- Identidade da empresa (CRÍTICO)
     company_doc_type VARCHAR(10) NOT NULL,
     company_doc_number VARCHAR(20) NOT NULL,
     company_email VARCHAR(150) NOT NULL,
@@ -7118,32 +7237,32 @@ CREATE TABLE accounts (
     settings_json TEXT,
     metadata_json TEXT,
 
-    deleted BOOLEAN DEFAULT false,
+    deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP
 );
 
--- Índice único para documento (somente contas ativas)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_number_active
-ON accounts (company_doc_number)
+-- Unicidade de documento por conta ativa
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active
+ON accounts (company_doc_type, company_doc_number)
 WHERE deleted = false;
 
--- Índice único para email (somente contas ativas)
+-- Unicidade de email por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
 ON accounts (company_email)
 WHERE deleted = false;
 
--- Índice único para schema
+-- Unicidade de schema (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
 ON accounts (schema_name);
 
--- Índice único para slug
+-- Unicidade de slug (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
 
--- V2__create_accounts_users.sql
+-- V2__create_controlplane_users.sql
 SET search_path TO public;
 
-CREATE TABLE users_account (
+CREATE TABLE IF NOT EXISTS controlplane_users (
     id BIGSERIAL PRIMARY KEY,
 
     name VARCHAR(100) NOT NULL,
@@ -7154,14 +7273,14 @@ CREATE TABLE users_account (
     role VARCHAR(50) NOT NULL,
 
     account_id BIGINT NOT NULL,
-    
+
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
     last_login TIMESTAMP,
-    failed_login_attempts INTEGER DEFAULT 0,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until TIMESTAMP,
-    must_change_password BOOLEAN DEFAULT false,
+    must_change_password BOOLEAN NOT NULL DEFAULT false,
     password_changed_at TIMESTAMP,
 
     timezone VARCHAR(50) DEFAULT 'America/Sao_Paulo',
@@ -7174,25 +7293,27 @@ CREATE TABLE users_account (
 
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMP,
-    
-     -- 📞 Extras
+
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
 
-    CONSTRAINT fk_users_account
+    CONSTRAINT fk_controlplane_users_account
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
 
-    CONSTRAINT ux_users_account_username UNIQUE (account_id, username),
-    CONSTRAINT ux_users_account_email UNIQUE (account_id, email)
+    CONSTRAINT ux_controlplane_users_username UNIQUE (account_id, username),
+    CONSTRAINT ux_controlplane_users_email UNIQUE (account_id, email)
 );
 
-CREATE TABLE accounts_users_permissions (
+CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
     user_id BIGINT NOT NULL,
     permission VARCHAR(100) NOT NULL,
-    CONSTRAINT fk_user_permissions_user
-        FOREIGN KEY (user_id) REFERENCES users_account(id) ON DELETE CASCADE,
-    CONSTRAINT ux_user_permission PRIMARY KEY (user_id, permission)
+
+    CONSTRAINT fk_controlplane_user_permissions_user
+        FOREIGN KEY (user_id) REFERENCES controlplane_users(id) ON DELETE CASCADE,
+
+    CONSTRAINT pk_controlplane_user_permissions PRIMARY KEY (user_id, permission)
 );
+
 -- V3__insert_controlplane_account.sql
 SET search_path TO public;
 
@@ -7210,7 +7331,7 @@ INSERT INTO accounts (
     deleted
 )
 SELECT
-    true, -- 🔥 Marcada como conta do sistema
+    true,
     'ControlPlane',
     'public',
     'controlplane',
@@ -7225,10 +7346,11 @@ WHERE NOT EXISTS (
     SELECT 1
     FROM accounts
     WHERE slug = 'controlplane'
-);-- V4__insert_accounts_super_admin.sql
+);
+-- V4__insert_controlplane_super_admin.sql
 SET search_path TO public;
 
-INSERT INTO users_account (
+INSERT INTO controlplane_users (
     name,
     username,
     email,
@@ -7245,22 +7367,24 @@ SELECT
     '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
     'SUPER_ADMIN',
     a.id,
-    false,  -- não suspenso pela conta
-    false   -- não suspenso pelo admin
+    false,
+    false
 FROM accounts a
 WHERE a.slug = 'controlplane'
 AND NOT EXISTS (
     SELECT 1
-    FROM users_account u
+    FROM controlplane_users u
     WHERE u.account_id = a.id
-    AND (u.username = 'superadmin' OR u.email = 'admin@controlplane.com')
-);-- V5__create_payments.sql
+      AND (u.username = 'superadmin' OR u.email = 'admin@controlplane.com')
+);
+
+-- V5__create_payments.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS payments (
     id BIGSERIAL PRIMARY KEY,
 
-    account_id BIGINT NULL,
+    account_id BIGINT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
 
     payment_date TIMESTAMP NOT NULL,
@@ -7287,7 +7411,7 @@ CREATE TABLE IF NOT EXISTS payments (
     refund_reason VARCHAR(500),
 
     CONSTRAINT fk_payments_account
-      FOREIGN KEY (account_id) REFERENCES accounts(id)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
@@ -7295,26 +7419,22 @@ CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transaction ON payments(transaction_id) WHERE transaction_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
 -- V1__create_tenants_users.sql
+
 CREATE TABLE IF NOT EXISTS users_tenant (
     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
 
-    -- 🔗 Relacionamento com account 
     account_id BIGINT NOT NULL,
 
-    -- 📛 Dados principais
     name VARCHAR(100) NOT NULL,
     username VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL,
     password VARCHAR(255) NOT NULL,
 
-    -- 👤 Perfil
     role VARCHAR(50) NOT NULL,
-    
-    
+
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
-    -- 🔐 Segurança / autenticação
     last_login TIMESTAMP,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until TIMESTAMP,
@@ -7323,76 +7443,83 @@ CREATE TABLE IF NOT EXISTS users_tenant (
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMP,
 
-    -- 📞 Extras
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
-   
-    -- 🌎 Internacionalização
+
     timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
 
-    -- 🧾 Auditoria
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
 
-    -- 🗑️ Soft delete
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
 
-    -- 🔒 Unicidade por tenant
     CONSTRAINT uk_users_tenant_username_account UNIQUE (username, account_id),
     CONSTRAINT uk_users_tenant_email_account UNIQUE (email, account_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_tenant_account_id ON users_tenant(account_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_username ON users_tenant(username);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users_tenant(email);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_deleted ON users_tenant(deleted) WHERE deleted = false;
 
-
--- Cria índices para performance
-CREATE INDEX idx_users_tenant_account_id ON users_tenant(account_id);
-CREATE INDEX idx_users_tenant_username ON users_tenant(username);
-CREATE INDEX idx_users_tenant_email ON users_tenant(email);
-CREATE INDEX idx_users_tenant_deleted ON users_tenant(deleted) WHERE deleted = false;
 -- V2__create_tenant_users_permissions.sql
 CREATE TABLE IF NOT EXISTS user_tenant_permissions (
     user_tenant_id BIGINT NOT NULL,
     permission VARCHAR(100) NOT NULL,
+
     PRIMARY KEY (user_tenant_id, permission),
+
     CONSTRAINT fk_user_tenant_permissions_user
-        FOREIGN KEY (user_tenant_id) 
-        REFERENCES users_tenant(id) 
+        FOREIGN KEY (user_tenant_id)
+        REFERENCES users_tenant(id)
         ON DELETE CASCADE
 );-- V3__create_categories.sql
 
 CREATE TABLE IF NOT EXISTS categories (
   id BIGSERIAL PRIMARY KEY,
+
   name VARCHAR(100) NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT true,
+
+  active  BOOLEAN NOT NULL DEFAULT true,
   deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMP,
+
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP,
 
   CONSTRAINT uk_categories_name UNIQUE (name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(active);
-CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted);
+CREATE INDEX IF NOT EXISTS idx_categories_active  ON categories(active);
+CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted) WHERE deleted = false;
 -- V4__create_subcategories.sql
 
 CREATE TABLE IF NOT EXISTS subcategories (
   id BIGSERIAL PRIMARY KEY,
+
   category_id BIGINT NOT NULL,
   name VARCHAR(100) NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT true,
+
+  active  BOOLEAN NOT NULL DEFAULT true,
   deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMP,
+
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP,
 
   CONSTRAINT fk_subcategories_category
-    FOREIGN KEY (category_id) REFERENCES categories(id),
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
 
   CONSTRAINT uk_subcategories_name_category UNIQUE (category_id, name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_subcategories_category_id ON subcategories(category_id);
-CREATE INDEX IF NOT EXISTS idx_subcategories_active ON subcategories(active);
-CREATE INDEX IF NOT EXISTS idx_subcategories_deleted ON subcategories(deleted);
+CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
+CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;
 -- V5__create_suppliers.sql
 
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -7405,7 +7532,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
   phone VARCHAR(20),
   address TEXT,
 
-  document VARCHAR(20) UNIQUE,
+  document VARCHAR(20),
   document_type VARCHAR(10),
 
   website VARCHAR(200),
@@ -7414,17 +7541,25 @@ CREATE TABLE IF NOT EXISTS suppliers (
   lead_time_days INTEGER,
   rating NUMERIC(3,2),
 
-  active BOOLEAN NOT NULL DEFAULT true,
+  active  BOOLEAN NOT NULL DEFAULT true,
+  deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMP,
+
   notes TEXT,
 
   created_at TIMESTAMP NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP,
-  deleted_at TIMESTAMP
+  updated_at TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_supplier_name ON suppliers(name);
+-- document único somente para fornecedores ativos e com documento preenchido
+CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_document_active
+ON suppliers(document)
+WHERE document IS NOT NULL AND deleted = false;
 
-CREATE INDEX IF NOT EXISTS idx_supplier_email ON suppliers(email);
+CREATE INDEX IF NOT EXISTS idx_supplier_name   ON suppliers(name);
+CREATE INDEX IF NOT EXISTS idx_supplier_email  ON suppliers(email);
+CREATE INDEX IF NOT EXISTS idx_supplier_active ON suppliers(active);
+CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;
 -- V6__create_products.sql
 
 CREATE TABLE IF NOT EXISTS products (
@@ -7460,8 +7595,9 @@ CREATE TABLE IF NOT EXISTS products (
 
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP,
-  deleted_at TIMESTAMP,
+
   deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMP,
 
   CONSTRAINT fk_products_category
     FOREIGN KEY (category_id) REFERENCES categories(id),
@@ -7473,15 +7609,19 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
 );
 
--- sku é unique no entity (@Column(unique=true))
-CREATE UNIQUE INDEX IF NOT EXISTS idx_product_sku ON products(sku) WHERE sku IS NOT NULL;
+-- sku único apenas quando preenchido e produto ativo
+CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_active
+ON products(sku)
+WHERE sku IS NOT NULL AND deleted = false;
 
--- índices conforme @Index do entity
-CREATE INDEX IF NOT EXISTS idx_product_name ON products(name);
-CREATE INDEX IF NOT EXISTS idx_product_supplier ON products(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_product_name       ON products(name);
+CREATE INDEX IF NOT EXISTS idx_product_supplier   ON products(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_product_created_at ON products(created_at);
-CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
+
+CREATE INDEX IF NOT EXISTS idx_products_category_id    ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products(subcategory_id);
+
+CREATE INDEX IF NOT EXISTS idx_products_deleted ON products(deleted) WHERE deleted = false;
 package brito.com.multitenancy001;
 
 import org.junit.jupiter.api.Test;

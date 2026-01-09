@@ -4,18 +4,19 @@ import java.time.LocalDateTime;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infra.multitenancy.TenantSchemaContext;
+import brito.com.multitenancy001.infra.exec.PublicExecutor;
+import brito.com.multitenancy001.infra.exec.TenantExecutor;
+import brito.com.multitenancy001.infra.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
-import brito.com.multitenancy001.tenant.model.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 	
-	  private final PublicAccountService publicAccountService;
+	  
+	private final PublicExecutor publicExec;
+	private final TxExecutor tx;
+	private final TenantExecutor tenantExec;
+
+	
+	
+	private final PublicAccountService publicAccountService;
 	  private final TenantSchemaProvisioningService tenantSchemaService;
 	  private final TenantUserRepository tenantUserRepository;
 	  private final PasswordEncoder passwordEncoder;
@@ -37,31 +45,27 @@ public class AccountOnboardingService {
        1. CRIAÇÃO DE CONTA 
        ========================================================= */
 
-    public AccountResponse createAccount(SignupRequest request) {
-        validateSignupRequest(request);
+	   public AccountResponse createAccount(SignupRequest request) {
+		    validateSignupRequest(request);
 
-        TenantSchemaContext.clearTenantSchema(); // garante PUBLIC
+		    Account account = tx.publicTx(() ->
+		        publicExec.run(() -> publicAccountService.createAccountFromSignup(request))
+		    );
 
-        // A) cria no PUBLIC e COMMITA (transação do publicAccountService)
-        Account account = publicAccountService.createAccountFromSignup(request);
+		    tenantSchemaService.schemaMigrationService(account.getSchemaName());
 
-        // B) cria schema + roda flyway do tenant (sem transação JPA public aberta)
-        tenantSchemaService.schemaMigrationService(account.getSchemaName());
+		    createTenantAdminInTenant(account, request);
 
-        // C) cria admin no TENANT com tenantTransactionManager
-        createTenantAdminInTenant(account, request);
+		    log.info("✅ Account criada | accountId={} | schema={} | slug={}",
+		            account.getId(), account.getSchemaName(), account.getSlug());
 
-        log.info("✅ Account criada | accountId={} | schema={} | slug={}",
-                account.getId(), account.getSchemaName(), account.getSlug());
+		    return AccountResponse.fromEntity(account);
+		}
 
-        return AccountResponse.fromEntity(account);
-    }
     
-    
-    @Transactional(transactionManager = "tenantTransactionManager")
-    protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
-        TenantSchemaContext.bindTenantSchema(account.getSchemaName());
-        try {
+   protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
+    return tenantExec.run(account.getSchemaName(), () ->
+        tx.tenantTx(() -> {
             String username = generateUsernameFromEmail(request.companyEmail());
 
             boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());
@@ -88,11 +92,10 @@ public class AccountOnboardingService {
             u.setLocale("pt_BR");
 
             return tenantUserRepository.save(u);
+        })
+    );
+}
 
-        } finally {
-            TenantSchemaContext.clearTenantSchema();
-        }
-    }
     
     
   

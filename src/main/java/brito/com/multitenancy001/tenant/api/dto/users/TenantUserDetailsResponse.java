@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.tenant.api.dto.users;
 
-import brito.com.multitenancy001.tenant.model.TenantUser;
-
 import java.time.LocalDateTime;
 import java.util.List;
+
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 public record TenantUserDetailsResponse(
         Long id,
