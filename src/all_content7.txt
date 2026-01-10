@@ -679,7 +679,7 @@ public class AccountLifecycleService {
 	
 	private final AccountApiMapper accountApiMapper;
 	
-	private final PublicExecutor publicExec;
+	private final PublicExecutor publicExecutor;
 
 	
 
@@ -703,7 +703,7 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
-        return publicExec.run(() ->
+        return publicExecutor.run(() ->
             accountRepository.findAllByDeletedFalse()
                 .stream()
                 .map(accountApiMapper::toResponse)
@@ -714,7 +714,7 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountByIdWithAdmin(Long accountId) {
-        return publicExec.run(() -> {
+        return publicExecutor.run(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -724,7 +724,7 @@ public class AccountLifecycleService {
 
    @Transactional(readOnly = true)
 public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-    return publicExec.run(() -> {
+    return publicExecutor.run(() -> {
         Account account = accountRepository.findByIdAndDeletedFalse(accountId)
             .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -3146,6 +3146,7 @@ public class PublicSchemaVerifier {
 }package brito.com.multitenancy001.infrastructure.exec;
 
 import java.util.function.Supplier;
+
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -3153,28 +3154,22 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 @Component
 public class PublicExecutor {
 
-	public <T> T run(Supplier<T> fn) {
-	    TenantContext.bind("public"); // garante PUBLIC explicitamente
-	    try {
-	        return fn.get();
-	    } finally {
-	        TenantContext.clear();
-	    }
-	}
+    public <T> T run(Supplier<T> supplier) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            return supplier.get();
+        }
+    }
 
-	public void run(Runnable fn) {
-	    TenantContext.bind("public");
-	    try {
-	        fn.run();
-	    } finally {
-	        TenantContext.clear();
-	    }
-	}
-
+    public void run(Runnable runnable) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            runnable.run();
+        }
+    }
 }
 package brito.com.multitenancy001.infrastructure.exec;
 
 import java.util.function.Supplier;
+
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -3191,19 +3186,17 @@ public class TenantExecutor {
     }
 
     public <T> T run(String schema, Supplier<T> fn) {
-        TenantContext.bind(schema);
-        try {
+        if (schema == null || "public".equals(schema)) {
+            throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+        }
+
+        // ✅ padronizado: nada de bind/clear manual
+        try (TenantContext.Scope ignored = TenantContext.scope(schema)) {
             return fn.get();
-        } finally {
-            TenantContext.clear();
         }
     }
 
     public void run(String schema, Runnable fn) {
-    	if (schema == null || "public".equals(schema)) {
-    		   throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
-    		}
-
         run(schema, () -> { fn.run(); return null; });
     }
 
@@ -4639,29 +4632,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantContext {
 
-
-
-    /**
-     * Retorna o tenant atual (com fallback para public)
-     */
     public static String getOrNull() {
-        // ✅ usando o método compatível com fallback
         return CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
     }
 
-    /**
-     * Bind do tenant à thread atual.
-     * ⚠️ Deve ser chamado ANTES de qualquer operação transacional.
-     */
     public static void bind(String tenantId) {
-
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             log.error("🔥 ERRO GRAVE: bindTenant chamado DENTRO de transação! tenant={}", tenantId);
         }
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
 
-        // Se vier vazio/nulo, remove (estado real fica sem tenant)
         if (!StringUtils.hasText(normalized)) {
             CurrentTenantSchemaResolver.bindTenantToCurrentThread(null);
             log.info("🔄 Tenant limpo (sem tenant) | thread={}", Thread.currentThread().threadId());
@@ -4669,22 +4650,41 @@ public class TenantContext {
         }
 
         CurrentTenantSchemaResolver.bindTenantToCurrentThread(normalized);
-
         log.info("🔄 Tenant bindado | thread={} | tenant={}",
                 Thread.currentThread().threadId(),
                 normalized);
     }
 
-    /**
-     * Remove o tenant da thread atual.
-     * ⚠️ Deve ser chamado no finally do filtro/interceptor.
-     */
     public static void clear() {
         CurrentTenantSchemaResolver.unbindTenantFromCurrentThread();
         log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
     }
 
+    // ✅ NOVO: escopo seguro
+    public static Scope scope(String tenantId) {
+        bind(tenantId);
+        return new Scope();
+    }
 
+    // ✅ NOVO: escopo PUBLIC explícito (garante que não ficou tenant pendurado)
+    public static Scope publicScope() {
+        clear();
+        return new Scope();
+    }
+
+    public static final class Scope implements AutoCloseable {
+        private boolean closed = false;
+
+        private Scope() {}
+
+        @Override
+        public void close() {
+            if (!closed) {
+                TenantContext.clear();
+                closed = true;
+            }
+        }
+    }
 }
 package brito.com.multitenancy001.shared.security;
 

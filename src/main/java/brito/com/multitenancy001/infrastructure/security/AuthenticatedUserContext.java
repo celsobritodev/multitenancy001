@@ -22,7 +22,10 @@ public class AuthenticatedUserContext implements UserDetails {
     private final String email;
     private final String password;
 
-    private final boolean active;
+  private final boolean active;
+  //  private final boolean enabled;
+ //   private final boolean accountNonLocked;
+
 
     private final Long accountId;
     private final String schemaName;
@@ -58,7 +61,7 @@ public class AuthenticatedUserContext implements UserDetails {
     @Override public String getPassword() { return password; }
     @Override public String getUsername() { return username; }
     @Override public boolean isAccountNonExpired() { return true; }
-    @Override public boolean isAccountNonLocked() { return active; }
+    @Override public boolean isAccountNonLocked() { return true; }
     @Override public boolean isCredentialsNonExpired() { return true; }
     @Override public boolean isEnabled() { return active; }
 }

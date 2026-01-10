@@ -32,7 +32,7 @@ public class AccountLifecycleService {
 	
 	private final AccountApiMapper accountApiMapper;
 	
-	private final PublicExecutor publicExec;
+	private final PublicExecutor publicExecutor;
 
 	
 
@@ -56,7 +56,7 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAllAccounts() {
-        return publicExec.run(() ->
+        return publicExecutor.run(() ->
             accountRepository.findAllByDeletedFalse()
                 .stream()
                 .map(accountApiMapper::toResponse)
@@ -67,7 +67,7 @@ public class AccountLifecycleService {
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountByIdWithAdmin(Long accountId) {
-        return publicExec.run(() -> {
+        return publicExecutor.run(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -77,7 +77,7 @@ public class AccountLifecycleService {
 
    @Transactional(readOnly = true)
 public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-    return publicExec.run(() -> {
+    return publicExecutor.run(() -> {
         Account account = accountRepository.findByIdAndDeletedFalse(accountId)
             .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 

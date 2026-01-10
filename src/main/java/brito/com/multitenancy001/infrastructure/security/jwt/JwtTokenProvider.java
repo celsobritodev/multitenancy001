@@ -142,18 +142,24 @@ public class JwtTokenProvider {
      * Obtém o contexto do token (antigo tenantSchema)
      * Mantém compatibilidade retornando "tenantSchema" se "context" não existir
      */
-    public String getContextFromToken(String token) {
-        Claims claims = getAllClaimsFromToken(token);
-        
-        // Tenta obter pelo novo nome "context"
-        String context = claims.get("context", String.class);
-        if (context != null) {
-            return context;
-        }
-        
-        // Fallback para compatibilidade com tokens antigos
-        return claims.get("tenantSchema", String.class);
+ public String getContextFromToken(String token) {
+    Claims claims = getAllClaimsFromToken(token);
+
+    String context = claims.get("context", String.class);
+    if (context == null) {
+        context = claims.get("tenantSchema", String.class);
     }
+
+    String type = claims.get("type", String.class);
+
+    // ✅ Só TENANT não pode ter public
+    if ("TENANT".equals(type) && "public".equalsIgnoreCase(context)) {
+        throw new JwtException("Invalid context for TENANT token: public");
+    }
+
+    return context;
+}
+
     
     /**
      * Método para compatibilidade (chama getContextFromToken)

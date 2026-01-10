@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.exec;
 
 import java.util.function.Supplier;
+
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -17,19 +18,17 @@ public class TenantExecutor {
     }
 
     public <T> T run(String schema, Supplier<T> fn) {
-        TenantContext.bind(schema);
-        try {
+        if (schema == null || "public".equals(schema)) {
+            throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+        }
+
+        // ✅ padronizado: nada de bind/clear manual
+        try (TenantContext.Scope ignored = TenantContext.scope(schema)) {
             return fn.get();
-        } finally {
-            TenantContext.clear();
         }
     }
 
     public void run(String schema, Runnable fn) {
-    	if (schema == null || "public".equals(schema)) {
-    		   throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
-    		}
-
         run(schema, () -> { fn.run(); return null; });
     }
 

@@ -9,13 +9,13 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import brito.com.multitenancy001.shared.context.TenantContext;
 
 import java.io.IOException;
@@ -25,7 +25,7 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final UserDetailsService userDetailsService; // ✅ Mantém interface
+    private final MultiContextUserDetailsService multiContextUserDetailsService;
 
     @Override
     protected void doFilterInternal(
@@ -33,6 +33,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+
+        boolean bound = false;
 
         try {
             final String authHeader = request.getHeader("Authorization");
@@ -44,23 +46,77 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             final String jwt = authHeader.substring(7);
 
-            // 1) valida token (assinatura + expiração)
             if (!jwtTokenProvider.validateToken(jwt)) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // 2) extrai tenantSchema e binda ANTES de qualquer JPA
-            final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
-            TenantContext.bind(tenantSchema);
-
-            // 3) autenticação
+            final String tokenType = jwtTokenProvider.getTokenType(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
+            
+            if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-            if (StringUtils.hasText(username)
-                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            if (!StringUtils.hasText(username)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                UserDetails userDetails;
+
+                if ("TENANT".equals(tokenType)) {
+                    final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
+
+                    if (!StringUtils.hasText(tenantSchema) || "public".equalsIgnoreCase(tenantSchema)) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+                    
+                    if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
+
+                    TenantContext.bind(tenantSchema);
+                    bound = true;
+
+                    Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+                    if (accountId == null) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
+                    userDetails = multiContextUserDetailsService.loadTenantUser(username, accountId);
+
+                } else if ("CONTROLPLANE".equals(tokenType)) {
+                	
+                	String context = jwtTokenProvider.getContextFromToken(jwt);
+                	if (StringUtils.hasText(context) && !"public".equalsIgnoreCase(context)) {
+                	    filterChain.doFilter(request, response);
+                	    return;
+                	}
+
+
+                	Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+                	if (accountId == null) {
+                	    filterChain.doFilter(request, response);
+                	    return;
+                	}
+
+                	userDetails = multiContextUserDetailsService.loadControlPlaneUser(username, accountId);
+
+
+                } else {
+                    // REFRESH / PASSWORD_RESET etc: normalmente não autentica request padrão
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
@@ -74,8 +130,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
 
         } finally {
-            // 4) limpa sempre (anti vazamento)
-            TenantContext.clear();
+            if (bound) {
+                TenantContext.clear();
+            }
         }
     }
 }

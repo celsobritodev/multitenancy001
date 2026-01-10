@@ -15,6 +15,9 @@ import java.util.Optional;
 @Repository
 public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
 	
+	Optional<ControlPlaneUser> findByUsernameAndAccount_IdAndDeletedFalse(String username, Long accountId);
+
+
 	long countByAccountIdAndDeletedFalse(Long accountId);
 	
 	Optional<ControlPlaneUser> findFirstByAccountIdAndDeletedFalse(Long accountId);

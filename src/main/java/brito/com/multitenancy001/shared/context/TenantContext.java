@@ -9,29 +9,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantContext {
 
-
-
-    /**
-     * Retorna o tenant atual (com fallback para public)
-     */
     public static String getOrNull() {
-        // ✅ usando o método compatível com fallback
         return CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
     }
 
-    /**
-     * Bind do tenant à thread atual.
-     * ⚠️ Deve ser chamado ANTES de qualquer operação transacional.
-     */
     public static void bind(String tenantId) {
-
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             log.error("🔥 ERRO GRAVE: bindTenant chamado DENTRO de transação! tenant={}", tenantId);
         }
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
 
-        // Se vier vazio/nulo, remove (estado real fica sem tenant)
         if (!StringUtils.hasText(normalized)) {
             CurrentTenantSchemaResolver.bindTenantToCurrentThread(null);
             log.info("🔄 Tenant limpo (sem tenant) | thread={}", Thread.currentThread().threadId());
@@ -39,20 +27,39 @@ public class TenantContext {
         }
 
         CurrentTenantSchemaResolver.bindTenantToCurrentThread(normalized);
-
         log.info("🔄 Tenant bindado | thread={} | tenant={}",
                 Thread.currentThread().threadId(),
                 normalized);
     }
 
-    /**
-     * Remove o tenant da thread atual.
-     * ⚠️ Deve ser chamado no finally do filtro/interceptor.
-     */
     public static void clear() {
         CurrentTenantSchemaResolver.unbindTenantFromCurrentThread();
         log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
     }
 
+    // ✅ NOVO: escopo seguro
+    public static Scope scope(String tenantId) {
+        bind(tenantId);
+        return new Scope();
+    }
 
+    // ✅ NOVO: escopo PUBLIC explícito (garante que não ficou tenant pendurado)
+    public static Scope publicScope() {
+        clear();
+        return new Scope();
+    }
+
+    public static final class Scope implements AutoCloseable {
+        private boolean closed = false;
+
+        private Scope() {}
+
+        @Override
+        public void close() {
+            if (!closed) {
+                TenantContext.clear();
+                closed = true;
+            }
+        }
+    }
 }
