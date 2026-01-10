@@ -38,7 +38,7 @@ public class AccountLifecycleService {
 
     private final AccountRepository accountRepository;
 
-    private final AccountOnboardingService onboardingService;
+    private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
     private final AccountTenantUserService accountTenantUserService;
 
@@ -47,7 +47,7 @@ public class AccountLifecycleService {
        ========================================================= */
 
     public AccountResponse createAccount(SignupRequest request) {
-        return onboardingService.createAccount(request);
+        return accountOnboardingService.createAccount(request);
     }
 
     /* =========================================================

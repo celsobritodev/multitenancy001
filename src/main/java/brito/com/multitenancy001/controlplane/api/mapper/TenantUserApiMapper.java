@@ -8,17 +8,17 @@ import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 @Component
 public class TenantUserApiMapper {
 
-    public AccountUserSummaryResponse toAccountUserSummary(TenantUser u) {
-        boolean enabled = !u.isDeleted()
-                && !u.isSuspendedByAccount()
-                && !u.isSuspendedByAdmin();
+    public AccountUserSummaryResponse toAccountUserSummary(TenantUser tenantUser) {
+        boolean enabled = !tenantUser.isDeleted()
+                && !tenantUser.isSuspendedByAccount()
+                && !tenantUser.isSuspendedByAdmin();
 
         return new AccountUserSummaryResponse(
-                u.getId(),
-                u.getUsername(),
-                u.getEmail(),
-                u.isSuspendedByAccount(),
-                u.isSuspendedByAdmin(),
+                tenantUser.getId(),
+                tenantUser.getUsername(),
+                tenantUser.getEmail(),
+                tenantUser.isSuspendedByAccount(),
+                tenantUser.isSuspendedByAdmin(),
                 enabled
         );
     }

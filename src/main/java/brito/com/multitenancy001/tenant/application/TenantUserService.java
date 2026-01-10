@@ -10,6 +10,7 @@ import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
+import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -133,11 +134,17 @@ public class TenantUserService {
     }
 
     public void softDeleteTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+    Long accountId = securityUtils.getCurrentAccountId();
+    String schema = securityUtils.getCurrentSchema();
 
-        runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
-    }
+    TenantUser actor = loadActor(accountId, schema);
+    TenantUser target = loadTarget(accountId, schema, userId);
+
+    assertCanDeleteTarget(actor, target);
+
+    runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
+}
+
 
     public AccountUserSummaryResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -162,8 +169,14 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
+        TenantUser actor = loadActor(accountId, schema);
+        TenantUser target = loadTarget(accountId, schema, userId);
+
+        assertCanDeleteTarget(actor, target);
+
         runInTenant(schema, () -> tenantUserTxService.hardDelete(userId, accountId));
     }
+
 
     // ===== PASSWORD RESET (PUBLIC + TENANT) =====
     public String generatePasswordResetToken(String slug, String email) {
@@ -180,11 +193,7 @@ public class TenantUserService {
         String normalizedEmail = email.trim().toLowerCase();
 
         return runInTenant(schema, () -> {
-//            TenantUser user = tx // aqui você pode criar um método tx.getByEmail(...)
-//                    .listUsers(account.getId()).stream()
-//                    .filter(u -> normalizedEmail.equals(u.getEmail()) && !u.isDeleted())
-//                    .findFirst()
-//                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+//            
             TenantUser user = tenantUserTxService.getByEmailActive(account.getId(), normalizedEmail);
 
             if (user.isSuspendedByAccount() || user.isDeleted()) throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
@@ -237,4 +246,50 @@ public class TenantUserService {
     
 
     private void validateCreateRequest(TenantUserCreateRequest r) { /* mantém seu método */ }
+    
+    
+  private TenantUser loadActor(Long accountId, String schema) {
+    Long actorId = securityUtils.getCurrentUserId();
+    return runInTenant(schema, () -> tenantUserTxService.getUser(actorId, accountId));
 }
+
+private TenantUser loadTarget(Long accountId, String schema, Long targetUserId) {
+    return runInTenant(schema, () -> tenantUserTxService.getUser(targetUserId, accountId));
+}
+
+private void assertCanDeleteTarget(TenantUser actor, TenantUser target) {
+    if (target.getRole() == TenantRole.TENANT_ADMIN && actor.getRole() != TenantRole.TENANT_ADMIN) {
+        throw new ApiException("FORBIDDEN", "Somente TENANT_ADMIN pode excluir/alterar um TENANT_ADMIN", 403);
+    }
+}
+
+private void assertCanTransferTenantAdmin(TenantUser actor, TenantUser newAdmin) {
+    if (actor.getRole() != TenantRole.TENANT_ADMIN) {
+        throw new ApiException("FORBIDDEN", "Apenas TENANT_ADMIN pode transferir a administração", 403);
+    }
+    if (newAdmin.getRole() != TenantRole.ADMIN) {
+        throw new ApiException("INVALID_TARGET", "Somente um ADMIN pode receber TENANT_ADMIN", 400);
+    }
+}
+
+public void transferTenantAdmin(Long targetAdminUserId) {
+    Long accountId = securityUtils.getCurrentAccountId();
+    String schema = securityUtils.getCurrentSchema();
+
+    TenantUser actor = loadActor(accountId, schema); // quem está logado
+    TenantUser newAdmin = loadTarget(accountId, schema, targetAdminUserId);
+
+    assertCanTransferTenantAdmin(actor, newAdmin);
+
+    runInTenant(schema, () -> {
+        tenantUserTxService.transferTenantAdminRole(accountId, actor.getId(), newAdmin.getId());
+    });
+}
+
+
+
+
+}
+
+
+

@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.model.Subcategory;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 
 import java.util.Optional;
 

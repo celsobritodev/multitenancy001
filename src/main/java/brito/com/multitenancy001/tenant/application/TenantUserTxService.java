@@ -239,18 +239,45 @@ public class TenantUserTxService {
         user.setUpdatedAt(LocalDateTime.now());
         return tenantUserRepository.save(user);
     }
-
-    private TenantRole parseTenantRole(String role) {
-        if (!StringUtils.hasText(role)) throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
-
-        String r = role.trim().toUpperCase();
-
-        return switch (r) {
-            case "TENANT_ADMIN", "ADMIN" -> TenantRole.TENANT_ADMIN;
-            case "MANAGER", "PRODUCT_MANAGER", "SALES_MANAGER" -> TenantRole.MANAGER;
-            case "VIEWER" -> TenantRole.VIEWER;
-            case "USER" -> TenantRole.USER;
-            default -> throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
-        };
+private TenantRole parseTenantRole(String role) {
+    if (!StringUtils.hasText(role)) {
+        throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
     }
+
+    String r = role.trim().toUpperCase();
+
+    return switch (r) {
+        case "TENANT_ADMIN" -> TenantRole.TENANT_ADMIN;
+        case "ADMIN" -> TenantRole.ADMIN;
+        case "PRODUCT_MANAGER" -> TenantRole.PRODUCT_MANAGER;
+        case "SALES_MANAGER" -> TenantRole.SALES_MANAGER;
+        case "BILLING_ADMIN" -> TenantRole.BILLING_ADMIN;
+        case "VIEWER" -> TenantRole.VIEWER;
+        case "USER" -> TenantRole.USER;
+        default -> throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
+    };
+}
+
+public void transferTenantAdminRole(Long accountId, Long fromUserId, Long toUserId) {
+    TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ADMIN não encontrado", 404));
+
+    TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "ADMIN alvo não encontrado", 404));
+
+    // Aqui NÃO valida regra de negócio (isso fica no service de cima),
+    // apenas aplica a troca.
+    from.setRole(TenantRole.ADMIN);
+    to.setRole(TenantRole.TENANT_ADMIN);
+
+    from.setUpdatedAt(LocalDateTime.now());
+    to.setUpdatedAt(LocalDateTime.now());
+
+    tenantUserRepository.save(from);
+    tenantUserRepository.save(to);
+}
+  
+
+
+    
 }

@@ -3,7 +3,7 @@ package brito.com.multitenancy001.tenant.api.mapper;
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
-import brito.com.multitenancy001.tenant.model.Product;
+import brito.com.multitenancy001.tenant.domain.product.Product;
 
 @Component
 public class ProductApiMapper {

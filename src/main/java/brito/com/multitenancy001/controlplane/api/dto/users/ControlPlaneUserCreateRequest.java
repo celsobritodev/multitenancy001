@@ -33,8 +33,9 @@ public record ControlPlaneUserCreateRequest(
     String password,
     
     @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "TENANT_ADMIN|MANAGER|VIEWER|USER", message = "Role inválida")
+    @Pattern(regexp = "SUPER_ADMIN|BILLING_ADMIN|SUPPORT|STAFF", message = "Role inválida")
     String role,
+
     
     List<String> permissions,
     

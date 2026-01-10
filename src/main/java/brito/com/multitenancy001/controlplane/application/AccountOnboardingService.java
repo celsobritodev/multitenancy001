@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controlplane.application;
 
 import java.time.LocalDateTime;
-
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -16,6 +16,7 @@ import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
+import brito.com.multitenancy001.tenant.application.username.UsernameGenerator;
 import brito.com.multitenancy001.tenant.domain.user.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -28,9 +29,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 	
+	private final UsernameGenerator usernameGenerator;
+
+	
 	private final AccountApiMapper accountApiMapper;
 	
-	private final PublicExecutor publicExec;
+	private final PublicExecutor publicExecutor;
 	private final TxExecutor txExecutor;
 	private final TenantExecutor tenantExecutor;
 
@@ -49,9 +53,11 @@ public class AccountOnboardingService {
 
 	   public AccountResponse createAccount(SignupRequest request) {
 		    validateSignupRequest(request);
+		    
+		    log.info("Tentando criar conta");
 
 		    Account account = txExecutor.publicTx(() ->
-		        publicExec.run(() -> publicAccountService.createAccountFromSignup(request))
+		        publicExecutor.run(() -> publicAccountService.createAccountFromSignup(request))
 		    );
 
 		    tenantSchemaProvisioningService.schemaMigrationService(account.getSchemaName());
@@ -65,17 +71,14 @@ public class AccountOnboardingService {
 		}
 
     
-   protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
+
+protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
     return tenantExecutor.run(account.getSchemaName(), () ->
         txExecutor.tenantTx(() -> {
-            String username = generateUsernameFromEmail(request.companyEmail());
 
-            boolean usernameExists = tenantUserRepository.existsByUsernameAndAccountId(username, account.getId());
-            boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(request.companyEmail(), account.getId());
+            boolean emailExists = tenantUserRepository
+                    .existsByEmailAndAccountId(request.companyEmail(), account.getId());
 
-            if (usernameExists) {
-                username = ensureUniqueUsername(username, account.getId());
-            }
             if (emailExists) {
                 throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
             }
@@ -83,7 +86,6 @@ public class AccountOnboardingService {
             TenantUser u = new TenantUser();
             u.setAccountId(account.getId());
             u.setName("Administrador");
-            u.setUsername(username);
             u.setEmail(request.companyEmail());
             u.setPassword(passwordEncoder.encode(request.password()));
             u.setRole(TenantRole.TENANT_ADMIN);
@@ -93,12 +95,22 @@ public class AccountOnboardingService {
             u.setTimezone("America/Sao_Paulo");
             u.setLocale("pt_BR");
 
-            return tenantUserRepository.save(u);
+            for (int attempt = 0; attempt < 5; attempt++) {
+                u.setUsername(usernameGenerator.generateFromEmail(request.companyEmail(), account.getId()));
+
+                try {
+                    return tenantUserRepository.save(u);
+                } catch (DataIntegrityViolationException e) {
+                    log.warn("Colisão de username ao criar admin. Tentativa {}. accountId={} email={}",
+                            attempt + 1, account.getId(), request.companyEmail());
+                }
+            }
+
+            throw new IllegalStateException("Failed to create tenant admin due to repeated username collisions");
         })
     );
 }
-
-    
+  
     
   
   
@@ -152,29 +164,10 @@ public class AccountOnboardingService {
     }
 
 
-    
 
-    private String generateUsernameFromEmail(String email) {
-        String base = email.split("@")[0].toLowerCase();
-        return base.replaceAll("[^a-z0-9._-]", "_")
-                   .replaceAll("_{2,}", "_")
-                   .replaceAll("^_|_$", "");
-    }
-    
-    
+	
 
-
-    private String ensureUniqueUsername(String baseUsername, Long accountId) {
-        String username = baseUsername;
-        int counter = 1;
-        
-        while (tenantUserRepository.existsByUsernameAndAccountId(username, accountId)) {
-            username = baseUsername + counter;
-            counter++;
-        }
-        
-        return username;
-    }
+	
 
     
 }

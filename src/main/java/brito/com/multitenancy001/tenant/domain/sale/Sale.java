@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.sale;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

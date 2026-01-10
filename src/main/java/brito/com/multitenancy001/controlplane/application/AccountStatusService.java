@@ -152,19 +152,22 @@ public class AccountStatusService {
             .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-    private void softDeleteTenantUsers(Long accountId) {
-        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
+   private void softDeleteTenantUsers(Long accountId) {
 
-        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            txExecutor.tenantRequiresNew(() -> {
-                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-                users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-                tenantUserRepository.saveAll(users);
-                return null;
-            });
+    Account account = txExecutor.publicReadOnlyTx(() ->
+        publicExecutor.run(() -> getAccountByIdRaw(accountId))
+    );
+
+    tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
+        txExecutor.tenantRequiresNew(() -> {
+            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
+            users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
+            tenantUserRepository.saveAll(users);
             return null;
-        }, null);
-    }
+        });
+        return null;
+    }, null);
+}
 
     private void restoreTenantUsers(Long accountId) {
         Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));

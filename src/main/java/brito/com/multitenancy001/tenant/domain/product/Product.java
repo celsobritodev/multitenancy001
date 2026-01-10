@@ -1,9 +1,13 @@
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.product;
 
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

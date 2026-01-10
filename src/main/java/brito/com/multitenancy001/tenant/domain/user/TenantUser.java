@@ -15,10 +15,8 @@ import java.util.List;
 @Table(
     name = "users_tenant",
     uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_user_tenant_account_username",
-            columnNames = {"account_id", "username"}
-        )
+        @UniqueConstraint(name = "uk_users_tenant_username_account", columnNames = {"username", "account_id"}),
+        @UniqueConstraint(name = "uk_users_tenant_email_account", columnNames = {"email", "account_id"})
     }
 )
 @Getter
@@ -28,6 +26,9 @@ import java.util.List;
 @Builder
 @ToString(exclude = "password")
 public class TenantUser {
+
+    private static final int USERNAME_MAX_LEN = 100;
+    private static final int EMAIL_MAX_LEN = 150;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,14 +43,14 @@ public class TenantUser {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = USERNAME_MAX_LEN)
     @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido.")
     private String username;
 
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false, length = 150)
+    @Column(nullable = false, length = EMAIL_MAX_LEN)
     private String email;
 
     @Enumerated(EnumType.STRING)
@@ -59,12 +60,10 @@ public class TenantUser {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    // ✅ NOVO: suspensão por conta (status da conta)
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
     private boolean suspendedByAccount = false;
 
-    // ✅ NOVO: suspensão manual por admin do tenant
     @Column(name = "suspended_by_admin", nullable = false)
     @Builder.Default
     private boolean suspendedByAdmin = false;
@@ -81,14 +80,14 @@ public class TenantUser {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    @Column(name = "failed_login_attempts")
+    @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
     private Integer failedLoginAttempts = 0;
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
-    @Column(name = "must_change_password")
+    @Column(name = "must_change_password", nullable = false)
     @Builder.Default
     private Boolean mustChangePassword = false;
 
@@ -101,11 +100,13 @@ public class TenantUser {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(name = "timezone", length = 50)
+    @Column(name = "timezone", nullable = false, length = 64,
+            columnDefinition = "varchar(64) default 'UTC'")
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10)
+    @Column(name = "locale", nullable = false, length = 10,
+            columnDefinition = "varchar(10) default 'pt-BR'")
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -120,7 +121,7 @@ public class TenantUser {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Column(name = "deleted")
+    @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
@@ -131,49 +132,142 @@ public class TenantUser {
     private Long updatedBy;
 
     @PrePersist
-    protected void onCreate() {
-        if (username != null) username = username.toLowerCase().trim();
+    @PreUpdate
+    protected void onSave() {
         if (permissions == null) permissions = new ArrayList<>();
+        if (role == null) throw new IllegalStateException("Role is required");
+
+        // Opcional (recomendado): padroniza casing/trim sem tentar "corrigir" regras de username
+        if (username != null) username = username.toLowerCase().trim();
+        if (email != null) email = email.toLowerCase().trim();
+
         if (permissions.isEmpty()) addDefaultPermissions();
     }
 
-    private void addDefaultPermissions() {
-        switch (role) {
-            case TENANT_ADMIN -> permissions.addAll(List.of(
-                "USER_CREATE","USER_UPDATE","USER_DELETE","USER_VIEW",
-                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_DELETE","PRODUCT_VIEW",
-                "SALE_CREATE","SALE_UPDATE","SALE_DELETE","SALE_VIEW",
-                "REPORT_VIEW","SETTINGS_MANAGE"
-            ));
-            case MANAGER -> permissions.addAll(List.of(
-                "PRODUCT_CREATE","PRODUCT_UPDATE","PRODUCT_VIEW",
-                "SALE_CREATE","SALE_VIEW","REPORT_VIEW"
-            ));
-            case VIEWER -> permissions.addAll(List.of(
-                "USER_VIEW","PRODUCT_VIEW","SALE_VIEW","REPORT_VIEW"
-            ));
-            case USER -> permissions.add("VIEW_BASIC");
-        }
+  private void addDefaultPermissions() {
+    switch (role) {
+
+        case TENANT_ADMIN -> permissions.addAll(List.of(
+            "TEN_USER_READ","TEN_USER_CREATE","TEN_USER_UPDATE","TEN_USER_SUSPEND","TEN_USER_RESTORE","TEN_USER_DELETE",
+            "TEN_ROLE_TRANSFER",
+            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
+            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
+            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
+            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
+            "TEN_REPORT_SALES_READ",
+            "TEN_BILLING_READ","TEN_BILLING_WRITE",
+            "TEN_SETTINGS_READ","TEN_SETTINGS_WRITE"
+        ));
+
+        case ADMIN -> permissions.addAll(List.of(
+            "TEN_USER_READ","TEN_USER_CREATE","TEN_USER_UPDATE","TEN_USER_SUSPEND","TEN_USER_RESTORE",
+            // não dá TEN_USER_DELETE por padrão se você quer restringir exclusões
+            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
+            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
+            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
+            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
+            "TEN_REPORT_SALES_READ",
+            "TEN_SETTINGS_READ","TEN_SETTINGS_WRITE",
+            "TEN_BILLING_READ" // pode ler billing do tenant, se fizer sentido
+        ));
+
+        case PRODUCT_MANAGER -> permissions.addAll(List.of(
+            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
+            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
+            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE"
+        ));
+
+        case SALES_MANAGER -> permissions.addAll(List.of(
+            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
+            "TEN_REPORT_SALES_READ"
+        ));
+
+        case BILLING_ADMIN -> permissions.addAll(List.of(
+            "TEN_BILLING_READ","TEN_BILLING_WRITE",
+            "TEN_SETTINGS_READ" // se precisa ler dados do tenant
+        ));
+
+        case VIEWER -> permissions.addAll(List.of(
+            "TEN_PRODUCT_READ",
+            "TEN_SALE_READ",
+            "TEN_REPORT_SALES_READ"
+        ));
+
+        case USER -> permissions.addAll(List.of(
+            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
+            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
+            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
+            "TEN_SALE_READ"
+        ));
+    }
+}
+
+
+    public boolean isLocked(LocalDateTime now) {
+        return lockedUntil != null && lockedUntil.isAfter(now);
     }
 
-    public boolean isEnabledForLogin(LocalDateTime now) {
-        if (lockedUntil != null && lockedUntil.isAfter(now)) return false;
+    public boolean isEnabledNow() {
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
+    public boolean isEnabledForLogin(LocalDateTime now) {
+        return isEnabledNow() && !isLocked(now);
+    }
 
     public void softDelete() {
         if (deleted) return;
+
         deleted = true;
         deletedAt = LocalDateTime.now();
 
-        // ✅ deletado sempre bloqueia login
         suspendedByAccount = true;
         suspendedByAdmin = true;
 
-        long ts = System.currentTimeMillis();
-        username = "deleted_" + username + "_" + ts;
-        email = "deleted_" + email + "_" + ts;
+        String ts = String.valueOf(System.currentTimeMillis());
+
+        // ✅ username: normaliza para ficar compatível com o pattern e preserva o sufixo (timestamp)
+        {
+            String prefix = "deleted_";
+            String suffix = "_" + ts;
+
+            String middle = (username == null ? "user" : username)
+                .toLowerCase()
+                .trim()
+                .replaceAll("[^a-z0-9._-]", "_")
+                .replaceAll("_{2,}", "_")
+                .replaceAll("^_|_$", "");
+
+            if (middle.isBlank()) middle = "user";
+
+            int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
+            if (maxMiddleLen < 1) maxMiddleLen = 1;
+
+            if (middle.length() > maxMiddleLen) {
+                middle = middle.substring(0, maxMiddleLen);
+                middle = middle.replaceAll("_+$", "");
+                if (middle.isBlank()) middle = "u";
+            }
+
+            username = prefix + middle + suffix;
+        }
+
+        // ✅ email: preserva o sufixo e respeita o tamanho máximo (não precisa normalizar como username)
+        {
+            String prefix = "deleted_";
+            String suffix = "_" + ts;
+
+            String middle = (email == null ? "deleted" : email).trim();
+
+            int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
+            if (maxMiddleLen < 1) maxMiddleLen = 1;
+
+            if (middle.length() > maxMiddleLen) {
+                middle = middle.substring(0, maxMiddleLen);
+            }
+
+            email = prefix + middle + suffix;
+        }
     }
 
     public void restore() {
@@ -181,9 +275,8 @@ public class TenantUser {
         deleted = false;
         deletedAt = null;
 
-        // ✅ ao restaurar: volta “desbloqueado” pela lógica normal
-        // (conta ativa vai controlar suspendedByAccount; admin controla suspendedByAdmin)
+        // ao restaurar: admin deixa de bloquear; account status segue mandando
         suspendedByAdmin = false;
-        // não força false em suspendedByAccount aqui — quem manda é o status da conta
+        // não altera suspendedByAccount aqui
     }
 }

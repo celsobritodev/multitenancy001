@@ -9,6 +9,7 @@ import brito.com.multitenancy001.controlplane.persistence.account.AccountReposit
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -41,58 +43,77 @@ public class ControlPlaneUserService {
                 ));
     }
 
-    public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
-        TenantContext.clear();
+   public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
+    TenantContext.clear();
 
-        Account controlPlaneAccount = getControlPlaneAccount();
+    Account controlPlaneAccount = getControlPlaneAccount();
 
-        // validações básicas
-        if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("INVALID_PASSWORD", "A senha não atende aos requisitos de segurança", 400);
-        }
-        if (request.username() == null || request.username().isBlank()) {
-            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
-        }
-        if (!request.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
-            throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
-        }
-
-        String username = request.username().toLowerCase().trim();
-
-        // role permitida somente plataforma
-        ControlPlaneRole role;
-        try {
-            role = ControlPlaneRole.valueOf(request.role().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
-        }
-
-        // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
-        if (!role.isControlPlaneRole()) {
-            throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
-        }
-
-        
-        if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
-            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
-        }
-        if (controlPlaneUserRepository.existsByEmailAndAccountId(request.email(), controlPlaneAccount.getId())) {
-            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
-        }
-
-        ControlPlaneUser user = ControlPlaneUser.builder()
-                .name(request.name())
-                .username(username)
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .role(role)
-                .account(controlPlaneAccount) 
-                .suspendedByAccount(false)
-                .suspendedByAdmin(false)
-                .build();
-
-        return mapToResponse(controlPlaneUserRepository.save(user));
+    // validações básicas
+    if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
+        throw new ApiException("INVALID_PASSWORD", "A senha não atende aos requisitos de segurança", 400);
     }
+    if (request.username() == null || request.username().isBlank()) {
+        throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+    }
+    if (!request.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
+        throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
+    }
+
+    String username = request.username().toLowerCase().trim();
+
+    // role permitida somente plataforma
+    ControlPlaneRole role;
+    try {
+        role = ControlPlaneRole.valueOf(request.role().toUpperCase());
+    } catch (IllegalArgumentException e) {
+        throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
+    }
+
+    // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
+    if (!role.isControlPlaneRole()) {
+        throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
+    }
+
+    if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
+        throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
+    }
+    if (controlPlaneUserRepository.existsByEmailAndAccountId(request.email(), controlPlaneAccount.getId())) {
+        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+    }
+
+    // =========================================================
+    // ✅ AQUI É O LOCAL EXATO: antes do builder
+    // =========================================================
+    Set<String> normalizedPermissions;
+    try {
+        normalizedPermissions = PermissionNormalizer.normalizeControlPlane(request.permissions());
+    } catch (IllegalArgumentException e) {
+        throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
+    }
+    // =========================================================
+
+    ControlPlaneUser user = ControlPlaneUser.builder()
+            .name(request.name())
+            .username(username)
+            .email(request.email())
+            .password(passwordEncoder.encode(request.password()))
+            .role(role)
+            .account(controlPlaneAccount)
+            .suspendedByAccount(false)
+            .suspendedByAdmin(false)
+
+            // =====================================================
+            // ✅ E AQUI: dentro do builder, antes do .build()
+            // =====================================================
+            .permissions(normalizedPermissions)
+
+            // =====================================================
+
+            .build();
+
+    return mapToResponse(controlPlaneUserRepository.save(user));
+}
+
 
     @Transactional(readOnly = true)
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
@@ -186,19 +207,22 @@ public class ControlPlaneUserService {
     
     
 
-    private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
-        return new ControlPlaneUserDetailsResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getName(),
-                user.getEmail(),
-                user.getRole().name(),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin(),
-                user.getCreatedAt(),
-                user.getUpdatedAt(),
-                user.getAccount().getId(),
-                List.of()
-        );
-    }
+   private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
+    return new ControlPlaneUserDetailsResponse(
+            user.getId(),
+            user.getUsername(),
+            user.getName(),
+            user.getEmail(),
+            user.getRole().name(),
+            user.isSuspendedByAccount(),
+            user.isSuspendedByAdmin(),
+            user.getCreatedAt(),
+            user.getUpdatedAt(),
+            user.getAccount().getId(),
+            user.getPermissions() == null
+                    ? List.of()
+                    : user.getPermissions().stream().sorted().toList()
+    );
+}
+
 }

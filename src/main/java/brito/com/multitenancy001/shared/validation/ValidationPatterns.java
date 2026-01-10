@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.shared.validation; // ou .validation
 
+import brito.com.multitenancy001.shared.domain.username.UsernamePolicy;
+
 /**
  * Padrões de validação reutilizáveis em todo o sistema
  */
@@ -11,7 +13,7 @@ public final class ValidationPatterns {
 	
 	// usado pra facilidar no desenvolvimento
 	// Username: 3-50 caracteres, APENAS letras (a-z, A-Z) e números (0-9)
-	public static final String USERNAME_PATTERN = "^[a-zA-Z0-9._-]{3,50}$";
+	public static final String USERNAME_PATTERN = UsernamePolicy.USERNAME_REGEX;
     
     // Password: mínimo 8 caracteres, pelo menos 1 letra maiúscula, 1 minúscula e 1 número
    // public static final String PASSWORD_PATTERN = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$";

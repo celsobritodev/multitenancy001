@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.sale;
 
 
 
@@ -13,7 +13,7 @@ public class SaleItem {
     
     // ... outros campos
     
-    // VERIFIQUE SE TEM @ManyToOne para Sale
+
     @ManyToOne
     @JoinColumn(name = "sale_id")
     private Sale sale;

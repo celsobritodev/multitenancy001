@@ -60,10 +60,7 @@ public class SecurityConfig {
                     "/api/tenant/auth/reset-password",
                     "/api/signup"
                 ).permitAll()
-
-                // 🔒 CONTROLPLANE(APÓS LOGIN)
-                .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
-
+                .requestMatchers("/api/admin/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session ->

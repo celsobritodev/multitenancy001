@@ -43,19 +43,19 @@ public class TenantSchemaHibernateConfig {
     public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
         var emf = new LocalContainerEntityManagerFactoryBean();
         emf.setDataSource(dataSource);
-        emf.setPackagesToScan("brito.com.multitenancy001.tenant.model");
 
- 
+        // ✅ aqui:
+        emf.setPackagesToScan("brito.com.multitenancy001.tenant.domain");
+        // (ou "brito.com.multitenancy001.tenant" se você quer pegar tudo do tenant)
+
         emf.setPersistenceUnitName("TENANT_PU");
         emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
 
         Map<String, Object> props = new HashMap<>();
-  
         props.put("hibernate.hbm2ddl.auto", "none");
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
 
-        // ✅ multi-tenant via string keys (compatível)
         props.put("hibernate.multiTenancy", "SCHEMA");
         props.put("hibernate.multi_tenant_connection_provider", multiTenantConnectionProvider);
         props.put("hibernate.tenant_identifier_resolver", tenantResolver);
@@ -63,4 +63,5 @@ public class TenantSchemaHibernateConfig {
         emf.setJpaPropertyMap(props);
         return emf;
     }
+
 }

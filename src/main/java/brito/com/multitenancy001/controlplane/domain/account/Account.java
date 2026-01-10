@@ -13,11 +13,8 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(
-		name = "accounts", uniqueConstraints = {
-    @UniqueConstraint(columnNames = "slug"),
-    @UniqueConstraint(columnNames = "schema_name")
-})
+@Table(name = "accounts") // a unicidade de schemaName e slug é garantida pela migration
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -36,9 +33,6 @@ public class Account {
    
     @Column(nullable = false, length = 150)
     private String name;
-    
-   
-    
     
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
     private String schemaName;
@@ -123,7 +117,7 @@ public class Account {
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude
-    private List<ControlPlaneUser> userAccount = new ArrayList<>();
+    private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
     
     
     
@@ -137,7 +131,7 @@ public class Account {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt; // ✅ LocalDateTime para auditoria
     
-    @Column(name = "deleted")
+    @Column(name = "deleted",nullable=false)
     @Builder.Default
     private boolean deleted = false;
     

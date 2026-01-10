@@ -1,10 +1,12 @@
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.supplier;
 
 
 
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+
+import brito.com.multitenancy001.tenant.domain.product.Product;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

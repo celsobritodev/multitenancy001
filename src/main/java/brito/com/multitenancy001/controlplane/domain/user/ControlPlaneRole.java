@@ -5,8 +5,9 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 public enum ControlPlaneRole implements RoleAuthority {
 
     SUPER_ADMIN(true),
+    BILLING_ADMIN(true),   // ✅ novo (plataforma)
     SUPPORT(true),
-	STAFF(true);
+    STAFF(true);
 
     private final boolean controlPlaneRole;
 
@@ -19,13 +20,15 @@ public enum ControlPlaneRole implements RoleAuthority {
         return "ROLE_" + name();
     }
 
-    // ✅ MÉTODO QUE FALTAVA
     public boolean isControlPlaneRole() {
         return controlPlaneRole;
     }
 
-    // (Opcional, mas elegante)
     public boolean isSuperAdmin() {
         return this == SUPER_ADMIN;
+    }
+
+    public boolean isBillingAdmin() {
+        return this == BILLING_ADMIN;
     }
 }

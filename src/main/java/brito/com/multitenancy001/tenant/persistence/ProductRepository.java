@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.model.Product;
+import brito.com.multitenancy001.tenant.domain.product.Product;
 
 import java.math.BigDecimal;
 import java.util.List;

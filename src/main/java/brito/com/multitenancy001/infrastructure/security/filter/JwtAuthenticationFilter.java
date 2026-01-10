@@ -54,6 +54,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             final String tokenType = jwtTokenProvider.getTokenType(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
             
+         // ✅ TRAVA: token tem que bater com a rota
+            if (requiresControlPlane(request) && !"CONTROLPLANE".equals(tokenType)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            if (requiresTenant(request) && !"TENANT".equals(tokenType)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            
             if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
                 filterChain.doFilter(request, response);
                 return;
@@ -135,4 +146,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
     }
+    
+    private boolean requiresControlPlane(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/admin/");
+    }
+
+    private boolean requiresTenant(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/tenant/");
+    }
+ 
+    
 }

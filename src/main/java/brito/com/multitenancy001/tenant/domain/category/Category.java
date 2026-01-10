@@ -1,7 +1,7 @@
 // ===============================
-// Subcategory.java
+// Category.java
 // ===============================
-package brito.com.multitenancy001.tenant.model;
+package brito.com.multitenancy001.tenant.domain.category;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -9,27 +9,19 @@ import lombok.Setter;
 
 @Entity
 @Table(
-    name="subcategories",
+    name = "categories",
     uniqueConstraints = @UniqueConstraint(
-        name="uk_subcategories_name_category",
-        columnNames={"category_id","name"}
+        name = "uk_categories_name",
+        columnNames = "name"
     )
 )
 @Getter
 @Setter
-public class Subcategory {
+public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional=false)
-    @JoinColumn(
-        name="category_id",
-        nullable=false,
-        foreignKey=@ForeignKey(name="fk_subcategories_category")
-    )
-    private Category category;
 
     @Column(nullable=false, length=100)
     private String name;

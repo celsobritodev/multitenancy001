@@ -1,5 +1,5 @@
 
-package brito.com.multitenancy001.controlplane.api.controller.accounts;
+package brito.com.multitenancy001.controlplane.api.controller.signup;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;

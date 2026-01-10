@@ -7,10 +7,10 @@
 package brito.com.multitenancy001.tenant.application;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.model.Category;
-import brito.com.multitenancy001.tenant.model.Product;
-import brito.com.multitenancy001.tenant.model.Subcategory;
-import brito.com.multitenancy001.tenant.model.Supplier;
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import brito.com.multitenancy001.tenant.domain.product.Product;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 import brito.com.multitenancy001.tenant.persistence.CategoryRepository;
 import brito.com.multitenancy001.tenant.persistence.ProductRepository;
 import brito.com.multitenancy001.tenant.persistence.SubcategoryRepository;
