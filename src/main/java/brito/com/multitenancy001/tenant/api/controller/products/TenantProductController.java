@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.tenant.api.controller.products;
 
+import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
 import brito.com.multitenancy001.tenant.api.dto.products.ProductUpsertRequest;
 import brito.com.multitenancy001.tenant.api.mapper.ProductApiMapper;
-import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
-import brito.com.multitenancy001.tenant.application.TenantProductService;
+import brito.com.multitenancy001.tenant.application.product.TenantProductService;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
@@ -18,116 +18,108 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/api/tenant/products")
 @RequiredArgsConstructor
 public class TenantProductController {
-	
-	private final ProductApiMapper productApiMapper;
 
-	private final TenantProductService tenantProductService;
+    private final ProductApiMapper productApiMapper;
+    private final TenantProductService tenantProductService;
 
-	// Novos endpoints para os campos adicionais
+    @GetMapping("/category/{categoryId}")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
+        List<Product> products = tenantProductService.findByCategoryId(categoryId);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
 
-	@GetMapping("/category/{categoryId}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
-	public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
-	    List<Product> products = tenantProductService.findByCategoryId(categoryId);
-	    List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-	    return ResponseEntity.ok(dtos);
-	}
+    @GetMapping("/brand/{brand}")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByBrand(@PathVariable String brand) {
+        List<Product> products = tenantProductService.findByBrand(brand);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
 
+    @GetMapping("/active")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getActiveProducts() {
+        List<Product> products = tenantProductService.findActiveProducts();
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
 
-	@GetMapping("/brand/{brand}")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
-	public ResponseEntity<List<ProductResponse>> getProductsByBrand(@PathVariable String brand) {
-		List<Product> products = tenantProductService.findByBrand(brand);
-		List<ProductResponse> productDTOs = products.stream().map(productApiMapper::toResponse).collect(Collectors.toList());
-		return ResponseEntity.ok(productDTOs);
-	}
+    @PatchMapping("/{id}/cost-price")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    public ResponseEntity<ProductResponse> updateCostPrice(
+            @PathVariable UUID id,
+            @RequestParam BigDecimal costPrice
+    ) {
+        Product updatedProduct = tenantProductService.updateCostPrice(id, costPrice);
+        return ResponseEntity.ok(productApiMapper.toResponse(updatedProduct));
+    }
 
-	@GetMapping("/active")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER', 'VIEWER')")
-	public ResponseEntity<List<ProductResponse>> getActiveProducts() {
-		List<Product> products = tenantProductService.findActiveProducts();
-		List<ProductResponse> productDTOs = products.stream().map(productApiMapper::toResponse).collect(Collectors.toList());
-		return ResponseEntity.ok(productDTOs);
-	}
+    @GetMapping("/inventory-value")
+    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    public ResponseEntity<BigDecimal> getTotalInventoryValue() {
+        BigDecimal value = tenantProductService.calculateTotalInventoryValue();
+        return ResponseEntity.ok(value != null ? value : BigDecimal.ZERO);
+    }
 
-	@PatchMapping("/{id}/cost-price")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<ProductResponse> updateCostPrice(@PathVariable UUID id, @RequestParam BigDecimal costPrice) {
+    @GetMapping("/low-stock/count")
+    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    public ResponseEntity<Long> countLowStockProducts(@RequestParam(defaultValue = "10") Integer threshold) {
+        Long count = tenantProductService.countLowStockProducts(threshold);
+        return ResponseEntity.ok(count != null ? count : 0L);
+    }
 
-		Product updatedProduct = tenantProductService.updateCostPrice(id, costPrice);
-		return ResponseEntity.ok(productApiMapper.toResponse(updatedProduct));
-	}
+    @PatchMapping("/{id}/toggle-active")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    public ResponseEntity<ProductResponse> toggleActive(@PathVariable UUID id) {
+        Product product = tenantProductService.findById(id);
+        product.setActive(!Boolean.TRUE.equals(product.getActive()));
+        tenantProductService.create(product);
+        return ResponseEntity.ok(productApiMapper.toResponse(product));
+    }
 
-	@GetMapping("/inventory-value")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<BigDecimal> getTotalInventoryValue() {
-		BigDecimal value = tenantProductService.calculateTotalInventoryValue();
-		return ResponseEntity.ok(value != null ? value : BigDecimal.ZERO);
-	}
+    @PostMapping("/detailed")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest request) {
 
-	@GetMapping("/low-stock/count")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<Long> countLowStockProducts(@RequestParam(defaultValue = "10") Integer threshold) {
+        Product product = new Product();
+        product.setName(request.name());
+        product.setDescription(request.description());
+        product.setSku(request.sku());
+        product.setPrice(request.price());
+        product.setStockQuantity(request.stockQuantity());
+        product.setMinStock(request.minStock());
+        product.setMaxStock(request.maxStock());
+        product.setCostPrice(request.costPrice());
+        product.setBrand(request.brand());
+        product.setWeightKg(request.weightKg());
+        product.setDimensions(request.dimensions());
+        product.setBarcode(request.barcode());
+        product.setActive(request.active());
 
-		Long count = tenantProductService.countLowStockProducts(threshold);
-		return ResponseEntity.ok(count != null ? count : 0L);
-	}
+        Category category = new Category();
+        category.setId(request.categoryId());
+        product.setCategory(category);
 
-	@PatchMapping("/{id}/toggle-active")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<ProductResponse> toggleActive(@PathVariable UUID id) {
-		Product product = tenantProductService.findById(id);
-		product.setActive(!Boolean.TRUE.equals(product.getActive()));
-		tenantProductService.create(product); // Reutiliza o método save
-		return ResponseEntity.ok(productApiMapper.toResponse(product));
-	}
+        if (request.subcategoryId() != null) {
+            Subcategory sub = new Subcategory();
+            sub.setId(request.subcategoryId());
+            product.setSubcategory(sub);
+        }
 
-	@PostMapping("/detailed")
-	@PreAuthorize("hasAnyRole('ADMIN', 'PRODUCT_MANAGER')")
-	public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest request) {
+        if (request.supplierId() != null) {
+            Supplier supplier = new Supplier();
+            supplier.setId(request.supplierId());
+            product.setSupplier(supplier);
+        }
 
-		Product product = new Product();
-		product.setName(request.name());
-		product.setDescription(request.description());
-		product.setSku(request.sku());
-		product.setPrice(request.price());
-		product.setStockQuantity(request.stockQuantity());
-		product.setMinStock(request.minStock());
-		product.setMaxStock(request.maxStock());
-		product.setCostPrice(request.costPrice());
-		product.setBrand(request.brand());
-		product.setWeightKg(request.weightKg());
-		product.setDimensions(request.dimensions());
-		product.setBarcode(request.barcode());
-		product.setActive(request.active());
-
-		// ✅ Category obrigatória
-		Category category = new Category();
-		category.setId(request.categoryId());
-		product.setCategory(category);
-
-		// ✅ Subcategory opcional
-		if (request.subcategoryId() != null) {
-			Subcategory sub = new Subcategory();
-			sub.setId(request.subcategoryId());
-			product.setSubcategory(sub);
-		}
-
-		// Supplier (como você já fazia)
-		if (request.supplierId() != null) {
-			Supplier supplier = new Supplier();
-			 supplier.setId(request.supplierId());
-			product.setSupplier(supplier);
-		}
-
-		Product savedProduct = tenantProductService.create(product);
-		return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
-	}
-
+        Product savedProduct = tenantProductService.create(product);
+        return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
+    }
 }

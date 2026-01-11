@@ -4,17 +4,17 @@
 //  update limpando subcategory quando vier null,
 //  usando findByIdWithCategory pra validar)
 // ===============================
-package brito.com.multitenancy001.tenant.application;
+package brito.com.multitenancy001.tenant.application.product;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
-import brito.com.multitenancy001.tenant.persistence.CategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.ProductRepository;
-import brito.com.multitenancy001.tenant.persistence.SubcategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.SupplierRepository;
+import brito.com.multitenancy001.tenant.persistence.category.CategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.category.SubcategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.product.ProductRepository;
+import brito.com.multitenancy001.tenant.persistence.supplier.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

@@ -2,7 +2,7 @@
 -- V2__create_tenant_users_permissions.sql
 CREATE TABLE IF NOT EXISTS user_tenant_permissions (
     user_tenant_id BIGINT NOT NULL,
-    permission VARCHAR(100) NOT NULL,
+    permission VARCHAR(120) NOT NULL,
 
     PRIMARY KEY (user_tenant_id, permission),
 

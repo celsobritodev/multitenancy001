@@ -24,7 +24,7 @@ public class AdminAuthService {
 
     public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
 
-        // 🔥 SUPER ADMIN SEMPRE NO PUBLIC
+
         TenantContext.clear();
 
         ControlPlaneUser user = controlPlaneUserRepository
@@ -36,7 +36,7 @@ public class AdminAuthService {
                 ));
 
         // 🔒 Regras de negócio
-        if (user.isSuspendedByAccount() || !user.getRole().isControlPlaneRole()) {
+        if (user.isSuspendedByAccount() ) {
             throw new ApiException(
                     "ACCESS_DENIED",
                     "Usuário não autorizado",

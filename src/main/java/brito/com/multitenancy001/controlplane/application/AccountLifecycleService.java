@@ -66,7 +66,7 @@ public class AccountLifecycleService {
 
 
     @Transactional(readOnly = true)
-    public AccountResponse getAccountByIdWithAdmin(Long accountId) {
+    public AccountResponse getAccountById(Long accountId) {
         return publicExecutor.run(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -105,9 +105,7 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
         accountStatusService.restoreAccount(accountId);
     }
 
-    /* =========================================================
-       4. TENANT USERS (ADMIN)
-       ========================================================= */
+    
 
     public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
         return accountTenantUserService.listTenantUsers(accountId, onlyActive);

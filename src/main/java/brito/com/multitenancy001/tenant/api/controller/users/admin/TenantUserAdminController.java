@@ -10,14 +10,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/tenant/users")
-@PreAuthorize("hasRole('TENANT_ADMIN')")
+@RequestMapping("/api/tenant/admin/users")
 @RequiredArgsConstructor
 public class TenantUserAdminController {
 
     private final AccountLifecycleService accountLifecycleService;
 
     @PatchMapping("/{userId}/suspend")
+    @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
     public ResponseEntity<Void> suspendUser(
             @PathVariable Long userId,
             @RequestBody TenantUserAdminSuspendRequest req,

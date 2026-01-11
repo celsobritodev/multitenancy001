@@ -3,11 +3,14 @@ package brito.com.multitenancy001.tenant.application.provisioning;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
+import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.regex.Pattern;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,18 +25,49 @@ public class TenantSchemaProvisioningService {
     private final TenantSchemaMigrationService tenantSchemaMigrationService;
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
+    
+    
+    private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
+    
+   
+
+    
+
+    private void validateSchemaNameOrThrow(String schemaName) {
+        if (!StringUtils.hasText(schemaName)) {
+            throw new ApiException("INVALID_SCHEMA", "Schema inválido", 400);
+        }
+
+        String trimmed = schemaName.trim();
+
+        if ("public".equalsIgnoreCase(trimmed)) {
+            throw new ApiException("INVALID_SCHEMA", "Schema 'public' não é permitido", 400);
+        }
+
+        if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
+            throw new ApiException(
+                    "INVALID_SCHEMA",
+                    "Schema inválido: use apenas letras, números e _ (underscore)",
+                    400
+            );
+        }
+    }
+
+    
 
     public boolean schemaExists(String schemaName) {
-        if (!StringUtils.hasText(schemaName) || "public".equals(schemaName)) return false;
+        if (!StringUtils.hasText(schemaName)) return false;
+
+        String normalized = schemaName.trim();
+
+        if ("public".equalsIgnoreCase(normalized)) return false;
 
         String sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = ?)";
-        Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, schemaName);
+        Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, normalized);
         return Boolean.TRUE.equals(exists);
     }
 
-    public boolean validateTenantSchema(String schemaName) {
-        return schemaExists(schemaName);
-    }
+   
 
     public boolean tableExists(String schemaName, String tableName) {
         if (!StringUtils.hasText(schemaName) || !StringUtils.hasText(tableName)) return false;
@@ -47,18 +81,19 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-    public void schemaMigrationService(String schemaName) {
-        if (!StringUtils.hasText(schemaName) || "public".equals(schemaName)) {
-            throw new ApiException("INVALID_SCHEMA", "Schema inválido", 400);
+    public void ensureSchemaExistsAndMigrate(String schemaName) {
+        validateSchemaNameOrThrow(schemaName);
+
+        String normalized = schemaName.trim().toLowerCase();
+
+
+        if (!schemaExists(normalized)) {
+            log.info("📦 Criando schema {}", normalized);
+            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + normalized + "\"");
         }
 
-        if (!schemaExists(schemaName)) {
-            log.info("📦 Criando schema {}", schemaName);
-            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + schemaName + "\"");
-        }
-
-        log.info("🧬 Rodando migrations do tenant: {}", schemaName);
-        tenantSchemaMigrationService.migrateTenant(schemaName);
+        log.info("🧬 Rodando migrations do tenant: {}", normalized);
+        tenantSchemaMigrationService.migrateTenant(normalized);
     }
 
     /**
@@ -92,7 +127,7 @@ public class TenantSchemaProvisioningService {
                 .username(normUsername)
                 .email(normEmail)
                 .password(passwordEncoder.encode(rawPassword))
-                .role(TenantRole.TENANT_ADMIN)
+                .role(TenantRole.TENANT_OWNER)
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .timezone(account.getTimezone() != null ? account.getTimezone() : "America/Sao_Paulo")

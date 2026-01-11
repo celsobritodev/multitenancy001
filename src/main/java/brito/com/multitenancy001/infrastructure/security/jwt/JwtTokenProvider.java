@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -9,12 +10,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
@@ -41,7 +43,7 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN CONTROLPLANE (para usuários da CONTROLPLANE)
+       TOKEN CONTROLPLANE
        ========================= */
     public String generateControlPlaneToken(
             Authentication authentication,
@@ -51,22 +53,23 @@ public class JwtTokenProvider {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
-            .subject(user.getUsername())
-            .claim("roles", user.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.joining(",")))
-            .claim("type", "CONTROLPLANE") 
-            .claim("context", context)
-            .claim("accountId", accountId)
-            .claim("userId", user.getUserId())
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
+                .subject(user.getUsername())
+                // ✅ permission-first: authorities = CP_*
+                .claim("authorities", user.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.joining(",")))
+                .claim("type", "CONTROLPLANE")
+                .claim("context", context)
+                .claim("accountId", accountId)
+                .claim("userId", user.getUserId())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
     }
 
     /* =========================
-       TOKEN TENANT (para usuários dentro de um tenant)
+       TOKEN TENANT
        ========================= */
     public String generateTenantToken(
             Authentication authentication,
@@ -76,51 +79,48 @@ public class JwtTokenProvider {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
-            .subject(user.getUsername())
-            .claim("roles", user.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.joining(",")))
-            .claim("type", "TENANT")
-            .claim("context", context)
-            .claim("accountId", accountId)
-            .claim("userId", user.getUserId())
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
+                .subject(user.getUsername())
+                // ✅ permission-first: authorities = TEN_*
+                .claim("authorities", user.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.joining(",")))
+                .claim("type", "TENANT")
+                .claim("context", context)
+                .claim("accountId", accountId)
+                .claim("userId", user.getUserId())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
     }
 
     /* =========================
-       REFRESH TOKEN (JWT)
+       REFRESH TOKEN
        ========================= */
     public String generateRefreshToken(String username, String context) {
         return Jwts.builder()
-            .subject(username)
-            .claim("type", "REFRESH")
-            .claim("context", context)
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
+                .subject(username)
+                .claim("type", "REFRESH")
+                .claim("context", context)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
     }
 
     /* =========================
        PASSWORD RESET TOKEN
        ========================= */
-    public String generatePasswordResetToken(
-            String username,
-            String context,
-            Long accountId
-    ) {
+    public String generatePasswordResetToken(String username, String context, Long accountId) {
         return Jwts.builder()
-            .subject(username)
-            .claim("type", "PASSWORD_RESET")
-            .claim("context", context)
-            .claim("accountId", accountId)
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
+                .subject(username)
+                .claim("type", "PASSWORD_RESET")
+                .claim("context", context)
+                .claim("accountId", accountId)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
     }
 
     /* =========================
@@ -128,10 +128,10 @@ public class JwtTokenProvider {
        ========================= */
     public Claims getAllClaimsFromToken(String token) {
         return Jwts.parser()
-            .verifyWith(key)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public String getUsernameFromToken(String token) {
@@ -142,28 +142,24 @@ public class JwtTokenProvider {
      * Obtém o contexto do token (antigo tenantSchema)
      * Mantém compatibilidade retornando "tenantSchema" se "context" não existir
      */
- public String getContextFromToken(String token) {
-    Claims claims = getAllClaimsFromToken(token);
+    public String getContextFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
 
-    String context = claims.get("context", String.class);
-    if (context == null) {
-        context = claims.get("tenantSchema", String.class);
+        String context = claims.get("context", String.class);
+        if (context == null) {
+            context = claims.get("tenantSchema", String.class);
+        }
+
+        String type = claims.get("type", String.class);
+
+        // ✅ Só TENANT não pode ter public
+        if ("TENANT".equals(type) && "public".equalsIgnoreCase(context)) {
+            throw new JwtException("Invalid context for TENANT token: public");
+        }
+
+        return context;
     }
 
-    String type = claims.get("type", String.class);
-
-    // ✅ Só TENANT não pode ter public
-    if ("TENANT".equals(type) && "public".equalsIgnoreCase(context)) {
-        throw new JwtException("Invalid context for TENANT token: public");
-    }
-
-    return context;
-}
-
-    
-    /**
-     * Método para compatibilidade (chama getContextFromToken)
-     */
     public String getTenantSchemaFromToken(String token) {
         return getContextFromToken(token);
     }
@@ -178,6 +174,34 @@ public class JwtTokenProvider {
 
     public Long getUserIdFromToken(String token) {
         return getAllClaimsFromToken(token).get("userId", Long.class);
+    }
+
+    /**
+     * ✅ NOVO: lê authorities do token (permission-first).
+     * Compatível com tokens antigos que ainda tenham "roles".
+     */
+    public List<String> getAuthoritiesFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+
+        // novo padrão
+        String authorities = claims.get("authorities", String.class);
+
+        // compatibilidade antiga (se existir)
+        if (!StringUtils.hasText(authorities)) {
+            authorities = claims.get("roles", String.class);
+        }
+
+        return splitCsv(authorities);
+    }
+
+    private List<String> splitCsv(String csv) {
+        if (!StringUtils.hasText(csv)) return List.of();
+
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
     }
 
     public boolean isTokenExpired(String token) {
@@ -217,18 +241,12 @@ public class JwtTokenProvider {
     public boolean isPasswordResetToken(String token) {
         return "PASSWORD_RESET".equals(getTokenType(token));
     }
-    
-    /**
-     * Verifica se o token é de um contexto específico
-     */
+
     public boolean isTokenInContext(String token, String expectedContext) {
         String actualContext = getContextFromToken(token);
         return expectedContext.equals(actualContext);
     }
-    
-    /**
-     * Verifica se o token é do contexto da plataforma (public)
-     */
+
     public boolean isControlPlaneContextToken(String token) {
         String context = getContextFromToken(token);
         return "public".equals(context);

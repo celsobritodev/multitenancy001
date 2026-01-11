@@ -39,7 +39,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int unsuspendAllByAccount(@Param("accountId") Long accountId);
 
-    // ✅ Suspender 1 usuário manualmente pelo ADMIN do TENANT
+  
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""

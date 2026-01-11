@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.application;
+package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.TenantUserApiMapper;
@@ -10,7 +10,7 @@ import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
+import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -258,17 +258,17 @@ private TenantUser loadTarget(Long accountId, String schema, Long targetUserId) 
 }
 
 private void assertCanDeleteTarget(TenantUser actor, TenantUser target) {
-    if (target.getRole() == TenantRole.TENANT_ADMIN && actor.getRole() != TenantRole.TENANT_ADMIN) {
-        throw new ApiException("FORBIDDEN", "Somente TENANT_ADMIN pode excluir/alterar um TENANT_ADMIN", 403);
+    if (target.getRole() == TenantRole.TENANT_OWNER && actor.getRole() != TenantRole.TENANT_OWNER) {
+        throw new ApiException("FORBIDDEN", "Somente TENANT_OWNER pode excluir/alterar um TENANT_OWNER", 403);
     }
 }
 
 private void assertCanTransferTenantAdmin(TenantUser actor, TenantUser newAdmin) {
-    if (actor.getRole() != TenantRole.TENANT_ADMIN) {
-        throw new ApiException("FORBIDDEN", "Apenas TENANT_ADMIN pode transferir a administração", 403);
+    if (actor.getRole() != TenantRole.TENANT_OWNER) {
+        throw new ApiException("FORBIDDEN", "Apenas TENANT_OWNER pode transferir a administração", 403);
     }
-    if (newAdmin.getRole() != TenantRole.ADMIN) {
-        throw new ApiException("INVALID_TARGET", "Somente um ADMIN pode receber TENANT_ADMIN", 400);
+    if (newAdmin.getRole() != TenantRole.TENANT_ADMIN) {
+        throw new ApiException("INVALID_TARGET", "Somente um TENANT_ADMIN pode receber TENANT_OWNER", 400);
     }
 }
 

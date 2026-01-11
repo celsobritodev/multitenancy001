@@ -1,6 +1,8 @@
 package brito.com.multitenancy001.tenant.domain.user;
 
+import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
@@ -9,7 +11,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -73,7 +77,7 @@ public class TenantUser {
         name = "user_tenant_permissions",
         joinColumns = @JoinColumn(name = "user_tenant_id")
     )
-    @Column(name = "permission", length = 100)
+    @Column(name = "permission", length = 120)
     @Builder.Default
     private List<String> permissions = new ArrayList<>();
 
@@ -100,13 +104,11 @@ public class TenantUser {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(name = "timezone", nullable = false, length = 64,
-            columnDefinition = "varchar(64) default 'UTC'")
+    @Column(name = "timezone", nullable = false, length = 50)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", nullable = false, length = 10,
-            columnDefinition = "varchar(10) default 'pt-BR'")
+    @Column(name = "locale", nullable = false, length = 10)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -131,88 +133,45 @@ public class TenantUser {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    @PrePersist
-    @PreUpdate
-    protected void onSave() {
-        if (permissions == null) permissions = new ArrayList<>();
-        if (role == null) throw new IllegalStateException("Role is required");
+   @PrePersist
+@PreUpdate
+protected void onSave() {
+    if (permissions == null) permissions = new ArrayList<>();
+    if (role == null) throw new IllegalStateException("Role is required");
 
-        // Opcional (recomendado): padroniza casing/trim sem tentar "corrigir" regras de username
-        if (username != null) username = username.toLowerCase().trim();
-        if (email != null) email = email.toLowerCase().trim();
+    if (username != null) username = username.toLowerCase().trim();
+    if (email != null) email = email.toLowerCase().trim();
 
-        if (permissions.isEmpty()) addDefaultPermissions();
+    // 1) se não veio nada, aplica defaults por role via TenantRolePermissions
+    if (permissions.isEmpty()) {
+        permissions = new ArrayList<>(
+                brito.com.multitenancy001.tenant.domain.security.TenantRolePermissions
+                        .permissionsFor(role)
+                        .stream()
+                        .map(Enum::name)
+                        .toList()
+        );
     }
 
-  private void addDefaultPermissions() {
-    switch (role) {
+    // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
+    Set<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
 
-        case TENANT_ADMIN -> permissions.addAll(List.of(
-            "TEN_USER_READ","TEN_USER_CREATE","TEN_USER_UPDATE","TEN_USER_SUSPEND","TEN_USER_RESTORE","TEN_USER_DELETE",
-            "TEN_ROLE_TRANSFER",
-            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
-            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
-            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
-            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
-            "TEN_REPORT_SALES_READ",
-            "TEN_BILLING_READ","TEN_BILLING_WRITE",
-            "TEN_SETTINGS_READ","TEN_SETTINGS_WRITE"
-        ));
-
-        case ADMIN -> permissions.addAll(List.of(
-            "TEN_USER_READ","TEN_USER_CREATE","TEN_USER_UPDATE","TEN_USER_SUSPEND","TEN_USER_RESTORE",
-            // não dá TEN_USER_DELETE por padrão se você quer restringir exclusões
-            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
-            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
-            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
-            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
-            "TEN_REPORT_SALES_READ",
-            "TEN_SETTINGS_READ","TEN_SETTINGS_WRITE",
-            "TEN_BILLING_READ" // pode ler billing do tenant, se fizer sentido
-        ));
-
-        case PRODUCT_MANAGER -> permissions.addAll(List.of(
-            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
-            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
-            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE"
-        ));
-
-        case SALES_MANAGER -> permissions.addAll(List.of(
-            "TEN_SALE_READ","TEN_SALE_WRITE","TEN_SALE_ISSUES_READ",
-            "TEN_REPORT_SALES_READ"
-        ));
-
-        case BILLING_ADMIN -> permissions.addAll(List.of(
-            "TEN_BILLING_READ","TEN_BILLING_WRITE",
-            "TEN_SETTINGS_READ" // se precisa ler dados do tenant
-        ));
-
-        case VIEWER -> permissions.addAll(List.of(
-            "TEN_PRODUCT_READ",
-            "TEN_SALE_READ",
-            "TEN_REPORT_SALES_READ"
-        ));
-
-        case USER -> permissions.addAll(List.of(
-            "TEN_PRODUCT_READ","TEN_PRODUCT_WRITE",
-            "TEN_CATEGORY_READ","TEN_CATEGORY_WRITE",
-            "TEN_SUPPLIER_READ","TEN_SUPPLIER_WRITE",
-            "TEN_SALE_READ"
-        ));
-    }
+    // 3) volta para List preservando ordem (se quiser preservar)
+    permissions = new ArrayList<>(new LinkedHashSet<>(normalized));
 }
+
 
 
     public boolean isLocked(LocalDateTime now) {
         return lockedUntil != null && lockedUntil.isAfter(now);
     }
 
-    public boolean isEnabledNow() {
+    public boolean isEnabledForLogin() {
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
     public boolean isEnabledForLogin(LocalDateTime now) {
-        return isEnabledNow() && !isLocked(now);
+        return isEnabledForLogin() && !isLocked(now);
     }
 
     public void softDelete() {

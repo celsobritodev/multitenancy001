@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.application.username;
+package brito.com.multitenancy001.tenant.application.username.generator;
 
 import java.util.UUID;
 
@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class UsernameGenerator {
+public class UsernameGeneratorService {
 
 	private static final int SUFFIX_LEN = 8;
 

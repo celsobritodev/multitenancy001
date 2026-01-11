@@ -6,7 +6,10 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 
-public record PaymentRequest(
+public record AdminPaymentRequest(
+
+        @NotNull
+        Long accountId,
 
         @NotNull
         @DecimalMin(value = "0.01", message = "amount deve ser > 0")

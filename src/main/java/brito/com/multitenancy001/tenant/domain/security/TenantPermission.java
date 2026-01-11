@@ -11,7 +11,7 @@ public enum TenantPermission implements PermissionAuthority {
     TEN_USER_RESTORE,
     TEN_USER_DELETE,
 
-    TEN_ROLE_TRANSFER, // TENANT_ADMIN -> ADMIN (ou vice-versa conforme regra)
+    TEN_ROLE_TRANSFER, 
 
     TEN_PRODUCT_READ,
     TEN_PRODUCT_WRITE,
@@ -32,7 +32,10 @@ public enum TenantPermission implements PermissionAuthority {
     TEN_BILLING_WRITE,
 
     TEN_SETTINGS_READ,
-    TEN_SETTINGS_WRITE;
+    TEN_SETTINGS_WRITE,
+	
+	TEN_INVENTORY_READ,
+	TEN_INVENTORY_WRITE;
 
     @Override
     public String asAuthority() {

@@ -9,9 +9,9 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class TenantProvisioningService {
 
-    private final TenantSchemaProvisioningService tenantSchemaService;
+    private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 
     public void createSchemaAndMigrate(String schemaName) {
-        tenantSchemaService.schemaMigrationService(schemaName);
+        tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
     }
 }

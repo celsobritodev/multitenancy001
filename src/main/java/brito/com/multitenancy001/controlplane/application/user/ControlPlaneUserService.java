@@ -69,10 +69,7 @@ public class ControlPlaneUserService {
         throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
     }
 
-    // garante que é role de plataforma (SUPER_ADMIN/SUPPORT/STAFF)
-    if (!role.isControlPlaneRole()) {
-        throw new ApiException("INVALID_ROLE", "Role não permitida para usuário de plataforma", 400);
-    }
+   
 
     if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
         throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);

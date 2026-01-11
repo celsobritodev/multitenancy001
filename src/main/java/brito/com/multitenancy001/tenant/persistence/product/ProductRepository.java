@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.persistence;
+package brito.com.multitenancy001.tenant.persistence.product;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -33,13 +33,13 @@ public record ControlPlaneUserCreateRequest(
     String password,
     
     @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "SUPER_ADMIN|BILLING_ADMIN|SUPPORT|STAFF", message = "Role inválida")
+    @Pattern(regexp = "SUPER_ADMIN|BILLING_ADMIN_CP|SUPPORT|STAFF", message = "Role inválida")
     String role,
 
     
     List<String> permissions,
     
-    // 🔹 CAMPOS NOVOS para UserTenant
+
     @Pattern(regexp = ValidationPatterns.PHONE_PATTERN, 
              message = "Telefone inválido")
     @Size(max = 20, message = "Telefone não pode exceder 20 caracteres")

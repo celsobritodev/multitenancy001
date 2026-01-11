@@ -8,14 +8,13 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
-
-import java.time.Clock;
-import java.time.LocalDateTime;
-
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -27,22 +26,21 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // Mantém compatibilidade: decide pelo TenantContext atual
         String schema = TenantContext.getOrNull();
-        if (schema == null) {
+
+        if (schema == null || "public".equalsIgnoreCase(schema)) {
             return loadControlPlaneUser(username);
         }
-        // Se alguém bindar "public" por engano, trate como controlplane
-        if ("public".equalsIgnoreCase(schema)) {
-            return loadControlPlaneUser(username);
-        }
-        // Aqui não sabemos accountId; mantém fallback antigo
+
         LocalDateTime now = LocalDateTime.now(clock);
+
         TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
-        return new AuthenticatedUserContext(user, schema, now);
+
+        var authorities = AuthoritiesFactory.forTenant(user);
+        return new AuthenticatedUserContext(user, schema, now, authorities);
     }
-    
+
     public UserDetails loadControlPlaneUser(String username, Long accountId) {
         LocalDateTime now = LocalDateTime.now(clock);
 
@@ -56,10 +54,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND",
                         "Usuário controlplane não encontrado para esta conta", 404));
 
-        return new AuthenticatedUserContext(user, "public", now);
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+        return new AuthenticatedUserContext(user, "public", now, authorities);
     }
- 
-    
 
     public UserDetails loadControlPlaneUser(String username) {
         LocalDateTime now = LocalDateTime.now(clock);
@@ -67,7 +64,8 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         ControlPlaneUser user = controlPlaneUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário controlplane não encontrado", 404));
 
-        return new AuthenticatedUserContext(user, "public", now);
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+        return new AuthenticatedUserContext(user, "public", now, authorities);
     }
 
     public UserDetails loadTenantUser(String username, Long accountId) {
@@ -88,7 +86,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
-        return new AuthenticatedUserContext(user, schema, now);
+        var authorities = AuthoritiesFactory.forTenant(user);
+        return new AuthenticatedUserContext(user, schema, now, authorities);
     }
-
 }

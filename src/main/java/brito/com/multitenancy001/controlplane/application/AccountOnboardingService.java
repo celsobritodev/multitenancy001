@@ -16,8 +16,8 @@ import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
-import brito.com.multitenancy001.tenant.application.username.UsernameGenerator;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
+import brito.com.multitenancy001.tenant.application.username.generator.UsernameGeneratorService;
+import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 	
-	private final UsernameGenerator usernameGenerator;
+	private final UsernameGeneratorService usernameGenerator;
 
 	
 	private final AccountApiMapper accountApiMapper;
@@ -60,7 +60,7 @@ public class AccountOnboardingService {
 		        publicExecutor.run(() -> publicAccountService.createAccountFromSignup(request))
 		    );
 
-		    tenantSchemaProvisioningService.schemaMigrationService(account.getSchemaName());
+		    tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
 		    createTenantAdminInTenant(account, request);
 
@@ -88,7 +88,7 @@ protected TenantUser createTenantAdminInTenant(Account account, SignupRequest re
             u.setName("Administrador");
             u.setEmail(request.companyEmail());
             u.setPassword(passwordEncoder.encode(request.password()));
-            u.setRole(TenantRole.TENANT_ADMIN);
+            u.setRole(TenantRole.TENANT_OWNER);
             u.setSuspendedByAccount(false);
             u.setSuspendedByAdmin(false);
             u.setCreatedAt(LocalDateTime.now());

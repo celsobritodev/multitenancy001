@@ -24,52 +24,40 @@ public class AccountAdminController {
 
     private final AccountLifecycleService accountLifecycleService;
 
-    // =========================
-    // READ (STAFF / SUPPORT / BILLING_ADMIN / SUPER_ADMIN)
-    // =========================
-
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STAFF') or hasRole('SUPPORT') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<List<AccountResponse>> listAllAccounts() {
         log.info("Listando todas as contas");
         return ResponseEntity.ok(accountLifecycleService.listAllAccounts());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STAFF') or hasRole('SUPPORT') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getAccountById(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.getAccountByIdWithAdmin(id));
+        return ResponseEntity.ok(accountLifecycleService.getAccountById(id));
     }
 
     @GetMapping("/{id}/details")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STAFF') or hasRole('SUPPORT') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountAdminDetailsResponse> getAccountByIdDetails(@PathVariable Long id) {
         return ResponseEntity.ok(accountLifecycleService.getAccountAdminDetails(id));
     }
 
     @GetMapping("/{id}/users")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('SUPPORT') or hasRole('STAFF') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<List<AccountUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
         log.info("Listando Usuários por conta");
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
     }
 
     @GetMapping("/{id}/users/active")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('SUPPORT') or hasRole('STAFF') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<List<AccountUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
     }
 
-    // =========================
-    // CHANGE STATUS (BILLING_ADMIN + SUPER_ADMIN)
-    // =========================
-    // - BILLING_ADMIN: suspender/reativar por cobrança
-    // - SUPER_ADMIN: pode tudo
-    // STAFF/SUPPORT não devem mudar status
-    // =========================
-
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('BILLING_ADMIN') or hasAuthority('CP_TENANT_SUSPEND') or hasAuthority('CP_TENANT_ACTIVATE')")
+    @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_ACTIVATE')")
     public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(
             @PathVariable Long id,
             @Valid @RequestBody AccountStatusChangeRequest req
@@ -77,19 +65,15 @@ public class AccountAdminController {
         return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, req));
     }
 
-    // =========================
-    // DELETE / RESTORE (SUPER_ADMIN only)
-    // =========================
-
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CP_TENANT_DELETE')")
+    @PreAuthorize("hasAuthority('CP_TENANT_DELETE')")
     public ResponseEntity<Void> softDeleteAccount(@PathVariable Long id) {
         accountLifecycleService.softDeleteAccount(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CP_TENANT_ACTIVATE')")
+    @PreAuthorize("hasAuthority('CP_TENANT_ACTIVATE')")
     public ResponseEntity<Void> restoreAccount(@PathVariable Long id) {
         accountLifecycleService.restoreAccount(id);
         return ResponseEntity.noContent().build();

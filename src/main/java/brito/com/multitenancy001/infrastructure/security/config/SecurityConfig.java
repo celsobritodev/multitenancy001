@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.infrastructure.security.config;
 
+import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,8 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -30,9 +29,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration authConfig
-    ) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
 
@@ -40,35 +37,60 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
 
-                // 🔓 ACTUATOR HEALTH (PUBLIC)
+                // =========================
+                // 🔓 PUBLIC
+                // =========================
                 .requestMatchers("/actuator/health").permitAll()
 
-                // 🔓 LOGIN / REFRESH (CONTROLPLANE)
+                // =========================
+                // 🔓 AUTH CONTROLPLANE (admin)
+                // =========================
                 .requestMatchers(
                     "/api/admin/auth/login",
                     "/api/admin/auth/refresh"
                 ).permitAll()
 
-                // 🔓 LOGIN / REFRESH (TENANT)
+                // =========================
+                // 🔓 AUTH TENANT
+                // =========================
                 .requestMatchers(
-                		"/api/tenant/auth/login",
-                    "/api/auth/refresh",
+                    "/api/tenant/auth/login",
+                    "/api/tenant/auth/refresh"
+                ).permitAll()
+
+                // =========================
+                // 🔓 PASSWORD RESET TENANT
+                // =========================
+                .requestMatchers(
+                    "/api/tenant/password/forgot",
+                    "/api/tenant/password/reset"
+                ).permitAll()
+
+                // =========================
+                // 🔓 SIGNUP / CHECKUSER
+                // =========================
+                .requestMatchers(
                     "/api/accounts/auth/checkuser",
-                    "/api/tenant/auth/forgot-password",
-                    "/api/tenant/auth/reset-password",
                     "/api/signup"
                 ).permitAll()
+
+                // =========================
+                // ✅ BOUNDARIES OFICIAIS
+                // =========================
                 .requestMatchers("/api/admin/**").authenticated()
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .requestMatchers("/api/controlplane/**").authenticated()
+                .requestMatchers("/api/tenant/**").authenticated()
+
+                // =========================
+                // ❌ Qualquer rota fora disso é erro de arquitetura
+                // =========================
+                .anyRequest().denyAll()
             );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }

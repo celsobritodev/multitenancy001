@@ -35,7 +35,7 @@ public class TenantExecutor {
     /** Retorna defaultValue se schema/tabela não existir (bom p/ side-effects). */
     public <T> T runIfReady(String schema, String requiredTable, Supplier<T> fn, T defaultValue) {
         if (schema == null || "public".equals(schema)) return defaultValue;
-        if (!tenantSchemaService.validateTenantSchema(schema)) return defaultValue;
+        if (!tenantSchemaService.schemaExists(schema)) return defaultValue;
         if (requiredTable != null && !tenantSchemaService.tableExists(schema, requiredTable)) return defaultValue;
         return run(schema, fn);
     }
@@ -45,7 +45,7 @@ public class TenantExecutor {
         if (schema == null || "public".equals(schema)) {
             throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
         }
-        if (!tenantSchemaService.validateTenantSchema(schema)) {
+        if (!tenantSchemaService.schemaExists(schema)) {
             throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant não existe", 404);
         }
         if (requiredTable != null && !tenantSchemaService.tableExists(schema, requiredTable)) {

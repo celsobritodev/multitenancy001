@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.application;
+package brito.com.multitenancy001.tenant.application.auth;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;

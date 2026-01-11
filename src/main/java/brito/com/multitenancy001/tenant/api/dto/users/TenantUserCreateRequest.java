@@ -33,7 +33,7 @@ public record TenantUserCreateRequest(
     String password,
     
     @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "TENANT_ADMIN|MANAGER|VIEWER|USER", message = "Role inválida")
+    @Pattern(regexp = "TENANT_OWNER|MANAGER|VIEWER|USER", message = "Role inválida")
     String role,
     
     List<String> permissions,

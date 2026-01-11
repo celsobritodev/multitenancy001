@@ -1,8 +1,9 @@
-package brito.com.multitenancy001.tenant.application;
+package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.user.TenantRole;
+import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -57,6 +59,13 @@ public class TenantUserTxService {
         }
 
         TenantRole parsedRole = parseTenantRole(role);
+     // ✅ normaliza e valida permissions AQUI (fonte de verdade)
+        final Set<String> normalizedPermissions;
+        try {
+            normalizedPermissions = PermissionNormalizer.normalizeTenant(permissions);
+        } catch (IllegalArgumentException e1) {
+            throw new ApiException("INVALID_PERMISSION", e1.getMessage(), 400);
+        }
         
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
@@ -71,13 +80,14 @@ public class TenantUserTxService {
                 .avatarUrl(avatarUrl)
                 .timezone("America/Sao_Paulo")
                 .locale("pt_BR")
-                .createdAt(LocalDateTime.now())
+                // ❌ remova createdAt daqui (o Hibernate já seta via @CreationTimestamp no entity)
                 .build();
 
-        // se quiser respeitar permissions do request (opcional)
-        if (permissions != null && !permissions.isEmpty()) {
-            user.setPermissions(permissions);
-        }
+     // ✅ Se request trouxe permissions válidas e não vazias, respeita.
+     // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
+     if (!normalizedPermissions.isEmpty()) {
+         user.setPermissions(normalizedPermissions.stream().toList());
+     }
 
         return tenantUserRepository.save(user);
     }
@@ -186,9 +196,7 @@ public class TenantUserTxService {
         tenantUserRepository.delete(user);
     }
 
-    // =========================
-    // RESET PASSWORD (ADMIN / USERID)
-    // =========================
+   
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
@@ -247,11 +255,11 @@ private TenantRole parseTenantRole(String role) {
     String r = role.trim().toUpperCase();
 
     return switch (r) {
+        case "TENANT_OWNER" -> TenantRole.TENANT_OWNER;
         case "TENANT_ADMIN" -> TenantRole.TENANT_ADMIN;
-        case "ADMIN" -> TenantRole.ADMIN;
         case "PRODUCT_MANAGER" -> TenantRole.PRODUCT_MANAGER;
         case "SALES_MANAGER" -> TenantRole.SALES_MANAGER;
-        case "BILLING_ADMIN" -> TenantRole.BILLING_ADMIN;
+        case "BILLING_ADMIN_TN" -> TenantRole.BILLING_ADMIN_TN;
         case "VIEWER" -> TenantRole.VIEWER;
         case "USER" -> TenantRole.USER;
         default -> throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
@@ -260,15 +268,15 @@ private TenantRole parseTenantRole(String role) {
 
 public void transferTenantAdminRole(Long accountId, Long fromUserId, Long toUserId) {
     TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ADMIN não encontrado", 404));
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_OWNER não encontrado", 404));
 
     TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "ADMIN alvo não encontrado", 404));
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ADMIN alvo não encontrado", 404));
 
     // Aqui NÃO valida regra de negócio (isso fica no service de cima),
     // apenas aplica a troca.
-    from.setRole(TenantRole.ADMIN);
-    to.setRole(TenantRole.TENANT_ADMIN);
+    from.setRole(TenantRole.TENANT_ADMIN);
+    to.setRole(TenantRole.TENANT_OWNER);
 
     from.setUpdatedAt(LocalDateTime.now());
     to.setUpdatedAt(LocalDateTime.now());

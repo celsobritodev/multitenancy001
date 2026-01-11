@@ -20,26 +20,26 @@ public class ControlPlaneUserAdminController {
     private final ControlPlaneUserService controlPlaneUserService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> createControlPlaneUser(@Valid @RequestBody ControlPlaneUserCreateRequest request) {
-    	ControlPlaneUserDetailsResponse response = controlPlaneUserService.createControlPlaneUser(request);
+        ControlPlaneUserDetailsResponse response = controlPlaneUserService.createControlPlaneUser(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listControlPlaneUsers() {
         return ResponseEntity.ok(controlPlaneUserService.listControlPlaneUsers());
     }
 
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT','STAFF')")
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> getControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.getControlPlaneUser(userId));
     }
 
     @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SUPPORT')")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserStatus(
             @PathVariable Long userId,
             @RequestParam boolean active) {
@@ -47,14 +47,14 @@ public class ControlPlaneUserAdminController {
     }
 
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('CP_USER_DELETE')")
     public ResponseEntity<Void> deleteControlPlaneUser(@PathVariable Long userId) {
         controlPlaneUserService.softDeleteControlPlaneUser(userId);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }

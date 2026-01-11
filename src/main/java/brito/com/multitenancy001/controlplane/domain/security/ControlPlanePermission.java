@@ -15,7 +15,8 @@ public enum ControlPlanePermission implements PermissionAuthority {
     CP_SUPPORT_RESET_PASSWORD,
 
     CP_USER_READ,
-    CP_USER_WRITE;
+    CP_USER_WRITE,
+    CP_USER_DELETE;
 
     @Override
     public String asAuthority() {

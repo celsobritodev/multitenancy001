@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.persistence;
+package brito.com.multitenancy001.tenant.persistence.category;
 
 
 import org.springframework.data.jpa.repository.JpaRepository;

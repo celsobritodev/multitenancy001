@@ -1,5 +1,8 @@
 package brito.com.multitenancy001.infrastructure.security.filter;
 
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,10 +16,6 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
-import brito.com.multitenancy001.shared.context.TenantContext;
 
 import java.io.IOException;
 
@@ -53,8 +52,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             final String tokenType = jwtTokenProvider.getTokenType(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
-            
-         // ✅ TRAVA: token tem que bater com a rota
+
+            // ✅ TRAVA: token tem que bater com a rota
             if (requiresControlPlane(request) && !"CONTROLPLANE".equals(tokenType)) {
                 filterChain.doFilter(request, response);
                 return;
@@ -64,12 +63,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            
+            // só aceitamos TENANT / CONTROLPLANE aqui
             if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
                 filterChain.doFilter(request, response);
                 return;
             }
-
 
             if (!StringUtils.hasText(username)) {
                 filterChain.doFilter(request, response);
@@ -87,12 +85,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         filterChain.doFilter(request, response);
                         return;
                     }
-                    
+
                     if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
                         filterChain.doFilter(request, response);
                         return;
                     }
-
 
                     TenantContext.bind(tenantSchema);
                     bound = true;
@@ -105,28 +102,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     userDetails = multiContextUserDetailsService.loadTenantUser(username, accountId);
 
-                } else if ("CONTROLPLANE".equals(tokenType)) {
-                	
-                	String context = jwtTokenProvider.getContextFromToken(jwt);
-                	if (StringUtils.hasText(context) && !"public".equalsIgnoreCase(context)) {
-                	    filterChain.doFilter(request, response);
-                	    return;
-                	}
+                } else { // CONTROLPLANE
+                    String context = jwtTokenProvider.getContextFromToken(jwt);
+                    if (StringUtils.hasText(context) && !"public".equalsIgnoreCase(context)) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
 
+                    Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+                    if (accountId == null) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
 
-                	Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
-                	if (accountId == null) {
-                	    filterChain.doFilter(request, response);
-                	    return;
-                	}
-
-                	userDetails = multiContextUserDetailsService.loadControlPlaneUser(username, accountId);
-
-
-                } else {
-                    // REFRESH / PASSWORD_RESET etc: normalmente não autentica request padrão
-                    filterChain.doFilter(request, response);
-                    return;
+                    userDetails = multiContextUserDetailsService.loadControlPlaneUser(username, accountId);
                 }
 
                 UsernamePasswordAuthenticationToken authToken =
@@ -146,16 +135,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
     }
-    
+
     private boolean requiresControlPlane(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/api/admin/");
+        return path.startsWith("/api/admin/") || path.startsWith("/api/controlplane/");
     }
 
     private boolean requiresTenant(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path.startsWith("/api/tenant/");
     }
- 
-    
+
 }

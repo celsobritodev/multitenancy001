@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -122,6 +123,17 @@ public class ControlPlaneUser {
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private Set<String> permissions = new HashSet<>();
+    
+    @PrePersist
+    @PreUpdate
+    private void normalizePermissions() {
+        // garante Set não nulo
+        if (permissions == null) permissions = new HashSet<>();
+
+        // normaliza prefixo/trim e bloqueia TEN_ no controlplane
+        permissions = PermissionNormalizer.normalizeControlPlane(permissions);
+    }
+
 
     
 
@@ -131,13 +143,13 @@ public class ControlPlaneUser {
     }
 
     // ✅ enabled “puro” (não deletado / não suspenso)
-    public boolean isEnabledFlag() {
+    public boolean isEnabledForLogin() {
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
     // ✅ decisão final de login (enabled + lock)
     public boolean isEnabledForLogin(LocalDateTime now) {
-        return isEnabledFlag() && isAccountNonLocked(now);
+        return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
     public void softDelete(LocalDateTime now, long uniqueSuffix) {

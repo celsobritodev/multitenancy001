@@ -43,12 +43,3 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     CONSTRAINT ux_controlplane_users_email UNIQUE (account_id, email)
 );
 
-CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
-    user_id BIGINT NOT NULL,
-    permission VARCHAR(100) NOT NULL,
-
-    CONSTRAINT fk_controlplane_user_permissions_user
-        FOREIGN KEY (user_id) REFERENCES controlplane_users(id) ON DELETE CASCADE,
-
-    CONSTRAINT pk_controlplane_user_permissions PRIMARY KEY (user_id, permission)
-);
