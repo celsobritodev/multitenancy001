@@ -5,13 +5,13 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.api.mapper.AccountUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountTenantUserService {
 
-    private final TenantUserApiMapper tenantUserApiMapper;
+    private final AccountUserApiMapper accountUserApiMapper;
 
     private final PublicExecutor publicExecutor;
     private final TenantExecutor tenantExecutor;
@@ -38,7 +38,6 @@ public class AccountTenantUserService {
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        // ✅ Evita problema de assinatura do runOrThrow: faz explícito
         tenantExecutor.assertReadyOrThrow(account.getSchemaName(), "users_tenant");
 
         return tenantExecutor.run(account.getSchemaName(), () ->
@@ -48,7 +47,7 @@ public class AccountTenantUserService {
                     : tenantUserRepository.findByAccountId(account.getId());
 
                 return users.stream()
-                        .map(tenantUserApiMapper::toTenantUserSummary)
+                        .map(accountUserApiMapper::toAccountUserSummary)
                         .toList();
             })
         );
@@ -61,7 +60,6 @@ public class AccountTenantUserService {
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        // ✅ idem
         tenantExecutor.assertReadyOrThrow(account.getSchemaName(), "users_tenant");
 
         tenantExecutor.run(account.getSchemaName(), () ->

@@ -4,8 +4,8 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetai
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
+import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,14 +45,14 @@ public class AccountAdminController {
 
     @GetMapping("/{id}/users")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
+    public ResponseEntity<List<TenantUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
         log.info("Listando Usuários por conta");
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
     }
 
     @GetMapping("/{id}/users/active")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
+    public ResponseEntity<List<TenantUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
     }
 
@@ -803,7 +803,6 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetai
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
@@ -812,6 +811,7 @@ import brito.com.multitenancy001.controlplane.persistence.account.AccountReposit
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -901,7 +901,7 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
 
     
 
-    public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+    public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
         return accountTenantUserService.listTenantUsers(accountId, onlyActive);
     }
 
@@ -1291,13 +1291,13 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -1318,7 +1318,7 @@ public class AccountTenantUserService {
     private final AccountRepository accountRepository;
     private final TenantUserRepository tenantUserRepository;
 
-    public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+    public List<TenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
 
         Account account = publicExecutor.run(() ->
             accountRepository.findByIdAndDeletedFalse(accountId)
@@ -1335,7 +1335,7 @@ public class AccountTenantUserService {
                     : tenantUserRepository.findByAccountId(account.getId());
 
                 return users.stream()
-                        .map(tenantUserApiMapper::toAccountUserSummary)
+                        .map(tenantUserApiMapper::toSummary)
                         .toList();
             })
         );
