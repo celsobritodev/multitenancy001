@@ -88,7 +88,7 @@ protected TenantUser createTenantOwnerInTenant(Account account, SignupRequest re
             u.setName("Administrador");
             u.setEmail(request.companyEmail());
             u.setPassword(passwordEncoder.encode(request.password()));
-            u.setRole(TenantRole.TENANT_OWNER);
+            u.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
             u.setSuspendedByAccount(false);
             u.setSuspendedByAdmin(false);
             u.setCreatedAt(LocalDateTime.now());

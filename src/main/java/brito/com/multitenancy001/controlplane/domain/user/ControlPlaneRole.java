@@ -4,10 +4,10 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum ControlPlaneRole implements RoleAuthority {
 
-    SUPER_ADMIN,
-    BILLING_ADMIN_CP,   // ou BILLING_ADMIN_CP se quiser manter sufixo
-    SUPPORT,
-    STAFF;
+    PLATFORM_OWNER,
+    PLATFORM_BILLING_MANAGER,  
+    PLATFORM_SUPPORT,
+    PLATFORM_OPERATOR;
 
     @Override
     public String asAuthority() {
@@ -15,10 +15,10 @@ public enum ControlPlaneRole implements RoleAuthority {
     }
 
     public boolean isSuperAdmin() {
-        return this == SUPER_ADMIN;
+        return this == PLATFORM_OWNER;
     }
 
     public boolean isBillingAdmin() {
-        return this == BILLING_ADMIN_CP;
+        return this == PLATFORM_BILLING_MANAGER;
     }
 }

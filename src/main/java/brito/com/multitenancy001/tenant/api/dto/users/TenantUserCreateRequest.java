@@ -6,8 +6,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
-import java.util.List;
-
+import java.util.LinkedHashSet;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 @Builder
@@ -33,10 +32,10 @@ public record TenantUserCreateRequest(
     String password,
     
     @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "TENANT_OWNER|MANAGER|VIEWER|USER", message = "Role inválida")
+    @Pattern(regexp = "TENANT_ACCOUNT_OWNER|TENANT_ACCOUNT_ADMIN|TENANT_CATALOG_MANAGER|TENANT_SALES_MANAGER|TENANT_BILLING_MANAGER|TENANT_READ_ONLY|TENANT_OPERATOR", message = "Role inválida")
     String role,
     
-    List<String> permissions,
+    LinkedHashSet<String> permissions,
     
     // 🔹 CAMPOS NOVOS para UserTenant
     @Pattern(regexp = ValidationPatterns.PHONE_PATTERN, 

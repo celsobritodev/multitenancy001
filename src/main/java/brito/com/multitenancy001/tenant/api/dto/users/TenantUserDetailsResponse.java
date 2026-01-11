@@ -1,8 +1,7 @@
 package brito.com.multitenancy001.tenant.api.dto.users;
 
 import java.time.LocalDateTime;
-import java.util.List;
-
+import java.util.LinkedHashSet;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 
 public record TenantUserDetailsResponse(
@@ -17,27 +16,28 @@ public record TenantUserDetailsResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         Long accountId,
-        List<String> permissions
+        LinkedHashSet<String> permissions
 ) {
-    public TenantUserDetailsResponse {
-        if (permissions == null) permissions = List.of();
-    }
+	public TenantUserDetailsResponse {
+	    if (permissions == null) permissions = new LinkedHashSet<>();
+	}
 
-    public static TenantUserDetailsResponse from(TenantUser u) {
-        boolean enabled = !u.isDeleted() && !u.isSuspendedByAccount() && !u.isSuspendedByAdmin();
+
+    public static TenantUserDetailsResponse from(TenantUser tenantUser) {
+        boolean enabled = !tenantUser.isDeleted() && !tenantUser.isSuspendedByAccount() && !tenantUser.isSuspendedByAdmin();
         return new TenantUserDetailsResponse(
-                u.getId(),
-                u.getUsername(),
-                u.getName(),
-                u.getEmail(),
-                u.getRole() != null ? u.getRole().name() : null,
-                u.isSuspendedByAccount(),
-                u.isSuspendedByAdmin(),
+                tenantUser.getId(),
+                tenantUser.getUsername(),
+                tenantUser.getName(),
+                tenantUser.getEmail(),
+                tenantUser.getRole() != null ? tenantUser.getRole().name() : null,
+                tenantUser.isSuspendedByAccount(),
+                tenantUser.isSuspendedByAdmin(),
                 enabled,
-                u.getCreatedAt(),
-                u.getUpdatedAt(),
-                u.getAccountId(),
-                u.getPermissions()
+                tenantUser.getCreatedAt(),
+                tenantUser.getUpdatedAt(),
+                tenantUser.getAccountId(),
+                tenantUser.getPermissions()
         );
     }
 }

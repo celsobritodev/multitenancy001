@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.controlplane.domain.account;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 
@@ -13,148 +13,140 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "accounts") // a unicidade de schemaName e slug é garantida pela migration
-
+@Table(name = "accounts")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Account {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Column(name = "is_system_account", nullable = false)
     @Builder.Default
     private boolean systemAccount = false;
-    
-   
+
     @Column(nullable = false, length = 150)
     private String name;
-    
+
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
     private String schemaName;
-    
+
     @Column(name = "slug", nullable = false, unique = true, length = 50)
     private String slug;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     @Builder.Default
     private AccountStatus status = AccountStatus.FREE_TRIAL;
-    
-    @Column(name = "created_at", nullable = false, updatable = false)
+
+    // ✅ AUDITORIA (técnico)
     @CreationTimestamp
-    private LocalDateTime createdAt; // ✅ LocalDate
-    
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // ✅ NEGÓCIO
     @Column(name = "trial_end_date")
-    private LocalDateTime trialEndDate; // ✅ LocalDate
-    
+    private LocalDateTime trialEndDate;
+
     @Column(name = "payment_due_date")
-    private LocalDateTime paymentDueDate; // ✅ LocalDate
-    
+    private LocalDateTime paymentDueDate;
+
     @Column(name = "next_billing_date")
-    private LocalDateTime nextBillingDate; // ✅ LocalDate
-    
+    private LocalDateTime nextBillingDate;
+
     @Column(name = "subscription_plan", length = 50)
     @Builder.Default
     private String subscriptionPlan = "FREE";
-    
+
     @Column(name = "max_users")
     @Builder.Default
     private Integer maxUsers = 5;
-    
+
     @Column(name = "max_products")
     @Builder.Default
     private Integer maxProducts = 100;
-    
+
     @Column(name = "max_storage_mb")
     @Builder.Default
     private Integer maxStorageMb = 100;
-    
+
     @Column(name = "company_email", nullable = false, length = 150)
     private String companyEmail;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "company_doc_type", nullable = false, length = 10)
     private DocumentType companyDocType;
-    
+
     @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
-    
+
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
-    
-   
-    
+
     @Column(name = "company_address", length = 500)
     private String companyAddress;
-    
+
     @Column(name = "company_city", length = 100)
     private String companyCity;
-    
+
     @Column(name = "company_state", length = 50)
     private String companyState;
-    
+
     @Column(name = "company_country", length = 50)
     @Builder.Default
     private String companyCountry = "Brasil";
-    
+
     @Column(name = "timezone", length = 50)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
-    
+
     @Column(name = "locale", length = 10)
     @Builder.Default
     private String locale = "pt_BR";
-    
+
     @Column(name = "currency", length = 3)
     @Builder.Default
     private String currency = "BRL";
-    
+
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-    
-    
-    
-    
+
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
-    
+
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
-    
+
     @Column(name = "deleted_at")
-    private LocalDateTime deletedAt; // ✅ LocalDateTime para auditoria
-    
-    @Column(name = "deleted",nullable=false)
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
-    
- 
-    
-    
-    
-    
+
     @PrePersist
     protected void onCreate() {
+        // base para regras de negócio (não use createdAt aqui)
+        LocalDateTime now = LocalDateTime.now();
 
-        if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
-        }
-
-        // 🔹 Gera slug automaticamente se não vier preenchido
+        // slug
         if (this.slug == null || this.slug.isBlank()) {
             this.slug = this.name.toLowerCase()
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("(^-|-$)", "");
         }
 
-        // 🔹 Gera schemaName automaticamente se não vier preenchido
+        // schemaName
         if (this.schemaName == null) {
             this.schemaName =
                 "tenant_" +
@@ -163,84 +155,48 @@ public class Account {
                 UUID.randomUUID().toString().substring(0, 8);
         }
 
-        // 🔹 Define trial automaticamente
+        // trial
         if (this.trialEndDate == null) {
-            this.trialEndDate = this.createdAt.plusDays(30);
+            this.trialEndDate = now.plusDays(30);
         }
     }
-    
-    
-    
 
-    @PreUpdate
-    protected void onUpdate() {
-        // Método para lógica de atualização se necessário
-    }
-    
-    /**
-     * Verifica se a conta está em trial ativo
-     */
     public boolean isTrialActive() {
-        return this.status == AccountStatus.FREE_TRIAL && 
-               this.trialEndDate != null && 
+        return this.status == AccountStatus.FREE_TRIAL &&
+               this.trialEndDate != null &&
                this.trialEndDate.isAfter(LocalDateTime.now());
     }
-    
-    /**
-     * Verifica se a conta está ativa
-     */
+
     public boolean isActive() {
-        return this.status == AccountStatus.ACTIVE || 
+        return this.status == AccountStatus.ACTIVE ||
                (this.status == AccountStatus.FREE_TRIAL && isTrialActive());
     }
-    
-    /**
-     * Verifica se o pagamento está atrasado
-     */
+
     public boolean isPaymentOverdue() {
-        return this.paymentDueDate != null && 
+        return this.paymentDueDate != null &&
                this.paymentDueDate.isBefore(LocalDateTime.now());
     }
-    
-    /**
-     * Dias restantes no trial
-     */
+
     public long getDaysRemainingInTrial() {
-        if (this.trialEndDate == null || !isTrialActive()) {
-            return 0;
-        }
+        if (this.trialEndDate == null || !isTrialActive()) return 0;
         return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
     }
-    
-   /**
- * Soft delete da conta
- */
-public void softDelete() {
-    if (!this.deleted) {
+
+    public void softDelete() {
+        if (this.deleted) return;
         this.deleted = true;
         this.deletedAt = LocalDateTime.now();
         this.status = AccountStatus.CANCELLED;
     }
-}
 
-    
-    /**
-     * Restaura a conta (undo soft delete)
-     */
     public void restore() {
-        if (this.deleted) {
-            this.deleted = false;
-            this.deletedAt = null;
-
-            // Regra de negócio: ao restaurar, volta para ACTIVE
-            this.status = AccountStatus.ACTIVE;
-        }
+        if (!this.deleted) return;
+        this.deleted = false;
+        this.deletedAt = null;
+        this.status = AccountStatus.ACTIVE;
     }
-    
+
     public boolean isSystemAccount() {
         return this.systemAccount || "public".equals(this.schemaName);
     }
-    
-
-    
 }

@@ -8,7 +8,7 @@ public interface RoleAuthority {
 
     /**
      * Retorna a authority no padrão Spring Security
-     * Ex: ROLE_SUPER_ADMIN, ROLE_TENANT_ADMIN
+     *
      */
     String asAuthority();
 

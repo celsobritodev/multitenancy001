@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.tenant.api.controller.users;
 
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
+import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.application.user.TenantUserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -38,15 +38,15 @@ public class TenantUserController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listTenantUsers() {
-        List<AccountUserSummaryResponse> users = tenantUserService.listTenantUsers();
+    public ResponseEntity<List<TenantUserSummaryResponse>> listTenantUsers() {
+        List<TenantUserSummaryResponse> users = tenantUserService.listTenantUsers();
         return ResponseEntity.ok(users);
     }
 
     @GetMapping("/active")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listActiveTenantUsers() {
-        List<AccountUserSummaryResponse> users = tenantUserService.listActiveTenantUsers();
+    public ResponseEntity<List<TenantUserSummaryResponse>> listActiveTenantUsers() {
+        List<TenantUserSummaryResponse> users = tenantUserService.listActiveTenantUsers();
         return ResponseEntity.ok(users);
     }
 
@@ -59,11 +59,11 @@ public class TenantUserController {
 
     @PatchMapping("/{userId}/status")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
-    public ResponseEntity<AccountUserSummaryResponse> updateTenantUserStatus(
+    public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
             @PathVariable Long userId,
             @RequestParam boolean active
     ) {
-        AccountUserSummaryResponse response = tenantUserService.updateTenantUserStatus(userId, active);
+        TenantUserSummaryResponse response = tenantUserService.updateTenantUserStatus(userId, active);
         return ResponseEntity.ok(response);
     }
 
@@ -76,14 +76,14 @@ public class TenantUserController {
 
     @PatchMapping("/{userId}/restore")
     @PreAuthorize("hasAuthority('TEN_USER_RESTORE')")
-    public ResponseEntity<AccountUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
-        AccountUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
+    public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
+        TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{userId}/password")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
-    public ResponseEntity<AccountUserSummaryResponse> resetTenantUserPassword(
+    public ResponseEntity<TenantUserSummaryResponse> resetTenantUserPassword(
             @PathVariable Long userId,
             @RequestParam
             @Pattern(
@@ -92,7 +92,7 @@ public class TenantUserController {
             )
             String newPassword
     ) {
-        AccountUserSummaryResponse response = tenantUserService.resetTenantUserPassword(userId, newPassword);
+        TenantUserSummaryResponse response = tenantUserService.resetTenantUserPassword(userId, newPassword);
         return ResponseEntity.ok(response);
     }
 

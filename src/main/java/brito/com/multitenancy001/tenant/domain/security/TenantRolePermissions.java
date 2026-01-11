@@ -9,9 +9,9 @@ public final class TenantRolePermissions {
 
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
         return switch (role) {
-            case TENANT_OWNER -> EnumSet.allOf(TenantPermission.class);
+            case TENANT_ACCOUNT_OWNER -> EnumSet.allOf(TenantPermission.class);
 
-            case TENANT_ADMIN -> EnumSet.of(
+            case TENANT_ACCOUNT_ADMIN -> EnumSet.of(
                     TenantPermission.TEN_USER_READ,
                     TenantPermission.TEN_USER_CREATE,
                     TenantPermission.TEN_USER_UPDATE,
@@ -22,32 +22,34 @@ public final class TenantRolePermissions {
                     TenantPermission.TEN_INVENTORY_READ,
                     TenantPermission.TEN_BILLING_READ,
                     TenantPermission.TEN_SETTINGS_READ,
-                    TenantPermission.TEN_SETTINGS_WRITE
+                    TenantPermission.TEN_SETTINGS_WRITE,
+                    TenantPermission.TEN_INVENTORY_WRITE
             );
 
-            case PRODUCT_MANAGER -> EnumSet.of(
+            case TENANT_PRODUCT_MANAGER -> EnumSet.of(
                     TenantPermission.TEN_PRODUCT_READ,
                     TenantPermission.TEN_PRODUCT_WRITE,
-                    TenantPermission.TEN_INVENTORY_READ
+                    TenantPermission.TEN_INVENTORY_READ,
+                    TenantPermission.TEN_INVENTORY_WRITE
             );
 
-            case SALES_MANAGER -> EnumSet.of(
+            case TENANT_SALES_MANAGER -> EnumSet.of(
                     TenantPermission.TEN_SALE_READ,
                     TenantPermission.TEN_SALE_WRITE
             );
 
-            case BILLING_ADMIN_TN -> EnumSet.of(
+            case TENANT_BILLING_MANAGER -> EnumSet.of(
                     TenantPermission.TEN_BILLING_READ,
                     TenantPermission.TEN_BILLING_WRITE
             );
 
-            case VIEWER -> EnumSet.of(
+            case TENANT_READ_ONLY -> EnumSet.of(
                     TenantPermission.TEN_PRODUCT_READ,
                     TenantPermission.TEN_INVENTORY_READ,
                     TenantPermission.TEN_USER_READ
             );
 
-            case USER -> EnumSet.of(
+            case TENANT_OPERATOR -> EnumSet.of(
                     TenantPermission.TEN_PRODUCT_READ
             );
         };

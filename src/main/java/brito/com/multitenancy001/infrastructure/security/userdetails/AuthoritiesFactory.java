@@ -37,19 +37,19 @@ public final class AuthoritiesFactory {
     }
 
     public static Collection<? extends GrantedAuthority> forTenant(TenantUser user) {
-        Set<String> perms = new LinkedHashSet<>();
+        Set<String> permissions = new LinkedHashSet<>();
 
         // 1) role -> permissions (enum -> name)
         TenantRolePermissions.permissionsFor(user.getRole())
-                .forEach(p -> perms.add(p.name()));
+                .forEach(p -> permissions.add(p.name()));
 
         // 2) permissions explícitas do user (List<String>)
         if (user.getPermissions() != null) {
-            perms.addAll(user.getPermissions());
+            permissions.addAll(user.getPermissions());
         }
 
         // 3) normaliza TEN_ e bloqueia CP_
-        Set<String> normalized = PermissionNormalizer.normalizeTenant(perms);
+        Set<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
 
         return normalized.stream()
                 .map(SimpleGrantedAuthority::new)

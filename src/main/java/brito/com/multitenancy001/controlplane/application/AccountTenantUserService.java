@@ -5,13 +5,13 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
-import brito.com.multitenancy001.controlplane.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class AccountTenantUserService {
-	
-	private final TenantUserApiMapper tenantUserApiMapper;
 
+    private final TenantUserApiMapper tenantUserApiMapper;
 
     private final PublicExecutor publicExecutor;
     private final TenantExecutor tenantExecutor;
@@ -39,13 +38,18 @@ public class AccountTenantUserService {
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        return tenantExecutor.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+        // ✅ Evita problema de assinatura do runOrThrow: faz explícito
+        tenantExecutor.assertReadyOrThrow(account.getSchemaName(), "users_tenant");
+
+        return tenantExecutor.run(account.getSchemaName(), () ->
             txExecutor.tenantReadOnlyTx(() -> {
                 List<TenantUser> users = onlyActive
                     ? tenantUserRepository.findActiveUsersByAccount(account.getId())
                     : tenantUserRepository.findByAccountId(account.getId());
 
-                return users.stream().map(tenantUserApiMapper::toAccountUserSummary).toList();
+                return users.stream()
+                        .map(tenantUserApiMapper::toTenantUserSummary)
+                        .toList();
             })
         );
     }
@@ -57,7 +61,10 @@ public class AccountTenantUserService {
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        tenantExecutor.runOrThrow(account.getSchemaName(), "users_tenant", () ->
+        // ✅ idem
+        tenantExecutor.assertReadyOrThrow(account.getSchemaName(), "users_tenant");
+
+        tenantExecutor.run(account.getSchemaName(), () ->
             txExecutor.tenantTx(() -> {
                 int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
                 if (updated == 0) {

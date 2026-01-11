@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -36,7 +37,7 @@ public class TenantUserTxService {
             String role,
             String phone,
             String avatarUrl,
-            List<String> permissions
+            LinkedHashSet<String> permissions
     ) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
 
@@ -85,12 +86,26 @@ public class TenantUserTxService {
 
      // ✅ Se request trouxe permissions válidas e não vazias, respeita.
      // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
-     if (!normalizedPermissions.isEmpty()) {
-         user.setPermissions(normalizedPermissions.stream().toList());
-     }
+        if (!normalizedPermissions.isEmpty()) {
+            user.setPermissions(new LinkedHashSet<>(normalizedPermissions));
+        }
+
 
         return tenantUserRepository.save(user);
     }
+    
+    public TenantUser setSuspendedByAdmin(Long userId, Long accountId, boolean suspended) {
+        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
+
+        user.setSuspendedByAdmin(suspended);
+        user.setUpdatedAt(LocalDateTime.now());
+        return tenantUserRepository.save(user);
+    }
+ 
+    
     
     
     @Transactional(transactionManager = "tenantTransactionManager")
@@ -247,36 +262,31 @@ public class TenantUserTxService {
         user.setUpdatedAt(LocalDateTime.now());
         return tenantUserRepository.save(user);
     }
-private TenantRole parseTenantRole(String role) {
-    if (!StringUtils.hasText(role)) {
-        throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
+    private TenantRole parseTenantRole(String role) {
+        if (!StringUtils.hasText(role)) {
+            throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
+        }
+        try {
+            return TenantRole.valueOf(role.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
+        }
     }
 
-    String r = role.trim().toUpperCase();
-
-    return switch (r) {
-        case "TENANT_OWNER" -> TenantRole.TENANT_OWNER;
-        case "TENANT_ADMIN" -> TenantRole.TENANT_ADMIN;
-        case "PRODUCT_MANAGER" -> TenantRole.PRODUCT_MANAGER;
-        case "SALES_MANAGER" -> TenantRole.SALES_MANAGER;
-        case "BILLING_ADMIN_TN" -> TenantRole.BILLING_ADMIN_TN;
-        case "VIEWER" -> TenantRole.VIEWER;
-        case "USER" -> TenantRole.USER;
-        default -> throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
-    };
-}
-
+    
+    
+    
 public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
     TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_OWNER não encontrado", 404));
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
 
     TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ADMIN alvo não encontrado", 404));
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
 
     // Aqui NÃO valida regra de negócio (isso fica no service de cima),
     // apenas aplica a troca.
-    from.setRole(TenantRole.TENANT_ADMIN);
-    to.setRole(TenantRole.TENANT_OWNER);
+    from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
+    to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
 
     from.setUpdatedAt(LocalDateTime.now());
     to.setUpdatedAt(LocalDateTime.now());

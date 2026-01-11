@@ -4,13 +4,13 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum TenantRole implements RoleAuthority {
 
-    TENANT_OWNER,
-    TENANT_ADMIN,
-    PRODUCT_MANAGER,
-    SALES_MANAGER,
-    BILLING_ADMIN_TN,
-    VIEWER,
-    USER;
+    TENANT_ACCOUNT_OWNER,
+    TENANT_ACCOUNT_ADMIN,
+    TENANT_PRODUCT_MANAGER,
+    TENANT_SALES_MANAGER,
+    TENANT_BILLING_MANAGER,
+    TENANT_READ_ONLY,
+    TENANT_OPERATOR;
 
     @Override
     public String asAuthority() {
@@ -18,6 +18,6 @@ public enum TenantRole implements RoleAuthority {
     }
 
     public boolean isTenantOwner() {
-        return this == TENANT_OWNER;
+        return this == TENANT_ACCOUNT_OWNER;
     }
 }

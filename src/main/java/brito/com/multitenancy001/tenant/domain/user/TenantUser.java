@@ -3,6 +3,7 @@ package brito.com.multitenancy001.tenant.domain.user;
 import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.security.TenantRole;
+import brito.com.multitenancy001.tenant.domain.security.TenantRolePermissions;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
@@ -10,9 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -79,7 +78,8 @@ public class TenantUser {
     )
     @Column(name = "permission", length = 120)
     @Builder.Default
-    private List<String> permissions = new ArrayList<>();
+
+    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
 
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
@@ -136,7 +136,7 @@ public class TenantUser {
    @PrePersist
 @PreUpdate
 protected void onSave() {
-    if (permissions == null) permissions = new ArrayList<>();
+    if (permissions == null) permissions = new LinkedHashSet<>();
     if (role == null) throw new IllegalStateException("Role is required");
 
     if (username != null) username = username.toLowerCase().trim();
@@ -144,8 +144,8 @@ protected void onSave() {
 
     // 1) se não veio nada, aplica defaults por role via TenantRolePermissions
     if (permissions.isEmpty()) {
-        permissions = new ArrayList<>(
-                brito.com.multitenancy001.tenant.domain.security.TenantRolePermissions
+        permissions = new LinkedHashSet<>(
+                TenantRolePermissions
                         .permissionsFor(role)
                         .stream()
                         .map(Enum::name)
@@ -156,8 +156,8 @@ protected void onSave() {
     // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
     Set<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
 
-    // 3) volta para List preservando ordem (se quiser preservar)
-    permissions = new ArrayList<>(new LinkedHashSet<>(normalized));
+    // 3) volta para LinkedHashSet preservando ordem (se quiser preservar)
+    permissions = new LinkedHashSet<>(new LinkedHashSet<>(normalized));
 }
 
 

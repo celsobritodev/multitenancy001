@@ -13,9 +13,9 @@ public final class ControlPlaneRolePermissions {
         if (role == null) return Set.of();
 
         return switch (role) {
-            case SUPER_ADMIN -> EnumSet.allOf(ControlPlanePermission.class);
+            case PLATFORM_OWNER -> EnumSet.allOf(ControlPlanePermission.class);
 
-            case BILLING_ADMIN_CP -> EnumSet.of(
+            case PLATFORM_BILLING_MANAGER -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_ACTIVATE,
@@ -23,7 +23,7 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_BILLING_WRITE
             );
 
-            case SUPPORT -> EnumSet.of(
+            case PLATFORM_SUPPORT -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_ACTIVATE,
@@ -31,7 +31,7 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_USER_WRITE
             );
 
-            case STAFF -> EnumSet.of(
+            case PLATFORM_OPERATOR -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_USER_READ
             );
