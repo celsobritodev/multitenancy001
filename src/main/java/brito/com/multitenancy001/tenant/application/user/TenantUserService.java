@@ -263,7 +263,7 @@ private void assertCanDeleteTarget(TenantUser actor, TenantUser target) {
     }
 }
 
-private void assertCanTransferTenantAdmin(TenantUser actor, TenantUser newAdmin) {
+private void assertCanTransferTenantOwner(TenantUser actor, TenantUser newAdmin) {
     if (actor.getRole() != TenantRole.TENANT_OWNER) {
         throw new ApiException("FORBIDDEN", "Apenas TENANT_OWNER pode transferir a administração", 403);
     }
@@ -272,17 +272,17 @@ private void assertCanTransferTenantAdmin(TenantUser actor, TenantUser newAdmin)
     }
 }
 
-public void transferTenantAdmin(Long targetAdminUserId) {
+public void transferTenantOwner(Long targetAdminUserId) {
     Long accountId = securityUtils.getCurrentAccountId();
     String schema = securityUtils.getCurrentSchema();
 
     TenantUser actor = loadActor(accountId, schema); // quem está logado
     TenantUser newAdmin = loadTarget(accountId, schema, targetAdminUserId);
 
-    assertCanTransferTenantAdmin(actor, newAdmin);
+    assertCanTransferTenantOwner(actor, newAdmin);
 
     runInTenant(schema, () -> {
-        tenantUserTxService.transferTenantAdminRole(accountId, actor.getId(), newAdmin.getId());
+        tenantUserTxService.transferTenantOwnerRole(accountId, actor.getId(), newAdmin.getId());
     });
 }
 

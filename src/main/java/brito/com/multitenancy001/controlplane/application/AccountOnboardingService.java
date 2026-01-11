@@ -62,7 +62,7 @@ public class AccountOnboardingService {
 
 		    tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
-		    createTenantAdminInTenant(account, request);
+		    createTenantOwnerInTenant(account, request);
 
 		    log.info("✅ Account criada | accountId={} | schema={} | slug={}",
 		            account.getId(), account.getSchemaName(), account.getSlug());
@@ -72,7 +72,7 @@ public class AccountOnboardingService {
 
     
 
-protected TenantUser createTenantAdminInTenant(Account account, SignupRequest request) {
+protected TenantUser createTenantOwnerInTenant(Account account, SignupRequest request) {
     return tenantExecutor.run(account.getSchemaName(), () ->
         txExecutor.tenantTx(() -> {
 

@@ -17,7 +17,7 @@ public enum TenantRole implements RoleAuthority {
         return "ROLE_" + name();
     }
 
-    public boolean isTenantAdmin() {
+    public boolean isTenantOwner() {
         return this == TENANT_OWNER;
     }
 }

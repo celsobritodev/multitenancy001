@@ -24,8 +24,8 @@ public class TenantUserController {
 
     @PatchMapping("/{userId}/transfer-admin")
     @PreAuthorize("hasAuthority('TEN_ROLE_TRANSFER')")
-    public ResponseEntity<Void> transferTenantAdmin(@PathVariable Long userId) {
-        tenantUserService.transferTenantAdmin(userId);
+    public ResponseEntity<Void> transferTenantOwner(@PathVariable Long userId) {
+        tenantUserService.transferTenantOwner(userId);
         return ResponseEntity.noContent().build();
     }
 

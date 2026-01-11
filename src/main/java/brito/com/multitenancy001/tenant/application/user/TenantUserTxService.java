@@ -266,7 +266,7 @@ private TenantRole parseTenantRole(String role) {
     };
 }
 
-public void transferTenantAdminRole(Long accountId, Long fromUserId, Long toUserId) {
+public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
     TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
             .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_OWNER não encontrado", 404));
 

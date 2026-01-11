@@ -99,7 +99,7 @@ public class TenantSchemaProvisioningService {
     /**
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
-    public TenantUser tenantAdminBootstrapService(Account account, String username, String email, String rawPassword) {
+    public TenantUser tenantOwnerBootstrapService(Account account, String username, String email, String rawPassword) {
         String bound = TenantContext.getOrNull();
         if (bound == null || !bound.equals(account.getSchemaName())) {
             throw new ApiException("TENANT_NOT_BOUND", "Tenant não está bindado no schema esperado", 500);

@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.api.controller.accountsadmin;
+package brito.com.multitenancy001.controlplane.api.controller.accounts.admin;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;

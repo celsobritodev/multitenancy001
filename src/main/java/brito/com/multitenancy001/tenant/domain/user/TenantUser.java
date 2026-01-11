@@ -162,8 +162,9 @@ protected void onSave() {
 
 
 
-    public boolean isLocked(LocalDateTime now) {
-        return lockedUntil != null && lockedUntil.isAfter(now);
+    public boolean isAccountNonLocked(LocalDateTime now) {
+    	var accountLocked = (lockedUntil != null && lockedUntil.isAfter(now));
+        return !accountLocked;
     }
 
     public boolean isEnabledForLogin() {
@@ -171,7 +172,7 @@ protected void onSave() {
     }
 
     public boolean isEnabledForLogin(LocalDateTime now) {
-        return isEnabledForLogin() && !isLocked(now);
+        return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
     public void softDelete() {
