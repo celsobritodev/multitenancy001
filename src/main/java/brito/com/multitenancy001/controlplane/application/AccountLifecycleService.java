@@ -23,95 +23,80 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AccountLifecycleService {
-	
+
 	private final ControlPlaneUserRepository controlPlaneUserRepository;
-
-	
 	private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
-
-	
 	private final AccountApiMapper accountApiMapper;
-	
 	private final PublicExecutor publicExecutor;
+	private final AccountRepository accountRepository;
+	private final AccountOnboardingService accountOnboardingService;
+	private final AccountStatusService accountStatusService;
+	private final AccountTenantUserService accountTenantUserService;
 
-	
+	/*
+	 * ========================================================= 1. ONBOARDING /
+	 * SIGNUP =========================================================
+	 */
 
-    private final AccountRepository accountRepository;
+	public AccountResponse createAccount(SignupRequest signupRequest) {
+		return accountOnboardingService.createAccount(signupRequest);
+	}
 
-    private final AccountOnboardingService accountOnboardingService;
-    private final AccountStatusService accountStatusService;
-    private final AccountTenantUserService accountTenantUserService;
+	/*
+	 * ========================================================= 2. CONSULTAS
+	 * (PUBLIC) =========================================================
+	 */
 
-    /* =========================================================
-       1. ONBOARDING / SIGNUP
-       ========================================================= */
+	@Transactional(readOnly = true)
+	public List<AccountResponse> listAllAccounts() {
+		return publicExecutor.run(
+				() -> accountRepository.findAllByDeletedFalse().stream().map(accountApiMapper::toResponse).toList());
+	}
 
-    public AccountResponse createAccount(SignupRequest request) {
-        return accountOnboardingService.createAccount(request);
-    }
+	@Transactional(readOnly = true)
+	public AccountResponse getAccountById(Long accountId) {
+		return publicExecutor.run(() -> {
+			Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+					.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+			return accountApiMapper.toResponse(account);
+		});
+	}
 
-    /* =========================================================
-       2. CONSULTAS (PUBLIC)
-       ========================================================= */
+	@Transactional(readOnly = true)
+	public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+		return publicExecutor.run(() -> {
+			Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+					.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-    @Transactional(readOnly = true)
-    public List<AccountResponse> listAllAccounts() {
-        return publicExecutor.run(() ->
-            accountRepository.findAllByDeletedFalse()
-                .stream()
-                .map(accountApiMapper::toResponse)
-                .toList()
-        );
-    }
+			long totalUsers = controlPlaneUserRepository.countByAccountIdAndDeletedFalse(accountId);
 
+			return accountAdminDetailsApiMapper.toResponse(account, null, totalUsers);
+		});
+	}
 
-    @Transactional(readOnly = true)
-    public AccountResponse getAccountById(Long accountId) {
-        return publicExecutor.run(() -> {
-            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-            return accountApiMapper.toResponse(account);
-        });
-    }
+	/*
+	 * ========================================================= 3. STATUS / SOFT
+	 * DELETE / RESTORE =========================================================
+	 */
 
+	public AccountStatusChangeResponse changeAccountStatus(Long accountId,
+			AccountStatusChangeRequest accountStatusChangeRequest) {
+		return accountStatusService.changeAccountStatus(accountId, accountStatusChangeRequest);
+	}
 
-   @Transactional(readOnly = true)
-public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-    return publicExecutor.run(() -> {
-        Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+	public void softDeleteAccount(Long accountId) {
+		accountStatusService.softDeleteAccount(accountId);
+	}
 
-        long totalUsers = controlPlaneUserRepository.countByAccountIdAndDeletedFalse(accountId);
+	public void restoreAccount(Long accountId) {
+		accountStatusService.restoreAccount(accountId);
+	}
 
-        return accountAdminDetailsApiMapper.toResponse(account, null, totalUsers);
-    });
-}
+	public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+		return accountTenantUserService.listTenantUsers(accountId, onlyActive);
+	}
 
-
-
-    /* =========================================================
-       3. STATUS / SOFT DELETE / RESTORE
-       ========================================================= */
-
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return accountStatusService.changeAccountStatus(accountId, req);
-    }
-
-    public void softDeleteAccount(Long accountId) {
-        accountStatusService.softDeleteAccount(accountId);
-    }
-
-    public void restoreAccount(Long accountId) {
-        accountStatusService.restoreAccount(accountId);
-    }
-
-    
-
-    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-        return accountTenantUserService.listTenantUsers(accountId, onlyActive);
-    }
-
-    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
-    }
+	public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
+		accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
+	}
 }

@@ -24,12 +24,11 @@ public class AccountStatusService {
 
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
-
     private final AccountRepository accountRepository;
     private final TenantUserAdminBridge tenantUserAdminBridge;
 
 
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
+    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest accountStatusChangeRequest) {
         return txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = accountRepository.findById(accountId)
@@ -39,8 +38,8 @@ public class AccountStatusService {
 
             // ... mantenha aqui suas regras de transição, validações, etc ...
 
-            account.setStatus(req.status());
-            if (req.status() == AccountStatus.ACTIVE) {
+            account.setStatus(accountStatusChangeRequest.status());
+            if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
                 account.setDeletedAt(null);
             }
             accountRepository.save(account);
@@ -49,15 +48,15 @@ public class AccountStatusService {
             boolean applied = false;
             String action = "NONE";
 
-            if (req.status() == AccountStatus.SUSPENDED) {
+            if (accountStatusChangeRequest.status() == AccountStatus.SUSPENDED) {
                 affected = suspendTenantUsersByAccount(account);
                 applied = true;
                 action = "SUSPEND_BY_ACCOUNT";
-            } else if (req.status() == AccountStatus.ACTIVE) {
+            } else if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
                 affected = unsuspendTenantUsersByAccount(account);
                 applied = true;
                 action = "UNSUSPEND_BY_ACCOUNT";
-            } else if (req.status() == AccountStatus.CANCELLED) {
+            } else if (accountStatusChangeRequest.status() == AccountStatus.CANCELLED) {
                 affected = cancelAccount(account);
                 applied = true;
                 action = "CANCELLED";

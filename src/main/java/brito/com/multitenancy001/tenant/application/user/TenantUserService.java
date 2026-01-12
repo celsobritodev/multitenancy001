@@ -6,6 +6,7 @@ import brito.com.multitenancy001.shared.account.AccountResolver;
 import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
@@ -15,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -30,6 +30,8 @@ public class TenantUserService {
     private final AccountResolver accountResolver;
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
+    private final AppClock appClock;
+
 
     // ===== helpers =====
     private <T> T runInTenant(String schema, Callable<T> action) {
@@ -205,7 +207,7 @@ public class TenantUserService {
             );
 
             user.setPasswordResetToken(token);
-            user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
+            user.setPasswordResetExpires(appClock.now().plusHours(1));
             tenantUserTxService.save(user);
 
             return token;
@@ -242,7 +244,8 @@ public class TenantUserService {
                     phone,
                     locale,
                     timezone,
-                    LocalDateTime.now()
+                    appClock.now()
+
             );
             return tenantUserApiMapper.toDetails(updated);
         });

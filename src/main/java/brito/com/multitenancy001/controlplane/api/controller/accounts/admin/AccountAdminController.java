@@ -60,9 +60,9 @@ public class AccountAdminController {
     @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_ACTIVATE')")
     public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(
             @PathVariable Long id,
-            @Valid @RequestBody AccountStatusChangeRequest req
+            @Valid @RequestBody AccountStatusChangeRequest accountStatusChangeRequest
     ) {
-        return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, req));
+        return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, accountStatusChangeRequest));
     }
 
     @DeleteMapping("/{id}")

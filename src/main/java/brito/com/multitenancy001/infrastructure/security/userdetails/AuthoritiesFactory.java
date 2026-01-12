@@ -2,7 +2,7 @@ package brito.com.multitenancy001.infrastructure.security.userdetails;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRolePermissions;
-import brito.com.multitenancy001.shared.security.PermissionNormalizer;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 
@@ -29,7 +29,7 @@ public final class AuthoritiesFactory {
         }
 
         // 3) normaliza CP_ e bloqueia TEN_
-        LinkedHashSet<String> normalized = PermissionNormalizer.normalizeControlPlane(permissions);
+        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlane(permissions);
 
         return normalized.stream()
                 .map(SimpleGrantedAuthority::new)
@@ -49,7 +49,7 @@ public final class AuthoritiesFactory {
         }
 
         // 3) normaliza TEN_ e bloqueia CP_
-        LinkedHashSet<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
+        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeTenant(permissions);
 
         return normalized.stream()
                 .map(SimpleGrantedAuthority::new)

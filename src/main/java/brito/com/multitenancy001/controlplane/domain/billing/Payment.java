@@ -57,7 +57,7 @@ public class Payment {
     @Column(name = "payment_gateway", length = 50)
     private String paymentGateway;
 
-    @Column(name = "currency", length = 3,nullable=false)
+    @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -67,10 +67,10 @@ public class Payment {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name="invoice_url", columnDefinition="TEXT")
+    @Column(name = "invoice_url", columnDefinition = "TEXT")
     private String invoiceUrl;
 
-    @Column(name="receipt_url", columnDefinition="TEXT")
+    @Column(name = "receipt_url", columnDefinition = "TEXT")
     private String receiptUrl;
 
     // ✅ AUDITORIA (técnico)
@@ -101,22 +101,48 @@ public class Payment {
                     .toUpperCase();
         }
 
+        // ⚠️ NÃO setar tempo aqui. paymentDate deve vir do service com Clock.
         if (this.paymentDate == null) {
-            this.paymentDate = LocalDateTime.now();
+            throw new IllegalStateException("paymentDate deve ser definido pela aplicação (Clock/AppClock).");
         }
 
+        // Se já está completed e não veio validUntil, calcula baseado no paymentDate (determinístico)
         if (this.status == PaymentStatus.COMPLETED && this.validUntil == null) {
-            this.validUntil = calculateDefaultValidUntil();
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
         }
     }
 
-    private LocalDateTime calculateDefaultValidUntil() {
-        return this.paymentDate.plusDays(30);
+    private LocalDateTime calculateDefaultValidUntil(LocalDateTime baseDate) {
+        return baseDate.plusDays(30);
     }
 
+    // ---------------------------
+    // Transições de estado (domínio)
+    // ---------------------------
+
+    /** Use quando o pagamento é marcado como concluído no "agora" do app. */
+    public void markAsCompleted(LocalDateTime now) {
+        this.status = PaymentStatus.COMPLETED;
+
+        // Se paymentDate ainda não foi setado, seta com o "agora" vindo de fora (Clock/AppClock)
+        if (this.paymentDate == null) {
+            this.paymentDate = now;
+        }
+
+        if (this.validUntil == null) {
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
+        }
+    }
+
+    /** Mantido por compatibilidade: exige que paymentDate já tenha sido definido externamente. */
     public void markAsCompleted() {
         this.status = PaymentStatus.COMPLETED;
-        if (this.validUntil == null) this.validUntil = calculateDefaultValidUntil();
+        if (this.paymentDate == null) {
+            throw new IllegalStateException("paymentDate deve ser definido antes de marcar como COMPLETED.");
+        }
+        if (this.validUntil == null) {
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
+        }
     }
 
     public void markAsFailed(String reason) {
@@ -126,31 +152,47 @@ public class Payment {
         }
     }
 
-    public void refundPartially(BigDecimal amount, String reason) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
+    public void refundPartially(LocalDateTime now, BigDecimal amount, String reason) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
             throw new IllegalArgumentException("Valor de reembolso inválido");
         }
+        if (!canBeRefunded(now)) {
+            throw new IllegalStateException("Pagamento não pode ser reembolsado");
+        }
+
         this.refundAmount = amount;
         this.refundReason = reason;
-        this.refundedAt = LocalDateTime.now();
+        this.refundedAt = now;
         this.status = PaymentStatus.REFUNDED;
     }
 
-    public void refundFully(String reason) {
+    public void refundFully(LocalDateTime now, String reason) {
+        if (!canBeRefunded(now)) {
+            throw new IllegalStateException("Pagamento não pode ser reembolsado");
+        }
+
         this.refundAmount = this.amount;
         this.refundReason = reason;
-        this.refundedAt = LocalDateTime.now();
+        this.refundedAt = now;
         this.status = PaymentStatus.REFUNDED;
     }
 
-    public boolean isActive() {
-        return this.status == PaymentStatus.COMPLETED &&
-               (this.validUntil == null || this.validUntil.isAfter(LocalDateTime.now()));
+    // ---------------------------
+    // Regras (parametrizadas por "agora")
+    // ---------------------------
+
+    public boolean isActive(LocalDateTime now) {
+        return this.status == PaymentStatus.COMPLETED
+                && (this.validUntil == null || this.validUntil.isAfter(now));
     }
 
-    public boolean canBeRefunded() {
-        return this.status == PaymentStatus.COMPLETED &&
-               this.refundedAt == null &&
-               this.paymentDate.isAfter(LocalDateTime.now().minusDays(90));
+    public boolean canBeRefunded(LocalDateTime now) {
+        if (this.status != PaymentStatus.COMPLETED) return false;
+        if (this.refundedAt != null) return false;
+        if (this.paymentDate == null) return false;
+
+        // Exemplo original: até 90 dias após paymentDate (regra determinística)
+        // (equivalente a: paymentDate.isAfter(now.minusDays(90)))
+        return this.paymentDate.isAfter(now.minusDays(90));
     }
 }

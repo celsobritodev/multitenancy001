@@ -18,9 +18,9 @@ public class TenantUserAdminController {
     @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
     public ResponseEntity<Void> suspendUser(
             @PathVariable Long userId,
-            @RequestBody TenantUserAdminSuspendRequest req
+            @RequestBody TenantUserAdminSuspendRequest tenantUserAdminSuspendRequest
     ) {
-        tenantUserAdminService.setUserSuspendedByAdmin(userId, req.suspended());
+        tenantUserAdminService.setUserSuspendedByAdmin(userId, tenantUserAdminSuspendRequest.suspended());
         return ResponseEntity.noContent().build();
     }
 }

@@ -37,7 +37,7 @@ public class ControlPlanePaymentController {
             @Valid @RequestBody AdminPaymentRequest body
     ) {
         // Garante que o accountId do path manda (evita inconsistência)
-        AdminPaymentRequest req = new AdminPaymentRequest(
+        AdminPaymentRequest adminPaymentRequest = new AdminPaymentRequest(
                 accountId,
                 body.amount(),
                 body.paymentMethod(),
@@ -45,7 +45,7 @@ public class ControlPlanePaymentController {
                 body.description()
         );
 
-        PaymentResponse response = paymentService.processPaymentForAccount(req);
+        PaymentResponse response = paymentService.processPaymentForAccount(adminPaymentRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -71,10 +71,10 @@ public class ControlPlanePaymentController {
     @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
     public ResponseEntity<PaymentResponse> refund(
             @PathVariable Long paymentId,
-            @Valid @RequestBody RefundRequest request
+            @Valid @RequestBody RefundRequest refundRequest
     ) {
         PaymentResponse response =
-                paymentService.refundPayment(paymentId, request.amount(), request.reason());
+                paymentService.refundPayment(paymentId, refundRequest.amount(), refundRequest.reason());
         return ResponseEntity.ok(response);
     }
 

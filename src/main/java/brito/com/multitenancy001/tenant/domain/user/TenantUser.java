@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.domain.user;
 
-import brito.com.multitenancy001.shared.security.PermissionNormalizer;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
@@ -75,9 +75,8 @@ public class TenantUser {
         name = "tenant_user_permissions",
         joinColumns = @JoinColumn(name = "tenant_user_id")
     )
-    @Column(name = "permission",nullable=false, length = 120)
+    @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();
 
     @Column(name = "last_login")
@@ -132,38 +131,30 @@ public class TenantUser {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-   @PrePersist
-@PreUpdate
-protected void onSave() {
-    if (permissions == null) permissions = new LinkedHashSet<>();
-    if (role == null) throw new IllegalStateException("Role is required");
+    @PrePersist
+    @PreUpdate
+    protected void onSave() {
+        if (role == null) throw new IllegalStateException("Role is required");
+        if (permissions == null) permissions = new LinkedHashSet<>();
 
-    if (username != null) username = username.toLowerCase().trim();
-    if (email != null) email = email.toLowerCase().trim();
+        if (username != null) username = username.toLowerCase().trim();
+        if (email != null) email = email.toLowerCase().trim();
 
-    // 1) se não veio nada, aplica defaults por role via TenantRolePermissions
-    if (permissions.isEmpty()) {
-        permissions = new LinkedHashSet<>(
-                TenantRolePermissions
-                        .permissionsFor(role)
-                        .stream()
-                        .map(Enum::name)
-                        .toList()
-        );
+        // 1) defaults por role (somente se vier vazio)
+        if (permissions.isEmpty()) {
+            permissions = new LinkedHashSet<>(
+                TenantRolePermissions.permissionsFor(role).stream()
+                    .map(Enum::name)
+                    .toList()
+            );
+        }
+
+        // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
+        permissions = new LinkedHashSet<>(PermissionScopeValidator.normalizeTenant(permissions));
     }
 
-    // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
-    LinkedHashSet<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
-
-    // 3) volta para LinkedHashSet preservando ordem (se quiser preservar)
-    permissions = new LinkedHashSet<>(new LinkedHashSet<>(normalized));
-}
-
-
-
     public boolean isAccountNonLocked(LocalDateTime now) {
-    	var accountLocked = (lockedUntil != null && lockedUntil.isAfter(now));
-        return !accountLocked;
+        return lockedUntil == null || !lockedUntil.isAfter(now);
     }
 
     public boolean isEnabledForLogin() {
@@ -174,63 +165,69 @@ protected void onSave() {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-    public void softDelete() {
+    /**
+     * ✅ Clock-aware: agora o tempo vem de fora (AppClock).
+     * Chamada típica: user.softDelete(appClock.now(), appClock.epochMillis());
+     */
+    public void softDelete(LocalDateTime now, long suffixEpochMillis) {
         if (deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
 
         deleted = true;
-        deletedAt = LocalDateTime.now();
+        deletedAt = now;
 
         suspendedByAccount = true;
         suspendedByAdmin = true;
 
-        String ts = String.valueOf(System.currentTimeMillis());
+        String ts = String.valueOf(suffixEpochMillis);
 
-        // ✅ username: normaliza para ficar compatível com o pattern e preserva o sufixo (timestamp)
-        {
-            String prefix = "deleted_";
-            String suffix = "_" + ts;
+        renameUsernameForDelete(ts);
+        renameEmailForDelete(ts);
+    }
 
-            String middle = (username == null ? "user" : username)
+    private void renameUsernameForDelete(String ts) {
+        String prefix = "deleted_";
+        String suffix = "_" + ts;
+
+        String middle = (username == null ? "user" : username)
                 .toLowerCase()
                 .trim()
                 .replaceAll("[^a-z0-9._-]", "_")
                 .replaceAll("_{2,}", "_")
                 .replaceAll("^_|_$", "");
 
-            if (middle.isBlank()) middle = "user";
+        if (middle.isBlank()) middle = "user";
 
-            int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
-            if (maxMiddleLen < 1) maxMiddleLen = 1;
+        int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
+        if (maxMiddleLen < 1) maxMiddleLen = 1;
 
-            if (middle.length() > maxMiddleLen) {
-                middle = middle.substring(0, maxMiddleLen);
-                middle = middle.replaceAll("_+$", "");
-                if (middle.isBlank()) middle = "u";
-            }
-
-            username = prefix + middle + suffix;
+        if (middle.length() > maxMiddleLen) {
+            middle = middle.substring(0, maxMiddleLen).replaceAll("_+$", "");
+            if (middle.isBlank()) middle = "u";
         }
 
-        // ✅ email: preserva o sufixo e respeita o tamanho máximo (não precisa normalizar como username)
-        {
-            String prefix = "deleted_";
-            String suffix = "_" + ts;
+        username = prefix + middle + suffix;
+    }
 
-            String middle = (email == null ? "deleted" : email).trim();
+    private void renameEmailForDelete(String ts) {
+        String prefix = "deleted_";
+        String suffix = "_" + ts;
 
-            int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
-            if (maxMiddleLen < 1) maxMiddleLen = 1;
+        String middle = (email == null ? "deleted" : email).trim();
 
-            if (middle.length() > maxMiddleLen) {
-                middle = middle.substring(0, maxMiddleLen);
-            }
+        int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
+        if (maxMiddleLen < 1) maxMiddleLen = 1;
 
-            email = prefix + middle + suffix;
+        if (middle.length() > maxMiddleLen) {
+            middle = middle.substring(0, maxMiddleLen);
         }
+
+        email = prefix + middle + suffix;
     }
 
     public void restore() {
         if (!deleted) return;
+
         deleted = false;
         deletedAt = null;
 

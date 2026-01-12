@@ -3,9 +3,9 @@ package brito.com.multitenancy001.shared.security;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
-public final class PermissionNormalizer {
+public final class PermissionScopeValidator {
 
-    private PermissionNormalizer() {}
+    private PermissionScopeValidator() {}
 
     public static LinkedHashSet<String> normalizeTenant(Collection<String> perms) {
     	LinkedHashSet<String> out = new LinkedHashSet<>();

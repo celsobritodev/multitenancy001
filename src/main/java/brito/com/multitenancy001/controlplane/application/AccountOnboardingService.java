@@ -22,14 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountOnboardingService {
 
     private final AccountApiMapper accountApiMapper;
-
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
-
     private final PublicAccountService publicAccountService;
     private final TenantProvisioningBridge tenantProvisioningBridge;
     private final TenantUserAdminBridge tenantUserAdminBridge;
-
     private final AccountRepository accountRepository;
 
     public AccountResponse createAccount(SignupRequest signupRequest) {

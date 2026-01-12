@@ -28,25 +28,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletResponse response,
+            @NonNull HttpServletRequest httpServletRequest,
+            @NonNull HttpServletResponse httpServletResponse,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
         boolean bound = false;
 
         try {
-            final String authHeader = request.getHeader("Authorization");
+            final String authHeader = httpServletRequest.getHeader("Authorization");
 
             if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
-                filterChain.doFilter(request, response);
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
             final String jwt = authHeader.substring(7);
 
             if (!jwtTokenProvider.validateToken(jwt)) {
-                filterChain.doFilter(request, response);
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
@@ -54,23 +54,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
             // ✅ TRAVA: token tem que bater com a rota
-            if (requiresControlPlane(request) && !"CONTROLPLANE".equals(tokenType)) {
-                filterChain.doFilter(request, response);
+            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(tokenType)) {
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
-            if (requiresTenant(request) && !"TENANT".equals(tokenType)) {
-                filterChain.doFilter(request, response);
+            if (requiresTenant(httpServletRequest) && !"TENANT".equals(tokenType)) {
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
             // só aceitamos TENANT / CONTROLPLANE aqui
             if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
-                filterChain.doFilter(request, response);
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
             if (!StringUtils.hasText(username)) {
-                filterChain.doFilter(request, response);
+                filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
@@ -82,12 +82,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
 
                     if (!StringUtils.hasText(tenantSchema) || "public".equalsIgnoreCase(tenantSchema)) {
-                        filterChain.doFilter(request, response);
+                        filterChain.doFilter(httpServletRequest, httpServletResponse);
                         return;
                     }
 
                     if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
-                        filterChain.doFilter(request, response);
+                        filterChain.doFilter(httpServletRequest, httpServletResponse);
                         return;
                     }
 
@@ -96,7 +96,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
                     if (accountId == null) {
-                        filterChain.doFilter(request, response);
+                        filterChain.doFilter(httpServletRequest, httpServletResponse);
                         return;
                     }
 
@@ -105,13 +105,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 } else { // CONTROLPLANE
                     String context = jwtTokenProvider.getContextFromToken(jwt);
                     if (StringUtils.hasText(context) && !"public".equalsIgnoreCase(context)) {
-                        filterChain.doFilter(request, response);
+                        filterChain.doFilter(httpServletRequest, httpServletResponse);
                         return;
                     }
 
                     Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
                     if (accountId == null) {
-                        filterChain.doFilter(request, response);
+                        filterChain.doFilter(httpServletRequest, httpServletResponse);
                         return;
                     }
 
@@ -123,11 +123,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 userDetails, null, userDetails.getAuthorities()
                         );
 
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
 
-            filterChain.doFilter(request, response);
+            filterChain.doFilter(httpServletRequest, httpServletResponse);
 
         } finally {
             if (bound) {
@@ -136,13 +136,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private boolean requiresControlPlane(HttpServletRequest request) {
-        String path = request.getRequestURI();
+    private boolean requiresControlPlane(HttpServletRequest httpServletRequest) {
+        String path = httpServletRequest.getRequestURI();
         return path.startsWith("/api/admin/") || path.startsWith("/api/controlplane/");
     }
 
-    private boolean requiresTenant(HttpServletRequest request) {
-        String path = request.getRequestURI();
+    private boolean requiresTenant(HttpServletRequest httpServletRequest) {
+        String path = httpServletRequest.getRequestURI();
         return path.startsWith("/api/tenant/");
     }
 

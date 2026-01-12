@@ -22,13 +22,13 @@ public class AdminAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
-    public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest request) {
+    public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest controlPlaneAdminLoginRequest) {
 
 
         TenantContext.clear();
 
         ControlPlaneUser user = controlPlaneUserRepository
-                .findByUsernameAndDeletedFalse(request.username())
+                .findByUsernameAndDeletedFalse(controlPlaneAdminLoginRequest.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
                         "Super admin não encontrado",
@@ -46,8 +46,8 @@ public class AdminAuthService {
 
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.username(),
-                        request.password()
+                        controlPlaneAdminLoginRequest.username(),
+                        controlPlaneAdminLoginRequest.password()
                 )
         );
 

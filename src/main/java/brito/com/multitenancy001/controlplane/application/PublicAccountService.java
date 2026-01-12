@@ -24,28 +24,26 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicAccountService {
 
     private final AccountRepository accountRepository;
-
-
-  
-    public Account createAccountFromSignup(SignupRequest request) {
+ 
+    public Account createAccountFromSignup(SignupRequest signupRequest) {
     	 TenantContext.clear();
 
     	    int maxAttempts = 5;
     	    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-    	        String slug = generateSlug(request.name());
-    	        String schemaName = generateSchemaName(request.name());
+    	        String slug = generateSlug(signupRequest.name());
+    	        String schemaName = generateSchemaName(signupRequest.name());
 
     	        try {
     	            Account account = new Account();
-    	            account.setName(request.name());
+    	            account.setName(signupRequest.name());
     	            account.setSlug(slug);
     	            account.setSchemaName(schemaName);
 
-    	            account.setCompanyEmail(request.companyEmail());
+    	            account.setCompanyEmail(signupRequest.companyEmail());
 
     	            // ✅ novos campos (sempre em conjunto)
-    	            account.setCompanyDocType(request.companyDocType());
-    	            account.setCompanyDocNumber(request.companyDocNumber());
+    	            account.setCompanyDocType(signupRequest.companyDocType());
+    	            account.setCompanyDocNumber(signupRequest.companyDocNumber());
 
     	            account.setCreatedAt(LocalDateTime.now());
     	            account.setTrialEndDate(LocalDateTime.now().plusDays(30));

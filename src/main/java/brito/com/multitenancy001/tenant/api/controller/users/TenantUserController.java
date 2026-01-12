@@ -31,8 +31,8 @@ public class TenantUserController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('TEN_USER_CREATE')")
-    public ResponseEntity<TenantUserDetailsResponse> createTenantUser(@Valid @RequestBody TenantUserCreateRequest request) {
-        TenantUserDetailsResponse response = tenantUserService.createTenantUser(request);
+    public ResponseEntity<TenantUserDetailsResponse> createTenantUser(@Valid @RequestBody TenantUserCreateRequest tenantUserCreateRequest) {
+        TenantUserDetailsResponse response = tenantUserService.createTenantUser(tenantUserCreateRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

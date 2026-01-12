@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     metadata_json TEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMP
+    deleted_at TIMESTAMP,
     
     CONSTRAINT chk_accounts_currency_len CHECK (char_length(currency) = 3)
 );

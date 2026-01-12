@@ -1,7 +1,8 @@
 package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.security.PermissionNormalizer;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -23,6 +24,11 @@ public class TenantUserTxService {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AppClock appClock;
+
+    private LocalDateTime now() {
+        return appClock.now();
+    }
 
     // =========================
     // CREATE
@@ -33,7 +39,7 @@ public class TenantUserTxService {
             String username,
             String email,
             String rawPassword,
-            TenantRole  roleEnum,
+            TenantRole roleEnum,
             String phone,
             String avatarUrl,
             LinkedHashSet<String> permissions
@@ -58,18 +64,16 @@ public class TenantUserTxService {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
-     
-     // ✅ normaliza e valida permissions AQUI (fonte de verdade)
+        // ✅ normaliza e valida permissions AQUI (fonte de verdade)
         final LinkedHashSet<String> normalizedPermissions;
         try {
-        	normalizedPermissions = PermissionNormalizer.normalizeTenant(
-        	        permissions == null ? new LinkedHashSet<>() : permissions
-        	);
-
+            normalizedPermissions = PermissionScopeValidator.normalizeTenant(
+                    permissions == null ? new LinkedHashSet<>() : permissions
+            );
         } catch (IllegalArgumentException e1) {
             throw new ApiException("INVALID_PERMISSION", e1.getMessage(), 400);
         }
-        
+
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
                 .name(name.trim())
@@ -83,31 +87,30 @@ public class TenantUserTxService {
                 .avatarUrl(avatarUrl)
                 .timezone("America/Sao_Paulo")
                 .locale("pt_BR")
-                // ❌ remova createdAt daqui (o Hibernate já seta via @CreationTimestamp no entity)
                 .build();
 
-     // ✅ Se request trouxe permissions válidas e não vazias, respeita.
-     // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
+        // ✅ Se trouxe permissions válidas e não vazias, respeita.
+        // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
         if (!normalizedPermissions.isEmpty()) {
             user.setPermissions(new LinkedHashSet<>(normalizedPermissions));
         }
 
-
         return tenantUserRepository.save(user);
     }
-    
+
     public TenantUser setSuspendedByAdmin(Long userId, Long accountId, boolean suspended) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
 
+        LocalDateTime now = now();
         user.setSuspendedByAdmin(suspended);
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
- 
-    
+
     @Transactional(readOnly = true)
     public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountId) {
         if (accountId == null) {
@@ -135,7 +138,7 @@ public class TenantUserTxService {
             String phone,
             String locale,
             String timezone,
-            LocalDateTime now
+            LocalDateTime nowParam
     ) {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
@@ -143,17 +146,17 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-        // Atualiza apenas o que veio preenchido
         if (StringUtils.hasText(name)) user.setName(name.trim());
         if (phone != null) user.setPhone(phone);
         if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
         if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
 
-        user.setUpdatedAt(now != null ? now : LocalDateTime.now());
+        LocalDateTime now = (nowParam != null ? nowParam : now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
- 
-    
+
     @Transactional(transactionManager = "tenantTransactionManager")
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
         int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
@@ -161,9 +164,6 @@ public class TenantUserTxService {
             throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
         }
     }
-
-    
-    
 
     // =========================
     // LIST / GET
@@ -175,7 +175,6 @@ public class TenantUserTxService {
 
     @Transactional(readOnly = true)
     public List<TenantUser> listActiveUsers(Long accountId) {
-        // CORREÇÃO: Use o novo método customizado
         return tenantUserRepository.findActiveUsersByAccount(accountId);
     }
 
@@ -185,14 +184,12 @@ public class TenantUserTxService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
     }
 
-    // usado em login/validações (sem deleted=true)
     @Transactional(readOnly = true)
     public TenantUser getByUsername(Long accountId, String username) {
         return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
     }
 
-    // ✅ isto substitui seu "getByEmailActive"
     @Transactional(readOnly = true)
     public TenantUser getByEmailActive(Long accountId, String email) {
         TenantUser user = tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(email, accountId)
@@ -205,7 +202,7 @@ public class TenantUserTxService {
     }
 
     // =========================
-    // UPDATE STATUS 
+    // UPDATE STATUS
     // =========================
     public TenantUser updateStatus(Long userId, Long accountId, boolean active) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
@@ -213,14 +210,14 @@ public class TenantUserTxService {
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
 
-        // ✅ ação do admin: suspende/reativa manualmente
-        user.setSuspendedByAdmin(!active);
+        LocalDateTime now = now();
 
-        // ✅ NÃO mexe em suspendedByAccount aqui (quem manda é o status da conta)
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setSuspendedByAdmin(!active);
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
-    
+
     // =========================
     // CONTAGEM
     // =========================
@@ -235,8 +232,10 @@ public class TenantUserTxService {
 
         if (user.isDeleted()) throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
 
-        user.softDelete();
-        user.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime now = now();
+        user.softDelete(now, appClock.epochMillis()); // ✅ novo método clock-aware
+        user.setUpdatedAt(now);
+
         tenantUserRepository.save(user);
     }
 
@@ -246,8 +245,11 @@ public class TenantUserTxService {
 
         if (!user.isDeleted()) throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
 
+        LocalDateTime now = now();
+
         user.restore();
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
 
@@ -257,7 +259,6 @@ public class TenantUserTxService {
         tenantUserRepository.delete(user);
     }
 
-   
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
@@ -266,10 +267,12 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
+        LocalDateTime now = now();
+
         user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordChangedAt(now);
         user.setMustChangePassword(false);
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
 
         return tenantUserRepository.save(user);
     }
@@ -288,51 +291,47 @@ public class TenantUserTxService {
         if (user.getPasswordResetToken() == null || !user.getPasswordResetToken().equals(token)) {
             throw new ApiException("INVALID_TOKEN", "Token não confere", 400);
         }
-        if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(LocalDateTime.now())) {
+
+        LocalDateTime now = now();
+
+        if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
             throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordChangedAt(now);
         user.setMustChangePassword(false);
 
         user.setPasswordResetToken(null);
         user.setPasswordResetExpires(null);
 
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
         tenantUserRepository.save(user);
     }
 
     // usado no generatePasswordResetToken
     public TenantUser save(TenantUser user) {
-        user.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime now = now();
+        user.setUpdatedAt(now);
         return tenantUserRepository.save(user);
     }
-    
 
-    
-    
-    
-public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
-    TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
+    public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
+        TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
 
-    TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
+        TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
 
-    // Aqui NÃO valida regra de negócio (isso fica no service de cima),
-    // apenas aplica a troca.
-    from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
-    to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+        LocalDateTime now = now();
 
-    from.setUpdatedAt(LocalDateTime.now());
-    to.setUpdatedAt(LocalDateTime.now());
+        from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
+        to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
 
-    tenantUserRepository.save(from);
-    tenantUserRepository.save(to);
-}
-  
+        from.setUpdatedAt(now);
+        to.setUpdatedAt(now);
 
-
-    
+        tenantUserRepository.save(from);
+        tenantUserRepository.save(to);
+    }
 }

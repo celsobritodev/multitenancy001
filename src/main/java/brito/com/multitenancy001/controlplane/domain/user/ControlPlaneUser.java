@@ -8,7 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.shared.security.PermissionNormalizer;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -133,7 +133,7 @@ public class ControlPlaneUser {
         if (permissions == null) permissions = new LinkedHashSet<>();
 
         // normaliza prefixo/trim e bloqueia TEN_ no controlplane
-        permissions = PermissionNormalizer.normalizeControlPlane(permissions);
+        permissions = PermissionScopeValidator.normalizeControlPlane(permissions);
     }
 
 

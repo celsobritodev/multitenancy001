@@ -21,11 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountTenantUserService {
 
     private final PublicExecutor publicExecutor;
-
     private final AccountRepository accountRepository;
     private final TenantUserAdminBridge tenantUserAdminBridge;
-
-    // ✅ passa a responsabilidade de "enabled" para o mapper correto
     private final AccountUserApiMapper accountUserApiMapper;
 
     public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {

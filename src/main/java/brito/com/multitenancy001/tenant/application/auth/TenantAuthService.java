@@ -26,12 +26,12 @@ public class TenantAuthService {
 
     private final TenantUserRepository tenantUserRepository;
 
-    public JwtResponse loginTenant(TenantLoginRequest request) {
+    public JwtResponse loginTenant(TenantLoginRequest tenantLoginRequest) {
 
         // 1️⃣ PUBLIC — resolve conta
         TenantContext.clear();
 
-        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(request.slug());
+        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(tenantLoginRequest.slug());
 
         
 
@@ -42,14 +42,14 @@ public class TenantAuthService {
             Authentication authentication =
                     authenticationManager.authenticate(
                             new UsernamePasswordAuthenticationToken(
-                                    request.username(),
-                                    request.password()
+                                    tenantLoginRequest.username(),
+                                    tenantLoginRequest.password()
                             )
                     );
 
             TenantUser user = tenantUserRepository
                     .findByUsernameAndAccountId(
-                            request.username(),
+                            tenantLoginRequest.username(),
                             account.id()
                     )
                     .orElseThrow(() -> new ApiException(

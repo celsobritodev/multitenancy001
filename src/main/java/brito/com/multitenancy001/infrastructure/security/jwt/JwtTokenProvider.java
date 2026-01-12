@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -14,6 +15,7 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -31,7 +33,13 @@ public class JwtTokenProvider {
     @Value("${app.jwt.refresh.expiration}")
     private long refreshExpirationInMs;
 
+    private final AppClock appClock;
+
     private SecretKey key;
+
+    public JwtTokenProvider(AppClock appClock) {
+        this.appClock = appClock;
+    }
 
     @PostConstruct
     public void init() {
@@ -40,6 +48,15 @@ public class JwtTokenProvider {
             throw new IllegalArgumentException("JWT secret must be at least 256 bits (32 chars)");
         }
         this.key = Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    private Date issuedAt() {
+        return Date.from(appClock.instant());
+    }
+
+    private Date expiresAtInMs(long ttlMillis) {
+        Instant exp = appClock.instant().plusMillis(ttlMillis);
+        return Date.from(exp);
     }
 
     /* =========================
@@ -62,8 +79,8 @@ public class JwtTokenProvider {
                 .claim("context", context)
                 .claim("accountId", accountId)
                 .claim("userId", user.getUserId())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -88,8 +105,8 @@ public class JwtTokenProvider {
                 .claim("context", context)
                 .claim("accountId", accountId)
                 .claim("userId", user.getUserId())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -102,8 +119,8 @@ public class JwtTokenProvider {
                 .subject(username)
                 .claim("type", "REFRESH")
                 .claim("context", context)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -112,13 +129,15 @@ public class JwtTokenProvider {
        PASSWORD RESET TOKEN
        ========================= */
     public String generatePasswordResetToken(String username, String context, Long accountId) {
+        long oneHourMs = 3_600_000L;
+
         return Jwts.builder()
                 .subject(username)
                 .claim("type", "PASSWORD_RESET")
                 .claim("context", context)
                 .claim("accountId", accountId)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(oneHourMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -183,10 +202,8 @@ public class JwtTokenProvider {
     public List<String> getAuthoritiesFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
-        // novo padrão
         String authorities = claims.get("authorities", String.class);
 
-        // compatibilidade antiga (se existir)
         if (!StringUtils.hasText(authorities)) {
             authorities = claims.get("roles", String.class);
         }
@@ -208,7 +225,7 @@ public class JwtTokenProvider {
         try {
             Claims claims = getAllClaimsFromToken(token);
             Date expiration = claims.getExpiration();
-            return expiration.before(new Date());
+            return expiration.before(Date.from(appClock.instant()));
         } catch (Exception e) {
             return true;
         }

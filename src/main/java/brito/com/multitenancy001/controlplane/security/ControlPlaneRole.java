@@ -14,11 +14,11 @@ public enum ControlPlaneRole implements RoleAuthority {
         return "ROLE_" + name();
     }
 
-    public boolean isSuperAdmin() {
+    public boolean isControlPlaneOwner() {
         return this == CONTROLPLANE_OWNER;
     }
 
-    public boolean isBillingAdmin() {
+    public boolean isBillingManager() {
         return this == CONTROLPLANE_BILLING_MANAGER;
     }
 }

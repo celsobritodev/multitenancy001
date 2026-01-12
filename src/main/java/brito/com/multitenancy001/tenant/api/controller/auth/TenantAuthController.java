@@ -17,8 +17,8 @@ public class TenantAuthController {
     private final TenantAuthService tenantAuthService;
 
     @PostMapping("/login")
-    public ResponseEntity<JwtResponse> loginTenant(@Valid @RequestBody TenantLoginRequest request) {
-        JwtResponse response = tenantAuthService.loginTenant(request);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<JwtResponse> loginTenant(@Valid @RequestBody TenantLoginRequest tenantLoginRequest) {
+        JwtResponse jwtResponse = tenantAuthService.loginTenant(tenantLoginRequest);
+        return ResponseEntity.ok(jwtResponse);
     }
 }

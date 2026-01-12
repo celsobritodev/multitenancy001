@@ -26,9 +26,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        String schema = TenantContext.getOrNull();
+        String schemaName = TenantContext.getOrNull();
 
-        if (schema == null || "public".equalsIgnoreCase(schema)) {
+        if (schemaName == null || "public".equalsIgnoreCase(schemaName)) {
             return loadControlPlaneUser(username);
         }
 
@@ -38,7 +38,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return new AuthenticatedUserContext(user, schema, now, authorities);
+        return new AuthenticatedUserContext(user, schemaName, now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username, Long accountId) {

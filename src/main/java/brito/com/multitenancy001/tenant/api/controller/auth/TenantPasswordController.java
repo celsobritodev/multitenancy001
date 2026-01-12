@@ -17,14 +17,14 @@ public class TenantPasswordController {
     private final TenantUserService tenantUserService;
 
     @PostMapping("/forgot")
-    public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        tenantUserService.generatePasswordResetToken(req.slug(), req.email());
+    public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {
+        tenantUserService.generatePasswordResetToken(forgotPasswordRequest.slug(), forgotPasswordRequest.email());
         return ResponseEntity.ok("Token gerado");
     }
 
     @PostMapping("/reset")
-    public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
-        tenantUserService.resetPasswordWithToken(req.token(), req.newPassword());
+    public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest resetPasswordRequest) {
+        tenantUserService.resetPasswordWithToken(resetPasswordRequest.token(), resetPasswordRequest.newPassword());
         return ResponseEntity.ok("Senha redefinida com sucesso");
     }
 }

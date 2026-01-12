@@ -86,36 +86,36 @@ public class TenantProductController {
 
     @PostMapping("/detailed")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
-    public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest request) {
+    public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest productUpsertRequest) {
 
         Product product = new Product();
-        product.setName(request.name());
-        product.setDescription(request.description());
-        product.setSku(request.sku());
-        product.setPrice(request.price());
-        product.setStockQuantity(request.stockQuantity());
-        product.setMinStock(request.minStock());
-        product.setMaxStock(request.maxStock());
-        product.setCostPrice(request.costPrice());
-        product.setBrand(request.brand());
-        product.setWeightKg(request.weightKg());
-        product.setDimensions(request.dimensions());
-        product.setBarcode(request.barcode());
-        product.setActive(request.active());
+        product.setName(productUpsertRequest.name());
+        product.setDescription(productUpsertRequest.description());
+        product.setSku(productUpsertRequest.sku());
+        product.setPrice(productUpsertRequest.price());
+        product.setStockQuantity(productUpsertRequest.stockQuantity());
+        product.setMinStock(productUpsertRequest.minStock());
+        product.setMaxStock(productUpsertRequest.maxStock());
+        product.setCostPrice(productUpsertRequest.costPrice());
+        product.setBrand(productUpsertRequest.brand());
+        product.setWeightKg(productUpsertRequest.weightKg());
+        product.setDimensions(productUpsertRequest.dimensions());
+        product.setBarcode(productUpsertRequest.barcode());
+        product.setActive(productUpsertRequest.active());
 
         Category category = new Category();
-        category.setId(request.categoryId());
+        category.setId(productUpsertRequest.categoryId());
         product.setCategory(category);
 
-        if (request.subcategoryId() != null) {
+        if (productUpsertRequest.subcategoryId() != null) {
             Subcategory sub = new Subcategory();
-            sub.setId(request.subcategoryId());
+            sub.setId(productUpsertRequest.subcategoryId());
             product.setSubcategory(sub);
         }
 
-        if (request.supplierId() != null) {
+        if (productUpsertRequest.supplierId() != null) {
             Supplier supplier = new Supplier();
-            supplier.setId(request.supplierId());
+            supplier.setId(productUpsertRequest.supplierId());
             product.setSupplier(supplier);
         }
 

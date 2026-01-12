@@ -25,8 +25,8 @@ public class TenantPaymentController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('TEN_BILLING_WRITE')")
-    public ResponseEntity<PaymentResponse> processPayment(@Valid @RequestBody PaymentRequest request) {
-        PaymentResponse response = paymentService.processPaymentForMyAccount(request);
+    public ResponseEntity<PaymentResponse> processPayment(@Valid @RequestBody PaymentRequest paymentRequest) {
+        PaymentResponse response = paymentService.processPaymentForMyAccount(paymentRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

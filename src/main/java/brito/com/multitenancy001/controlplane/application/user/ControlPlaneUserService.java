@@ -9,7 +9,7 @@ import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserR
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
-import brito.com.multitenancy001.shared.security.PermissionNormalizer;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,43 +43,43 @@ public class ControlPlaneUserService {
                 ));
     }
 
-  public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
+  public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest controlPlaneUserCreateRequest) {
     TenantContext.clear();
 
     Account controlPlaneAccount = getControlPlaneAccount();
 
     
-    if (request.username() == null || request.username().isBlank()) {
+    if (controlPlaneUserCreateRequest.username() == null || controlPlaneUserCreateRequest.username().isBlank()) {
         throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
     }
-    if (!request.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
+    if (!controlPlaneUserCreateRequest.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
         throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
     }
 
-    String username = request.username().toLowerCase().trim();
+    String username = controlPlaneUserCreateRequest.username().toLowerCase().trim();
 
     // ✅ agora role já vem tipada (enum)
-    ControlPlaneRole roleEnum = request.role();
+    ControlPlaneRole roleEnum = controlPlaneUserCreateRequest.role();
 
     if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
         throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
     }
-    if (controlPlaneUserRepository.existsByEmailAndAccountId(request.email(), controlPlaneAccount.getId())) {
+    if (controlPlaneUserRepository.existsByEmailAndAccountId(controlPlaneUserCreateRequest.email(), controlPlaneAccount.getId())) {
         throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
     }
 
     LinkedHashSet<String> normalizedPermissions;
     try {
-        normalizedPermissions = PermissionNormalizer.normalizeControlPlane(request.permissions());
+        normalizedPermissions = PermissionScopeValidator.normalizeControlPlane(controlPlaneUserCreateRequest.permissions());
     } catch (IllegalArgumentException e) {
         throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
     }
 
     ControlPlaneUser user = ControlPlaneUser.builder()
-            .name(request.name())
+            .name(controlPlaneUserCreateRequest.name())
             .username(username)
-            .email(request.email())
-            .password(passwordEncoder.encode(request.password()))
+            .email(controlPlaneUserCreateRequest.email())
+            .password(passwordEncoder.encode(controlPlaneUserCreateRequest.password()))
             .role(roleEnum)
             .account(controlPlaneAccount)
             .suspendedByAccount(false)
