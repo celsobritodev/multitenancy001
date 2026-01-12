@@ -7,12 +7,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedHashSet;
 
 @Entity
 @Table(
@@ -45,7 +45,7 @@ public class ControlPlaneUser {
     private String email;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 40)
+    @Column(name = "role", nullable = false, length = 50)
     private ControlPlaneRole role;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -122,13 +122,13 @@ public class ControlPlaneUser {
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private Set<String> permissions = new HashSet<>();
+    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
     
     @PrePersist
     @PreUpdate
     private void normalizePermissions() {
         // garante Set não nulo
-        if (permissions == null) permissions = new HashSet<>();
+        if (permissions == null) permissions = new LinkedHashSet<>();
 
         // normaliza prefixo/trim e bloqueia TEN_ no controlplane
         permissions = PermissionNormalizer.normalizeControlPlane(permissions);

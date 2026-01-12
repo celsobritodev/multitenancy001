@@ -1,38 +1,38 @@
 package brito.com.multitenancy001.tenant.application.user;
 
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.account.AccountResolver;
+import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
-import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 @Service
 @RequiredArgsConstructor
 public class TenantUserService {
 
-	private final TenantUserApiMapper tenantUserApiMapper;
+    private final TenantUserApiMapper tenantUserApiMapper;
 
-	
-    private final TenantUserTxService tenantUserTxService; // ✅ novo
-    private final AccountRepository accountRepository; // PUBLIC
+    private final TenantUserTxService tenantUserTxService;
+    private final AccountResolver accountResolver;
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
 
     // ===== helpers =====
-    private <T> T runInTenant(String schema, java.util.concurrent.Callable<T> action) {
+    private <T> T runInTenant(String schema, Callable<T> action) {
         TenantContext.bind(schema);
         try {
             return action.call();
@@ -54,244 +54,197 @@ public class TenantUserService {
         }
     }
 
-   public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
+    // =========================================================
+    // CONTROLLER METHODS
+    // =========================================================
+
+    public void transferTenantOwner(Long toUserId) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+        Long fromUserId = securityUtils.getCurrentUserId();
+
+        runInTenant(schema, () ->
+                tenantUserTxService.transferTenantOwnerRole(accountId, fromUserId, toUserId)
+        );
+    }
+
+    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
     Long accountId = securityUtils.getCurrentAccountId();
     String schema = securityUtils.getCurrentSchema();
 
-    validateCreateRequest(tenantUserCreateRequest);
+  
 
+    String name = tenantUserCreateRequest.name().trim();
     String username = tenantUserCreateRequest.username().trim().toLowerCase();
     String email = tenantUserCreateRequest.email().trim().toLowerCase();
 
-    return runInTenant(schema, () -> toDetails(
-            tenantUserTxService.createTenantUser(
-                    accountId,
-                    tenantUserCreateRequest.name().trim(),
-                    username,
-                    email,
-                    tenantUserCreateRequest.password(),
-                    tenantUserCreateRequest.role(),
-                    tenantUserCreateRequest.phone(),
-                    tenantUserCreateRequest.avatarUrl(),
-                    tenantUserCreateRequest.permissions()
-            )
-    ));
+
+    final LinkedHashSet<String> perms =
+            (tenantUserCreateRequest.permissions() == null || tenantUserCreateRequest.permissions().isEmpty())
+                    ? null
+                    : new LinkedHashSet<>(tenantUserCreateRequest.permissions());
+
+    return runInTenant(schema, () -> {
+    	TenantUser created = tenantUserTxService.createTenantUser(
+    	        accountId,
+    	        name,                             // já trimado
+    	        username,
+    	        email,
+    	        tenantUserCreateRequest.password(),
+    	        tenantUserCreateRequest.role(),
+    	        tenantUserCreateRequest.phone(),
+    	        tenantUserCreateRequest.avatarUrl(),
+    	        perms
+    	);
+
+
+        return tenantUserApiMapper.toDetails(created);
+    });
 }
-   
-   public void softDeleteTenantUser(Long userId) {
-	    Long accountId = securityUtils.getCurrentAccountId();
-	    String schema = securityUtils.getCurrentSchema();
-
-	    TenantUser actor = loadActor(accountId, schema);
-	    TenantUser target = loadTarget(accountId, schema, userId);
-
-	    assertCanDeleteTarget(actor, target);
-
-	    runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
-	}
 
 
+    public List<TenantUserSummaryResponse> listTenantUsers() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
 
-   public List<TenantUserSummaryResponse> listTenantUsers() {
-	    Long accountId = securityUtils.getCurrentAccountId();
-	    String schema = securityUtils.getCurrentSchema();
+        return runInTenant(schema, () ->
+                tenantUserTxService.listUsers(accountId)
+                        .stream()
+                        .map(tenantUserApiMapper::toSummary)
+                        .toList()
+        );
+    }
 
-	    return runInTenant(schema, () ->
-	            tenantUserTxService.listUsers(accountId).stream()
-	                    .map(this::toSummary)
-	                    .toList()
-	    );
-	}
+    public List<TenantUserSummaryResponse> listActiveTenantUsers() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
 
-    
-    
-
-   public List<TenantUserSummaryResponse> listActiveTenantUsers() {
-	    Long accountId = securityUtils.getCurrentAccountId();
-	    String schema = securityUtils.getCurrentSchema();
-
-	    return runInTenant(schema, () ->
-	            tenantUserTxService.listActiveUsers(accountId).stream()
-	                    .map(this::toSummary)
-	                    .toList()
-	    );
-	}
+        return runInTenant(schema, () ->
+                tenantUserTxService.listActiveUsers(accountId)
+                        .stream()
+                        .map(tenantUserApiMapper::toSummary)
+                        .toList()
+        );
+    }
 
     public TenantUserDetailsResponse getTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toDetails(tenantUserTxService.getUser(userId, accountId)));
+        return runInTenant(schema, () -> {
+            TenantUser user = tenantUserTxService.getUser(userId, accountId);
+            return tenantUserApiMapper.toDetails(user);
+        });
     }
-
-    
-    
-    private TenantUserSummaryResponse toSummary(TenantUser u) {
-        return tenantUserApiMapper.toSummary(u);
-    }
-
-
-
-    private TenantUserDetailsResponse toDetails(TenantUser u) {
-        return TenantUserDetailsResponse.from(u);
-    }
-    
 
     public TenantUserSummaryResponse updateTenantUserStatus(Long userId, boolean active) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toSummary(
-                tenantUserTxService.updateStatus(userId, accountId, active)
-        ));
+        return runInTenant(schema, () -> {
+            TenantUser updated = tenantUserTxService.updateStatus(userId, accountId, active);
+            return tenantUserApiMapper.toSummary(updated);
+        });
     }
 
+    public void softDeleteTenantUser(Long userId) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+
+        runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
+    }
 
     public TenantUserSummaryResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toSummary(
-                tenantUserTxService.restore(userId, accountId)
-        ));
+        return runInTenant(schema, () -> {
+            TenantUser restored = tenantUserTxService.restore(userId, accountId);
+            return tenantUserApiMapper.toSummary(restored);
+        });
     }
-    
-    
+
     public TenantUserSummaryResponse resetTenantUserPassword(Long userId, String newPassword) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> toSummary(
-                tenantUserTxService.resetPassword(userId, accountId, newPassword)
-        ));
+        return runInTenant(schema, () -> {
+            TenantUser updated = tenantUserTxService.resetPassword(userId, accountId, newPassword);
+            return tenantUserApiMapper.toSummary(updated);
+        });
     }
-    
 
     public void hardDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        TenantUser actor = loadActor(accountId, schema);
-        TenantUser target = loadTarget(accountId, schema, userId);
-
-        assertCanDeleteTarget(actor, target);
-
         runInTenant(schema, () -> tenantUserTxService.hardDelete(userId, accountId));
     }
 
+    // =========================================================
+    // PASSWORD RESET (PUBLIC -> TENANT)
+    // =========================================================
 
-    // ===== PASSWORD RESET (PUBLIC + TENANT) =====
-    public String generatePasswordResetToken(String slug, String email) {
+    public String generatePasswordResetToken(String slug, String usernameOrEmail) {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
-        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+        if (!StringUtils.hasText(usernameOrEmail)) throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
 
-        // PUBLIC (sem @Transactional tenant)
-        TenantContext.clear();
-        Account account = accountRepository.findBySlugAndDeletedFalse(slug)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-        if (!account.isActive()) throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        String schema = account.getSchemaName();
-        String normalizedEmail = email.trim().toLowerCase();
+        return runInTenant(account.schemaName(), () -> {
+            TenantUser user = tenantUserTxService.getUserByUsernameOrEmail(usernameOrEmail, account.id());
 
-        return runInTenant(schema, () -> {
-//            
-            TenantUser user = tenantUserTxService.getByEmailActive(account.getId(), normalizedEmail);
-
-            if (user.isSuspendedByAccount() || user.isDeleted()) throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
 
             String token = jwtTokenProvider.generatePasswordResetToken(
                     user.getUsername(),
-                    schema,
-                    account.getId()
+                    account.schemaName(),
+                    account.id()
             );
 
-            // Atualizar token precisa ser TX TENANT também — ideal: criar método tx.setResetToken(...)
             user.setPasswordResetToken(token);
             user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
-
             tenantUserTxService.save(user);
+
             return token;
         });
     }
-    
-    
+
     public void resetPasswordWithToken(String token, String newPassword) {
-        if (!StringUtils.hasText(token)) {
-            throw new ApiException("INVALID_TOKEN", "Token é obrigatório", 400);
-        }
-        if (!StringUtils.hasText(newPassword)) {
-            throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
-        }
+        if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
 
-        if (!jwtTokenProvider.validateToken(token) || !jwtTokenProvider.isPasswordResetToken(token)) {
-            throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
-        }
-
-        String schema = jwtTokenProvider.getContextFromToken(token);
+        String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
         String username = jwtTokenProvider.getUsernameFromToken(token);
 
-        if (!StringUtils.hasText(schema) || accountId == null || !StringUtils.hasText(username)) {
-            throw new ApiException("INVALID_TOKEN", "Token incompleto", 400);
-        }
+        runInTenant(schema, () ->
+                tenantUserTxService.resetPasswordWithToken(accountId, username, token, newPassword)
+        );
+    }
 
-        // ✅ bind antes da TX (por isso usamos runInTenant)
-        runInTenant(schema, () -> {
-            tenantUserTxService.resetPasswordWithToken(accountId, username, token, newPassword);
+    // =========================================================
+    // MY PROFILE (agora existe no TxService)
+    // =========================================================
+
+    public TenantUserDetailsResponse updateMyProfile(String name, String phone, String locale, String timezone) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+        Long userId = securityUtils.getCurrentUserId();
+
+        return runInTenant(schema, () -> {
+            TenantUser updated = tenantUserTxService.updateProfile(
+                    userId,
+                    accountId,
+                    name,
+                    phone,
+                    locale,
+                    timezone,
+                    LocalDateTime.now()
+            );
+            return tenantUserApiMapper.toDetails(updated);
         });
     }
- 
-    
-    
-    
-    
-
-    private void validateCreateRequest(TenantUserCreateRequest r) { /* mantém seu método */ }
-    
-    
-  private TenantUser loadActor(Long accountId, String schema) {
-    Long actorId = securityUtils.getCurrentUserId();
-    return runInTenant(schema, () -> tenantUserTxService.getUser(actorId, accountId));
 }
-
-private TenantUser loadTarget(Long accountId, String schema, Long targetUserId) {
-    return runInTenant(schema, () -> tenantUserTxService.getUser(targetUserId, accountId));
-}
-
-private void assertCanDeleteTarget(TenantUser actor, TenantUser target) {
-    if (target.getRole() == TenantRole.TENANT_ACCOUNT_OWNER && actor.getRole() != TenantRole.TENANT_ACCOUNT_OWNER) {
-        throw new ApiException("FORBIDDEN", "Somente TENANT_ACCOUNT_OWNER pode excluir/alterar um TENANT_ACCOUNT_ADMIN", 403);
-    }
-}
-
-private void assertCanTransferTenantOwner(TenantUser actor, TenantUser newAdmin) {
-    if (actor.getRole() != TenantRole.TENANT_ACCOUNT_OWNER) {
-        throw new ApiException("FORBIDDEN", "Apenas TENANT_ACCOUNT_OWNER pode transferir a administração", 403);
-    }
-    if (newAdmin.getRole() != TenantRole.TENANT_ACCOUNT_ADMIN) {
-        throw new ApiException("INVALID_TARGET", "Somente um TENANT_ACCOUNT_ADMIN pode receber TENANT_ACCOUNT_OWNER", 400);
-    }
-}
-
-public void transferTenantOwner(Long targetAdminUserId) {
-    Long accountId = securityUtils.getCurrentAccountId();
-    String schema = securityUtils.getCurrentSchema();
-
-    TenantUser actor = loadActor(accountId, schema); // quem está logado
-    TenantUser newAdmin = loadTarget(accountId, schema, targetAdminUserId);
-
-    assertCanTransferTenantOwner(actor, newAdmin);
-
-    runInTenant(schema, () -> {
-        tenantUserTxService.transferTenantOwnerRole(accountId, actor.getId(), newAdmin.getId());
-    });
-}
-
-
-
-
-}
-
-
-

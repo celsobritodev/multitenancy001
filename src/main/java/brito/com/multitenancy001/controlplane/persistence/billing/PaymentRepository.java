@@ -19,6 +19,11 @@ import java.util.Optional;
 
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
+	
+	Optional<Payment> findByIdAndAccountId(Long id, Long accountId);
+	
+	boolean existsByIdAndAccountId(Long id, Long accountId);
+
     
     List<Payment> findByAccountId(Long accountId);
     

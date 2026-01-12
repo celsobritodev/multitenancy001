@@ -9,8 +9,8 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetai
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -107,7 +107,7 @@ public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
 
     
 
-    public List<AccountUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
+    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
         return accountTenantUserService.listTenantUsers(accountId, onlyActive);
     }
 

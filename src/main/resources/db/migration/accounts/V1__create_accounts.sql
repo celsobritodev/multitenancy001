@@ -14,12 +14,12 @@ CREATE TABLE IF NOT EXISTS accounts (
     slug VARCHAR(50) NOT NULL,
 
     -- Status / Plano
-    status VARCHAR(50) NOT NULL,
-    subscription_plan VARCHAR(50) DEFAULT 'FREE',
+    status VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
+    subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    max_users INTEGER DEFAULT 5,
-    max_products INTEGER DEFAULT 100,
-    max_storage_mb INTEGER DEFAULT 100,
+    max_users INTEGER NOT NULL DEFAULT 5,
+    max_products INTEGER NOT NULL DEFAULT 100,
+    max_storage_mb INTEGER NOT NULL DEFAULT 100,
 
     -- Identidade da empresa (CRÍTICO)
     company_doc_type VARCHAR(10) NOT NULL,
@@ -30,15 +30,18 @@ CREATE TABLE IF NOT EXISTS accounts (
     company_address VARCHAR(500),
     company_city VARCHAR(100),
     company_state VARCHAR(50),
-    company_country VARCHAR(50) DEFAULT 'Brasil',
+    company_country VARCHAR(50) NOT NULL DEFAULT 'Brasil',
 
     -- Localização
-    timezone VARCHAR(50) DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) DEFAULT 'pt_BR',
-    currency VARCHAR(3) DEFAULT 'BRL',
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
 
-    -- Datas
+    -- Auditoria
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP,
+
+    -- Datas de negócio
     trial_end_date TIMESTAMP,
     payment_due_date TIMESTAMP,
     next_billing_date TIMESTAMP,
@@ -68,3 +71,7 @@ ON accounts (schema_name);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
 
+-- (Opcional) garantir tamanho de currency
+ALTER TABLE accounts
+  ADD CONSTRAINT IF NOT EXISTS chk_accounts_currency_len
+  CHECK (char_length(currency) = 3);

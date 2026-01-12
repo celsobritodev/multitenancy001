@@ -88,9 +88,15 @@ public class PaymentService {
 		// Reusa validação central (mantém regras iguais)
 		validatePayment(account, request.amount());
 
-		Payment payment = Payment.builder().account(account).amount(request.amount())
-				.paymentMethod(request.paymentMethod()).paymentGateway(request.paymentGateway())
-				.description(request.description()).status(PaymentStatus.PENDING).build();
+		Payment payment = Payment.builder()
+				.account(account)
+				.amount(request.amount())
+				.paymentMethod(request.paymentMethod())
+				.paymentGateway(request.paymentGateway())
+				.description(request.description())
+				.status(PaymentStatus.PENDING)
+				.paymentDate(LocalDateTime.now())
+				.build();
 
 		payment = paymentRepository.save(payment);
 
@@ -114,9 +120,15 @@ public class PaymentService {
 
 		validatePayment(account, request.amount());
 
-		Payment payment = Payment.builder().account(account).amount(request.amount())
-				.paymentMethod(request.paymentMethod()).paymentGateway(request.paymentGateway())
-				.description(request.description()).status(PaymentStatus.PENDING).build();
+		Payment payment = Payment.builder()
+				.account(account)
+				.amount(request.amount())
+				.paymentMethod(request.paymentMethod())
+				.paymentGateway(request.paymentGateway())
+				.description(request.description())
+				.status(PaymentStatus.PENDING)
+				.paymentDate(LocalDateTime.now())
+				.build();
 
 		payment = paymentRepository.save(payment);
 
@@ -131,6 +143,17 @@ public class PaymentService {
 
 		throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
 	}
+	
+	@Transactional(readOnly = true)
+	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
+	    Long accountId = securityUtils.getCurrentAccountId();
+
+	    Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+	            .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+	    return mapToResponse(payment);
+	}
+
 
 	@Transactional(readOnly = true)
 	public List<PaymentResponse> getPaymentsByMyAccount() {

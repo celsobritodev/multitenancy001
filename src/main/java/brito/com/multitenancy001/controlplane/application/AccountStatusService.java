@@ -1,8 +1,6 @@
 package brito.com.multitenancy001.controlplane.application;
 
 import java.time.LocalDateTime;
-import java.util.List;
-
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
@@ -11,11 +9,11 @@ import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
-import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,11 +23,11 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountStatusService {
 
     private final PublicExecutor publicExecutor;
-    private final TenantExecutor tenantExecutor;
     private final TxExecutor txExecutor;
 
     private final AccountRepository accountRepository;
-    private final TenantUserRepository tenantUserRepository;
+    private final TenantUserAdminBridge tenantUserAdminBridge;
+
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
         return txExecutor.publicTx(() -> publicExecutor.run(() -> {
@@ -69,45 +67,42 @@ public class AccountStatusService {
         }));
     }
 
-    private int cancelAccount(Account account) {
-        // 1) PUBLIC (REQUIRES_NEW)
-        txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
-            account.setDeletedAt(LocalDateTime.now());
-            accountRepository.save(account);
-            return null;
-        }));
+   protected int suspendTenantUsersByAccount(Account account) {
+    return tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+}
 
-        // 2) TENANT (REQUIRES_NEW), best-effort (retorna 0 se schema/tabela não existir)
-        return tenantExecutor.runIfReady(
-            account.getSchemaName(),
-            "users_tenant",
-            () -> txExecutor.tenantRequiresNew(() -> {
-                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-                users.forEach(TenantUser::softDelete);
-                tenantUserRepository.saveAll(users);
-                return users.size();
-            }),
-            0
-        );
-    }
+protected int unsuspendTenantUsersByAccount(Account account) {
+    return tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+}
 
-    protected int suspendTenantUsersByAccount(Account account) {
-        return tenantExecutor.runIfReady(
-            account.getSchemaName(),
-            "users_tenant",
-            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(account.getId())),
-            0
-        );
-    }
+private int cancelAccount(Account account) {
+    txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
+        account.setDeletedAt(LocalDateTime.now());
+        accountRepository.save(account);
+        return null;
+    }));
 
-    protected int unsuspendTenantUsersByAccount(Account account) {
-        return tenantExecutor.runIfReady(
-            account.getSchemaName(),
-            "users_tenant",
-            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(account.getId())),
-            0
-        );
-    }
+    // soft-delete users best-effort
+    return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+}
+
+private void softDeleteTenantUsers(Long accountId) {
+    Account account = txExecutor.publicReadOnlyTx(() ->
+        publicExecutor.run(() -> getAccountByIdRaw(accountId))
+    );
+
+    tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+}
+
+private void restoreTenantUsers(Long accountId) {
+    Account account = txExecutor.publicReadOnlyTx(() ->
+        publicExecutor.run(() -> getAccountByIdRaw(accountId))
+    );
+
+    tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+}
+
+
 
     public void softDeleteAccount(Long accountId) {
         txExecutor.publicTx(() -> publicExecutor.run(() -> {
@@ -152,37 +147,7 @@ public class AccountStatusService {
             .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-   private void softDeleteTenantUsers(Long accountId) {
-
-    Account account = txExecutor.publicReadOnlyTx(() ->
-        publicExecutor.run(() -> getAccountByIdRaw(accountId))
-    );
-
-    tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-        txExecutor.tenantRequiresNew(() -> {
-            List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-            users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-            tenantUserRepository.saveAll(users);
-            return null;
-        });
-        return null;
-    }, null);
-}
-
-    private void restoreTenantUsers(Long accountId) {
-        Account account = txExecutor.publicReadOnlyTx(() -> publicExecutor.run(() -> getAccountByIdRaw(accountId)));
-
-        tenantExecutor.runIfReady(account.getSchemaName(), "users_tenant", () -> {
-            txExecutor.tenantRequiresNew(() -> {
-                List<TenantUser> users = tenantUserRepository.findByAccountId(account.getId());
-                users.forEach(u -> { if (u.isDeleted()) u.restore(); });
-                tenantUserRepository.saveAll(users);
-                return null;
-            });
-            return null;
-        }, null);
-    }
-
+  
     private AccountStatusChangeResponse buildStatusChangeResponse(
             Account account,
             AccountStatus previous,

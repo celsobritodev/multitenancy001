@@ -15,7 +15,6 @@ import java.util.UUID;
 @Table(name = "payments", indexes = {
     @Index(name = "idx_payment_account", columnList = "account_id"),
     @Index(name = "idx_payment_status", columnList = "status"),
-    @Index(name = "idx_payment_transaction", columnList = "transaction_id", unique = true),
     @Index(name = "idx_payment_date", columnList = "payment_date")
 })
 @Getter

@@ -3,9 +3,9 @@ package brito.com.multitenancy001.tenant.application.provisioning;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
-import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

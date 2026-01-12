@@ -1,7 +1,11 @@
 -- V5__create_suppliers.sql
 
+-- 1) Habilita função de UUID (Postgres)
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 2) Tabela suppliers com UUID gerado automaticamente
 CREATE TABLE IF NOT EXISTS suppliers (
-  id UUID PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name VARCHAR(200) NOT NULL,
   contact_person VARCHAR(100),
@@ -29,12 +33,12 @@ CREATE TABLE IF NOT EXISTS suppliers (
   updated_at TIMESTAMP
 );
 
--- document único somente para fornecedores ativos e com documento preenchido
+-- 3) document único somente para fornecedores ativos (não deletados) e com documento preenchido
 CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_document_active
 ON suppliers(document)
 WHERE document IS NOT NULL AND deleted = false;
 
-CREATE INDEX IF NOT EXISTS idx_supplier_name   ON suppliers(name);
-CREATE INDEX IF NOT EXISTS idx_supplier_email  ON suppliers(email);
-CREATE INDEX IF NOT EXISTS idx_supplier_active ON suppliers(active);
+CREATE INDEX IF NOT EXISTS idx_supplier_name    ON suppliers(name);
+CREATE INDEX IF NOT EXISTS idx_supplier_email   ON suppliers(email);
+CREATE INDEX IF NOT EXISTS idx_supplier_active  ON suppliers(active);
 CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;

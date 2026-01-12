@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.domain.security;
+package brito.com.multitenancy001.tenant.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
 

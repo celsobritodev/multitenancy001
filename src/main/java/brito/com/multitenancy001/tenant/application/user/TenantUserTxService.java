@@ -3,9 +3,9 @@ package brito.com.multitenancy001.tenant.application.user;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.security.TenantRole;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -15,7 +15,6 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +33,7 @@ public class TenantUserTxService {
             String username,
             String email,
             String rawPassword,
-            String role,
+            TenantRole  roleEnum,
             String phone,
             String avatarUrl,
             LinkedHashSet<String> permissions
@@ -59,11 +58,14 @@ public class TenantUserTxService {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
-        TenantRole parsedRole = parseTenantRole(role);
+     
      // ✅ normaliza e valida permissions AQUI (fonte de verdade)
-        final Set<String> normalizedPermissions;
+        final LinkedHashSet<String> normalizedPermissions;
         try {
-            normalizedPermissions = PermissionNormalizer.normalizeTenant(permissions);
+        	normalizedPermissions = PermissionNormalizer.normalizeTenant(
+        	        permissions == null ? new LinkedHashSet<>() : permissions
+        	);
+
         } catch (IllegalArgumentException e1) {
             throw new ApiException("INVALID_PERMISSION", e1.getMessage(), 400);
         }
@@ -74,7 +76,7 @@ public class TenantUserTxService {
                 .username(u)
                 .email(e)
                 .password(passwordEncoder.encode(rawPassword))
-                .role(parsedRole)
+                .role(roleEnum)
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .phone(phone)
@@ -106,7 +108,51 @@ public class TenantUserTxService {
     }
  
     
-    
+    @Transactional(readOnly = true)
+    public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountId) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+        }
+        if (!StringUtils.hasText(usernameOrEmail)) {
+            throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
+        }
+
+        String login = usernameOrEmail.trim().toLowerCase();
+
+        if (login.contains("@")) {
+            return tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(login, accountId)
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+        }
+
+        return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(login, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+    }
+
+    public TenantUser updateProfile(
+            Long userId,
+            Long accountId,
+            String name,
+            String phone,
+            String locale,
+            String timezone,
+            LocalDateTime now
+    ) {
+        if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+
+        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        // Atualiza apenas o que veio preenchido
+        if (StringUtils.hasText(name)) user.setName(name.trim());
+        if (phone != null) user.setPhone(phone);
+        if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
+        if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
+
+        user.setUpdatedAt(now != null ? now : LocalDateTime.now());
+        return tenantUserRepository.save(user);
+    }
+ 
     
     @Transactional(transactionManager = "tenantTransactionManager")
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
@@ -262,16 +308,7 @@ public class TenantUserTxService {
         user.setUpdatedAt(LocalDateTime.now());
         return tenantUserRepository.save(user);
     }
-    private TenantRole parseTenantRole(String role) {
-        if (!StringUtils.hasText(role)) {
-            throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
-        }
-        try {
-            return TenantRole.valueOf(role.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ApiException("INVALID_ROLE", "Role inválida: " + role, 400);
-        }
-    }
+    
 
     
     

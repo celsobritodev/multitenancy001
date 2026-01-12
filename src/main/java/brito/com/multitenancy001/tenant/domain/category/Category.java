@@ -1,11 +1,12 @@
-// ===============================
-// Category.java
-// ===============================
 package brito.com.multitenancy001.tenant.domain.category;
 
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -23,12 +24,44 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false, length=100)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable=false)
-    private Boolean active = true;
+    // Negócio
+    @Column(nullable = false)
+    private boolean active = true;
 
-    @Column(nullable=false)
-    private Boolean deleted = false;
+    // Soft delete
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    // Auditoria
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // =====================
+    // Regras de domínio
+    // =====================
+
+    public void softDelete() {
+        if (this.deleted) return;
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+        this.active = false;
+    }
+
+    public void restore() {
+        if (!this.deleted) return;
+        this.deleted = false;
+        this.deletedAt = null;
+        this.active = true;
+    }
 }

@@ -2,24 +2,28 @@ package brito.com.multitenancy001.controlplane.api.mapper;
 
 import org.springframework.stereotype.Component;
 
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenantUserSummaryResponse;
+import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 
 @Component
 public class AccountUserApiMapper {
 
-    public AccountUserSummaryResponse toAccountUserSummary(TenantUser tenantUser) {
-        boolean enabled =
-                !tenantUser.isDeleted()
-                && !tenantUser.isSuspendedByAccount()
-                && !tenantUser.isSuspendedByAdmin();
+    public AccountTenantUserSummaryResponse toAccountUserSummary(UserSummaryData user) {
 
-        return new AccountUserSummaryResponse(
-                tenantUser.getId(),
-                tenantUser.getUsername(),
-                tenantUser.getEmail(),
-                tenantUser.isSuspendedByAccount(),
-                tenantUser.isSuspendedByAdmin(),
+        boolean enabled =
+                !user.deleted()
+                && !user.suspendedByAccount()
+                && !user.suspendedByAdmin();
+
+        return new AccountTenantUserSummaryResponse(
+                user.id(),
+                user.accountId(),
+                user.name(),
+                user.username(),
+                user.email(),
+                user.role(),
+                user.suspendedByAccount(),
+                user.suspendedByAdmin(),
                 enabled
         );
     }

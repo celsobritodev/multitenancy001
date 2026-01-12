@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS payments (
     transaction_id VARCHAR(100) UNIQUE,
     payment_method VARCHAR(50),
     payment_gateway VARCHAR(50),
-    currency VARCHAR(3) DEFAULT 'BRL',
+    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
 
     description VARCHAR(500),
     metadata_json TEXT,

@@ -5,9 +5,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.account.AccountResolver;
+import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -22,7 +22,8 @@ public class TenantAuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
-    private final AccountRepository accountRepository;
+    private final AccountResolver accountResolver;
+
     private final TenantUserRepository tenantUserRepository;
 
     public JwtResponse loginTenant(TenantLoginRequest request) {
@@ -30,24 +31,12 @@ public class TenantAuthService {
         // 1️⃣ PUBLIC — resolve conta
         TenantContext.clear();
 
-        Account account = accountRepository
-                .findBySlugAndDeletedFalse(request.slug())
-                .orElseThrow(() -> new ApiException(
-                        "ACCOUNT_NOT_FOUND",
-                        "Conta não encontrada",
-                        404
-                ));
+        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(request.slug());
 
-        if (!account.isActive()) {
-            throw new ApiException(
-                    "ACCOUNT_INACTIVE",
-                    "Conta inativa",
-                    403
-            );
-        }
+        
 
         // 2️⃣ TENANT — bind correto
-        TenantContext.bind(account.getSchemaName());
+        TenantContext.bind(account.schemaName());
 
         try {
             Authentication authentication =
@@ -61,13 +50,14 @@ public class TenantAuthService {
             TenantUser user = tenantUserRepository
                     .findByUsernameAndAccountId(
                             request.username(),
-                            account.getId()
+                            account.id()
                     )
                     .orElseThrow(() -> new ApiException(
                             "USER_NOT_FOUND",
                             "Usuário não encontrado",
                             404
                     ));
+
 
             if (user.isSuspendedByAccount() || user.isDeleted()) {
                 throw new ApiException(
@@ -79,14 +69,16 @@ public class TenantAuthService {
 
             String accessToken = tokenProvider.generateTenantToken(
                     authentication,
-                    account.getId(),
-                    account.getSchemaName()
+                    account.id(),
+                    account.schemaName()
             );
-
+            
+            
             String refreshToken = tokenProvider.generateRefreshToken(
                     user.getUsername(),
-                    account.getSchemaName()
+                    account.schemaName()
             );
+
 
             return new JwtResponse(
                     accessToken,
@@ -95,8 +87,8 @@ public class TenantAuthService {
                     user.getUsername(),
                     user.getEmail(),
                     user.getRole().name(),
-                    account.getId(),
-                    account.getSchemaName()
+                    account.id(),
+                    account.schemaName()
             );
 
         } finally {

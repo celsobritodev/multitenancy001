@@ -4,7 +4,7 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetai
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.application.AccountLifecycleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -45,14 +45,14 @@ public class AccountAdminController {
 
     @GetMapping("/{id}/users")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
+    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
         log.info("Listando Usuários por conta");
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
     }
 
     @GetMapping("/{id}/users/active")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
+    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
     }
 

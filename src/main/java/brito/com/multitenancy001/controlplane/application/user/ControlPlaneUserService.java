@@ -3,10 +3,10 @@ package brito.com.multitenancy001.controlplane.application.user;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneRole;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
+import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.security.PermissionNormalizer;
@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @Transactional
@@ -43,15 +43,12 @@ public class ControlPlaneUserService {
                 ));
     }
 
-   public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
+  public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
     TenantContext.clear();
 
     Account controlPlaneAccount = getControlPlaneAccount();
 
-    // validações básicas
-    if (!request.password().matches(ValidationPatterns.PASSWORD_PATTERN)) {
-        throw new ApiException("INVALID_PASSWORD", "A senha não atende aos requisitos de segurança", 400);
-    }
+    
     if (request.username() == null || request.username().isBlank()) {
         throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
     }
@@ -61,15 +58,8 @@ public class ControlPlaneUserService {
 
     String username = request.username().toLowerCase().trim();
 
-    // role permitida somente plataforma
-    ControlPlaneRole role;
-    try {
-        role = ControlPlaneRole.valueOf(request.role().toUpperCase());
-    } catch (IllegalArgumentException e) {
-        throw new ApiException("INVALID_ROLE", "Role inválida para plataforma", 400);
-    }
-
-   
+    // ✅ agora role já vem tipada (enum)
+    ControlPlaneRole roleEnum = request.role();
 
     if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
         throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
@@ -78,38 +68,28 @@ public class ControlPlaneUserService {
         throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
     }
 
-    // =========================================================
-    // ✅ AQUI É O LOCAL EXATO: antes do builder
-    // =========================================================
-    Set<String> normalizedPermissions;
+    LinkedHashSet<String> normalizedPermissions;
     try {
         normalizedPermissions = PermissionNormalizer.normalizeControlPlane(request.permissions());
     } catch (IllegalArgumentException e) {
         throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
     }
-    // =========================================================
 
     ControlPlaneUser user = ControlPlaneUser.builder()
             .name(request.name())
             .username(username)
             .email(request.email())
             .password(passwordEncoder.encode(request.password()))
-            .role(role)
+            .role(roleEnum)
             .account(controlPlaneAccount)
             .suspendedByAccount(false)
             .suspendedByAdmin(false)
-
-            // =====================================================
-            // ✅ E AQUI: dentro do builder, antes do .build()
-            // =====================================================
             .permissions(normalizedPermissions)
-
-            // =====================================================
-
             .build();
 
     return mapToResponse(controlPlaneUserRepository.save(user));
 }
+
 
 
     @Transactional(readOnly = true)

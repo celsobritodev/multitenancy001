@@ -2,8 +2,8 @@ package brito.com.multitenancy001.tenant.domain.user;
 
 import brito.com.multitenancy001.shared.security.PermissionNormalizer;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.security.TenantRole;
-import brito.com.multitenancy001.tenant.domain.security.TenantRolePermissions;
+import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
@@ -12,14 +12,13 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
-import java.util.Set;
 
 @Entity
 @Table(
-    name = "users_tenant",
+    name = "tenant_users",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_users_tenant_username_account", columnNames = {"username", "account_id"}),
-        @UniqueConstraint(name = "uk_users_tenant_email_account", columnNames = {"email", "account_id"})
+        @UniqueConstraint(name = "uk_tenant_users_username_account", columnNames = {"username", "account_id"}),
+        @UniqueConstraint(name = "uk_tenant_users_email_account", columnNames = {"email", "account_id"})
     }
 )
 @Getter
@@ -73,8 +72,8 @@ public class TenantUser {
 
     @ElementCollection
     @CollectionTable(
-        name = "user_tenant_permissions",
-        joinColumns = @JoinColumn(name = "user_tenant_id")
+        name = "tenant_user_permissions",
+        joinColumns = @JoinColumn(name = "tenant_user_id")
     )
     @Column(name = "permission", length = 120)
     @Builder.Default
@@ -154,7 +153,7 @@ protected void onSave() {
     }
 
     // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
-    Set<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
+    LinkedHashSet<String> normalized = PermissionNormalizer.normalizeTenant(permissions);
 
     // 3) volta para LinkedHashSet preservando ordem (se quiser preservar)
     permissions = new LinkedHashSet<>(new LinkedHashSet<>(normalized));

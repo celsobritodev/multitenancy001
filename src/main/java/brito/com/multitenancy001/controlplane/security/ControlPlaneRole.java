@@ -1,13 +1,13 @@
-package brito.com.multitenancy001.controlplane.domain.user;
+package brito.com.multitenancy001.controlplane.security;
 
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum ControlPlaneRole implements RoleAuthority {
 
-    PLATFORM_OWNER,
-    PLATFORM_BILLING_MANAGER,  
-    PLATFORM_SUPPORT,
-    PLATFORM_OPERATOR;
+    CONTROLPLANE_OWNER,
+    CONTROLPLANE_BILLING_MANAGER,  
+    CONTROLPLANE_SUPPORT,
+    CONTROLPLANE_OPERATOR;
 
     @Override
     public String asAuthority() {
@@ -15,10 +15,10 @@ public enum ControlPlaneRole implements RoleAuthority {
     }
 
     public boolean isSuperAdmin() {
-        return this == PLATFORM_OWNER;
+        return this == CONTROLPLANE_OWNER;
     }
 
     public boolean isBillingAdmin() {
-        return this == PLATFORM_BILLING_MANAGER;
+        return this == CONTROLPLANE_BILLING_MANAGER;
     }
 }

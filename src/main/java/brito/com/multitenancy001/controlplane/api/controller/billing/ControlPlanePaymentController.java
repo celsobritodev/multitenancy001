@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.controlplane.api.controller.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
-import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.controlplane.application.billing.PaymentService;
 import jakarta.validation.Valid;
@@ -20,20 +19,24 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/controlplane/billing/payments")
+@RequestMapping("/api/admin/billing/payments")
 @RequiredArgsConstructor
 @Validated
-public class PaymentController {
+public class ControlPlanePaymentController {
 
     private final PaymentService paymentService;
-    
+
+    // =========================================================
+    // ADMIN / CROSS-TENANT
+    // =========================================================
+
     @PostMapping("/by-account/{accountId}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_WRITE')")
     public ResponseEntity<PaymentResponse> processPaymentForAccount(
             @PathVariable Long accountId,
             @Valid @RequestBody AdminPaymentRequest body
     ) {
-        // Garante que o path manda (evita inconsistência)
+        // Garante que o accountId do path manda (evita inconsistência)
         AdminPaymentRequest req = new AdminPaymentRequest(
                 accountId,
                 body.amount(),
@@ -46,42 +49,9 @@ public class PaymentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    
-
-    @PostMapping
-    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
-    public ResponseEntity<PaymentResponse> processPayment(@Valid @RequestBody PaymentRequest request) {
-        PaymentResponse response = paymentService.processPaymentForMyAccount(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @GetMapping("/{paymentId}")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
-    public ResponseEntity<PaymentResponse> getById(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(paymentService.getPaymentById(paymentId));
-    }
-
-    // =========================
-    // MINHA CONTA (SAFE DEFAULT)
-    // =========================
-
-    @GetMapping("/by-account")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
-    public ResponseEntity<List<PaymentResponse>> getByMyAccount() {
-        return ResponseEntity.ok(paymentService.getPaymentsByMyAccount());
-    }
-
-    @GetMapping("/by-account/active")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
-    public ResponseEntity<Boolean> hasActivePaymentMyAccount() {
-        return ResponseEntity.ok(paymentService.hasActivePaymentMyAccount());
-    }
-
- 
-
     @GetMapping("/by-account/{accountId}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
-    public ResponseEntity<List<PaymentResponse>> getByAccountAdmin(@PathVariable Long accountId) {
+    public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(paymentService.getPaymentsByAccount(accountId));
     }
 

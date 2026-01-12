@@ -2,12 +2,14 @@ package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 import java.util.List;
 
+import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 @Builder
@@ -17,10 +19,12 @@ public record ControlPlaneUserCreateRequest(
     @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
     String name,
     
-    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, 
-             message = "Username inválido. Use apenas letras, números, . e _")
+    @NotBlank(message = "Username é obrigatório")
+    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido...")
     @Size(min = 3, max = 50, message = "Username deve ter entre 3 e 50 caracteres")
     String username,
+
+ 
     
     @NotBlank(message = "Email é obrigatório")
     @Email(message = "Email inválido")
@@ -32,10 +36,8 @@ public record ControlPlaneUserCreateRequest(
              message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas, números e caracteres especiais")
     String password,
     
-    @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "PLATFORM_OWNER|PLATFORM_BILLING_MANAGER|PLATFORM_SUPPORT|PLATFORM_OPERATOR\r\n"
-    		+ "", message = "Role inválida")
-    String role,
+    @NotNull(message = "Role é obrigatória")
+    ControlPlaneRole role,
 
     
     List<String> permissions,

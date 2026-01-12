@@ -2,12 +2,14 @@ package brito.com.multitenancy001.tenant.api.dto.users;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 import java.util.LinkedHashSet;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 
 @Builder
 public record TenantUserCreateRequest(
@@ -16,10 +18,11 @@ public record TenantUserCreateRequest(
     @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
     String name,
     
-    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, 
-             message = "Username inválido. Use apenas letras, números, . e _")
-    @Size(min = 3, max = 50, message = "Username deve ter entre 3 e 50 caracteres")
+    @NotBlank(message = "Username é obrigatório")
+    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido...")
+    @Size(min = 3, max = 50, message = "Username inválido. Use apenas letras, números, . e _")
     String username,
+
     
     @NotBlank(message = "Email é obrigatório")
     @Email(message = "Email inválido")
@@ -31,9 +34,8 @@ public record TenantUserCreateRequest(
              message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas, números e caracteres especiais")
     String password,
     
-    @NotBlank(message = "Role é obrigatória")
-    @Pattern(regexp = "TENANT_ACCOUNT_OWNER|TENANT_ACCOUNT_ADMIN|TENANT_CATALOG_MANAGER|TENANT_SALES_MANAGER|TENANT_BILLING_MANAGER|TENANT_READ_ONLY|TENANT_OPERATOR", message = "Role inválida")
-    String role,
+    @NotNull(message = "Role é obrigatória")
+    TenantRole role,
     
     LinkedHashSet<String> permissions,
     
@@ -48,12 +50,13 @@ public record TenantUserCreateRequest(
     
 ) {
     
-    public TenantUserCreateRequest {
-        if (phone != null) {
-            phone = phone.trim();
-        }
-        if (avatarUrl != null) {
-            avatarUrl = avatarUrl.trim();
-        }
-    }
+	public TenantUserCreateRequest {
+	    if (name != null) name = name.trim();
+	    if (username != null) username = username.trim();
+	    if (email != null) email = email.trim();
+
+	    if (phone != null) phone = phone.trim();
+	    if (avatarUrl != null) avatarUrl = avatarUrl.trim();
+	}
+
 }

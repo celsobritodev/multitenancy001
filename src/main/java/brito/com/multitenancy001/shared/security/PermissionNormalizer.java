@@ -1,15 +1,14 @@
 package brito.com.multitenancy001.shared.security;
 
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedHashSet;
 
 public final class PermissionNormalizer {
 
     private PermissionNormalizer() {}
 
-    public static Set<String> normalizeTenant(Collection<String> perms) {
-        Set<String> out = new HashSet<>();
+    public static LinkedHashSet<String> normalizeTenant(Collection<String> perms) {
+    	LinkedHashSet<String> out = new LinkedHashSet<>();
         if (perms == null) return out;
         for (String p : perms) {
             if (p == null) continue;
@@ -28,8 +27,8 @@ public final class PermissionNormalizer {
         return out;
     }
 
-    public static Set<String> normalizeControlPlane(Collection<String> perms) {
-        Set<String> out = new HashSet<>();
+    public static LinkedHashSet<String> normalizeControlPlane(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
         if (perms == null) return out;
         for (String p : perms) {
             if (p == null) continue;

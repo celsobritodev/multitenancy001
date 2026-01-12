@@ -16,7 +16,7 @@ SELECT
     'superadmin',
     'admin@controlplane.com',
     '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
-    'PLATFORM_OWNER',
+    'CONTROLPLANE_OWNER',
     a.id,
     false,
     false

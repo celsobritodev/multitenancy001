@@ -1,9 +1,7 @@
-package brito.com.multitenancy001.controlplane.domain.security;
+package brito.com.multitenancy001.controlplane.security;
 
 import java.util.EnumSet;
 import java.util.Set;
-
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneRole;
 
 public final class ControlPlaneRolePermissions {
 
@@ -13,27 +11,30 @@ public final class ControlPlaneRolePermissions {
         if (role == null) return Set.of();
 
         return switch (role) {
-            case PLATFORM_OWNER -> EnumSet.allOf(ControlPlanePermission.class);
+            case CONTROLPLANE_OWNER -> EnumSet.allOf(ControlPlanePermission.class);
 
-            case PLATFORM_BILLING_MANAGER -> EnumSet.of(
+            case CONTROLPLANE_BILLING_MANAGER -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_ACTIVATE,
                 ControlPlanePermission.CP_BILLING_READ,
-                ControlPlanePermission.CP_BILLING_WRITE
+                ControlPlanePermission.CP_BILLING_WRITE,
+                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
             );
 
-            case PLATFORM_SUPPORT -> EnumSet.of(
+            case CONTROLPLANE_SUPPORT -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_ACTIVATE,
                 ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_USER_WRITE
+                ControlPlanePermission.CP_USER_WRITE,
+                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
             );
 
-            case PLATFORM_OPERATOR -> EnumSet.of(
+            case CONTROLPLANE_OPERATOR -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
-                ControlPlanePermission.CP_USER_READ
+                ControlPlanePermission.CP_USER_READ,
+                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
             );
         };
     }

@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.domain.security;
+package brito.com.multitenancy001.controlplane.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
 

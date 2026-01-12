@@ -17,7 +17,7 @@ public class AdminAuthController {
 	private final AdminAuthService adminAuthService;
 
 	@PostMapping("/login")
-	public ResponseEntity<JwtResponse> loginSuperAdmin(@Valid @RequestBody ControlPlaneAdminLoginRequest request) {
+	public ResponseEntity<JwtResponse> loginControlPlaneUser(@Valid @RequestBody ControlPlaneAdminLoginRequest request) {
 
 		JwtResponse response = adminAuthService.loginSuperAdmin(request);
 		return ResponseEntity.ok(response);
