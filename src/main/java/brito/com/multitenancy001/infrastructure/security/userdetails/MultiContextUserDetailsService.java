@@ -5,6 +5,7 @@ import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserR
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -22,7 +22,11 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final TenantUserRepository tenantUserRepository;
-    private final Clock clock;
+    private final AppClock appClock;
+
+    private LocalDateTime now() {
+        return appClock.now();
+    }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -32,7 +36,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             return loadControlPlaneUser(username);
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
@@ -42,24 +46,30 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     public UserDetails loadControlPlaneUser(String username, Long accountId) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED",
-                    "accountId é obrigatório para autenticar usuário da controlplane", 400);
+            throw new ApiException(
+                    "ACCOUNT_REQUIRED",
+                    "accountId é obrigatório para autenticar usuário da controlplane",
+                    400
+            );
         }
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByUsernameAndAccount_IdAndDeletedFalse(username, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND",
-                        "Usuário controlplane não encontrado para esta conta", 404));
+                .orElseThrow(() -> new ApiException(
+                        "USER_NOT_FOUND",
+                        "Usuário controlplane não encontrado para esta conta",
+                        404
+                ));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return new AuthenticatedUserContext(user, "public", now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         ControlPlaneUser user = controlPlaneUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário controlplane não encontrado", 404));
@@ -71,16 +81,22 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     public UserDetails loadTenantUser(String username, Long accountId) {
         String schema = TenantContext.getOrNull();
         if (schema == null || "public".equalsIgnoreCase(schema)) {
-            throw new ApiException("TENANT_CONTEXT_REQUIRED",
-                    "TenantContext não está bindado para autenticar usuário tenant", 401);
+            throw new ApiException(
+                    "TENANT_CONTEXT_REQUIRED",
+                    "TenantContext não está bindado para autenticar usuário tenant",
+                    401
+            );
         }
 
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED",
-                    "accountId é obrigatório para autenticar usuário tenant", 400);
+            throw new ApiException(
+                    "ACCOUNT_REQUIRED",
+                    "accountId é obrigatório para autenticar usuário tenant",
+                    400
+            );
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         TenantUser user = tenantUserRepository
                 .findByUsernameAndAccountIdAndDeletedFalse(username, accountId)

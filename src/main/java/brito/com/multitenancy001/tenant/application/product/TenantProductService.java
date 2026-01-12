@@ -7,6 +7,7 @@
 package brito.com.multitenancy001.tenant.application.product;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
@@ -37,6 +38,7 @@ public class TenantProductService {
     private final SupplierRepository supplierRepository;
     private final CategoryRepository categoryRepository;
     private final SubcategoryRepository subcategoryRepository;
+    private final AppClock appClock;
 
     @Transactional(readOnly = true)
     public Page<Product> findAll(Pageable pageable) {
@@ -207,7 +209,7 @@ public class TenantProductService {
     @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
-        product.softDelete();
+        product.softDelete(appClock.now());
         productRepository.save(product);
     }
 

@@ -1,72 +1,62 @@
 package brito.com.multitenancy001.controlplane.api.mapper;
 
-import java.time.Clock;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.time.AppClock;
+import org.springframework.stereotype.Component;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
-import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-
 @Component
 public class AccountAdminDetailsApiMapper {
-	
-	private final Clock clock;
-	private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
-	
 
+    private final AppClock appClock;
+    private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
 
-	public AccountAdminDetailsApiMapper(Clock clock, ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
-	    this.clock = clock;
-	    this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
-	}
-
-
-   public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
-	   LocalDateTime now = LocalDateTime.now(clock);
-	   LocalDate today = now.toLocalDate();
-	   LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;  
-	   
-	   
-
-
-    boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
-    boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
-
-    long trialDaysRemaining = 0;
-    if (inTrial) {
-        trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
+    public AccountAdminDetailsApiMapper(AppClock appClock, ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
+        this.appClock = appClock;
+        this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
     }
 
-    return new AccountAdminDetailsResponse(
-        account.getId(),
-        account.getName(),
-        account.getSlug(),
-        account.getSchemaName(),
-        account.getStatus().name(),
+    public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
+        LocalDateTime now = appClock.now();
+        LocalDate today = now.toLocalDate();
+        LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;
 
-        account.getCompanyDocType(),
-        account.getCompanyDocNumber(),
+        boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
+        boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
 
-        account.getCreatedAt(),
-        account.getTrialEndDate(),
-        account.getPaymentDueDate(),
-        account.getDeletedAt(),
+        long trialDaysRemaining = 0;
+        if (inTrial && end != null) {
+            trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
+        }
 
-        inTrial,
-        trialExpired,
-        trialDaysRemaining,
+        return new AccountAdminDetailsResponse(
+                account.getId(),
+                account.getName(),
+                account.getSlug(),
+                account.getSchemaName(),
+                account.getStatus().name(),
 
-        admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
+                account.getCompanyDocType(),
+                account.getCompanyDocNumber(),
 
+                account.getCreatedAt(),
+                account.getTrialEndDate(),
+                account.getPaymentDueDate(),
+                account.getDeletedAt(),
 
+                inTrial,
+                trialExpired,
+                trialDaysRemaining,
 
-        totalUsers,
-        account.isActive()
-    );
-}
+                admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
 
+                totalUsers,
+                account.isActive(now) // ✅ agora clock-aware
+        );
+    }
 }

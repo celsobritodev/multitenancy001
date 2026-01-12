@@ -1,21 +1,20 @@
 package brito.com.multitenancy001.controlplane.application;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
-
-import org.springframework.transaction.annotation.Transactional;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -24,56 +23,59 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicAccountService {
 
     private final AccountRepository accountRepository;
- 
+    private final AppClock appClock;
+
     public Account createAccountFromSignup(SignupRequest signupRequest) {
-    	 TenantContext.clear();
+        TenantContext.clear();
 
-    	    int maxAttempts = 5;
-    	    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-    	        String slug = generateSlug(signupRequest.name());
-    	        String schemaName = generateSchemaName(signupRequest.name());
+        int maxAttempts = 5;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            String slug = generateSlug(signupRequest.name());
+            String schemaName = generateSchemaName(signupRequest.name());
 
-    	        try {
-    	            Account account = new Account();
-    	            account.setName(signupRequest.name());
-    	            account.setSlug(slug);
-    	            account.setSchemaName(schemaName);
+            try {
+                LocalDateTime now = appClock.now();
 
-    	            account.setCompanyEmail(signupRequest.companyEmail());
+                Account account = new Account();
+                account.setName(signupRequest.name());
+                account.setSlug(slug);
+                account.setSchemaName(schemaName);
 
-    	            // ✅ novos campos (sempre em conjunto)
-    	            account.setCompanyDocType(signupRequest.companyDocType());
-    	            account.setCompanyDocNumber(signupRequest.companyDocNumber());
+                account.setCompanyEmail(signupRequest.companyEmail());
+                account.setCompanyDocType(signupRequest.companyDocType());
+                account.setCompanyDocNumber(signupRequest.companyDocNumber());
 
-    	            account.setCreatedAt(LocalDateTime.now());
-    	            account.setTrialEndDate(LocalDateTime.now().plusDays(30));
-    	            account.setStatus(AccountStatus.FREE_TRIAL);
-    	            account.setSystemAccount(false);
+                // ✅ negócio (clock-aware)
+                account.setTrialEndDate(now.plusDays(30));
+                account.setStatus(AccountStatus.FREE_TRIAL);
+                account.setSystemAccount(false);
 
-    	            // Defaults
-    	            account.setSubscriptionPlan("FREE");
-    	            account.setMaxUsers(5);
-    	            account.setMaxProducts(100);
-    	            account.setMaxStorageMb(100);
-    	            account.setCompanyCountry("Brasil");
-    	            account.setTimezone("America/Sao_Paulo");
-    	            account.setLocale("pt_BR");
-    	            account.setCurrency("BRL");
+                // Defaults
+                account.setSubscriptionPlan("FREE");
+                account.setMaxUsers(5);
+                account.setMaxProducts(100);
+                account.setMaxStorageMb(100);
+                account.setCompanyCountry("Brasil");
+                account.setTimezone("America/Sao_Paulo");
+                account.setLocale("pt_BR");
+                account.setCurrency("BRL");
 
-    	            return accountRepository.save(account);
+                return accountRepository.save(account);
 
-    	        } catch (DataIntegrityViolationException e) {
-    	            if (!isSlugOrSchemaUniqueViolation(e)) throw e;
-    	            log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
-    	                    attempt, maxAttempts, slug, schemaName);
-    	        }
-    	    }
+            } catch (DataIntegrityViolationException e) {
+                if (!isSlugOrSchemaUniqueViolation(e)) throw e;
+                log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
+                        attempt, maxAttempts, slug, schemaName);
+            }
+        }
 
-    	    throw new ApiException("ACCOUNT_CREATE_FAILED",
-    	            "Não foi possível criar conta (colisão de identificadores). Tente novamente.", 409);
-    	}
-    
-    
+        throw new ApiException(
+                "ACCOUNT_CREATE_FAILED",
+                "Não foi possível criar conta (colisão de identificadores). Tente novamente.",
+                409
+        );
+    }
+
     private String generateSlug(String name) {
         String base = (name == null ? "conta" : name.toLowerCase())
                 .replaceAll("[^a-z0-9]+", "-")
@@ -94,10 +96,6 @@ public class PublicAccountService {
         return "tenant_" + base + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-   
-    
-    
-
     private boolean isSlugOrSchemaUniqueViolation(Throwable e) {
         Throwable t = e;
         while (t.getCause() != null) t = t.getCause();
@@ -110,5 +108,4 @@ public class PublicAccountService {
                 || msg.contains("accounts_schema_name_key")
                 || msg.contains("company_email");
     }
-
 }

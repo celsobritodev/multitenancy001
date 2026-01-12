@@ -1,11 +1,10 @@
 package brito.com.multitenancy001.tenant.domain.supplier;
 
+import brito.com.multitenancy001.tenant.domain.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import brito.com.multitenancy001.tenant.domain.product.Product;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,7 +26,6 @@ import java.util.UUID;
 @ToString(exclude = {"products"})
 public class Supplier {
 
-    // ✅ Opção A: DB gera UUID (recomendado se sua migration usa DEFAULT gen_random_uuid())
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
@@ -48,7 +46,6 @@ public class Supplier {
     @Column(columnDefinition = "TEXT")
     private String address;
 
-    // ✅ Sem unique=true (unicidade parcial está na migration)
     @Column(length = 20)
     private String document;
 
@@ -97,15 +94,22 @@ public class Supplier {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public void softDelete() {
+    // =====================
+    // Regras de domínio
+    // =====================
+
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.active = true;

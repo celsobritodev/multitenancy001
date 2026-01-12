@@ -1,24 +1,23 @@
 package brito.com.multitenancy001.controlplane.api.mapper;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-
-import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.time.AppClock;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
 
 @Component
 public class ControlPlaneUserApiMapper {
 
-    private final Clock clock;
+    private final AppClock appClock;
 
-    public ControlPlaneUserApiMapper(Clock clock) {
-        this.clock = clock;
+    public ControlPlaneUserApiMapper(AppClock appClock) {
+        this.appClock = appClock;
     }
 
     public ControlPlaneAdminUserSummaryResponse toAdminSummary(ControlPlaneUser user) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = appClock.now();
         boolean enabled = user.isEnabledForLogin(now);
 
         return new ControlPlaneAdminUserSummaryResponse(

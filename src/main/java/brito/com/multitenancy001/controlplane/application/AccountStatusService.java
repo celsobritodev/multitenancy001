@@ -1,8 +1,5 @@
 package brito.com.multitenancy001.controlplane.application;
 
-import java.time.LocalDateTime;
-import org.springframework.stereotype.Service;
-
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -12,10 +9,10 @@ import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-
-
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -26,20 +23,18 @@ public class AccountStatusService {
     private final TxExecutor txExecutor;
     private final AccountRepository accountRepository;
     private final TenantUserAdminBridge tenantUserAdminBridge;
+    private final AppClock appClock;
 
-
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest accountStatusChangeRequest) {
+    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
         return txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-            AccountStatus previous = account.getStatus(); // ✅ captura antes de alterar
+            AccountStatus previous = account.getStatus();
 
-            // ... mantenha aqui suas regras de transição, validações, etc ...
-
-            account.setStatus(accountStatusChangeRequest.status());
-            if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
+            account.setStatus(req.status());
+            if (req.status() == AccountStatus.ACTIVE) {
                 account.setDeletedAt(null);
             }
             accountRepository.save(account);
@@ -48,15 +43,15 @@ public class AccountStatusService {
             boolean applied = false;
             String action = "NONE";
 
-            if (accountStatusChangeRequest.status() == AccountStatus.SUSPENDED) {
+            if (req.status() == AccountStatus.SUSPENDED) {
                 affected = suspendTenantUsersByAccount(account);
                 applied = true;
                 action = "SUSPEND_BY_ACCOUNT";
-            } else if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
+            } else if (req.status() == AccountStatus.ACTIVE) {
                 affected = unsuspendTenantUsersByAccount(account);
                 applied = true;
                 action = "UNSUSPEND_BY_ACCOUNT";
-            } else if (accountStatusChangeRequest.status() == AccountStatus.CANCELLED) {
+            } else if (req.status() == AccountStatus.CANCELLED) {
                 affected = cancelAccount(account);
                 applied = true;
                 action = "CANCELLED";
@@ -66,42 +61,37 @@ public class AccountStatusService {
         }));
     }
 
-   protected int suspendTenantUsersByAccount(Account account) {
-    return tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+    protected int suspendTenantUsersByAccount(Account account) {
+        return tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-protected int unsuspendTenantUsersByAccount(Account account) {
-    return tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+    protected int unsuspendTenantUsersByAccount(Account account) {
+        return tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-private int cancelAccount(Account account) {
-    txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
-        account.setDeletedAt(LocalDateTime.now());
-        accountRepository.save(account);
-        return null;
-    }));
+    private int cancelAccount(Account account) {
+        txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
+            account.setDeletedAt(appClock.now());
+            accountRepository.save(account);
+            return null;
+        }));
 
-    // soft-delete users best-effort
-    return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+        return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-private void softDeleteTenantUsers(Long accountId) {
-    Account account = txExecutor.publicReadOnlyTx(() ->
-        publicExecutor.run(() -> getAccountByIdRaw(accountId))
-    );
+    private void softDeleteTenantUsers(Long accountId) {
+        Account account = txExecutor.publicReadOnlyTx(() ->
+                publicExecutor.run(() -> getAccountByIdRaw(accountId))
+        );
+        tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-    tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
-}
-
-private void restoreTenantUsers(Long accountId) {
-    Account account = txExecutor.publicReadOnlyTx(() ->
-        publicExecutor.run(() -> getAccountByIdRaw(accountId))
-    );
-
-    tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
-}
-
-
+    private void restoreTenantUsers(Long accountId) {
+        Account account = txExecutor.publicReadOnlyTx(() ->
+                publicExecutor.run(() -> getAccountByIdRaw(accountId))
+        );
+        tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
     public void softDeleteAccount(Long accountId) {
         txExecutor.publicTx(() -> publicExecutor.run(() -> {
@@ -113,7 +103,7 @@ private void restoreTenantUsers(Long accountId) {
                         "Não é permitido excluir contas do sistema", 403);
             }
 
-            account.softDelete();
+            account.softDelete(appClock.now());
             accountRepository.save(account);
 
             softDeleteTenantUsers(accountId);
@@ -143,10 +133,9 @@ private void restoreTenantUsers(Long accountId) {
 
     private Account getAccountByIdRaw(Long accountId) {
         return accountRepository.findById(accountId)
-            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-  
     private AccountStatusChangeResponse buildStatusChangeResponse(
             Account account,
             AccountStatus previous,
@@ -158,7 +147,7 @@ private void restoreTenantUsers(Long accountId) {
                 account.getId(),
                 account.getStatus().name(),
                 previous.name(),
-                LocalDateTime.now(),
+                appClock.now(),
                 account.getSchemaName(),
                 new AccountStatusChangeResponse.SideEffects(tenantUsersUpdated, action, count)
         );

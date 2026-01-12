@@ -82,9 +82,7 @@ public class TenantUserAdminBridge {
                     u.setSuspendedByAccount(false);
                     u.setSuspendedByAdmin(false);
 
-                    // ❌ não setar createdAt manualmente: @CreationTimestamp já cuida disso
-                    // u.setCreatedAt(LocalDateTime.now());
-
+                    
                     u.setTimezone("America/Sao_Paulo");
                     u.setLocale("pt_BR");
 

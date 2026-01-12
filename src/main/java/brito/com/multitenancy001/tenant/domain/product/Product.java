@@ -1,13 +1,12 @@
 package brito.com.multitenancy001.tenant.domain.product;
 
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import brito.com.multitenancy001.tenant.domain.category.Category;
-import brito.com.multitenancy001.tenant.domain.category.Subcategory;
-import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -16,12 +15,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products", indexes = {
-    @Index(name = "idx_product_name", columnList = "name"),
- 
-    @Index(name = "idx_product_supplier", columnList = "supplier_id"),
-    @Index(name = "idx_product_created_at", columnList = "created_at"),
-    @Index(name = "idx_products_category_id", columnList = "category_id"),
-    @Index(name = "idx_products_subcategory_id", columnList = "subcategory_id")
+        @Index(name = "idx_product_name", columnList = "name"),
+        @Index(name = "idx_product_supplier", columnList = "supplier_id"),
+        @Index(name = "idx_product_created_at", columnList = "created_at"),
+        @Index(name = "idx_products_category_id", columnList = "category_id"),
+        @Index(name = "idx_products_subcategory_id", columnList = "subcategory_id")
 })
 @Getter
 @Setter
@@ -41,7 +39,7 @@ public class Product {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(length = 100,nullable=false)
+    @Column(length = 100, nullable = false)
     private String sku;
 
     @Column(precision = 10, scale = 2, nullable = false)
@@ -63,20 +61,18 @@ public class Product {
     @Column(name = "profit_margin", precision = 5, scale = 2)
     private BigDecimal profitMargin;
 
-    // ✅ FK simples (category_id) - obrigatório
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
-        name = "category_id",
-        nullable = false,
-        foreignKey = @ForeignKey(name = "fk_products_category")
+            name = "category_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_products_category")
     )
     private Category category;
 
-    // ✅ CORREÇÃO: FK simples para subcategory (REMOVER a composta)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
-        name = "subcategory_id",
-        foreignKey = @ForeignKey(name = "fk_products_subcategory")
+            name = "subcategory_id",
+            foreignKey = @ForeignKey(name = "fk_products_subcategory")
     )
     private Subcategory subcategory;
 
@@ -92,7 +88,7 @@ public class Product {
     @Column(name = "barcode", length = 50)
     private String barcode;
 
-    @Column(name = "active", nullable=false)
+    @Column(name = "active", nullable = false)
     @Builder.Default
     private Boolean active = true;
 
@@ -117,15 +113,15 @@ public class Product {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Column(name = "deleted",nullable=false)
+    @Column(name = "deleted", nullable = false)
     @Builder.Default
     private Boolean deleted = false;
 
     @PrePersist
     protected void onCreate() {
-       
         if (this.stockQuantity == null) this.stockQuantity = 0;
         if (this.active == null) this.active = true;
+        if (this.deleted == null) this.deleted = false;
         calculateProfitMargin();
     }
 
@@ -138,15 +134,30 @@ public class Product {
         if (this.costPrice != null && this.costPrice.compareTo(BigDecimal.ZERO) > 0 && this.price != null) {
             BigDecimal profit = this.price.subtract(this.costPrice);
             this.profitMargin = profit
-                .divide(this.costPrice, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100));
+                    .divide(this.costPrice, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
         }
     }
 
-    public void softDelete() {
+    // =====================
+    // Regras de domínio
+    // =====================
+
+    public void softDelete(LocalDateTime now) {
+        if (Boolean.TRUE.equals(this.deleted)) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
+    }
+
+    public void restore() {
+        if (!Boolean.TRUE.equals(this.deleted)) return;
+
+        this.deleted = false;
+        this.deletedAt = null;
+        this.active = true;
     }
 
     public void updatePrice(BigDecimal newPrice) {
@@ -161,7 +172,7 @@ public class Product {
         this.costPrice = newCostPrice;
         calculateProfitMargin();
     }
-    
+
     public void addToStock(Integer quantity) {
         if (quantity == null || quantity <= 0) {
             throw new IllegalArgumentException("Quantidade deve ser positiva");

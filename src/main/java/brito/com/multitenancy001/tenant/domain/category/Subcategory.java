@@ -35,18 +35,15 @@ public class Subcategory {
     @Column(nullable = false, length = 100)
     private String name;
 
-    // Negócio
     @Column(nullable = false)
     private boolean active = true;
 
-    // Soft delete
     @Column(nullable = false)
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    // Auditoria
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -55,19 +52,18 @@ public class Subcategory {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // =====================
-    // Regras de domínio
-    // =====================
-
-    public void softDelete() {
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.active = true;

@@ -1,13 +1,13 @@
 package brito.com.multitenancy001.controlplane.domain.account;
 
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -62,19 +62,19 @@ public class Account {
     @Column(name = "next_billing_date")
     private LocalDateTime nextBillingDate;
 
-    @Column(name = "subscription_plan", nullable=false, length = 50)
+    @Column(name = "subscription_plan", nullable = false, length = 50)
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users", nullable=false)
+    @Column(name = "max_users", nullable = false)
     @Builder.Default
     private Integer maxUsers = 5;
 
-    @Column(name = "max_products", nullable=false)
+    @Column(name = "max_products", nullable = false)
     @Builder.Default
     private Integer maxProducts = 100;
 
-    @Column(name = "max_storage_mb", nullable=false)
+    @Column(name = "max_storage_mb", nullable = false)
     @Builder.Default
     private Integer maxStorageMb = 100;
 
@@ -100,19 +100,19 @@ public class Account {
     @Column(name = "company_state", length = 50)
     private String companyState;
 
-    @Column(name = "company_country", length = 50, nullable=false)
+    @Column(name = "company_country", length = 50, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
 
-    @Column(name = "timezone", length = 50, nullable=false)
+    @Column(name = "timezone", length = 50, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10, nullable=false)
+    @Column(name = "locale", length = 10, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
 
-    @Column(name = "currency", length = 3, nullable=false)
+    @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -136,61 +136,72 @@ public class Account {
 
     @PrePersist
     protected void onCreate() {
-        // base para regras de negócio (não use createdAt aqui)
-        LocalDateTime now = LocalDateTime.now();
-
+        // ✅ aqui NÃO usar tempo
         // slug
         if (this.slug == null || this.slug.isBlank()) {
-            this.slug = this.name.toLowerCase()
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+            this.slug = (this.name == null ? "conta" : this.name)
+                    .toLowerCase()
+                    .replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("(^-|-$)", "");
         }
 
         // schemaName
-        if (this.schemaName == null) {
+        if (this.schemaName == null || this.schemaName.isBlank()) {
             this.schemaName =
-                "tenant_" +
-                this.slug.replace("-", "_") +
-                "_" +
-                UUID.randomUUID().toString().substring(0, 8);
+                    "tenant_" +
+                    this.slug.replace("-", "_") +
+                    "_" +
+                    UUID.randomUUID().toString().substring(0, 8);
         }
+    }
 
-        // trial
+    // =========================
+    // Regras clock-aware
+    // =========================
+
+    public boolean isTrialActive(LocalDateTime now) {
+        return this.status == AccountStatus.FREE_TRIAL
+                && this.trialEndDate != null
+                && now != null
+                && this.trialEndDate.isAfter(now);
+    }
+
+    public boolean isActive(LocalDateTime now) {
+        return this.status == AccountStatus.ACTIVE
+                || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
+    }
+
+    public boolean isPaymentOverdue(LocalDateTime now) {
+        return this.paymentDueDate != null
+                && now != null
+                && this.paymentDueDate.isBefore(now);
+    }
+
+    public long getDaysRemainingInTrial(LocalDateTime now) {
+        if (now == null) return 0;
+        if (this.trialEndDate == null || !isTrialActive(now)) return 0;
+        return ChronoUnit.DAYS.between(now, this.trialEndDate);
+    }
+
+    public void ensureTrialEndDate(LocalDateTime now, long trialDays) {
         if (this.trialEndDate == null) {
-            this.trialEndDate = now.plusDays(30);
+            if (now == null) throw new IllegalArgumentException("now is required");
+            this.trialEndDate = now.plusDays(trialDays);
         }
     }
 
-    public boolean isTrialActive() {
-        return this.status == AccountStatus.FREE_TRIAL &&
-               this.trialEndDate != null &&
-               this.trialEndDate.isAfter(LocalDateTime.now());
-    }
-
-    public boolean isActive() {
-        return this.status == AccountStatus.ACTIVE ||
-               (this.status == AccountStatus.FREE_TRIAL && isTrialActive());
-    }
-
-    public boolean isPaymentOverdue() {
-        return this.paymentDueDate != null &&
-               this.paymentDueDate.isBefore(LocalDateTime.now());
-    }
-
-    public long getDaysRemainingInTrial() {
-        if (this.trialEndDate == null || !isTrialActive()) return 0;
-        return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
-    }
-
-    public void softDelete() {
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.status = AccountStatus.CANCELLED;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.status = AccountStatus.ACTIVE;

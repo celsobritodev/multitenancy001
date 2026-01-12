@@ -10,13 +10,13 @@ import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,9 +29,7 @@ public class ControlPlaneUserService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
-    private final Clock clock;
-   
-    
+    private final AppClock appClock;
 
     private Account getControlPlaneAccount() {
         TenantContext.clear(); // PUBLIC
@@ -43,54 +41,51 @@ public class ControlPlaneUserService {
                 ));
     }
 
-  public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest controlPlaneUserCreateRequest) {
-    TenantContext.clear();
+    public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
+        TenantContext.clear();
 
-    Account controlPlaneAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-    
-    if (controlPlaneUserCreateRequest.username() == null || controlPlaneUserCreateRequest.username().isBlank()) {
-        throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+        if (req.username() == null || req.username().isBlank()) {
+            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+        }
+        if (!req.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
+            throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
+        }
+
+        String username = req.username().toLowerCase().trim();
+
+        // ✅ role já tipada
+        ControlPlaneRole roleEnum = req.role();
+
+        if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
+            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
+        }
+        if (controlPlaneUserRepository.existsByEmailAndAccountId(req.email(), controlPlaneAccount.getId())) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+        }
+
+        LinkedHashSet<String> normalizedPermissions;
+        try {
+            normalizedPermissions = PermissionScopeValidator.normalizeControlPlane(req.permissions());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
+        }
+
+        ControlPlaneUser user = ControlPlaneUser.builder()
+                .name(req.name())
+                .username(username)
+                .email(req.email())
+                .password(passwordEncoder.encode(req.password()))
+                .role(roleEnum)
+                .account(controlPlaneAccount)
+                .suspendedByAccount(false)
+                .suspendedByAdmin(false)
+                .permissions(normalizedPermissions)
+                .build();
+
+        return mapToResponse(controlPlaneUserRepository.save(user));
     }
-    if (!controlPlaneUserCreateRequest.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
-        throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
-    }
-
-    String username = controlPlaneUserCreateRequest.username().toLowerCase().trim();
-
-    // ✅ agora role já vem tipada (enum)
-    ControlPlaneRole roleEnum = controlPlaneUserCreateRequest.role();
-
-    if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
-        throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
-    }
-    if (controlPlaneUserRepository.existsByEmailAndAccountId(controlPlaneUserCreateRequest.email(), controlPlaneAccount.getId())) {
-        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
-    }
-
-    LinkedHashSet<String> normalizedPermissions;
-    try {
-        normalizedPermissions = PermissionScopeValidator.normalizeControlPlane(controlPlaneUserCreateRequest.permissions());
-    } catch (IllegalArgumentException e) {
-        throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
-    }
-
-    ControlPlaneUser user = ControlPlaneUser.builder()
-            .name(controlPlaneUserCreateRequest.name())
-            .username(username)
-            .email(controlPlaneUserCreateRequest.email())
-            .password(passwordEncoder.encode(controlPlaneUserCreateRequest.password()))
-            .role(roleEnum)
-            .account(controlPlaneAccount)
-            .suspendedByAccount(false)
-            .suspendedByAdmin(false)
-            .permissions(normalizedPermissions)
-            .build();
-
-    return mapToResponse(controlPlaneUserRepository.save(user));
-}
-
-
 
     @Transactional(readOnly = true)
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
@@ -117,12 +112,7 @@ public class ControlPlaneUserService {
 
         return mapToResponse(user);
     }
-    
-    
-    
-    
-    
-    
+
     public ControlPlaneUserDetailsResponse updateControlPlaneUserStatus(Long userId, boolean active) {
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
@@ -141,13 +131,7 @@ public class ControlPlaneUserService {
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
 
-    
-    
-
     public void softDeleteControlPlaneUser(Long userId) {
-    	   LocalDateTime now = LocalDateTime.now(clock);
-           long suffix = clock.millis();
-           
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
 
@@ -159,12 +143,12 @@ public class ControlPlaneUserService {
             throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
         }
 
-     
+        LocalDateTime now = appClock.now();
+        long suffix = appClock.epochMillis();
+
         user.softDelete(now, suffix);
         controlPlaneUserRepository.save(user);
-
     }
-    
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
         TenantContext.clear();
@@ -181,25 +165,22 @@ public class ControlPlaneUserService {
         user.restore();
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
-    
-    
 
-   private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
-    return new ControlPlaneUserDetailsResponse(
-            user.getId(),
-            user.getUsername(),
-            user.getName(),
-            user.getEmail(),
-            user.getRole().name(),
-            user.isSuspendedByAccount(),
-            user.isSuspendedByAdmin(),
-            user.getCreatedAt(),
-            user.getUpdatedAt(),
-            user.getAccount().getId(),
-            user.getPermissions() == null
-                    ? List.of()
-                    : user.getPermissions().stream().sorted().toList()
-    );
-}
-
+    private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
+        return new ControlPlaneUserDetailsResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getName(),
+                user.getEmail(),
+                user.getRole().name(),
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.getCreatedAt(),
+                user.getUpdatedAt(),
+                user.getAccount().getId(),
+                user.getPermissions() == null
+                        ? List.of()
+                        : user.getPermissions().stream().sorted().toList()
+        );
+    }
 }
