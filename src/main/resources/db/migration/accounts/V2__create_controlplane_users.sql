@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     must_change_password BOOLEAN NOT NULL DEFAULT false,
     password_changed_at TIMESTAMP,
 
-    timezone VARCHAR(50) DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) DEFAULT 'pt_BR',
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,

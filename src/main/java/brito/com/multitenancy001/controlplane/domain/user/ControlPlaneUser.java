@@ -79,11 +79,11 @@ public class ControlPlaneUser {
     private LocalDateTime passwordChangedAt;
 
     // ✅ ESTES CAMPOS EXISTEM NA MIGRATION
-    @Column(name = "timezone", length = 50)
+    @Column(name = "timezone", nullable=false,length = 50)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10)
+    @Column(name = "locale", nullable=false,length = 10)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -118,11 +118,13 @@ public class ControlPlaneUser {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "controlplane_user_permissions",
+        schema = "public",
         joinColumns = @JoinColumn(name = "user_id")
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+
     
     @PrePersist
     @PreUpdate

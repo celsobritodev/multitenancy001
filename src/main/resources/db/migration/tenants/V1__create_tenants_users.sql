@@ -42,6 +42,5 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tenant_users_account_id ON tenant_users(account_id);
-CREATE INDEX IF NOT EXISTS idx_tenant_users_username ON tenant_users(username);
-CREATE INDEX IF NOT EXISTS idx_tenant_users_email ON tenant_users(email);
+
 CREATE INDEX IF NOT EXISTS idx_tenant_users_deleted ON tenant_users(deleted) WHERE deleted = false;

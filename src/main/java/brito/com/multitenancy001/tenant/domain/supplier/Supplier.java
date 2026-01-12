@@ -29,6 +29,7 @@ public class Supplier {
 
     // ✅ Opção A: DB gera UUID (recomendado se sua migration usa DEFAULT gen_random_uuid())
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 

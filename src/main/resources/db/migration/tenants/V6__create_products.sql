@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS products (
   name VARCHAR(200) NOT NULL,
   description TEXT,
 
-  sku VARCHAR(100),
+  sku VARCHAR(100) NOT NULL,
   price NUMERIC(10,2) NOT NULL,
 
   stock_quantity INT NOT NULL DEFAULT 0,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- sku único apenas quando preenchido e produto ativo
 CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_active
 ON products(sku)
-WHERE sku IS NOT NULL AND deleted = false;
+WHERE deleted = false;
 
 CREATE INDEX IF NOT EXISTS idx_product_name       ON products(name);
 CREATE INDEX IF NOT EXISTS idx_product_supplier   ON products(supplier_id);

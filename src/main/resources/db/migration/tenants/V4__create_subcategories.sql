@@ -19,6 +19,6 @@ CREATE TABLE IF NOT EXISTS subcategories (
   CONSTRAINT uk_subcategories_name_category UNIQUE (category_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_subcategories_category_id ON subcategories(category_id);
+
 CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;

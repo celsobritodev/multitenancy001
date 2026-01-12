@@ -41,7 +41,7 @@ public class Product {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(unique = true, length = 100)
+    @Column(length = 100,nullable=false)
     private String sku;
 
     @Column(precision = 10, scale = 2, nullable = false)
@@ -92,7 +92,7 @@ public class Product {
     @Column(name = "barcode", length = 50)
     private String barcode;
 
-    @Column(name = "active")
+    @Column(name = "active", nullable=false)
     @Builder.Default
     private Boolean active = true;
 
@@ -117,7 +117,7 @@ public class Product {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Column(name = "deleted")
+    @Column(name = "deleted",nullable=false)
     @Builder.Default
     private Boolean deleted = false;
 

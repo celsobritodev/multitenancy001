@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS accounts (
 
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP
+    
+    CONSTRAINT chk_accounts_currency_len CHECK (char_length(currency) = 3)
 );
 
 -- Unicidade de documento por conta ativa
@@ -70,8 +72,3 @@ ON accounts (schema_name);
 -- Unicidade de slug (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
-
--- (Opcional) garantir tamanho de currency
-ALTER TABLE accounts
-  ADD CONSTRAINT IF NOT EXISTS chk_accounts_currency_len
-  CHECK (char_length(currency) = 3);

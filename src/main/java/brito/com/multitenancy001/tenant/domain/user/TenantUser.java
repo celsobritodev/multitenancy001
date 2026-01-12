@@ -75,7 +75,7 @@ public class TenantUser {
         name = "tenant_user_permissions",
         joinColumns = @JoinColumn(name = "tenant_user_id")
     )
-    @Column(name = "permission", length = 120)
+    @Column(name = "permission",nullable=false, length = 120)
     @Builder.Default
 
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();

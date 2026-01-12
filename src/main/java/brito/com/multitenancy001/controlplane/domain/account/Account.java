@@ -62,19 +62,19 @@ public class Account {
     @Column(name = "next_billing_date")
     private LocalDateTime nextBillingDate;
 
-    @Column(name = "subscription_plan", length = 50)
+    @Column(name = "subscription_plan", nullable=false, length = 50)
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users")
+    @Column(name = "max_users", nullable=false)
     @Builder.Default
     private Integer maxUsers = 5;
 
-    @Column(name = "max_products")
+    @Column(name = "max_products", nullable=false)
     @Builder.Default
     private Integer maxProducts = 100;
 
-    @Column(name = "max_storage_mb")
+    @Column(name = "max_storage_mb", nullable=false)
     @Builder.Default
     private Integer maxStorageMb = 100;
 
@@ -100,19 +100,19 @@ public class Account {
     @Column(name = "company_state", length = 50)
     private String companyState;
 
-    @Column(name = "company_country", length = 50)
+    @Column(name = "company_country", length = 50, nullable=false)
     @Builder.Default
     private String companyCountry = "Brasil";
 
-    @Column(name = "timezone", length = 50)
+    @Column(name = "timezone", length = 50, nullable=false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10)
+    @Column(name = "locale", length = 10, nullable=false)
     @Builder.Default
     private String locale = "pt_BR";
 
-    @Column(name = "currency", length = 3)
+    @Column(name = "currency", length = 3, nullable=false)
     @Builder.Default
     private String currency = "BRL";
 

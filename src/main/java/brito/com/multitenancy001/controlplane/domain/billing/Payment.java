@@ -57,7 +57,7 @@ public class Payment {
     @Column(name = "payment_gateway", length = 50)
     private String paymentGateway;
 
-    @Column(name = "currency", length = 3)
+    @Column(name = "currency", length = 3,nullable=false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -67,10 +67,10 @@ public class Payment {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name = "invoice_url")
+    @Column(name="invoice_url", columnDefinition="TEXT")
     private String invoiceUrl;
 
-    @Column(name = "receipt_url")
+    @Column(name="receipt_url", columnDefinition="TEXT")
     private String receiptUrl;
 
     // ✅ AUDITORIA (técnico)

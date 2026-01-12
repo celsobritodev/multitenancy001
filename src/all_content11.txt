@@ -2009,19 +2009,19 @@ public class Account {
     @Column(name = "next_billing_date")
     private LocalDateTime nextBillingDate;
 
-    @Column(name = "subscription_plan", length = 50)
+    @Column(name = "subscription_plan", nullable=false, length = 50)
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users")
+    @Column(name = "max_users", nullable=false)
     @Builder.Default
     private Integer maxUsers = 5;
 
-    @Column(name = "max_products")
+    @Column(name = "max_products", nullable=false)
     @Builder.Default
     private Integer maxProducts = 100;
 
-    @Column(name = "max_storage_mb")
+    @Column(name = "max_storage_mb", nullable=false)
     @Builder.Default
     private Integer maxStorageMb = 100;
 
@@ -2047,19 +2047,19 @@ public class Account {
     @Column(name = "company_state", length = 50)
     private String companyState;
 
-    @Column(name = "company_country", length = 50)
+    @Column(name = "company_country", length = 50, nullable=false)
     @Builder.Default
     private String companyCountry = "Brasil";
 
-    @Column(name = "timezone", length = 50)
+    @Column(name = "timezone", length = 50, nullable=false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10)
+    @Column(name = "locale", length = 10, nullable=false)
     @Builder.Default
     private String locale = "pt_BR";
 
-    @Column(name = "currency", length = 3)
+    @Column(name = "currency", length = 3, nullable=false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -2270,7 +2270,7 @@ public class Payment {
     @Column(name = "payment_gateway", length = 50)
     private String paymentGateway;
 
-    @Column(name = "currency", length = 3)
+    @Column(name = "currency", length = 3,nullable=false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -2280,10 +2280,10 @@ public class Payment {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name = "invoice_url")
+    @Column(name="invoice_url", columnDefinition="TEXT")
     private String invoiceUrl;
 
-    @Column(name = "receipt_url")
+    @Column(name="receipt_url", columnDefinition="TEXT")
     private String receiptUrl;
 
     // ✅ AUDITORIA (técnico)
@@ -2497,11 +2497,11 @@ public class ControlPlaneUser {
     private LocalDateTime passwordChangedAt;
 
     // ✅ ESTES CAMPOS EXISTEM NA MIGRATION
-    @Column(name = "timezone", length = 50)
+    @Column(name = "timezone", nullable=false,length = 50)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10)
+    @Column(name = "locale", nullable=false,length = 10)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -2536,11 +2536,13 @@ public class ControlPlaneUser {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "controlplane_user_permissions",
+        schema = "public",
         joinColumns = @JoinColumn(name = "user_id")
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+
     
     @PrePersist
     @PreUpdate
@@ -7328,7 +7330,7 @@ public class Product {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(unique = true, length = 100)
+    @Column(length = 100,nullable=false)
     private String sku;
 
     @Column(precision = 10, scale = 2, nullable = false)
@@ -7379,7 +7381,7 @@ public class Product {
     @Column(name = "barcode", length = 50)
     private String barcode;
 
-    @Column(name = "active")
+    @Column(name = "active", nullable=false)
     @Builder.Default
     private Boolean active = true;
 
@@ -7404,7 +7406,7 @@ public class Product {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Column(name = "deleted")
+    @Column(name = "deleted",nullable=false)
     @Builder.Default
     private Boolean deleted = false;
 
@@ -7668,6 +7670,7 @@ public class Supplier {
 
     // ✅ Opção A: DB gera UUID (recomendado se sua migration usa DEFAULT gen_random_uuid())
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
@@ -7826,7 +7829,7 @@ public class TenantUser {
         name = "tenant_user_permissions",
         joinColumns = @JoinColumn(name = "tenant_user_id")
     )
-    @Column(name = "permission", length = 120)
+    @Column(name = "permission",nullable=false, length = 120)
     @Builder.Default
 
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();
@@ -8441,8 +8444,8 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     must_change_password BOOLEAN NOT NULL DEFAULT false,
     password_changed_at TIMESTAMP,
 
-    timezone VARCHAR(50) DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) DEFAULT 'pt_BR',
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -8577,7 +8580,7 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
 CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transaction ON payments(transaction_id) WHERE transaction_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
 -- V1__create_tenants_users.sql
 
@@ -8623,8 +8626,7 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tenant_users_account_id ON tenant_users(account_id);
-CREATE INDEX IF NOT EXISTS idx_tenant_users_username ON tenant_users(username);
-CREATE INDEX IF NOT EXISTS idx_tenant_users_email ON tenant_users(email);
+
 CREATE INDEX IF NOT EXISTS idx_tenant_users_deleted ON tenant_users(deleted) WHERE deleted = false;
 
 -- V2__create_tenant_users_permissions.sql
@@ -8678,7 +8680,7 @@ CREATE TABLE IF NOT EXISTS subcategories (
   CONSTRAINT uk_subcategories_name_category UNIQUE (category_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_subcategories_category_id ON subcategories(category_id);
+
 CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;
 -- V5__create_suppliers.sql
@@ -8733,7 +8735,7 @@ CREATE TABLE IF NOT EXISTS products (
   name VARCHAR(200) NOT NULL,
   description TEXT,
 
-  sku VARCHAR(100),
+  sku VARCHAR(100) NOT NULL,
   price NUMERIC(10,2) NOT NULL,
 
   stock_quantity INT NOT NULL DEFAULT 0,
@@ -8777,7 +8779,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- sku único apenas quando preenchido e produto ativo
 CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_active
 ON products(sku)
-WHERE sku IS NOT NULL AND deleted = false;
+WHERE deleted = false;
 
 CREATE INDEX IF NOT EXISTS idx_product_name       ON products(name);
 CREATE INDEX IF NOT EXISTS idx_product_supplier   ON products(supplier_id);
