@@ -402,7 +402,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/3/users",
+					"raw": "{{base_url}}/api/admin/accounts/2/users",
 					"host": [
 						"{{base_url}}"
 					],
@@ -410,7 +410,7 @@
 						"api",
 						"admin",
 						"accounts",
-						"3",
+						"2",
 						"users"
 					]
 				},
@@ -610,7 +610,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDk2NzEsImV4cCI6MTc2NzU1MzI3MX0.PNL4l3aPsXPtuy2C8pBXxfO-25orNxJO70otVAe9PgMNr4_aqAZ4iBvYwI9RkEi_deg3rf4_JhoN7NCReVMVKQ\",",
 							"type": "string"
 						}
 					]
@@ -619,7 +619,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \n  \"reason\": \"Teste\"\n}",
+					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Teste\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
