@@ -12,6 +12,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -77,7 +78,7 @@ public class TenantUser {
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    private Set<String> permissions = new LinkedHashSet<>();
 
     @Column(name = "last_login")
     private LocalDateTime lastLogin;

@@ -54,13 +54,13 @@ public class TenantUserTxService {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
         }
 
-        String u = username.trim().toLowerCase();
-        String e = email.trim().toLowerCase();
+        String usernameNew = username.trim().toLowerCase();
+        String emailNew = email.trim().toLowerCase();
 
-        if (tenantUserRepository.existsByUsernameAndAccountId(u, accountId)) {
+        if (tenantUserRepository.existsByUsernameAndAccountId(usernameNew, accountId)) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe nesta conta", 409);
         }
-        if (tenantUserRepository.existsByEmailAndAccountId(e, accountId)) {
+        if (tenantUserRepository.existsByEmailAndAccountId(emailNew, accountId)) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
@@ -77,8 +77,8 @@ public class TenantUserTxService {
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
                 .name(name.trim())
-                .username(u)
-                .email(e)
+                .username(usernameNew)
+                .email(emailNew)
                 .password(passwordEncoder.encode(rawPassword))
                 .role(roleEnum)
                 .suspendedByAccount(false)

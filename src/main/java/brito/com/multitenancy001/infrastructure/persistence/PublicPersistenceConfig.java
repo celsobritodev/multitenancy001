@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.persistence;
 
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -11,19 +11,17 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Persistência do schema PUBLIC (ControlPlane).
- * Explicita o que o Spring Boot criaria como default.
+ * Usa o EntityManagerFactory default do Spring Boot (bean: "entityManagerFactory")
+ * e cria um alias semântico: "publicEntityManagerFactory".
  */
 @Configuration
 @EnableJpaRepositories(
-        basePackages = "brito.com.multitenancy001.controlplane",
+        basePackages = "brito.com.multitenancy001.controlplane.persistence",
         entityManagerFactoryRef = "publicEntityManagerFactory",
         transactionManagerRef = "publicTransactionManager"
 )
 public class PublicPersistenceConfig {
 
-    /**
-     * Alias semântico do EntityManagerFactory default do Spring Boot.
-     */
     @Bean(name = "publicEntityManagerFactory")
     @Primary
     public EntityManagerFactory publicEntityManagerFactory(

@@ -25,6 +25,7 @@ import java.util.UUID;
 public class Sale {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
@@ -34,7 +35,6 @@ public class Sale {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
-    // Snapshot do cliente (se você não tem uma entidade Customer)
     @Column(name = "customer_name", length = 200)
     private String customerName;
 
@@ -67,8 +67,6 @@ public class Sale {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    // ========= helpers =========
 
     public void addItem(SaleItem item) {
         if (item == null) return;

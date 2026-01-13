@@ -13,6 +13,7 @@ import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -123,7 +124,7 @@ public class ControlPlaneUser {
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    private Set<String> permissions = new LinkedHashSet<>();
 
     
     @PrePersist

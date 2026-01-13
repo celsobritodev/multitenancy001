@@ -20,6 +20,7 @@ import java.util.UUID;
 public class SaleItem {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
@@ -31,11 +32,11 @@ public class SaleItem {
     )
     private Sale sale;
 
-    // ✅ Sem FK para products. Referência fraca (histórico)
+    // Sem FK para products. Referência fraca (histórico)
     @Column(name = "product_id")
     private UUID productId;
 
-    // ✅ Snapshot obrigatório do produto no momento da venda
+    // Snapshot obrigatório do produto no momento da venda
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
@@ -47,8 +48,6 @@ public class SaleItem {
 
     @Column(name = "total_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalPrice;
-
-    // ========= helpers =========
 
     public void recalcTotal() {
         if (quantity == null || unitPrice == null) {
