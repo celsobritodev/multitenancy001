@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.db.flyway;
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

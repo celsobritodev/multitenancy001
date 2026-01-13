@@ -16,7 +16,7 @@ import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 

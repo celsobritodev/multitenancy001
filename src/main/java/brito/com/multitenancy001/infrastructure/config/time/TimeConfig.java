@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.config;
+package brito.com.multitenancy001.infrastructure.config.time;
 
 import java.time.Clock;
 

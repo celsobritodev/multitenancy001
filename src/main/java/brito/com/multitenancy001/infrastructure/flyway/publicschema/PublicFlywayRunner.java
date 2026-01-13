@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.db.flyway;
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.ApplicationArguments;
@@ -13,17 +13,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PublicFlywayRunner implements ApplicationRunner {
 
-    private final Flyway flywayAccount;
-    
-   
+	private final Flyway flywayPublic;
 
-    @Override
-    public void run(ApplicationArguments args) {
-    	
-   
-    	
-    	
-        log.info("🚀 Executando Flyway ACCOUNT (public)");
-        flywayAccount.migrate();
-    }
+	@Override
+	public void run(ApplicationArguments args) {
+
+		log.info("🚀 Executando Flyway ACCOUNT (schema public)");
+		flywayPublic.migrate();
+	}
 }

@@ -16,7 +16,7 @@ public class TenantSchemaConnectionProvider
         extends AbstractDataSourceBasedMultiTenantConnectionProviderImpl<String> {
 
     private static final long serialVersionUID = 1L;
-    private static final String DEFAULT_TENANT = "public";
+    private static final String DEFAULT_SCHEMA = "public";
 
     private final DataSource dataSource;
 
@@ -38,11 +38,11 @@ public class TenantSchemaConnectionProvider
 
         String effectiveTenant = StringUtils.hasText(tenantIdentifier)
                 ? tenantIdentifier
-                : DEFAULT_TENANT;
+                : DEFAULT_SCHEMA;
 
         if (!StringUtils.hasText(tenantIdentifier)) {
             log.warn("⚠️ [MT] tenantIdentifier vazio → usando DEFAULT ({}) | threadTenant={}",
-                    DEFAULT_TENANT, threadTenant);
+                    DEFAULT_SCHEMA, threadTenant);
         }
 
         validateSchemaName(effectiveTenant);
@@ -51,7 +51,7 @@ public class TenantSchemaConnectionProvider
 
         try (Statement stmt = connection.createStatement()) {
 
-            if (!DEFAULT_TENANT.equals(effectiveTenant)) {
+            if (!DEFAULT_SCHEMA.equals(effectiveTenant)) {
                 ensureSchemaExists(connection, effectiveTenant);
 
                 String quotedTenant = quoteIdentifier(effectiveTenant);

@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.tenant.application.provisioning;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -22,7 +23,7 @@ import org.springframework.util.StringUtils;
 public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantSchemaMigrationService tenantSchemaMigrationService;
+    private final TenantSchemaFlywayMigrationService tenantSchemaMigrationService;
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
     
@@ -93,7 +94,7 @@ public class TenantSchemaProvisioningService {
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
-        tenantSchemaMigrationService.migrateTenant(normalized);
+        tenantSchemaMigrationService.migrateTenantSchema(normalized);
     }
 
     /**

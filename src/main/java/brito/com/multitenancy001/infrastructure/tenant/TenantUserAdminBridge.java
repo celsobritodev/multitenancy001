@@ -7,8 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
-import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.time.AppClock;

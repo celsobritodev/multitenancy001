@@ -71,7 +71,7 @@ public class CurrentTenantSchemaResolver
 
     /**
      * O Hibernate sempre precisa de um tenant válido.
-     * ✅ Aqui sim a gente aplica fallback para DEFAULT_TENANT.
+     * ✅ Aqui sim a gente aplica fallback para DEFAULT_SCHEMA.
      */
     @Override
     public String resolveCurrentTenantIdentifier() {

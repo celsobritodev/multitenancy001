@@ -13,7 +13,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 		basePackages = "brito.com.multitenancy001.tenant",
 		entityManagerFactoryRef = "tenantEntityManagerFactory",
 		transactionManagerRef = "tenantTransactionManager")
-public class TenantPlanePersistenceConfig {
+public class TenantPersistenceConfig {
 
 	@Bean(name = "tenantTransactionManager")
 	public PlatformTransactionManager tenantTransactionManager(

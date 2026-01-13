@@ -8,7 +8,7 @@ import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenan
 import brito.com.multitenancy001.controlplane.api.mapper.AccountUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;

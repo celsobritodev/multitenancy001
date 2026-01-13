@@ -615,75 +615,65 @@ public record AccountTenantUserSummaryResponse(
 ) {}
 package brito.com.multitenancy001.controlplane.api.mapper;
 
-import java.time.Clock;
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.time.AppClock;
+import org.springframework.stereotype.Component;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
-import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-
 @Component
 public class AccountAdminDetailsApiMapper {
-	
-	private final Clock clock;
-	private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
-	
 
+    private final AppClock appClock;
+    private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
 
-	public AccountAdminDetailsApiMapper(Clock clock, ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
-	    this.clock = clock;
-	    this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
-	}
-
-
-   public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
-	   LocalDateTime now = LocalDateTime.now(clock);
-	   LocalDate today = now.toLocalDate();
-	   LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;  
-	   
-	   
-
-
-    boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
-    boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
-
-    long trialDaysRemaining = 0;
-    if (inTrial) {
-        trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
+    public AccountAdminDetailsApiMapper(AppClock appClock, ControlPlaneUserApiMapper controlPlaneUserApiMapper) {
+        this.appClock = appClock;
+        this.controlPlaneUserApiMapper = controlPlaneUserApiMapper;
     }
 
-    return new AccountAdminDetailsResponse(
-        account.getId(),
-        account.getName(),
-        account.getSlug(),
-        account.getSchemaName(),
-        account.getStatus().name(),
+    public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
+        LocalDateTime now = appClock.now();
+        LocalDate today = now.toLocalDate();
+        LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;
 
-        account.getCompanyDocType(),
-        account.getCompanyDocNumber(),
+        boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
+        boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
 
-        account.getCreatedAt(),
-        account.getTrialEndDate(),
-        account.getPaymentDueDate(),
-        account.getDeletedAt(),
+        long trialDaysRemaining = 0;
+        if (inTrial && end != null) {
+            trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
+        }
 
-        inTrial,
-        trialExpired,
-        trialDaysRemaining,
+        return new AccountAdminDetailsResponse(
+                account.getId(),
+                account.getName(),
+                account.getSlug(),
+                account.getSchemaName(),
+                account.getStatus().name(),
 
-        admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
+                account.getCompanyDocType(),
+                account.getCompanyDocNumber(),
 
+                account.getCreatedAt(),
+                account.getTrialEndDate(),
+                account.getPaymentDueDate(),
+                account.getDeletedAt(),
 
+                inTrial,
+                trialExpired,
+                trialDaysRemaining,
 
-        totalUsers,
-        account.isActive()
-    );
-}
+                admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
 
+                totalUsers,
+                account.isActive(now) // ✅ agora clock-aware
+        );
+    }
 }
 package brito.com.multitenancy001.controlplane.api.mapper;
 
@@ -766,25 +756,24 @@ public class AccountUserApiMapper {
 }
 package brito.com.multitenancy001.controlplane.api.mapper;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-
-import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.time.AppClock;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
 
 @Component
 public class ControlPlaneUserApiMapper {
 
-    private final Clock clock;
+    private final AppClock appClock;
 
-    public ControlPlaneUserApiMapper(Clock clock) {
-        this.clock = clock;
+    public ControlPlaneUserApiMapper(AppClock appClock) {
+        this.appClock = appClock;
     }
 
     public ControlPlaneAdminUserSummaryResponse toAdminSummary(ControlPlaneUser user) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = appClock.now();
         boolean enabled = user.isEnabledForLogin(now);
 
         return new ControlPlaneAdminUserSummaryResponse(
@@ -815,7 +804,7 @@ import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
 
@@ -909,8 +898,8 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
-import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantProvisioningBridge;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -996,22 +985,19 @@ public class AccountOnboardingService {
 }
 package brito.com.multitenancy001.controlplane.application;
 
-import java.time.LocalDateTime;
-import org.springframework.stereotype.Service;
-
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
-import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-
-
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -1022,20 +1008,18 @@ public class AccountStatusService {
     private final TxExecutor txExecutor;
     private final AccountRepository accountRepository;
     private final TenantUserAdminBridge tenantUserAdminBridge;
+    private final AppClock appClock;
 
-
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest accountStatusChangeRequest) {
+    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
         return txExecutor.publicTx(() -> publicExecutor.run(() -> {
 
             Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-            AccountStatus previous = account.getStatus(); // ✅ captura antes de alterar
+            AccountStatus previous = account.getStatus();
 
-            // ... mantenha aqui suas regras de transição, validações, etc ...
-
-            account.setStatus(accountStatusChangeRequest.status());
-            if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
+            account.setStatus(req.status());
+            if (req.status() == AccountStatus.ACTIVE) {
                 account.setDeletedAt(null);
             }
             accountRepository.save(account);
@@ -1044,15 +1028,15 @@ public class AccountStatusService {
             boolean applied = false;
             String action = "NONE";
 
-            if (accountStatusChangeRequest.status() == AccountStatus.SUSPENDED) {
+            if (req.status() == AccountStatus.SUSPENDED) {
                 affected = suspendTenantUsersByAccount(account);
                 applied = true;
                 action = "SUSPEND_BY_ACCOUNT";
-            } else if (accountStatusChangeRequest.status() == AccountStatus.ACTIVE) {
+            } else if (req.status() == AccountStatus.ACTIVE) {
                 affected = unsuspendTenantUsersByAccount(account);
                 applied = true;
                 action = "UNSUSPEND_BY_ACCOUNT";
-            } else if (accountStatusChangeRequest.status() == AccountStatus.CANCELLED) {
+            } else if (req.status() == AccountStatus.CANCELLED) {
                 affected = cancelAccount(account);
                 applied = true;
                 action = "CANCELLED";
@@ -1062,42 +1046,37 @@ public class AccountStatusService {
         }));
     }
 
-   protected int suspendTenantUsersByAccount(Account account) {
-    return tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+    protected int suspendTenantUsersByAccount(Account account) {
+        return tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-protected int unsuspendTenantUsersByAccount(Account account) {
-    return tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+    protected int unsuspendTenantUsersByAccount(Account account) {
+        return tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-private int cancelAccount(Account account) {
-    txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
-        account.setDeletedAt(LocalDateTime.now());
-        accountRepository.save(account);
-        return null;
-    }));
+    private int cancelAccount(Account account) {
+        txExecutor.publicRequiresNew(() -> publicExecutor.run(() -> {
+            account.setDeletedAt(appClock.now());
+            accountRepository.save(account);
+            return null;
+        }));
 
-    // soft-delete users best-effort
-    return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
-}
+        return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-private void softDeleteTenantUsers(Long accountId) {
-    Account account = txExecutor.publicReadOnlyTx(() ->
-        publicExecutor.run(() -> getAccountByIdRaw(accountId))
-    );
+    private void softDeleteTenantUsers(Long accountId) {
+        Account account = txExecutor.publicReadOnlyTx(() ->
+                publicExecutor.run(() -> getAccountByIdRaw(accountId))
+        );
+        tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
-    tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
-}
-
-private void restoreTenantUsers(Long accountId) {
-    Account account = txExecutor.publicReadOnlyTx(() ->
-        publicExecutor.run(() -> getAccountByIdRaw(accountId))
-    );
-
-    tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
-}
-
-
+    private void restoreTenantUsers(Long accountId) {
+        Account account = txExecutor.publicReadOnlyTx(() ->
+                publicExecutor.run(() -> getAccountByIdRaw(accountId))
+        );
+        tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+    }
 
     public void softDeleteAccount(Long accountId) {
         txExecutor.publicTx(() -> publicExecutor.run(() -> {
@@ -1109,7 +1088,7 @@ private void restoreTenantUsers(Long accountId) {
                         "Não é permitido excluir contas do sistema", 403);
             }
 
-            account.softDelete();
+            account.softDelete(appClock.now());
             accountRepository.save(account);
 
             softDeleteTenantUsers(accountId);
@@ -1139,10 +1118,9 @@ private void restoreTenantUsers(Long accountId) {
 
     private Account getAccountByIdRaw(Long accountId) {
         return accountRepository.findById(accountId)
-            .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-  
     private AccountStatusChangeResponse buildStatusChangeResponse(
             Account account,
             AccountStatus previous,
@@ -1154,7 +1132,7 @@ private void restoreTenantUsers(Long accountId) {
                 account.getId(),
                 account.getStatus().name(),
                 previous.name(),
-                LocalDateTime.now(),
+                appClock.now(),
                 account.getSchemaName(),
                 new AccountStatusChangeResponse.SideEffects(tenantUsersUpdated, action, count)
         );
@@ -1170,7 +1148,7 @@ import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenan
 import brito.com.multitenancy001.controlplane.api.mapper.AccountUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.exec.PublicExecutor;
+import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
@@ -1232,7 +1210,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminAuthService {
 
-    private final AuthenticationManager authenticationManager;
+    private static final String DEFAULT_SCHEMA = "public";
+	private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
@@ -1268,12 +1247,12 @@ public class AdminAuthService {
         String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
-                "public"
+                DEFAULT_SCHEMA
         );
 
         String refreshToken = jwtTokenProvider.generateRefreshToken(
                 user.getUsername(),
-                "public"
+                DEFAULT_SCHEMA
         );
 
         return new JwtResponse(
@@ -1284,7 +1263,7 @@ public class AdminAuthService {
                 user.getEmail(),
                 user.getRole().name(),
                 user.getAccount().getId(),
-                "public"
+                DEFAULT_SCHEMA
         );
     }
 }
@@ -1301,6 +1280,7 @@ import brito.com.multitenancy001.controlplane.persistence.account.AccountReposit
 import brito.com.multitenancy001.controlplane.persistence.billing.PaymentRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -1311,7 +1291,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -1319,296 +1298,304 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PaymentService {
 
-	private final AccountRepository accountRepository;
-	private final PaymentRepository paymentRepository;
-	private final SecurityUtils securityUtils;
-
-	@Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
-	public void checkPayments() {
-		log.info("Iniciando verificação de pagamentos...");
-		LocalDateTime today = LocalDateTime.now();
-
-		List<Account> expiredTrials = accountRepository.findByStatus(AccountStatus.FREE_TRIAL).stream()
-				.filter(account -> account.getTrialEndDate() != null && account.getTrialEndDate().isBefore(today))
-				.collect(Collectors.toList());
-
-		for (Account account : expiredTrials) {
-			suspendAccount(account, "Trial expirado");
-		}
-
-		List<Account> overdueAccounts = accountRepository.findByPaymentDueDateBefore(today);
-
-		for (Account account : overdueAccounts) {
-			if (account.getStatus() == AccountStatus.ACTIVE) {
-				suspendAccount(account, "Pagamento atrasado");
-			}
-		}
-
-		checkExpiredPendingPayments();
-	}
-
-	private void suspendAccount(Account account, String reason) {
-		account.setStatus(AccountStatus.SUSPENDED);
-		accountRepository.save(account);
-		sendSuspensionEmail(account, reason);
-	}
-
-	private void checkExpiredPendingPayments() {
-		LocalDateTime thirtyMinutesAgo = LocalDateTime.now().minusMinutes(30);
-
-		List<Payment> expiredPayments = paymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING,
-				thirtyMinutesAgo);
-
-		for (Payment payment : expiredPayments) {
-			payment.setStatus(PaymentStatus.EXPIRED);
-			paymentRepository.save(payment);
-		}
-	}
-
-	@Transactional
-	public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
-
-		if (adminPaymentRequest.accountId() == null) {
-			throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-		}
-
-		Account account = accountRepository.findById(adminPaymentRequest.accountId())
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-		// Reusa validação central (mantém regras iguais)
-		validatePayment(account, adminPaymentRequest.amount());
-
-		Payment payment = Payment.builder()
-				.account(account)
-				.amount(adminPaymentRequest.amount())
-				.paymentMethod(adminPaymentRequest.paymentMethod())
-				.paymentGateway(adminPaymentRequest.paymentGateway())
-				.description(adminPaymentRequest.description())
-				.status(PaymentStatus.PENDING)
-				.paymentDate(LocalDateTime.now())
-				.build();
-
-		payment = paymentRepository.save(payment);
-
-		boolean ok = processWithPaymentGateway(payment, new PaymentRequest(adminPaymentRequest.amount(), adminPaymentRequest.paymentMethod(),
-				adminPaymentRequest.paymentGateway(), adminPaymentRequest.description()));
-
-		if (ok) {
-			completePayment(payment, account);
-			return mapToResponse(payment);
-		}
-
-		failPayment(payment, "Falha no processamento do pagamento");
-
-		throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
-	}
-
-	@Transactional
-	public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
-		Long accountId = securityUtils.getCurrentAccountId();
-		Account account = findAccountOrThrow(accountId);
-
-		validatePayment(account, paymentRequest.amount());
-
-		Payment payment = Payment.builder()
-				.account(account)
-				.amount(paymentRequest.amount())
-				.paymentMethod(paymentRequest.paymentMethod())
-				.paymentGateway(paymentRequest.paymentGateway())
-				.description(paymentRequest.description())
-				.status(PaymentStatus.PENDING)
-				.paymentDate(LocalDateTime.now())
-				.build();
-
-		payment = paymentRepository.save(payment);
-
-		boolean ok = processWithPaymentGateway(payment, paymentRequest);
-
-		if (ok) {
-			completePayment(payment, account);
-			return mapToResponse(payment);
-		}
-
-		failPayment(payment, "Falha no processamento do pagamento");
-
-		throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
-	}
-	
-	@Transactional(readOnly = true)
-	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
-	    Long accountId = securityUtils.getCurrentAccountId();
-
-	    Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
-	            .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
-
-	    return mapToResponse(payment);
-	}
-
-
-	@Transactional(readOnly = true)
-	public List<PaymentResponse> getPaymentsByMyAccount() {
-		Long accountId = securityUtils.getCurrentAccountId();
-		return getPaymentsByAccount(accountId);
-	}
-
-	@Transactional(readOnly = true)
-	public boolean hasActivePaymentMyAccount() {
-		Long accountId = securityUtils.getCurrentAccountId();
-		return hasActivePayment(accountId);
-	}
-
-
-
-	@Transactional(readOnly = true)
-	public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-		return paymentRepository.findByAccountId(accountId).stream().map(this::mapToResponse)
-				.collect(Collectors.toList());
-	}
-
-	@Transactional(readOnly = true)
-	public boolean hasActivePayment(Long accountId) {
-		return paymentRepository.findActivePayment(accountId, LocalDateTime.now()).isPresent();
-	}
-
-	
-
-	@Transactional(readOnly = true)
-	public PaymentResponse getPaymentById(Long paymentId) {
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
-		return mapToResponse(payment);
-	}
-
-	@Transactional
-	public PaymentResponse completePaymentManually(Long paymentId) {
-
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
-
-		if (payment.getStatus() != PaymentStatus.PENDING) {
-			throw new ApiException("INVALID_PAYMENT_STATUS", "Pagamento não está pendente", 409);
-		}
-
-		completePayment(payment, payment.getAccount());
-		return mapToResponse(payment);
-	}
-
-	@Transactional
-	public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
-
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
-
-		if (!payment.canBeRefunded()) {
-			throw new ApiException("PAYMENT_NOT_REFUNDABLE", "Pagamento não pode ser reembolsado", 409);
-		}
-
-		if (amount == null) {
-			payment.refundFully(reason);
-		} else {
-			payment.refundPartially(amount, reason);
-		}
-
-		paymentRepository.save(payment);
-		return mapToResponse(payment);
-	}
-
-	@Transactional(readOnly = true)
-	public BigDecimal getTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
-		List<Object[]> revenueByAccount = paymentRepository.getRevenueByAccount(startDate, endDate);
-
-		return revenueByAccount.stream().map(obj -> (BigDecimal) obj[1]).reduce(BigDecimal.ZERO, BigDecimal::add);
-	}
-
-	/*
-	 * ========================================================= PRIVATE HELPERS
-	 * =========================================================
-	 */
-
-	private Account findAccountOrThrow(Long accountId) {
-		return accountRepository.findById(accountId)
-				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-	}
-
-	private void completePayment(Payment payment, Account account) {
-		payment.markAsCompleted();
-		payment.setTransactionId(generateTransactionId());
-		paymentRepository.save(payment);
-
-		account.setStatus(AccountStatus.ACTIVE);
-		account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil()));
-		accountRepository.save(account);
-
-		sendPaymentConfirmationEmail(account, payment);
-	}
-
-	private void failPayment(Payment payment, String reason) {
-		payment.markAsFailed(reason);
-		paymentRepository.save(payment);
-	}
-
-	private void validatePayment(Account account, BigDecimal amount) {
-
-		if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-			throw new ApiException("INVALID_AMOUNT", "Valor do pagamento inválido", 400);
-		}
-
-		if (account.isDeleted()) {
-			throw new ApiException("ACCOUNT_DELETED", "Conta deletada", 410);
-		}
-
-		Optional<Payment> activePayment = paymentRepository.findActivePayment(account.getId(), LocalDateTime.now());
-
-		if (activePayment.isPresent()) {
-			throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
-		}
-	}
-
-	private PaymentResponse mapToResponse(Payment payment) {
-		return new PaymentResponse(payment.getId(), payment.getAccount().getId(), payment.getAmount(),
-				payment.getPaymentDate(), payment.getValidUntil(), payment.getStatus().name(),
-				payment.getTransactionId(), payment.getPaymentMethod(), payment.getPaymentGateway(),
-				payment.getDescription(), payment.getCreatedAt(), payment.getUpdatedAt());
-	}
-
-	private void sendSuspensionEmail(Account account, String reason) {
-		log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
-	}
-
-	private void sendPaymentConfirmationEmail(Account account, Payment payment) {
-		log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
-	}
-
-	private String generateTransactionId() {
-		return "TXN_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-	}
-
-	private LocalDateTime calculateNextDueDate(LocalDateTime validUntil) {
-		return validUntil != null ? validUntil : LocalDateTime.now().plusMonths(1);
-	}
-
-	private boolean processWithPaymentGateway(Payment payment, PaymentRequest paymentRequest) {
-
-		log.info("Processando pagamento com gateway: {}", paymentRequest.paymentGateway());
-
-		try {
-			Thread.sleep(1000);
-			return Math.random() < 0.9;
-
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			log.error("Erro ao processar pagamento no gateway", e);
-			return false;
-		}
-	}
+    private final AccountRepository accountRepository;
+    private final PaymentRepository paymentRepository;
+    private final SecurityUtils securityUtils;
+    private final AppClock appClock;
+
+    @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
+    public void checkPayments() {
+        log.info("Iniciando verificação de pagamentos...");
+        LocalDateTime now = appClock.now();
+
+        List<Account> expiredTrials = accountRepository.findByStatus(AccountStatus.FREE_TRIAL).stream()
+                .filter(account -> account.getTrialEndDate() != null && account.getTrialEndDate().isBefore(now))
+                .collect(Collectors.toList());
+
+        for (Account account : expiredTrials) {
+            suspendAccount(account, "Trial expirado");
+        }
+
+        List<Account> overdueAccounts = accountRepository.findByPaymentDueDateBefore(now);
+
+        for (Account account : overdueAccounts) {
+            if (account.getStatus() == AccountStatus.ACTIVE) {
+                suspendAccount(account, "Pagamento atrasado");
+            }
+        }
+
+        checkExpiredPendingPayments(now);
+    }
+
+    private void suspendAccount(Account account, String reason) {
+        account.setStatus(AccountStatus.SUSPENDED);
+        accountRepository.save(account);
+        sendSuspensionEmail(account, reason);
+    }
+
+    private void checkExpiredPendingPayments(LocalDateTime now) {
+        LocalDateTime thirtyMinutesAgo = now.minusMinutes(30);
+
+        List<Payment> expiredPayments = paymentRepository.findByStatusAndCreatedAtBefore(
+                PaymentStatus.PENDING, thirtyMinutesAgo
+        );
+
+        for (Payment payment : expiredPayments) {
+            payment.setStatus(PaymentStatus.EXPIRED);
+            paymentRepository.save(payment);
+        }
+    }
+
+    @Transactional
+    public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
+
+        if (adminPaymentRequest.accountId() == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        }
+
+        Account account = accountRepository.findById(adminPaymentRequest.accountId())
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+        LocalDateTime now = appClock.now();
+        validatePayment(account, adminPaymentRequest.amount(), now);
+
+        Payment payment = Payment.builder()
+                .account(account)
+                .amount(adminPaymentRequest.amount())
+                .paymentMethod(adminPaymentRequest.paymentMethod())
+                .paymentGateway(adminPaymentRequest.paymentGateway())
+                .description(adminPaymentRequest.description())
+                .status(PaymentStatus.PENDING)
+                .paymentDate(now)
+                .build();
+
+        payment = paymentRepository.save(payment);
+
+        boolean ok = processWithPaymentGateway(
+                payment,
+                new PaymentRequest(
+                        adminPaymentRequest.amount(),
+                        adminPaymentRequest.paymentMethod(),
+                        adminPaymentRequest.paymentGateway(),
+                        adminPaymentRequest.description()
+                )
+        );
+
+        if (ok) {
+            completePayment(payment, account, now);
+            return mapToResponse(payment);
+        }
+
+        failPayment(payment, "Falha no processamento do pagamento");
+        throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
+    }
+
+    @Transactional
+    public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        Account account = findAccountOrThrow(accountId);
+
+        LocalDateTime now = appClock.now();
+        validatePayment(account, paymentRequest.amount(), now);
+
+        Payment payment = Payment.builder()
+                .account(account)
+                .amount(paymentRequest.amount())
+                .paymentMethod(paymentRequest.paymentMethod())
+                .paymentGateway(paymentRequest.paymentGateway())
+                .description(paymentRequest.description())
+                .status(PaymentStatus.PENDING)
+                .paymentDate(now)
+                .build();
+
+        payment = paymentRepository.save(payment);
+
+        boolean ok = processWithPaymentGateway(payment, paymentRequest);
+
+        if (ok) {
+            completePayment(payment, account, now);
+            return mapToResponse(payment);
+        }
+
+        failPayment(payment, "Falha no processamento do pagamento");
+        throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
+        Long accountId = securityUtils.getCurrentAccountId();
+
+        Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+        return mapToResponse(payment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getPaymentsByMyAccount() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        return getPaymentsByAccount(accountId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActivePaymentMyAccount() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        return hasActivePayment(accountId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
+        return paymentRepository.findByAccountId(accountId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActivePayment(Long accountId) {
+        return paymentRepository.findActivePayment(accountId, appClock.now()).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentResponse getPaymentById(Long paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+        return mapToResponse(payment);
+    }
+
+    @Transactional
+    public PaymentResponse completePaymentManually(Long paymentId) {
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw new ApiException("INVALID_PAYMENT_STATUS", "Pagamento não está pendente", 409);
+        }
+
+        LocalDateTime now = appClock.now();
+        completePayment(payment, payment.getAccount(), now);
+        return mapToResponse(payment);
+    }
+
+    @Transactional
+    public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+        LocalDateTime now = appClock.now();
+
+        if (!payment.canBeRefunded(now)) {
+            throw new ApiException("PAYMENT_NOT_REFUNDABLE", "Pagamento não pode ser reembolsado", 409);
+        }
+
+        if (amount == null) {
+            payment.refundFully(now, reason);
+        } else {
+            payment.refundPartially(now, amount, reason);
+        }
+
+        paymentRepository.save(payment);
+        return mapToResponse(payment);
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal getTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Object[]> revenueByAccount = paymentRepository.getRevenueByAccount(startDate, endDate);
+
+        return revenueByAccount.stream()
+                .map(obj -> (BigDecimal) obj[1])
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /*
+     * ========================================================= PRIVATE HELPERS
+     * =========================================================
+     */
+
+    private Account findAccountOrThrow(Long accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+    }
+
+    private void completePayment(Payment payment, Account account, LocalDateTime now) {
+        payment.markAsCompleted(now);
+        paymentRepository.save(payment);
+
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
+        accountRepository.save(account);
+
+        sendPaymentConfirmationEmail(account, payment);
+    }
+
+    private void failPayment(Payment payment, String reason) {
+        payment.markAsFailed(reason);
+        paymentRepository.save(payment);
+    }
+
+    private void validatePayment(Account account, BigDecimal amount, LocalDateTime now) {
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiException("INVALID_AMOUNT", "Valor do pagamento inválido", 400);
+        }
+
+        if (account.isDeleted()) {
+            throw new ApiException("ACCOUNT_DELETED", "Conta deletada", 410);
+        }
+
+        Optional<Payment> activePayment = paymentRepository.findActivePayment(account.getId(), now);
+
+        if (activePayment.isPresent()) {
+            throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
+        }
+    }
+
+    private PaymentResponse mapToResponse(Payment payment) {
+        return new PaymentResponse(
+                payment.getId(),
+                payment.getAccount().getId(),
+                payment.getAmount(),
+                payment.getPaymentDate(),
+                payment.getValidUntil(),
+                payment.getStatus().name(),
+                payment.getTransactionId(),
+                payment.getPaymentMethod(),
+                payment.getPaymentGateway(),
+                payment.getDescription(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
+        );
+    }
+
+    private void sendSuspensionEmail(Account account, String reason) {
+        log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
+    }
+
+    private void sendPaymentConfirmationEmail(Account account, Payment payment) {
+        log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
+    }
+
+    private LocalDateTime calculateNextDueDate(LocalDateTime validUntil, LocalDateTime now) {
+        return validUntil != null ? validUntil : now.plusMonths(1);
+    }
+
+    private boolean processWithPaymentGateway(Payment payment, PaymentRequest paymentRequest) {
+
+        log.info("Processando pagamento com gateway: {}", paymentRequest.paymentGateway());
+
+        try {
+            Thread.sleep(1000);
+            return Math.random() < 0.9;
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Erro ao processar pagamento no gateway", e);
+            return false;
+        }
+    }
 }
 package brito.com.multitenancy001.controlplane.application;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -1616,10 +1603,15 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
-
-import org.springframework.transaction.annotation.Transactional;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -1628,56 +1620,59 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicAccountService {
 
     private final AccountRepository accountRepository;
- 
+    private final AppClock appClock;
+
     public Account createAccountFromSignup(SignupRequest signupRequest) {
-    	 TenantContext.clear();
+        TenantContext.clear();
 
-    	    int maxAttempts = 5;
-    	    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-    	        String slug = generateSlug(signupRequest.name());
-    	        String schemaName = generateSchemaName(signupRequest.name());
+        int maxAttempts = 5;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            String slug = generateSlug(signupRequest.name());
+            String schemaName = generateSchemaName(signupRequest.name());
 
-    	        try {
-    	            Account account = new Account();
-    	            account.setName(signupRequest.name());
-    	            account.setSlug(slug);
-    	            account.setSchemaName(schemaName);
+            try {
+                LocalDateTime now = appClock.now();
 
-    	            account.setCompanyEmail(signupRequest.companyEmail());
+                Account account = new Account();
+                account.setName(signupRequest.name());
+                account.setSlug(slug);
+                account.setSchemaName(schemaName);
 
-    	            // ✅ novos campos (sempre em conjunto)
-    	            account.setCompanyDocType(signupRequest.companyDocType());
-    	            account.setCompanyDocNumber(signupRequest.companyDocNumber());
+                account.setCompanyEmail(signupRequest.companyEmail());
+                account.setCompanyDocType(signupRequest.companyDocType());
+                account.setCompanyDocNumber(signupRequest.companyDocNumber());
 
-    	            account.setCreatedAt(LocalDateTime.now());
-    	            account.setTrialEndDate(LocalDateTime.now().plusDays(30));
-    	            account.setStatus(AccountStatus.FREE_TRIAL);
-    	            account.setSystemAccount(false);
+                // ✅ negócio (clock-aware)
+                account.setTrialEndDate(now.plusDays(30));
+                account.setStatus(AccountStatus.FREE_TRIAL);
+                account.setSystemAccount(false);
 
-    	            // Defaults
-    	            account.setSubscriptionPlan("FREE");
-    	            account.setMaxUsers(5);
-    	            account.setMaxProducts(100);
-    	            account.setMaxStorageMb(100);
-    	            account.setCompanyCountry("Brasil");
-    	            account.setTimezone("America/Sao_Paulo");
-    	            account.setLocale("pt_BR");
-    	            account.setCurrency("BRL");
+                // Defaults
+                account.setSubscriptionPlan("FREE");
+                account.setMaxUsers(5);
+                account.setMaxProducts(100);
+                account.setMaxStorageMb(100);
+                account.setCompanyCountry("Brasil");
+                account.setTimezone("America/Sao_Paulo");
+                account.setLocale("pt_BR");
+                account.setCurrency("BRL");
 
-    	            return accountRepository.save(account);
+                return accountRepository.save(account);
 
-    	        } catch (DataIntegrityViolationException e) {
-    	            if (!isSlugOrSchemaUniqueViolation(e)) throw e;
-    	            log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
-    	                    attempt, maxAttempts, slug, schemaName);
-    	        }
-    	    }
+            } catch (DataIntegrityViolationException e) {
+                if (!isSlugOrSchemaUniqueViolation(e)) throw e;
+                log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
+                        attempt, maxAttempts, slug, schemaName);
+            }
+        }
 
-    	    throw new ApiException("ACCOUNT_CREATE_FAILED",
-    	            "Não foi possível criar conta (colisão de identificadores). Tente novamente.", 409);
-    	}
-    
-    
+        throw new ApiException(
+                "ACCOUNT_CREATE_FAILED",
+                "Não foi possível criar conta (colisão de identificadores). Tente novamente.",
+                409
+        );
+    }
+
     private String generateSlug(String name) {
         String base = (name == null ? "conta" : name.toLowerCase())
                 .replaceAll("[^a-z0-9]+", "-")
@@ -1698,10 +1693,6 @@ public class PublicAccountService {
         return "tenant_" + base + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-   
-    
-    
-
     private boolean isSlugOrSchemaUniqueViolation(Throwable e) {
         Throwable t = e;
         while (t.getCause() != null) t = t.getCause();
@@ -1714,7 +1705,6 @@ public class PublicAccountService {
                 || msg.contains("accounts_schema_name_key")
                 || msg.contains("company_email");
     }
-
 }
 package brito.com.multitenancy001.controlplane.application.user;
 
@@ -1728,13 +1718,13 @@ import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1747,9 +1737,7 @@ public class ControlPlaneUserService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
-    private final Clock clock;
-   
-    
+    private final AppClock appClock;
 
     private Account getControlPlaneAccount() {
         TenantContext.clear(); // PUBLIC
@@ -1761,54 +1749,51 @@ public class ControlPlaneUserService {
                 ));
     }
 
-  public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest controlPlaneUserCreateRequest) {
-    TenantContext.clear();
+    public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
+        TenantContext.clear();
 
-    Account controlPlaneAccount = getControlPlaneAccount();
+        Account controlPlaneAccount = getControlPlaneAccount();
 
-    
-    if (controlPlaneUserCreateRequest.username() == null || controlPlaneUserCreateRequest.username().isBlank()) {
-        throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+        if (req.username() == null || req.username().isBlank()) {
+            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
+        }
+        if (!req.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
+            throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
+        }
+
+        String username = req.username().toLowerCase().trim();
+
+        // ✅ role já tipada
+        ControlPlaneRole roleEnum = req.role();
+
+        if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
+            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
+        }
+        if (controlPlaneUserRepository.existsByEmailAndAccountId(req.email(), controlPlaneAccount.getId())) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+        }
+
+        LinkedHashSet<String> normalizedPermissions;
+        try {
+            normalizedPermissions = PermissionScopeValidator.normalizeControlPlane(req.permissions());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
+        }
+
+        ControlPlaneUser user = ControlPlaneUser.builder()
+                .name(req.name())
+                .username(username)
+                .email(req.email())
+                .password(passwordEncoder.encode(req.password()))
+                .role(roleEnum)
+                .account(controlPlaneAccount)
+                .suspendedByAccount(false)
+                .suspendedByAdmin(false)
+                .permissions(normalizedPermissions)
+                .build();
+
+        return mapToResponse(controlPlaneUserRepository.save(user));
     }
-    if (!controlPlaneUserCreateRequest.username().matches(ValidationPatterns.USERNAME_PATTERN)) {
-        throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
-    }
-
-    String username = controlPlaneUserCreateRequest.username().toLowerCase().trim();
-
-    // ✅ agora role já vem tipada (enum)
-    ControlPlaneRole roleEnum = controlPlaneUserCreateRequest.role();
-
-    if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
-        throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
-    }
-    if (controlPlaneUserRepository.existsByEmailAndAccountId(controlPlaneUserCreateRequest.email(), controlPlaneAccount.getId())) {
-        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
-    }
-
-    LinkedHashSet<String> normalizedPermissions;
-    try {
-        normalizedPermissions = PermissionScopeValidator.normalizeControlPlane(controlPlaneUserCreateRequest.permissions());
-    } catch (IllegalArgumentException e) {
-        throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
-    }
-
-    ControlPlaneUser user = ControlPlaneUser.builder()
-            .name(controlPlaneUserCreateRequest.name())
-            .username(username)
-            .email(controlPlaneUserCreateRequest.email())
-            .password(passwordEncoder.encode(controlPlaneUserCreateRequest.password()))
-            .role(roleEnum)
-            .account(controlPlaneAccount)
-            .suspendedByAccount(false)
-            .suspendedByAdmin(false)
-            .permissions(normalizedPermissions)
-            .build();
-
-    return mapToResponse(controlPlaneUserRepository.save(user));
-}
-
-
 
     @Transactional(readOnly = true)
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
@@ -1835,12 +1820,7 @@ public class ControlPlaneUserService {
 
         return mapToResponse(user);
     }
-    
-    
-    
-    
-    
-    
+
     public ControlPlaneUserDetailsResponse updateControlPlaneUserStatus(Long userId, boolean active) {
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
@@ -1859,13 +1839,7 @@ public class ControlPlaneUserService {
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
 
-    
-    
-
     public void softDeleteControlPlaneUser(Long userId) {
-    	   LocalDateTime now = LocalDateTime.now(clock);
-           long suffix = clock.millis();
-           
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
 
@@ -1877,12 +1851,12 @@ public class ControlPlaneUserService {
             throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
         }
 
-     
+        LocalDateTime now = appClock.now();
+        long suffix = appClock.epochMillis();
+
         user.softDelete(now, suffix);
         controlPlaneUserRepository.save(user);
-
     }
-    
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
         TenantContext.clear();
@@ -1899,38 +1873,35 @@ public class ControlPlaneUserService {
         user.restore();
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
-    
-    
 
-   private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
-    return new ControlPlaneUserDetailsResponse(
-            user.getId(),
-            user.getUsername(),
-            user.getName(),
-            user.getEmail(),
-            user.getRole().name(),
-            user.isSuspendedByAccount(),
-            user.isSuspendedByAdmin(),
-            user.getCreatedAt(),
-            user.getUpdatedAt(),
-            user.getAccount().getId(),
-            user.getPermissions() == null
-                    ? List.of()
-                    : user.getPermissions().stream().sorted().toList()
-    );
-}
-
+    private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
+        return new ControlPlaneUserDetailsResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getName(),
+                user.getEmail(),
+                user.getRole().name(),
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.getCreatedAt(),
+                user.getUpdatedAt(),
+                user.getAccount().getId(),
+                user.getPermissions() == null
+                        ? List.of()
+                        : user.getPermissions().stream().sorted().toList()
+        );
+    }
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -1985,19 +1956,19 @@ public class Account {
     @Column(name = "next_billing_date")
     private LocalDateTime nextBillingDate;
 
-    @Column(name = "subscription_plan", nullable=false, length = 50)
+    @Column(name = "subscription_plan", nullable = false, length = 50)
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users", nullable=false)
+    @Column(name = "max_users", nullable = false)
     @Builder.Default
     private Integer maxUsers = 5;
 
-    @Column(name = "max_products", nullable=false)
+    @Column(name = "max_products", nullable = false)
     @Builder.Default
     private Integer maxProducts = 100;
 
-    @Column(name = "max_storage_mb", nullable=false)
+    @Column(name = "max_storage_mb", nullable = false)
     @Builder.Default
     private Integer maxStorageMb = 100;
 
@@ -2023,19 +1994,19 @@ public class Account {
     @Column(name = "company_state", length = 50)
     private String companyState;
 
-    @Column(name = "company_country", length = 50, nullable=false)
+    @Column(name = "company_country", length = 50, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
 
-    @Column(name = "timezone", length = 50, nullable=false)
+    @Column(name = "timezone", length = 50, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10, nullable=false)
+    @Column(name = "locale", length = 10, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
 
-    @Column(name = "currency", length = 3, nullable=false)
+    @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -2059,61 +2030,72 @@ public class Account {
 
     @PrePersist
     protected void onCreate() {
-        // base para regras de negócio (não use createdAt aqui)
-        LocalDateTime now = LocalDateTime.now();
-
+        // ✅ aqui NÃO usar tempo
         // slug
         if (this.slug == null || this.slug.isBlank()) {
-            this.slug = this.name.toLowerCase()
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+            this.slug = (this.name == null ? "conta" : this.name)
+                    .toLowerCase()
+                    .replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("(^-|-$)", "");
         }
 
         // schemaName
-        if (this.schemaName == null) {
+        if (this.schemaName == null || this.schemaName.isBlank()) {
             this.schemaName =
-                "tenant_" +
-                this.slug.replace("-", "_") +
-                "_" +
-                UUID.randomUUID().toString().substring(0, 8);
+                    "tenant_" +
+                    this.slug.replace("-", "_") +
+                    "_" +
+                    UUID.randomUUID().toString().substring(0, 8);
         }
+    }
 
-        // trial
+    // =========================
+    // Regras clock-aware
+    // =========================
+
+    public boolean isTrialActive(LocalDateTime now) {
+        return this.status == AccountStatus.FREE_TRIAL
+                && this.trialEndDate != null
+                && now != null
+                && this.trialEndDate.isAfter(now);
+    }
+
+    public boolean isActive(LocalDateTime now) {
+        return this.status == AccountStatus.ACTIVE
+                || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
+    }
+
+    public boolean isPaymentOverdue(LocalDateTime now) {
+        return this.paymentDueDate != null
+                && now != null
+                && this.paymentDueDate.isBefore(now);
+    }
+
+    public long getDaysRemainingInTrial(LocalDateTime now) {
+        if (now == null) return 0;
+        if (this.trialEndDate == null || !isTrialActive(now)) return 0;
+        return ChronoUnit.DAYS.between(now, this.trialEndDate);
+    }
+
+    public void ensureTrialEndDate(LocalDateTime now, long trialDays) {
         if (this.trialEndDate == null) {
-            this.trialEndDate = now.plusDays(30);
+            if (now == null) throw new IllegalArgumentException("now is required");
+            this.trialEndDate = now.plusDays(trialDays);
         }
     }
 
-    public boolean isTrialActive() {
-        return this.status == AccountStatus.FREE_TRIAL &&
-               this.trialEndDate != null &&
-               this.trialEndDate.isAfter(LocalDateTime.now());
-    }
-
-    public boolean isActive() {
-        return this.status == AccountStatus.ACTIVE ||
-               (this.status == AccountStatus.FREE_TRIAL && isTrialActive());
-    }
-
-    public boolean isPaymentOverdue() {
-        return this.paymentDueDate != null &&
-               this.paymentDueDate.isBefore(LocalDateTime.now());
-    }
-
-    public long getDaysRemainingInTrial() {
-        if (this.trialEndDate == null || !isTrialActive()) return 0;
-        return java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), this.trialEndDate);
-    }
-
-    public void softDelete() {
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.status = AccountStatus.CANCELLED;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.status = AccountStatus.ACTIVE;
@@ -2246,7 +2228,7 @@ public class Payment {
     @Column(name = "payment_gateway", length = 50)
     private String paymentGateway;
 
-    @Column(name = "currency", length = 3,nullable=false)
+    @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 
@@ -2256,10 +2238,10 @@ public class Payment {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name="invoice_url", columnDefinition="TEXT")
+    @Column(name = "invoice_url", columnDefinition = "TEXT")
     private String invoiceUrl;
 
-    @Column(name="receipt_url", columnDefinition="TEXT")
+    @Column(name = "receipt_url", columnDefinition = "TEXT")
     private String receiptUrl;
 
     // ✅ AUDITORIA (técnico)
@@ -2290,22 +2272,48 @@ public class Payment {
                     .toUpperCase();
         }
 
+        // ⚠️ NÃO setar tempo aqui. paymentDate deve vir do service com Clock.
         if (this.paymentDate == null) {
-            this.paymentDate = LocalDateTime.now();
+            throw new IllegalStateException("paymentDate deve ser definido pela aplicação (Clock/AppClock).");
         }
 
+        // Se já está completed e não veio validUntil, calcula baseado no paymentDate (determinístico)
         if (this.status == PaymentStatus.COMPLETED && this.validUntil == null) {
-            this.validUntil = calculateDefaultValidUntil();
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
         }
     }
 
-    private LocalDateTime calculateDefaultValidUntil() {
-        return this.paymentDate.plusDays(30);
+    private LocalDateTime calculateDefaultValidUntil(LocalDateTime baseDate) {
+        return baseDate.plusDays(30);
     }
 
+    // ---------------------------
+    // Transições de estado (domínio)
+    // ---------------------------
+
+    /** Use quando o pagamento é marcado como concluído no "agora" do app. */
+    public void markAsCompleted(LocalDateTime now) {
+        this.status = PaymentStatus.COMPLETED;
+
+        // Se paymentDate ainda não foi setado, seta com o "agora" vindo de fora (Clock/AppClock)
+        if (this.paymentDate == null) {
+            this.paymentDate = now;
+        }
+
+        if (this.validUntil == null) {
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
+        }
+    }
+
+    /** Mantido por compatibilidade: exige que paymentDate já tenha sido definido externamente. */
     public void markAsCompleted() {
         this.status = PaymentStatus.COMPLETED;
-        if (this.validUntil == null) this.validUntil = calculateDefaultValidUntil();
+        if (this.paymentDate == null) {
+            throw new IllegalStateException("paymentDate deve ser definido antes de marcar como COMPLETED.");
+        }
+        if (this.validUntil == null) {
+            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
+        }
     }
 
     public void markAsFailed(String reason) {
@@ -2315,32 +2323,48 @@ public class Payment {
         }
     }
 
-    public void refundPartially(BigDecimal amount, String reason) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
+    public void refundPartially(LocalDateTime now, BigDecimal amount, String reason) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
             throw new IllegalArgumentException("Valor de reembolso inválido");
         }
+        if (!canBeRefunded(now)) {
+            throw new IllegalStateException("Pagamento não pode ser reembolsado");
+        }
+
         this.refundAmount = amount;
         this.refundReason = reason;
-        this.refundedAt = LocalDateTime.now();
+        this.refundedAt = now;
         this.status = PaymentStatus.REFUNDED;
     }
 
-    public void refundFully(String reason) {
+    public void refundFully(LocalDateTime now, String reason) {
+        if (!canBeRefunded(now)) {
+            throw new IllegalStateException("Pagamento não pode ser reembolsado");
+        }
+
         this.refundAmount = this.amount;
         this.refundReason = reason;
-        this.refundedAt = LocalDateTime.now();
+        this.refundedAt = now;
         this.status = PaymentStatus.REFUNDED;
     }
 
-    public boolean isActive() {
-        return this.status == PaymentStatus.COMPLETED &&
-               (this.validUntil == null || this.validUntil.isAfter(LocalDateTime.now()));
+    // ---------------------------
+    // Regras (parametrizadas por "agora")
+    // ---------------------------
+
+    public boolean isActive(LocalDateTime now) {
+        return this.status == PaymentStatus.COMPLETED
+                && (this.validUntil == null || this.validUntil.isAfter(now));
     }
 
-    public boolean canBeRefunded() {
-        return this.status == PaymentStatus.COMPLETED &&
-               this.refundedAt == null &&
-               this.paymentDate.isAfter(LocalDateTime.now().minusDays(90));
+    public boolean canBeRefunded(LocalDateTime now) {
+        if (this.status != PaymentStatus.COMPLETED) return false;
+        if (this.refundedAt != null) return false;
+        if (this.paymentDate == null) return false;
+
+        // Exemplo original: até 90 dias após paymentDate (regra determinística)
+        // (equivalente a: paymentDate.isAfter(now.minusDays(90)))
+        return this.paymentDate.isAfter(now.minusDays(90));
     }
 }
 package brito.com.multitenancy001.controlplane.domain.billing;
@@ -2777,7 +2801,7 @@ public enum ControlPlaneRole implements RoleAuthority {
         return this == CONTROLPLANE_OWNER;
     }
 
-    public boolean isControlPlaneBillingAdmin() {
+    public boolean isBillingManager() {
         return this == CONTROLPLANE_BILLING_MANAGER;
     }
 }
@@ -2822,7 +2846,7 @@ public final class ControlPlaneRolePermissions {
         };
     }
 }
-package brito.com.multitenancy001.infrastructure.config;
+package brito.com.multitenancy001.infrastructure.config.time;
 
 import java.time.Clock;
 
@@ -2837,102 +2861,7 @@ public class TimeConfig {
         return Clock.systemDefaultZone();
     }
 }
-package brito.com.multitenancy001.infrastructure.db.flyway;
-
-import javax.sql.DataSource;
-
-import org.flywaydb.core.Flyway;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class PublicFlywayConfig {
-
-    @Bean
-    public Flyway flywayAccount(DataSource dataSource) {
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .schemas("public")
-                .locations("classpath:db/migration/accounts")
-                .baselineOnMigrate(true)
-                .load();
-
-        // 🚀 EXECUTA NA INICIALIZAÇÃO
-        //flyway.migrate();
-
-        return flyway;
-    }
-}
-package brito.com.multitenancy001.infrastructure.db.flyway;
-
-import org.flywaydb.core.Flyway;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-@Component
-@RequiredArgsConstructor
-@Slf4j
-public class PublicFlywayRunner implements ApplicationRunner {
-
-    private final Flyway flywayAccount;
-    
-   
-
-    @Override
-    public void run(ApplicationArguments args) {
-    	
-   
-    	
-    	
-        log.info("🚀 Executando Flyway ACCOUNT (public)");
-        flywayAccount.migrate();
-    }
-}
-package brito.com.multitenancy001.infrastructure.db.flyway;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
-
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class PublicSchemaVerifier {
-    
-    private final JdbcTemplate jdbc;
-    
-    @EventListener(ApplicationReadyEvent.class)
-    public void verifyTables() {
-        log.info("🔍 Verificando tabelas criadas pelo Flyway...");
-        
-        try {
-            // Apenas VERIFICA, não cria
-            Integer accountsCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'accounts'", 
-                Integer.class
-            );
-            
-            Integer usersCount = jdbc.queryForObject(
-            	    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'controlplane_users'",
-            	    Integer.class
-            	);
-
-            
-            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, controlplane_users={}", accountsCount, usersCount);
-
-        } catch (Exception e) {
-            log.error("⚠️ Aviso na verificação: {}", e.getMessage());
-        }
-    }
-}package brito.com.multitenancy001.infrastructure.exec;
+package brito.com.multitenancy001.infrastructure.executor;
 
 import java.util.function.Supplier;
 
@@ -2955,7 +2884,7 @@ public class PublicExecutor {
         }
     }
 }
-package brito.com.multitenancy001.infrastructure.exec;
+package brito.com.multitenancy001.infrastructure.executor;
 
 import java.util.function.Supplier;
 
@@ -3015,7 +2944,7 @@ public class TenantExecutor {
         return run(schema, fn);
     }
 }
-package brito.com.multitenancy001.infrastructure.exec;
+package brito.com.multitenancy001.infrastructure.executor;
 
 import java.util.function.Supplier;
 
@@ -3139,30 +3068,119 @@ public class TxExecutor {
         tenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 }
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
-import jakarta.persistence.EntityManagerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import javax.sql.DataSource;
+
+import org.flywaydb.core.Flyway;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
-@EnableJpaRepositories(
-    basePackages =  "brito.com.multitenancy001.controlplane",
-    entityManagerFactoryRef = "publicEntityManagerFactory",
-    transactionManagerRef = "publicTransactionManager"
-)
-public class ControlPlanePersistenceConfig {
+public class PublicFlywayConfig {
 
-    @Bean(name = "publicTransactionManager")
-    @Primary
-    public PlatformTransactionManager publicTransactionManager(
-            @Qualifier("publicEntityManagerFactory") EntityManagerFactory emf) {
-        return new JpaTransactionManager(emf);
+    @Bean
+    public Flyway flywayPublic(DataSource dataSource) {
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .schemas("public")
+                .locations("classpath:db/migration/accounts")
+                .baselineOnMigrate(true)
+                .load();
+
+      
+        return flyway;
+    }
+}
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
+
+import org.flywaydb.core.Flyway;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.stereotype.Component;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class PublicFlywayRunner implements ApplicationRunner {
+
+	private final Flyway flywayPublic;
+
+	@Override
+	public void run(ApplicationArguments args) {
+
+		log.info("🚀 Executando Flyway ACCOUNT (schema public)");
+		flywayPublic.migrate();
+	}
+}
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class PublicSchemaVerifier {
+    
+    private final JdbcTemplate jdbc;
+    
+    @EventListener(ApplicationReadyEvent.class)
+    public void verifyTables() {
+        log.info("🔍 Verificando tabelas criadas pelo Flyway...");
+        
+        try {
+            // Apenas VERIFICA, não cria
+            Integer accountsCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'accounts'", 
+                Integer.class
+            );
+            
+            Integer usersCount = jdbc.queryForObject(
+            	    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'controlplane_users'",
+            	    Integer.class
+            	);
+
+            
+            log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, controlplane_users={}", accountsCount, usersCount);
+
+        } catch (Exception e) {
+            log.error("⚠️ Aviso na verificação: {}", e.getMessage());
+        }
+    }
+}package brito.com.multitenancy001.infrastructure.flyway.tenantschema;
+
+import lombok.RequiredArgsConstructor;
+import org.flywaydb.core.Flyway;
+import org.springframework.stereotype.Service;
+
+import javax.sql.DataSource;
+
+@Service
+@RequiredArgsConstructor
+public class TenantSchemaFlywayMigrationService {
+
+    private final DataSource dataSource;
+
+    public void migrateTenantSchema(String schemaName) {
+        Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schemaName)
+                .defaultSchema(schemaName) // 🔥 ESSENCIAL
+                .createSchemas(false)
+                .locations("classpath:db/migration/tenants")
+                .baselineOnMigrate(true)
+                .load();
+
+        flyway.migrate();
     }
 }
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
@@ -3238,7 +3256,7 @@ public class CurrentTenantSchemaResolver
 
     /**
      * O Hibernate sempre precisa de um tenant válido.
-     * ✅ Aqui sim a gente aplica fallback para DEFAULT_TENANT.
+     * ✅ Aqui sim a gente aplica fallback para DEFAULT_SCHEMA.
      */
     @Override
     public String resolveCurrentTenantIdentifier() {
@@ -3268,6 +3286,48 @@ import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+
+/**
+ * Persistência do schema PUBLIC (ControlPlane).
+ * Explicita o que o Spring Boot criaria como default.
+ */
+@Configuration
+@EnableJpaRepositories(
+        basePackages = "brito.com.multitenancy001.controlplane",
+        entityManagerFactoryRef = "publicEntityManagerFactory",
+        transactionManagerRef = "publicTransactionManager"
+)
+public class PublicPersistenceConfig {
+
+    /**
+     * Alias semântico do EntityManagerFactory default do Spring Boot.
+     */
+    @Bean(name = "publicEntityManagerFactory")
+    @Primary
+    public EntityManagerFactory publicEntityManagerFactory(
+            @Qualifier("entityManagerFactory") EntityManagerFactory emf
+    ) {
+        return emf;
+    }
+
+    @Bean(name = "publicTransactionManager")
+    @Primary
+    public PlatformTransactionManager publicTransactionManager(
+            @Qualifier("publicEntityManagerFactory") EntityManagerFactory emf
+    ) {
+        return new JpaTransactionManager(emf);
+    }
+}
+package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+
+import jakarta.persistence.EntityManagerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -3277,7 +3337,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 		basePackages = "brito.com.multitenancy001.tenant",
 		entityManagerFactoryRef = "tenantEntityManagerFactory",
 		transactionManagerRef = "tenantTransactionManager")
-public class TenantPlanePersistenceConfig {
+public class TenantPersistenceConfig {
 
 	@Bean(name = "tenantTransactionManager")
 	public PlatformTransactionManager tenantTransactionManager(
@@ -3303,7 +3363,7 @@ public class TenantSchemaConnectionProvider
         extends AbstractDataSourceBasedMultiTenantConnectionProviderImpl<String> {
 
     private static final long serialVersionUID = 1L;
-    private static final String DEFAULT_TENANT = "public";
+    private static final String DEFAULT_SCHEMA = "public";
 
     private final DataSource dataSource;
 
@@ -3325,11 +3385,11 @@ public class TenantSchemaConnectionProvider
 
         String effectiveTenant = StringUtils.hasText(tenantIdentifier)
                 ? tenantIdentifier
-                : DEFAULT_TENANT;
+                : DEFAULT_SCHEMA;
 
         if (!StringUtils.hasText(tenantIdentifier)) {
             log.warn("⚠️ [MT] tenantIdentifier vazio → usando DEFAULT ({}) | threadTenant={}",
-                    DEFAULT_TENANT, threadTenant);
+                    DEFAULT_SCHEMA, threadTenant);
         }
 
         validateSchemaName(effectiveTenant);
@@ -3338,7 +3398,7 @@ public class TenantSchemaConnectionProvider
 
         try (Statement stmt = connection.createStatement()) {
 
-            if (!DEFAULT_TENANT.equals(effectiveTenant)) {
+            if (!DEFAULT_SCHEMA.equals(effectiveTenant)) {
                 ensureSchemaExists(connection, effectiveTenant);
 
                 String quotedTenant = quoteIdentifier(effectiveTenant);
@@ -3737,6 +3797,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             final String authHeader = httpServletRequest.getHeader("Authorization");
 
+            // "Bearer ..." é esquema HTTP, não é domínio do token
             if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
@@ -3749,21 +3810,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            final String tokenType = jwtTokenProvider.getTokenType(jwt);
+            // ✅ agora é claro: authDomain = TENANT/CONTROLPLANE/...
+            final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
             // ✅ TRAVA: token tem que bater com a rota
-            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(tokenType)) {
+            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
-            if (requiresTenant(httpServletRequest) && !"TENANT".equals(tokenType)) {
+            if (requiresTenant(httpServletRequest) && !"TENANT".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
             // só aceitamos TENANT / CONTROLPLANE aqui
-            if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
+            if (!"TENANT".equals(authDomain) && !"CONTROLPLANE".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
@@ -3777,7 +3839,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails;
 
-                if ("TENANT".equals(tokenType)) {
+                if ("TENANT".equals(authDomain)) {
                     final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
 
                     if (!StringUtils.hasText(tenantSchema) || "public".equalsIgnoreCase(tenantSchema)) {
@@ -3844,11 +3906,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = httpServletRequest.getRequestURI();
         return path.startsWith("/api/tenant/");
     }
-
 }
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -3862,6 +3924,7 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -3869,6 +3932,12 @@ import java.util.stream.Collectors;
 
 @Component
 public class JwtTokenProvider {
+
+    public static final String CLAIM_AUTHORITIES = "authorities";
+    public static final String CLAIM_AUTH_DOMAIN = "authDomain"; // <-- NOVO
+    public static final String CLAIM_CONTEXT = "context";
+    public static final String CLAIM_ACCOUNT_ID = "accountId";
+    public static final String CLAIM_USER_ID = "userId";
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -3879,7 +3948,12 @@ public class JwtTokenProvider {
     @Value("${app.jwt.refresh.expiration}")
     private long refreshExpirationInMs;
 
+    private final AppClock appClock;
     private SecretKey key;
+
+    public JwtTokenProvider(AppClock appClock) {
+        this.appClock = appClock;
+    }
 
     @PostConstruct
     public void init() {
@@ -3890,54 +3964,53 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
+    private Date issuedAt() {
+        return Date.from(appClock.instant());
+    }
+
+    private Date expiresAtInMs(long ttlMillis) {
+        Instant exp = appClock.instant().plusMillis(ttlMillis);
+        return Date.from(exp);
+    }
+
     /* =========================
-       TOKEN CONTROLPLANE
+       ACCESS TOKEN - CONTROLPLANE
        ========================= */
-    public String generateControlPlaneToken(
-            Authentication authentication,
-            Long accountId,
-            String context
-    ) {
+    public String generateControlPlaneToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                // ✅ permission-first: authorities = CP_*
-                .claim("authorities", user.getAuthorities().stream()
+                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim("type", "CONTROLPLANE")
-                .claim("context", context)
-                .claim("accountId", accountId)
-                .claim("userId", user.getUserId())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .claim(CLAIM_AUTH_DOMAIN, "CONTROLPLANE") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .claim(CLAIM_USER_ID, user.getUserId())
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
 
     /* =========================
-       TOKEN TENANT
+       ACCESS TOKEN - TENANT
        ========================= */
-    public String generateTenantToken(
-            Authentication authentication,
-            Long accountId,
-            String context
-    ) {
+    public String generateTenantToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                // ✅ permission-first: authorities = TEN_*
-                .claim("authorities", user.getAuthorities().stream()
+                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim("type", "TENANT")
-                .claim("context", context)
-                .claim("accountId", accountId)
-                .claim("userId", user.getUserId())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpirationInMs))
+                .claim(CLAIM_AUTH_DOMAIN, "TENANT") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .claim(CLAIM_USER_ID, user.getUserId())
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -3948,10 +4021,10 @@ public class JwtTokenProvider {
     public String generateRefreshToken(String username, String context) {
         return Jwts.builder()
                 .subject(username)
-                .claim("type", "REFRESH")
-                .claim("context", context)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + refreshExpirationInMs))
+                .claim(CLAIM_AUTH_DOMAIN, "REFRESH") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -3960,13 +4033,15 @@ public class JwtTokenProvider {
        PASSWORD RESET TOKEN
        ========================= */
     public String generatePasswordResetToken(String username, String context, Long accountId) {
+        long oneHourMs = 3_600_000L;
+
         return Jwts.builder()
                 .subject(username)
-                .claim("type", "PASSWORD_RESET")
-                .claim("context", context)
-                .claim("accountId", accountId)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1h
+                .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(oneHourMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -3993,15 +4068,14 @@ public class JwtTokenProvider {
     public String getContextFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
-        String context = claims.get("context", String.class);
+        String context = claims.get(CLAIM_CONTEXT, String.class);
         if (context == null) {
             context = claims.get("tenantSchema", String.class);
         }
 
-        String type = claims.get("type", String.class);
+        String authDomain = getAuthDomain(token);
 
-        // ✅ Só TENANT não pode ter public
-        if ("TENANT".equals(type) && "public".equalsIgnoreCase(context)) {
+        if ("TENANT".equals(authDomain) && "public".equalsIgnoreCase(context)) {
             throw new JwtException("Invalid context for TENANT token: public");
         }
 
@@ -4013,30 +4087,39 @@ public class JwtTokenProvider {
     }
 
     public Long getAccountIdFromToken(String token) {
-        return getAllClaimsFromToken(token).get("accountId", Long.class);
-    }
-
-    public String getTokenType(String token) {
-        return getAllClaimsFromToken(token).get("type", String.class);
-    }
-
-    public Long getUserIdFromToken(String token) {
-        return getAllClaimsFromToken(token).get("userId", Long.class);
+        return getAllClaimsFromToken(token).get(CLAIM_ACCOUNT_ID, Long.class);
     }
 
     /**
-     * ✅ NOVO: lê authorities do token (permission-first).
-     * Compatível com tokens antigos que ainda tenham "roles".
+     * ✅ NOVO: authDomain = TENANT/CONTROLPLANE/REFRESH/PASSWORD_RESET
+     * ✅ Compatível: se não existir, cai para claim antiga "type"
      */
+    public String getAuthDomain(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+
+        String authDomain = claims.get(CLAIM_AUTH_DOMAIN, String.class);
+        if (!StringUtils.hasText(authDomain)) {
+            authDomain = claims.get("type", String.class); // compat tokens antigos
+        }
+
+        return authDomain;
+    }
+
+    // Se você tinha o método getTokenType, mantenha como alias (opcional)
+    public String getTokenType(String token) {
+        return getAuthDomain(token);
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return getAllClaimsFromToken(token).get(CLAIM_USER_ID, Long.class);
+    }
+
     public List<String> getAuthoritiesFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
-        // novo padrão
-        String authorities = claims.get("authorities", String.class);
-
-        // compatibilidade antiga (se existir)
+        String authorities = claims.get(CLAIM_AUTHORITIES, String.class);
         if (!StringUtils.hasText(authorities)) {
-            authorities = claims.get("roles", String.class);
+            authorities = claims.get("roles", String.class); // compat tokens antigos
         }
 
         return splitCsv(authorities);
@@ -4056,7 +4139,7 @@ public class JwtTokenProvider {
         try {
             Claims claims = getAllClaimsFromToken(token);
             Date expiration = claims.getExpiration();
-            return expiration.before(new Date());
+            return expiration.before(Date.from(appClock.instant()));
         } catch (Exception e) {
             return true;
         }
@@ -4071,23 +4154,20 @@ public class JwtTokenProvider {
         }
     }
 
-    /* =========================
-       MÉTODOS AUXILIARES
-       ========================= */
     public boolean isControlPlaneToken(String token) {
-        return "CONTROLPLANE".equals(getTokenType(token));
+        return "CONTROLPLANE".equals(getAuthDomain(token));
     }
 
     public boolean isTenantToken(String token) {
-        return "TENANT".equals(getTokenType(token));
+        return "TENANT".equals(getAuthDomain(token));
     }
 
     public boolean isRefreshToken(String token) {
-        return "REFRESH".equals(getTokenType(token));
+        return "REFRESH".equals(getAuthDomain(token));
     }
 
     public boolean isPasswordResetToken(String token) {
-        return "PASSWORD_RESET".equals(getTokenType(token));
+        return "PASSWORD_RESET".equals(getAuthDomain(token));
     }
 
     public boolean isTokenInContext(String token, String expectedContext) {
@@ -4213,6 +4293,7 @@ import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserR
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -4221,7 +4302,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -4230,44 +4310,54 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final TenantUserRepository tenantUserRepository;
-    private final Clock clock;
+    private final AppClock appClock;
+
+    private LocalDateTime now() {
+        return appClock.now();
+    }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        String schema = TenantContext.getOrNull();
+        String schemaName = TenantContext.getOrNull();
 
-        if (schema == null || "public".equalsIgnoreCase(schema)) {
+        if (schemaName == null || "public".equalsIgnoreCase(schemaName)) {
             return loadControlPlaneUser(username);
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return new AuthenticatedUserContext(user, schema, now, authorities);
+        return new AuthenticatedUserContext(user, schemaName, now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username, Long accountId) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED",
-                    "accountId é obrigatório para autenticar usuário da controlplane", 400);
+            throw new ApiException(
+                    "ACCOUNT_REQUIRED",
+                    "accountId é obrigatório para autenticar usuário da controlplane",
+                    400
+            );
         }
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByUsernameAndAccount_IdAndDeletedFalse(username, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND",
-                        "Usuário controlplane não encontrado para esta conta", 404));
+                .orElseThrow(() -> new ApiException(
+                        "USER_NOT_FOUND",
+                        "Usuário controlplane não encontrado para esta conta",
+                        404
+                ));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return new AuthenticatedUserContext(user, "public", now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username) {
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         ControlPlaneUser user = controlPlaneUserRepository.findByUsernameAndDeletedFalse(username)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário controlplane não encontrado", 404));
@@ -4279,16 +4369,22 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     public UserDetails loadTenantUser(String username, Long accountId) {
         String schema = TenantContext.getOrNull();
         if (schema == null || "public".equalsIgnoreCase(schema)) {
-            throw new ApiException("TENANT_CONTEXT_REQUIRED",
-                    "TenantContext não está bindado para autenticar usuário tenant", 401);
+            throw new ApiException(
+                    "TENANT_CONTEXT_REQUIRED",
+                    "TenantContext não está bindado para autenticar usuário tenant",
+                    401
+            );
         }
 
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED",
-                    "accountId é obrigatório para autenticar usuário tenant", 400);
+            throw new ApiException(
+                    "ACCOUNT_REQUIRED",
+                    "accountId é obrigatório para autenticar usuário tenant",
+                    400
+            );
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime now = now();
 
         TenantUser user = tenantUserRepository
                 .findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
@@ -4317,8 +4413,6 @@ public class TenantProvisioningBridge {
 }
 package brito.com.multitenancy001.infrastructure.tenant;
 
-
-
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -4326,10 +4420,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.exec.TenantExecutor;
-import brito.com.multitenancy001.infrastructure.exec.TxExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.application.username.generator.UsernameGeneratorService;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -4343,78 +4438,79 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantUserAdminBridge {
 
     private static final String TENANT_USERS_TABLE = "tenant_users";
-	private final TenantExecutor tenantExecutor;
+
+    private final TenantExecutor tenantExecutor;
     private final TxExecutor txExecutor;
 
     private final TenantUserRepository tenantUserRepository;
     private final UsernameGeneratorService usernameGenerator;
     private final PasswordEncoder passwordEncoder;
-    
-    
+
+    private final AppClock appClock;
+
     public List<UserSummaryData> listUserSummaries(String schemaName, Long accountId, boolean onlyActive) {
         tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-            txExecutor.tenantReadOnlyTx(() -> {
+                txExecutor.tenantReadOnlyTx(() -> {
 
-                var users = onlyActive
-                        ? tenantUserRepository.findActiveUsersByAccount(accountId)
-                        : tenantUserRepository.findByAccountId(accountId);
+                    var users = onlyActive
+                            ? tenantUserRepository.findActiveUsersByAccount(accountId)
+                            : tenantUserRepository.findByAccountId(accountId);
 
-                return users.stream()
-                        .map(u -> new UserSummaryData(
-                                u.getId(),
-                                u.getAccountId(),
-                                u.getName(),
-                                u.getUsername(),
-                                u.getEmail(),
-                                u.getRole() == null ? null : u.getRole().name(),
-                                Boolean.TRUE.equals(u.isSuspendedByAccount()),
-                                Boolean.TRUE.equals(u.isSuspendedByAdmin()),
-                                u.isDeleted()
-                        ))
-                        .toList();
-            })
+                    return users.stream()
+                            .map(u -> new UserSummaryData(
+                                    u.getId(),
+                                    u.getAccountId(),
+                                    u.getName(),
+                                    u.getUsername(),
+                                    u.getEmail(),
+                                    u.getRole() == null ? null : u.getRole().name(),
+                                    u.isSuspendedByAccount(),
+                                    u.isSuspendedByAdmin(),
+                                    u.isDeleted()
+                            ))
+                            .toList();
+                })
         );
     }
- 
-    
 
     public TenantUser createTenantOwner(String schemaName, Long accountId, String email, String rawPassword) {
         tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-            txExecutor.tenantTx(() -> {
+                txExecutor.tenantTx(() -> {
 
-                boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(email, accountId);
-                if (emailExists) {
-                    throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
-                }
-
-                TenantUser u = new TenantUser();
-                u.setAccountId(accountId);
-                u.setName("Administrador");
-                u.setEmail(email);
-                u.setPassword(passwordEncoder.encode(rawPassword));
-                u.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
-                u.setSuspendedByAccount(false);
-                u.setSuspendedByAdmin(false);
-                u.setCreatedAt(LocalDateTime.now());
-                u.setTimezone("America/Sao_Paulo");
-                u.setLocale("pt_BR");
-
-                for (int attempt = 0; attempt < 5; attempt++) {
-                    u.setUsername(usernameGenerator.generateFromEmail(email, accountId));
-                    try {
-                        return tenantUserRepository.save(u);
-                    } catch (DataIntegrityViolationException e) {
-                        log.warn("Colisão de username ao criar admin. Tentativa {}. accountId={} email={}",
-                                attempt + 1, accountId, email);
+                    boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(email, accountId);
+                    if (emailExists) {
+                        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
                     }
-                }
 
-                throw new IllegalStateException("Failed to create tenant admin due to repeated username collisions");
-            })
+                    TenantUser u = new TenantUser();
+                    u.setAccountId(accountId);
+                    u.setName("Administrador");
+                    u.setEmail(email);
+                    u.setPassword(passwordEncoder.encode(rawPassword));
+                    u.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+                    u.setSuspendedByAccount(false);
+                    u.setSuspendedByAdmin(false);
+
+                    
+                    u.setTimezone("America/Sao_Paulo");
+                    u.setLocale("pt_BR");
+
+                    for (int attempt = 0; attempt < 5; attempt++) {
+                        u.setUsername(usernameGenerator.generateFromEmail(email, accountId));
+                        try {
+                            return tenantUserRepository.save(u);
+                        } catch (DataIntegrityViolationException e) {
+                            log.warn("Colisão de username ao criar admin. Tentativa {}. accountId={} email={}",
+                                    attempt + 1, accountId, email);
+                        }
+                    }
+
+                    throw new IllegalStateException("Failed to create tenant admin due to repeated username collisions");
+                })
         );
     }
 
@@ -4422,11 +4518,10 @@ public class TenantUserAdminBridge {
         tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-            txExecutor.tenantReadOnlyTx(() -> {
-                return onlyActive
-                    ? tenantUserRepository.findActiveUsersByAccount(accountId)
-                    : tenantUserRepository.findByAccountId(accountId);
-            })
+                txExecutor.tenantReadOnlyTx(() -> onlyActive
+                        ? tenantUserRepository.findActiveUsersByAccount(accountId)
+                        : tenantUserRepository.findByAccountId(accountId)
+                )
         );
     }
 
@@ -4434,55 +4529,77 @@ public class TenantUserAdminBridge {
         tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
 
         tenantExecutor.run(schemaName, () ->
-            txExecutor.tenantTx(() -> {
-                int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
-                if (updated == 0) {
-                    throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
-                }
-                return null;
-            })
+                txExecutor.tenantTx(() -> {
+                    int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
+                    if (updated == 0) {
+                        throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
+                    }
+                    return null;
+                })
         );
     }
 
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-            schemaName, TENANT_USERS_TABLE,
-            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
-            0
+                schemaName, TENANT_USERS_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
+                0
         );
     }
 
     public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-            schemaName, TENANT_USERS_TABLE,
-            () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
-            0
+                schemaName, TENANT_USERS_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
+                0
         );
     }
 
     public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-            schemaName, TENANT_USERS_TABLE,
-            () -> txExecutor.tenantRequiresNew(() -> {
-                List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
-                users.forEach(u -> { if (!u.isDeleted()) u.softDelete(); });
-                tenantUserRepository.saveAll(users);
-                return users.size();
-            }),
-            0
+                schemaName, TENANT_USERS_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> {
+                    List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
+
+                    // ✅ congela o "agora" uma vez (consistência)
+                    LocalDateTime now = appClock.now();
+                    long base = appClock.epochMillis();
+
+                    long seq = 0;
+                    for (TenantUser u : users) {
+                        if (!u.isDeleted()) {
+                            // ✅ sufixo por usuário para evitar colisão de username/email
+                            u.softDelete(now, base + (seq++));
+                            u.setUpdatedAt(now);
+                        }
+                    }
+
+                    tenantUserRepository.saveAll(users);
+                    return users.size();
+                }),
+                0
         );
     }
 
     public int restoreAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-            schemaName, TENANT_USERS_TABLE,
-            () -> txExecutor.tenantRequiresNew(() -> {
-                List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
-                users.forEach(u -> { if (u.isDeleted()) u.restore(); });
-                tenantUserRepository.saveAll(users);
-                return users.size();
-            }),
-            0
+                schemaName, TENANT_USERS_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> {
+                    List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
+
+                    LocalDateTime now = appClock.now();
+
+                    for (TenantUser u : users) {
+                        if (u.isDeleted()) {
+                            u.restore();
+                            u.setUpdatedAt(now);
+                        }
+                    }
+
+                    tenantUserRepository.saveAll(users);
+                    return users.size();
+                }),
+                0
         );
     }
 }
@@ -4504,49 +4621,41 @@ public class Multitenancy001Application {
 }
 package brito.com.multitenancy001.shared.account;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class AccountResolver {
 
-    private final AccountRepository accountRepository;
+	private final AccountRepository accountRepository;
+	private final AppClock appClock;
 
-    /**
-     * Resolve conta no schema PUBLIC e já valida se existe e se está ativa.
-     * Retorna apenas um snapshot mínimo (sem expor o domínio do controlplane).
-     */
-    public AccountSnapshot resolveActiveAccountBySlug(String slug) {
-        TenantContext.clear(); // garante PUBLIC
+	/**
+	 * Resolve conta no schema PUBLIC e já valida se existe e se está ativa. Retorna
+	 * apenas um snapshot mínimo (sem expor o domínio do controlplane).
+	 */
+	public AccountSnapshot resolveActiveAccountBySlug(String slug) {
+		LocalDateTime now = appClock.now();
+		TenantContext.clear(); // garante PUBLIC
 
-        Account account = accountRepository
-                .findBySlugAndDeletedFalse(slug)
-                .orElseThrow(() -> new ApiException(
-                        "ACCOUNT_NOT_FOUND",
-                        "Conta não encontrada",
-                        404
-                ));
+		Account account = accountRepository.findBySlugAndDeletedFalse(slug)
+				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-        if (!account.isActive()) {
-            throw new ApiException(
-                    "ACCOUNT_INACTIVE",
-                    "Conta inativa",
-                    403
-            );
-        }
+		if (!account.isActive(now)) {
+			throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+		}
 
-        return new AccountSnapshot(
-                account.getId(),
-                account.getSchemaName(),
-                account.getStatus().name()
-        );
-    }
+		return new AccountSnapshot(account.getId(), account.getSchemaName(), account.getStatus().name());
+	}
 }
 package brito.com.multitenancy001.shared.account;
 
@@ -4557,11 +4666,13 @@ public record AccountSnapshot(
 ) {}
 package brito.com.multitenancy001.shared.api.dto.auth;
 
-
-
 public record JwtResponse(
     String accessToken,
     String refreshToken,
+    /**
+     * HTTP Authorization scheme (ex: "Bearer").
+     * NÃO confundir com o "authDomain" do JWT (TENANT/CONTROLPLANE/etc).
+     */
     String tokenType,
     Long userId,
     String username,
@@ -4575,15 +4686,17 @@ public record JwtResponse(
             tokenType = "Bearer";
         }
     }
-    
-    // Constructor conveniência
-    public JwtResponse(String accessToken, String refreshToken, 
-                      Long userId, String username, String email, 
-                      String role, Long accountId, String tenantSchema) {
-        this(accessToken, refreshToken, "Bearer", 
+
+    public JwtResponse(
+            String accessToken, String refreshToken,
+            Long userId, String username, String email,
+            String role, Long accountId, String tenantSchema
+    ) {
+        this(accessToken, refreshToken, "Bearer",
              userId, username, email, role, accountId, tenantSchema);
     }
-}package brito.com.multitenancy001.shared.api.error;
+}
+package brito.com.multitenancy001.shared.api.error;
 
 
 
@@ -4674,14 +4787,17 @@ public class ApiException extends RuntimeException {
     }
 }package brito.com.multitenancy001.shared.api.error;
 
+import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -4690,193 +4806,185 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
+@Slf4j
 public class GlobalExceptionHandler {
+
+    private final AppClock appClock;
+
+    private LocalDateTime now() {
+        return appClock.now();
+    }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiEnumErrorResponse> handleNotReadable(HttpMessageNotReadableException ex) {
-        
+
         Throwable cause = ex.getCause();
-        
+
         if (cause instanceof InvalidFormatException ife) {
             Class<?> targetType = ife.getTargetType();
-            
+
             if (targetType != null && targetType.isEnum()) {
                 String fieldName = ife.getPath().isEmpty() ? "status" : ife.getPath().get(0).getFieldName();
                 String invalidValue = ife.getValue() != null ? ife.getValue().toString() : "null";
-                
+
                 List<String> allowedValues = Arrays.stream(targetType.getEnumConstants())
-                    .map(Object::toString)
-                    .toList();
-                
+                        .map(Object::toString)
+                        .toList();
+
                 return ResponseEntity.badRequest().body(
-                    ApiEnumErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .error("INVALID_ENUM")
-                        .message("Valor inválido para o campo " + fieldName)
-                        .field(fieldName)
-                        .invalidValue(invalidValue)
-                        .allowedValues(allowedValues)
-                        .build()
+                        ApiEnumErrorResponse.builder()
+                                .timestamp(now())
+                                .error("INVALID_ENUM")
+                                .message("Valor inválido para o campo " + fieldName)
+                                .field(fieldName)
+                                .invalidValue(invalidValue)
+                                .allowedValues(allowedValues)
+                                .build()
                 );
             }
         }
-        
+
         return ResponseEntity.badRequest().body(
-            ApiEnumErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .error("INVALID_REQUEST_BODY")
-                .message("Corpo da requisição inválido")
-                .build()
+                ApiEnumErrorResponse.builder()
+                        .timestamp(now())
+                        .error("INVALID_REQUEST_BODY")
+                        .message("Corpo da requisição inválido")
+                        .build()
         );
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiEnumErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        
-        String errorMessage = ex.getMostSpecificCause().getMessage();
-        
-        // Log para debug
-        System.out.println("=== DEBUG DataIntegrityViolationException ===");
-        System.out.println("Error message: " + errorMessage);
-        
-        // Verifica qual constraint foi violada
+
+        String errorMessage = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        if (!StringUtils.hasText(errorMessage)) errorMessage = "";
+
+        log.debug("DataIntegrityViolationException: {}", errorMessage);
+
         if (errorMessage.contains("company_doc_number")) {
             String cnpj = extractValue(errorMessage, "company_doc_number");
             return ResponseEntity.status(409).body(
-                ApiEnumErrorResponse.builder()
-                    .timestamp(LocalDateTime.now())
-                    .error("DUPLICATE_CNPJ")
-                    .message("Já existe uma conta com o CNPJ " + cnpj)
-                    .field("companyDocNumber")
-                    .invalidValue(cnpj)
-                    .build()
+                    ApiEnumErrorResponse.builder()
+                            .timestamp(now())
+                            .error("DUPLICATE_CNPJ")
+                            .message("Já existe uma conta com o CNPJ " + cnpj)
+                            .field("companyDocNumber")
+                            .invalidValue(cnpj)
+                            .build()
             );
         }
-        
+
         if (errorMessage.contains("company_email")) {
             String email = extractValue(errorMessage, "company_email");
             return ResponseEntity.status(409).body(
-                ApiEnumErrorResponse.builder()
-                    .timestamp(LocalDateTime.now())
-                    .error("DUPLICATE_EMAIL")
-                    .message("Já existe uma conta com o email " + email)
-                    .field("companyEmail")
-                    .invalidValue(email)
-                    .build()
+                    ApiEnumErrorResponse.builder()
+                            .timestamp(now())
+                            .error("DUPLICATE_EMAIL")
+                            .message("Já existe uma conta com o email " + email)
+                            .field("companyEmail")
+                            .invalidValue(email)
+                            .build()
             );
         }
-        
+
         if (errorMessage.contains("slug")) {
             String slug = extractValue(errorMessage, "slug");
             return ResponseEntity.status(409).body(
-                ApiEnumErrorResponse.builder()
-                    .timestamp(LocalDateTime.now())
-                    .error("DUPLICATE_SLUG")
-                    .message("Já existe uma conta com o slug " + slug)
-                    .field("slug")
-                    .invalidValue(slug)
-                    .build()
+                    ApiEnumErrorResponse.builder()
+                            .timestamp(now())
+                            .error("DUPLICATE_SLUG")
+                            .message("Já existe uma conta com o slug " + slug)
+                            .field("slug")
+                            .invalidValue(slug)
+                            .build()
             );
         }
-        
+
         if (errorMessage.contains("schema_name")) {
             String schema = extractValue(errorMessage, "schema_name");
             return ResponseEntity.status(409).body(
-                ApiEnumErrorResponse.builder()
-                    .timestamp(LocalDateTime.now())
-                    .error("DUPLICATE_SCHEMA")
-                    .message("Erro interno: schema " + schema + " já existe")
-                    .build()
+                    ApiEnumErrorResponse.builder()
+                            .timestamp(now())
+                            .error("DUPLICATE_SCHEMA")
+                            .message("Erro interno: schema " + schema + " já existe")
+                            .build()
             );
         }
-        
-        // Caso genérico
+
         return ResponseEntity.status(409).body(
-            ApiEnumErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .error("DUPLICATE_ENTRY")
-                .message("Registro duplicado. Verifique os dados informados.")
-                .build()
+                ApiEnumErrorResponse.builder()
+                        .timestamp(now())
+                        .error("DUPLICATE_ENTRY")
+                        .message("Registro duplicado. Verifique os dados informados.")
+                        .build()
         );
     }
-    
+
     private String extractValue(String message, String fieldName) {
         try {
-            // Padrão para PostgreSQL: "Chave (company_doc_number)=(4254567235667712) já existe."
-            Pattern pattern = Pattern.compile("\\(" + fieldName + "\\)=\\(([^\\)]+)\\)");
+            // PostgreSQL pt-BR: "Chave (company_doc_number)=(...) já existe."
+            Pattern pattern = Pattern.compile("\\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher = pattern.matcher(message);
-            
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
-            
-            // Padrão alternativo: "Key (company_doc_number)=(value) already exists."
-            Pattern pattern2 = Pattern.compile("Key \\(" + fieldName + "\\)=\\(([^\\)]+)\\)");
+            if (matcher.find()) return matcher.group(1);
+
+            // Alternativo EN: "Key (company_doc_number)=(...) already exists."
+            Pattern pattern2 = Pattern.compile("Key \\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher2 = pattern2.matcher(message);
-            
-            if (matcher2.find()) {
-                return matcher2.group(1);
-            }
-            
+            if (matcher2.find()) return matcher2.group(1);
+
         } catch (Exception e) {
-            System.out.println("Erro ao extrair valor: " + e.getMessage());
+            log.debug("Erro ao extrair valor do erro de constraint: {}", e.getMessage());
         }
-        
+
         return "não identificado";
     }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiEnumErrorResponse> handleApi(ApiException ex) {
         return ResponseEntity.status(ex.getStatus()).body(
-            ApiEnumErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .error(ex.getError())
-                .message(ex.getMessage())
-                .build()
+                ApiEnumErrorResponse.builder()
+                        .timestamp(now())
+                        .error(ex.getError())
+                        .message(ex.getMessage())
+                        .build()
         );
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
-        // 🔥 REMOVA os logs de debug do handler genérico
-        // System.out.println("=== DEBUG Generic Exception ===");
-        // System.out.println("Exception type: " + ex.getClass().getName());
-        // System.out.println("Message: " + ex.getMessage());
-        // ex.printStackTrace();
-        
-        return ResponseEntity.internalServerError().body(
-            ApiEnumErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .error("INTERNAL_SERVER_ERROR")
-                .message("Erro interno inesperado. Contate o suporte.")
-                .build()
-        );
-    }
-    
-    
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(
-            MethodArgumentNotValidException ex) {
-        
+    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+
         List<String> errors = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
-        
+
         ApiErrorResponse errorResponse = ApiErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
+                .timestamp(now())
                 .error("VALIDATION_ERROR")
                 .message("Erro de validação")
                 .details(errors)
                 .build();
-        
+
         return ResponseEntity.badRequest().body(errorResponse);
     }
-    
-    
-    
-}package brito.com.multitenancy001.shared.context;
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
+        // log só o suficiente (sem stacktrace enorme por padrão)
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+
+        return ResponseEntity.internalServerError().body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(now())
+                        .error("INTERNAL_SERVER_ERROR")
+                        .message("Erro interno inesperado. Contate o suporte.")
+                        .build()
+        );
+    }
+}
+package brito.com.multitenancy001.shared.context;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
@@ -5092,6 +5200,52 @@ public interface RoleAuthority {
      */
     default boolean isAdmin() {
         return false;
+    }
+}
+package brito.com.multitenancy001.shared.time;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
+public interface AppClock {
+
+    Clock clock();
+
+    default Instant instant() {
+        return Instant.now(clock());
+    }
+
+    default LocalDateTime now() {
+        return LocalDateTime.now(clock());
+    }
+
+    default ZoneId zone() {
+        return clock().getZone();
+    }
+
+    default long epochMillis() {
+        return instant().toEpochMilli();
+    }
+}
+package brito.com.multitenancy001.shared.time;
+
+import java.time.Clock;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SystemAppClock implements AppClock {
+
+    private final Clock clock;
+
+    public SystemAppClock(Clock clock) {
+        this.clock = clock;
+    }
+
+    @Override
+    public Clock clock() {
+        return clock;
     }
 }
 package brito.com.multitenancy001.shared.validation; // ou .validation
@@ -5968,6 +6122,7 @@ public class TenantAuthService {
 package brito.com.multitenancy001.tenant.application.product;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
@@ -5998,6 +6153,7 @@ public class TenantProductService {
     private final SupplierRepository supplierRepository;
     private final CategoryRepository categoryRepository;
     private final SubcategoryRepository subcategoryRepository;
+    private final AppClock appClock;
 
     @Transactional(readOnly = true)
     public Page<Product> findAll(Pageable pageable) {
@@ -6168,7 +6324,7 @@ public class TenantProductService {
     @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
-        product.softDelete();
+        product.softDelete(appClock.now());
         productRepository.save(product);
     }
 
@@ -6250,34 +6406,8 @@ public class TenantProvisioningService {
 }
 package brito.com.multitenancy001.tenant.application.provisioning;
 
-import lombok.RequiredArgsConstructor;
-import org.flywaydb.core.Flyway;
-import org.springframework.stereotype.Service;
-
-import javax.sql.DataSource;
-
-@Service
-@RequiredArgsConstructor
-public class TenantSchemaMigrationService {
-
-    private final DataSource dataSource;
-
-    public void migrateTenant(String schemaName) {
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .schemas(schemaName)
-                .defaultSchema(schemaName) // 🔥 ESSENCIAL
-                .createSchemas(false)
-                .locations("classpath:db/migration/tenants")
-                .baselineOnMigrate(true)
-                .load();
-
-        flyway.migrate();
-    }
-}
-package brito.com.multitenancy001.tenant.application.provisioning;
-
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -6299,7 +6429,7 @@ import org.springframework.util.StringUtils;
 public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantSchemaMigrationService tenantSchemaMigrationService;
+    private final TenantSchemaFlywayMigrationService tenantSchemaMigrationService;
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
     
@@ -6370,7 +6500,7 @@ public class TenantSchemaProvisioningService {
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
-        tenantSchemaMigrationService.migrateTenant(normalized);
+        tenantSchemaMigrationService.migrateTenantSchema(normalized);
     }
 
     /**
@@ -6456,6 +6586,7 @@ import brito.com.multitenancy001.shared.account.AccountResolver;
 import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
@@ -6465,7 +6596,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -6480,6 +6610,8 @@ public class TenantUserService {
     private final AccountResolver accountResolver;
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
+    private final AppClock appClock;
+
 
     // ===== helpers =====
     private <T> T runInTenant(String schema, Callable<T> action) {
@@ -6655,7 +6787,7 @@ public class TenantUserService {
             );
 
             user.setPasswordResetToken(token);
-            user.setPasswordResetExpires(LocalDateTime.now().plusHours(1));
+            user.setPasswordResetExpires(appClock.now().plusHours(1));
             tenantUserTxService.save(user);
 
             return token;
@@ -6692,7 +6824,8 @@ public class TenantUserService {
                     phone,
                     locale,
                     timezone,
-                    LocalDateTime.now()
+                    appClock.now()
+
             );
             return tenantUserApiMapper.toDetails(updated);
         });
@@ -6702,6 +6835,7 @@ package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -6723,6 +6857,11 @@ public class TenantUserTxService {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AppClock appClock;
+
+    private LocalDateTime now() {
+        return appClock.now();
+    }
 
     // =========================
     // CREATE
@@ -6733,7 +6872,7 @@ public class TenantUserTxService {
             String username,
             String email,
             String rawPassword,
-            TenantRole  roleEnum,
+            TenantRole roleEnum,
             String phone,
             String avatarUrl,
             LinkedHashSet<String> permissions
@@ -6758,18 +6897,16 @@ public class TenantUserTxService {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
-     
-     // ✅ normaliza e valida permissions AQUI (fonte de verdade)
+        // ✅ normaliza e valida permissions AQUI (fonte de verdade)
         final LinkedHashSet<String> normalizedPermissions;
         try {
-        	normalizedPermissions = PermissionScopeValidator.normalizeTenant(
-        	        permissions == null ? new LinkedHashSet<>() : permissions
-        	);
-
+            normalizedPermissions = PermissionScopeValidator.normalizeTenant(
+                    permissions == null ? new LinkedHashSet<>() : permissions
+            );
         } catch (IllegalArgumentException e1) {
             throw new ApiException("INVALID_PERMISSION", e1.getMessage(), 400);
         }
-        
+
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
                 .name(name.trim())
@@ -6783,31 +6920,30 @@ public class TenantUserTxService {
                 .avatarUrl(avatarUrl)
                 .timezone("America/Sao_Paulo")
                 .locale("pt_BR")
-                // ❌ remova createdAt daqui (o Hibernate já seta via @CreationTimestamp no entity)
                 .build();
 
-     // ✅ Se trouxe permissions válidas e não vazias, respeita.
-     // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
+        // ✅ Se trouxe permissions válidas e não vazias, respeita.
+        // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
         if (!normalizedPermissions.isEmpty()) {
             user.setPermissions(new LinkedHashSet<>(normalizedPermissions));
         }
 
-
         return tenantUserRepository.save(user);
     }
-    
+
     public TenantUser setSuspendedByAdmin(Long userId, Long accountId, boolean suspended) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
 
+        LocalDateTime now = now();
         user.setSuspendedByAdmin(suspended);
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
- 
-    
+
     @Transactional(readOnly = true)
     public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountId) {
         if (accountId == null) {
@@ -6835,7 +6971,7 @@ public class TenantUserTxService {
             String phone,
             String locale,
             String timezone,
-            LocalDateTime now
+            LocalDateTime nowParam
     ) {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
@@ -6843,17 +6979,17 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-        // Atualiza apenas o que veio preenchido
         if (StringUtils.hasText(name)) user.setName(name.trim());
         if (phone != null) user.setPhone(phone);
         if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
         if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
 
-        user.setUpdatedAt(now != null ? now : LocalDateTime.now());
+        LocalDateTime now = (nowParam != null ? nowParam : now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
- 
-    
+
     @Transactional(transactionManager = "tenantTransactionManager")
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
         int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
@@ -6861,9 +6997,6 @@ public class TenantUserTxService {
             throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
         }
     }
-
-    
-    
 
     // =========================
     // LIST / GET
@@ -6875,7 +7008,6 @@ public class TenantUserTxService {
 
     @Transactional(readOnly = true)
     public List<TenantUser> listActiveUsers(Long accountId) {
-        // CORREÇÃO: Use o novo método customizado
         return tenantUserRepository.findActiveUsersByAccount(accountId);
     }
 
@@ -6885,14 +7017,12 @@ public class TenantUserTxService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
     }
 
-    // usado em login/validações (sem deleted=true)
     @Transactional(readOnly = true)
     public TenantUser getByUsername(Long accountId, String username) {
         return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
     }
 
-    // ✅ isto substitui seu "getByEmailActive"
     @Transactional(readOnly = true)
     public TenantUser getByEmailActive(Long accountId, String email) {
         TenantUser user = tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(email, accountId)
@@ -6905,7 +7035,7 @@ public class TenantUserTxService {
     }
 
     // =========================
-    // UPDATE STATUS 
+    // UPDATE STATUS
     // =========================
     public TenantUser updateStatus(Long userId, Long accountId, boolean active) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
@@ -6913,14 +7043,14 @@ public class TenantUserTxService {
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
 
-        // ✅ ação do admin: suspende/reativa manualmente
-        user.setSuspendedByAdmin(!active);
+        LocalDateTime now = now();
 
-        // ✅ NÃO mexe em suspendedByAccount aqui (quem manda é o status da conta)
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setSuspendedByAdmin(!active);
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
-    
+
     // =========================
     // CONTAGEM
     // =========================
@@ -6935,8 +7065,10 @@ public class TenantUserTxService {
 
         if (user.isDeleted()) throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
 
-        user.softDelete();
-        user.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime now = now();
+        user.softDelete(now, appClock.epochMillis()); // ✅ novo método clock-aware
+        user.setUpdatedAt(now);
+
         tenantUserRepository.save(user);
     }
 
@@ -6946,8 +7078,11 @@ public class TenantUserTxService {
 
         if (!user.isDeleted()) throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
 
+        LocalDateTime now = now();
+
         user.restore();
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
+
         return tenantUserRepository.save(user);
     }
 
@@ -6957,7 +7092,6 @@ public class TenantUserTxService {
         tenantUserRepository.delete(user);
     }
 
-   
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
@@ -6966,10 +7100,12 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
+        LocalDateTime now = now();
+
         user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordChangedAt(now);
         user.setMustChangePassword(false);
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
 
         return tenantUserRepository.save(user);
     }
@@ -6988,54 +7124,51 @@ public class TenantUserTxService {
         if (user.getPasswordResetToken() == null || !user.getPasswordResetToken().equals(token)) {
             throw new ApiException("INVALID_TOKEN", "Token não confere", 400);
         }
-        if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(LocalDateTime.now())) {
+
+        LocalDateTime now = now();
+
+        if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
             throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordChangedAt(now);
         user.setMustChangePassword(false);
 
         user.setPasswordResetToken(null);
         user.setPasswordResetExpires(null);
 
-        user.setUpdatedAt(LocalDateTime.now());
+        user.setUpdatedAt(now);
         tenantUserRepository.save(user);
     }
 
     // usado no generatePasswordResetToken
     public TenantUser save(TenantUser user) {
-        user.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime now = now();
+        user.setUpdatedAt(now);
         return tenantUserRepository.save(user);
     }
-    
 
-    
-    
-    
-public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
-    TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
+    public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
+        TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
 
-    TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
+        TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
 
-    // Aqui NÃO valida regra de negócio (isso fica no service de cima),
-    // apenas aplica a troca.
-    from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
-    to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+        LocalDateTime now = now();
 
-    from.setUpdatedAt(LocalDateTime.now());
-    to.setUpdatedAt(LocalDateTime.now());
+        from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
+        to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
 
-    tenantUserRepository.save(from);
-    tenantUserRepository.save(to);
+        from.setUpdatedAt(now);
+        to.setUpdatedAt(now);
+
+        tenantUserRepository.save(from);
+        tenantUserRepository.save(to);
+    }
 }
-  
-
-
-    
-}package brito.com.multitenancy001.tenant.application.username.generator;
+package brito.com.multitenancy001.tenant.application.username.generator;
 
 import java.util.UUID;
 
@@ -7133,11 +7266,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-    name = "categories",
-    uniqueConstraints = @UniqueConstraint(
-        name = "uk_categories_name",
-        columnNames = "name"
-    )
+        name = "categories",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_categories_name",
+                columnNames = "name"
+        )
 )
 @Getter
 @Setter
@@ -7150,18 +7283,15 @@ public class Category {
     @Column(nullable = false, length = 100)
     private String name;
 
-    // Negócio
     @Column(nullable = false)
     private boolean active = true;
 
-    // Soft delete
     @Column(nullable = false)
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    // Auditoria
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -7170,19 +7300,18 @@ public class Category {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // =====================
-    // Regras de domínio
-    // =====================
-
-    public void softDelete() {
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.active = true;
@@ -7225,18 +7354,15 @@ public class Subcategory {
     @Column(nullable = false, length = 100)
     private String name;
 
-    // Negócio
     @Column(nullable = false)
     private boolean active = true;
 
-    // Soft delete
     @Column(nullable = false)
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    // Auditoria
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -7245,19 +7371,18 @@ public class Subcategory {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // =====================
-    // Regras de domínio
-    // =====================
-
-    public void softDelete() {
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.active = true;
@@ -7265,14 +7390,13 @@ public class Subcategory {
 }
 package brito.com.multitenancy001.tenant.domain.product;
 
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import brito.com.multitenancy001.tenant.domain.category.Category;
-import brito.com.multitenancy001.tenant.domain.category.Subcategory;
-import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -7281,12 +7405,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products", indexes = {
-    @Index(name = "idx_product_name", columnList = "name"),
- 
-    @Index(name = "idx_product_supplier", columnList = "supplier_id"),
-    @Index(name = "idx_product_created_at", columnList = "created_at"),
-    @Index(name = "idx_products_category_id", columnList = "category_id"),
-    @Index(name = "idx_products_subcategory_id", columnList = "subcategory_id")
+        @Index(name = "idx_product_name", columnList = "name"),
+        @Index(name = "idx_product_supplier", columnList = "supplier_id"),
+        @Index(name = "idx_product_created_at", columnList = "created_at"),
+        @Index(name = "idx_products_category_id", columnList = "category_id"),
+        @Index(name = "idx_products_subcategory_id", columnList = "subcategory_id")
 })
 @Getter
 @Setter
@@ -7306,7 +7429,7 @@ public class Product {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(length = 100,nullable=false)
+    @Column(length = 100, nullable = false)
     private String sku;
 
     @Column(precision = 10, scale = 2, nullable = false)
@@ -7328,20 +7451,18 @@ public class Product {
     @Column(name = "profit_margin", precision = 5, scale = 2)
     private BigDecimal profitMargin;
 
-    // ✅ FK simples (category_id) - obrigatório
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
-        name = "category_id",
-        nullable = false,
-        foreignKey = @ForeignKey(name = "fk_products_category")
+            name = "category_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_products_category")
     )
     private Category category;
 
-    // ✅ CORREÇÃO: FK simples para subcategory (REMOVER a composta)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
-        name = "subcategory_id",
-        foreignKey = @ForeignKey(name = "fk_products_subcategory")
+            name = "subcategory_id",
+            foreignKey = @ForeignKey(name = "fk_products_subcategory")
     )
     private Subcategory subcategory;
 
@@ -7357,7 +7478,7 @@ public class Product {
     @Column(name = "barcode", length = 50)
     private String barcode;
 
-    @Column(name = "active", nullable=false)
+    @Column(name = "active", nullable = false)
     @Builder.Default
     private Boolean active = true;
 
@@ -7382,15 +7503,15 @@ public class Product {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @Column(name = "deleted",nullable=false)
+    @Column(name = "deleted", nullable = false)
     @Builder.Default
     private Boolean deleted = false;
 
     @PrePersist
     protected void onCreate() {
-       
         if (this.stockQuantity == null) this.stockQuantity = 0;
         if (this.active == null) this.active = true;
+        if (this.deleted == null) this.deleted = false;
         calculateProfitMargin();
     }
 
@@ -7403,15 +7524,30 @@ public class Product {
         if (this.costPrice != null && this.costPrice.compareTo(BigDecimal.ZERO) > 0 && this.price != null) {
             BigDecimal profit = this.price.subtract(this.costPrice);
             this.profitMargin = profit
-                .divide(this.costPrice, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100));
+                    .divide(this.costPrice, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
         }
     }
 
-    public void softDelete() {
+    // =====================
+    // Regras de domínio
+    // =====================
+
+    public void softDelete(LocalDateTime now) {
+        if (Boolean.TRUE.equals(this.deleted)) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
+    }
+
+    public void restore() {
+        if (!Boolean.TRUE.equals(this.deleted)) return;
+
+        this.deleted = false;
+        this.deletedAt = null;
+        this.active = true;
     }
 
     public void updatePrice(BigDecimal newPrice) {
@@ -7426,7 +7562,7 @@ public class Product {
         this.costPrice = newCostPrice;
         calculateProfitMargin();
     }
-    
+
     public void addToStock(Integer quantity) {
         if (quantity == null || quantity <= 0) {
             throw new IllegalArgumentException("Quantidade deve ser positiva");
@@ -7446,7 +7582,8 @@ public class Product {
         }
         this.stockQuantity -= quantity;
     }
-}package brito.com.multitenancy001.tenant.domain.sale;
+}
+package brito.com.multitenancy001.tenant.domain.sale;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -7617,12 +7754,11 @@ public enum SaleStatus {
 }
 package brito.com.multitenancy001.tenant.domain.supplier;
 
+import brito.com.multitenancy001.tenant.domain.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import brito.com.multitenancy001.tenant.domain.product.Product;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -7644,7 +7780,6 @@ import java.util.UUID;
 @ToString(exclude = {"products"})
 public class Supplier {
 
-    // ✅ Opção A: DB gera UUID (recomendado se sua migration usa DEFAULT gen_random_uuid())
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
@@ -7665,7 +7800,6 @@ public class Supplier {
     @Column(columnDefinition = "TEXT")
     private String address;
 
-    // ✅ Sem unique=true (unicidade parcial está na migration)
     @Column(length = 20)
     private String document;
 
@@ -7714,15 +7848,22 @@ public class Supplier {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public void softDelete() {
+    // =====================
+    // Regras de domínio
+    // =====================
+
+    public void softDelete(LocalDateTime now) {
         if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
         this.deleted = true;
-        this.deletedAt = LocalDateTime.now();
+        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
+
         this.deleted = false;
         this.deletedAt = null;
         this.active = true;
@@ -7805,9 +7946,8 @@ public class TenantUser {
         name = "tenant_user_permissions",
         joinColumns = @JoinColumn(name = "tenant_user_id")
     )
-    @Column(name = "permission",nullable=false, length = 120)
+    @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-
     private LinkedHashSet<String> permissions = new LinkedHashSet<>();
 
     @Column(name = "last_login")
@@ -7862,38 +8002,30 @@ public class TenantUser {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-   @PrePersist
-@PreUpdate
-protected void onSave() {
-    if (permissions == null) permissions = new LinkedHashSet<>();
-    if (role == null) throw new IllegalStateException("Role is required");
+    @PrePersist
+    @PreUpdate
+    protected void onSave() {
+        if (role == null) throw new IllegalStateException("Role is required");
+        if (permissions == null) permissions = new LinkedHashSet<>();
 
-    if (username != null) username = username.toLowerCase().trim();
-    if (email != null) email = email.toLowerCase().trim();
+        if (username != null) username = username.toLowerCase().trim();
+        if (email != null) email = email.toLowerCase().trim();
 
-    // 1) se não veio nada, aplica defaults por role via TenantRolePermissions
-    if (permissions.isEmpty()) {
-        permissions = new LinkedHashSet<>(
-                TenantRolePermissions
-                        .permissionsFor(role)
-                        .stream()
-                        .map(Enum::name)
-                        .toList()
-        );
+        // 1) defaults por role (somente se vier vazio)
+        if (permissions.isEmpty()) {
+            permissions = new LinkedHashSet<>(
+                TenantRolePermissions.permissionsFor(role).stream()
+                    .map(Enum::name)
+                    .toList()
+            );
+        }
+
+        // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
+        permissions = new LinkedHashSet<>(PermissionScopeValidator.normalizeTenant(permissions));
     }
 
-    // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
-    LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeTenant(permissions);
-
-    // 3) volta para LinkedHashSet preservando ordem (se quiser preservar)
-    permissions = new LinkedHashSet<>(new LinkedHashSet<>(normalized));
-}
-
-
-
     public boolean isAccountNonLocked(LocalDateTime now) {
-    	var accountLocked = (lockedUntil != null && lockedUntil.isAfter(now));
-        return !accountLocked;
+        return lockedUntil == null || !lockedUntil.isAfter(now);
     }
 
     public boolean isEnabledForLogin() {
@@ -7904,63 +8036,69 @@ protected void onSave() {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-    public void softDelete() {
+    /**
+     * ✅ Clock-aware: agora o tempo vem de fora (AppClock).
+     * Chamada típica: user.softDelete(appClock.now(), appClock.epochMillis());
+     */
+    public void softDelete(LocalDateTime now, long suffixEpochMillis) {
         if (deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
 
         deleted = true;
-        deletedAt = LocalDateTime.now();
+        deletedAt = now;
 
         suspendedByAccount = true;
         suspendedByAdmin = true;
 
-        String ts = String.valueOf(System.currentTimeMillis());
+        String ts = String.valueOf(suffixEpochMillis);
 
-        // ✅ username: normaliza para ficar compatível com o pattern e preserva o sufixo (timestamp)
-        {
-            String prefix = "deleted_";
-            String suffix = "_" + ts;
+        renameUsernameForDelete(ts);
+        renameEmailForDelete(ts);
+    }
 
-            String middle = (username == null ? "user" : username)
+    private void renameUsernameForDelete(String ts) {
+        String prefix = "deleted_";
+        String suffix = "_" + ts;
+
+        String middle = (username == null ? "user" : username)
                 .toLowerCase()
                 .trim()
                 .replaceAll("[^a-z0-9._-]", "_")
                 .replaceAll("_{2,}", "_")
                 .replaceAll("^_|_$", "");
 
-            if (middle.isBlank()) middle = "user";
+        if (middle.isBlank()) middle = "user";
 
-            int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
-            if (maxMiddleLen < 1) maxMiddleLen = 1;
+        int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
+        if (maxMiddleLen < 1) maxMiddleLen = 1;
 
-            if (middle.length() > maxMiddleLen) {
-                middle = middle.substring(0, maxMiddleLen);
-                middle = middle.replaceAll("_+$", "");
-                if (middle.isBlank()) middle = "u";
-            }
-
-            username = prefix + middle + suffix;
+        if (middle.length() > maxMiddleLen) {
+            middle = middle.substring(0, maxMiddleLen).replaceAll("_+$", "");
+            if (middle.isBlank()) middle = "u";
         }
 
-        // ✅ email: preserva o sufixo e respeita o tamanho máximo (não precisa normalizar como username)
-        {
-            String prefix = "deleted_";
-            String suffix = "_" + ts;
+        username = prefix + middle + suffix;
+    }
 
-            String middle = (email == null ? "deleted" : email).trim();
+    private void renameEmailForDelete(String ts) {
+        String prefix = "deleted_";
+        String suffix = "_" + ts;
 
-            int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
-            if (maxMiddleLen < 1) maxMiddleLen = 1;
+        String middle = (email == null ? "deleted" : email).trim();
 
-            if (middle.length() > maxMiddleLen) {
-                middle = middle.substring(0, maxMiddleLen);
-            }
+        int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
+        if (maxMiddleLen < 1) maxMiddleLen = 1;
 
-            email = prefix + middle + suffix;
+        if (middle.length() > maxMiddleLen) {
+            middle = middle.substring(0, maxMiddleLen);
         }
+
+        email = prefix + middle + suffix;
     }
 
     public void restore() {
         if (!deleted) return;
+
         deleted = false;
         deletedAt = null;
 

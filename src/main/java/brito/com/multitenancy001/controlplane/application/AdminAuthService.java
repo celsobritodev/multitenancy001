@@ -18,7 +18,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminAuthService {
 
-    private final AuthenticationManager authenticationManager;
+    private static final String DEFAULT_SCHEMA = "public";
+	private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
@@ -54,12 +55,12 @@ public class AdminAuthService {
         String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
-                "public"
+                DEFAULT_SCHEMA
         );
 
         String refreshToken = jwtTokenProvider.generateRefreshToken(
                 user.getUsername(),
-                "public"
+                DEFAULT_SCHEMA
         );
 
         return new JwtResponse(
@@ -70,7 +71,7 @@ public class AdminAuthService {
                 user.getEmail(),
                 user.getRole().name(),
                 user.getAccount().getId(),
-                "public"
+                DEFAULT_SCHEMA
         );
     }
 }

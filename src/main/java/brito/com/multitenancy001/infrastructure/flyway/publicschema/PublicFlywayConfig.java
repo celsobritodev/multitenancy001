@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.db.flyway;
+package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import javax.sql.DataSource;
 
@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 public class PublicFlywayConfig {
 
     @Bean
-    public Flyway flywayAccount(DataSource dataSource) {
+    public Flyway flywayPublic(DataSource dataSource) {
         Flyway flyway = Flyway.configure()
                 .dataSource(dataSource)
                 .schemas("public")
@@ -18,9 +18,7 @@ public class PublicFlywayConfig {
                 .baselineOnMigrate(true)
                 .load();
 
-        // 🚀 EXECUTA NA INICIALIZAÇÃO
-        //flyway.migrate();
-
+      
         return flyway;
     }
 }

@@ -38,6 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             final String authHeader = httpServletRequest.getHeader("Authorization");
 
+            // "Bearer ..." é esquema HTTP, não é domínio do token
             if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
@@ -50,21 +51,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            final String tokenType = jwtTokenProvider.getTokenType(jwt);
+            // ✅ agora é claro: authDomain = TENANT/CONTROLPLANE/...
+            final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
             // ✅ TRAVA: token tem que bater com a rota
-            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(tokenType)) {
+            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
-            if (requiresTenant(httpServletRequest) && !"TENANT".equals(tokenType)) {
+            if (requiresTenant(httpServletRequest) && !"TENANT".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
             // só aceitamos TENANT / CONTROLPLANE aqui
-            if (!"TENANT".equals(tokenType) && !"CONTROLPLANE".equals(tokenType)) {
+            if (!"TENANT".equals(authDomain) && !"CONTROLPLANE".equals(authDomain)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
@@ -78,7 +80,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails;
 
-                if ("TENANT".equals(tokenType)) {
+                if ("TENANT".equals(authDomain)) {
                     final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
 
                     if (!StringUtils.hasText(tenantSchema) || "public".equalsIgnoreCase(tenantSchema)) {
@@ -145,5 +147,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = httpServletRequest.getRequestURI();
         return path.startsWith("/api/tenant/");
     }
-
 }

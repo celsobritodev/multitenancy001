@@ -24,6 +24,12 @@ import java.util.stream.Collectors;
 @Component
 public class JwtTokenProvider {
 
+    public static final String CLAIM_AUTHORITIES = "authorities";
+    public static final String CLAIM_AUTH_DOMAIN = "authDomain"; // <-- NOVO
+    public static final String CLAIM_CONTEXT = "context";
+    public static final String CLAIM_ACCOUNT_ID = "accountId";
+    public static final String CLAIM_USER_ID = "userId";
+
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
@@ -34,7 +40,6 @@ public class JwtTokenProvider {
     private long refreshExpirationInMs;
 
     private final AppClock appClock;
-
     private SecretKey key;
 
     public JwtTokenProvider(AppClock appClock) {
@@ -60,25 +65,20 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN CONTROLPLANE
+       ACCESS TOKEN - CONTROLPLANE
        ========================= */
-    public String generateControlPlaneToken(
-            Authentication authentication,
-            Long accountId,
-            String context
-    ) {
+    public String generateControlPlaneToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                // ✅ permission-first: authorities = CP_*
-                .claim("authorities", user.getAuthorities().stream()
+                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim("type", "CONTROLPLANE")
-                .claim("context", context)
-                .claim("accountId", accountId)
-                .claim("userId", user.getUserId())
+                .claim(CLAIM_AUTH_DOMAIN, "CONTROLPLANE") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .claim(CLAIM_USER_ID, user.getUserId())
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -86,25 +86,20 @@ public class JwtTokenProvider {
     }
 
     /* =========================
-       TOKEN TENANT
+       ACCESS TOKEN - TENANT
        ========================= */
-    public String generateTenantToken(
-            Authentication authentication,
-            Long accountId,
-            String context
-    ) {
+    public String generateTenantToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                // ✅ permission-first: authorities = TEN_*
-                .claim("authorities", user.getAuthorities().stream()
+                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim("type", "TENANT")
-                .claim("context", context)
-                .claim("accountId", accountId)
-                .claim("userId", user.getUserId())
+                .claim(CLAIM_AUTH_DOMAIN, "TENANT") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .claim(CLAIM_USER_ID, user.getUserId())
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -117,8 +112,8 @@ public class JwtTokenProvider {
     public String generateRefreshToken(String username, String context) {
         return Jwts.builder()
                 .subject(username)
-                .claim("type", "REFRESH")
-                .claim("context", context)
+                .claim(CLAIM_AUTH_DOMAIN, "REFRESH") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -133,9 +128,9 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(username)
-                .claim("type", "PASSWORD_RESET")
-                .claim("context", context)
-                .claim("accountId", accountId)
+                .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET") // <-- NOVO
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(oneHourMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -164,15 +159,14 @@ public class JwtTokenProvider {
     public String getContextFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
-        String context = claims.get("context", String.class);
+        String context = claims.get(CLAIM_CONTEXT, String.class);
         if (context == null) {
             context = claims.get("tenantSchema", String.class);
         }
 
-        String type = claims.get("type", String.class);
+        String authDomain = getAuthDomain(token);
 
-        // ✅ Só TENANT não pode ter public
-        if ("TENANT".equals(type) && "public".equalsIgnoreCase(context)) {
+        if ("TENANT".equals(authDomain) && "public".equalsIgnoreCase(context)) {
             throw new JwtException("Invalid context for TENANT token: public");
         }
 
@@ -184,28 +178,39 @@ public class JwtTokenProvider {
     }
 
     public Long getAccountIdFromToken(String token) {
-        return getAllClaimsFromToken(token).get("accountId", Long.class);
-    }
-
-    public String getTokenType(String token) {
-        return getAllClaimsFromToken(token).get("type", String.class);
-    }
-
-    public Long getUserIdFromToken(String token) {
-        return getAllClaimsFromToken(token).get("userId", Long.class);
+        return getAllClaimsFromToken(token).get(CLAIM_ACCOUNT_ID, Long.class);
     }
 
     /**
-     * ✅ NOVO: lê authorities do token (permission-first).
-     * Compatível com tokens antigos que ainda tenham "roles".
+     * ✅ NOVO: authDomain = TENANT/CONTROLPLANE/REFRESH/PASSWORD_RESET
+     * ✅ Compatível: se não existir, cai para claim antiga "type"
      */
+    public String getAuthDomain(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+
+        String authDomain = claims.get(CLAIM_AUTH_DOMAIN, String.class);
+        if (!StringUtils.hasText(authDomain)) {
+            authDomain = claims.get("type", String.class); // compat tokens antigos
+        }
+
+        return authDomain;
+    }
+
+    // Se você tinha o método getTokenType, mantenha como alias (opcional)
+    public String getTokenType(String token) {
+        return getAuthDomain(token);
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return getAllClaimsFromToken(token).get(CLAIM_USER_ID, Long.class);
+    }
+
     public List<String> getAuthoritiesFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
-        String authorities = claims.get("authorities", String.class);
-
+        String authorities = claims.get(CLAIM_AUTHORITIES, String.class);
         if (!StringUtils.hasText(authorities)) {
-            authorities = claims.get("roles", String.class);
+            authorities = claims.get("roles", String.class); // compat tokens antigos
         }
 
         return splitCsv(authorities);
@@ -240,23 +245,20 @@ public class JwtTokenProvider {
         }
     }
 
-    /* =========================
-       MÉTODOS AUXILIARES
-       ========================= */
     public boolean isControlPlaneToken(String token) {
-        return "CONTROLPLANE".equals(getTokenType(token));
+        return "CONTROLPLANE".equals(getAuthDomain(token));
     }
 
     public boolean isTenantToken(String token) {
-        return "TENANT".equals(getTokenType(token));
+        return "TENANT".equals(getAuthDomain(token));
     }
 
     public boolean isRefreshToken(String token) {
-        return "REFRESH".equals(getTokenType(token));
+        return "REFRESH".equals(getAuthDomain(token));
     }
 
     public boolean isPasswordResetToken(String token) {
-        return "PASSWORD_RESET".equals(getTokenType(token));
+        return "PASSWORD_RESET".equals(getAuthDomain(token));
     }
 
     public boolean isTokenInContext(String token, String expectedContext) {

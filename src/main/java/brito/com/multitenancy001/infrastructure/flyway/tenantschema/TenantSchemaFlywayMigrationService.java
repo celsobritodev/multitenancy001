@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.application.provisioning;
+package brito.com.multitenancy001.infrastructure.flyway.tenantschema;
 
 import lombok.RequiredArgsConstructor;
 import org.flywaydb.core.Flyway;
@@ -8,11 +8,11 @@ import javax.sql.DataSource;
 
 @Service
 @RequiredArgsConstructor
-public class TenantSchemaMigrationService {
+public class TenantSchemaFlywayMigrationService {
 
     private final DataSource dataSource;
 
-    public void migrateTenant(String schemaName) {
+    public void migrateTenantSchema(String schemaName) {
         Flyway flyway = Flyway.configure()
                 .dataSource(dataSource)
                 .schemas(schemaName)
