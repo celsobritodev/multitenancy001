@@ -1,4 +1,4 @@
--- V2__create_account_entitlements.sql
+-- V2__create_table_account_entitlements.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS account_entitlements (

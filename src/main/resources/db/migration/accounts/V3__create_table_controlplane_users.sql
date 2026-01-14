@@ -1,4 +1,4 @@
--- V3__create_controlplane_users.sql
+-- V3__create_table_controlplane_users.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_users (

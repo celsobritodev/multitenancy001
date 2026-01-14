@@ -1,4 +1,4 @@
--- V4__seed_controlplane_account.sql
+-- V5__insert_controlplane_users.sql
 SET search_path TO public;
 
 -- Cria 4 usuários padrão do Control Plane no account SYSTEM (slug controlplane)

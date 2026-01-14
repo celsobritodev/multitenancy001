@@ -1,4 +1,4 @@
--- V3.5__insert_controlplane_account.sql
+-- V4__insert_controlplane_account.sql
 SET search_path TO public;
 
 INSERT INTO accounts (
@@ -23,7 +23,7 @@ SELECT
     'public',
     'controlplane',
     'ACTIVE',
-    'FREE',
+    'SYSTEM',
     'CNPJ',
     '00000000000000',
     'admin@controlplane.com',

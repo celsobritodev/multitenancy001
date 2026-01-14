@@ -1,4 +1,4 @@
--- V3__create_categories.sql
+-- V3__create_table_categories.sql
 
 CREATE TABLE IF NOT EXISTS categories (
   id BIGSERIAL PRIMARY KEY,

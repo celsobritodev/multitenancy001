@@ -1,5 +1,5 @@
 
--- V2__create_tenant_users_permissions.sql
+-- V2__create_table_tenant_users_permissions.sql
 CREATE TABLE IF NOT EXISTS tenant_user_permissions (
     tenant_user_id BIGINT NOT NULL,
     permission VARCHAR(120) NOT NULL,
