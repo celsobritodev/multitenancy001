@@ -16,34 +16,36 @@ public class AccountApiMapper {
 	
 	
 
-    public AccountResponse toResponse(Account account) {
-        return new AccountResponse(
-            account.getId(),
-            account.getName(),
-            account.getSlug(),
-            account.getSchemaName(),
-            account.getStatus().name(),
-            account.getCreatedAt(),
-            account.getTrialEndDate(),
-            null,
-            account.isSystemAccount()
-        );
-    }
+	public AccountResponse toResponse(Account account) {
+	    return new AccountResponse(
+	        account.getId(),
+	        account.getName(),
+	        account.getSlug(),
+	        account.getSchemaName(),
+	        account.getStatus().name(),
+	        account.getType().name(),
+	        account.getCreatedAt(),
+	        account.getTrialEndDate(),
+	        null
+	    );
+	}
 
-    public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
-        ControlPlaneAdminUserSummaryResponse adminResponse =
+
+   public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
+    ControlPlaneAdminUserSummaryResponse adminResponse =
             adminUser != null ? controlPlaneUserApiMapper.toAdminSummary(adminUser) : null;
 
-        return new AccountResponse(
+    return new AccountResponse(
             account.getId(),
             account.getName(),
             account.getSlug(),
             account.getSchemaName(),
             account.getStatus().name(),
+            account.getType().name(),
             account.getCreatedAt(),
             account.getTrialEndDate(),
-            adminResponse,
-            account.isSystemAccount()
-        );
-    }
+            adminResponse
+    );
+}
+
 }

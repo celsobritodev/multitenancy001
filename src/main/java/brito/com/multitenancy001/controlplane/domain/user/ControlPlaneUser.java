@@ -49,7 +49,7 @@ public class ControlPlaneUser {
     @Column(name = "role", nullable = false, length = 50)
     private ControlPlaneRole role;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 

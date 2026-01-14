@@ -1,9 +1,8 @@
-
--- V3__insert_controlplane_account.sql
+-- V3.5__insert_controlplane_account.sql
 SET search_path TO public;
 
 INSERT INTO accounts (
-    is_system_account,
+    account_type,
     name,
     schema_name,
     slug,
@@ -13,22 +12,26 @@ INSERT INTO accounts (
     company_doc_number,
     company_email,
     company_country,
+    timezone,
+    locale,
+    currency,
     deleted
 )
 SELECT
-    true,
-    'ControlPlane',
+    'SYSTEM',
+    'Control Plane',
     'public',
     'controlplane',
     'ACTIVE',
     'FREE',
     'CNPJ',
     '00000000000000',
-    'controlplane@system.com',
+    'admin@controlplane.com',
     'Brasil',
+    'America/Sao_Paulo',
+    'pt_BR',
+    'BRL',
     false
 WHERE NOT EXISTS (
-    SELECT 1
-    FROM accounts
-    WHERE slug = 'controlplane'
+    SELECT 1 FROM accounts WHERE slug = 'controlplane'
 );

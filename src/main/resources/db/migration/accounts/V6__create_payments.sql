@@ -1,4 +1,4 @@
--- V5__create_payments.sql
+-- V7__create_payments.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS payments (

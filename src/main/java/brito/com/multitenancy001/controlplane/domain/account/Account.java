@@ -1,16 +1,18 @@
 package brito.com.multitenancy001.controlplane.domain.account;
 
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.ArrayList;
+
 
 @Entity
 @Table(name = "accounts")
@@ -25,9 +27,10 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "is_system_account", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
     @Builder.Default
-    private boolean systemAccount = false;
+    private AccountType type = AccountType.TENANT;
 
     @Column(nullable = false, length = 150)
     private String name;
@@ -43,7 +46,7 @@ public class Account {
     @Builder.Default
     private AccountStatus status = AccountStatus.FREE_TRIAL;
 
-    // ✅ AUDITORIA (técnico)
+    // Auditoria (técnico)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -52,7 +55,7 @@ public class Account {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ✅ NEGÓCIO
+    // Datas de negócio
     @Column(name = "trial_end_date")
     private LocalDateTime trialEndDate;
 
@@ -66,18 +69,7 @@ public class Account {
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users", nullable = false)
-    @Builder.Default
-    private Integer maxUsers = 5;
-
-    @Column(name = "max_products", nullable = false)
-    @Builder.Default
-    private Integer maxProducts = 100;
-
-    @Column(name = "max_storage_mb", nullable = false)
-    @Builder.Default
-    private Integer maxStorageMb = 100;
-
+    // Identidade empresa
     @Column(name = "company_email", nullable = false, length = 150)
     private String companyEmail;
 
@@ -87,7 +79,7 @@ public class Account {
 
     @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
-
+    
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
 
@@ -98,12 +90,15 @@ public class Account {
     private String companyCity;
 
     @Column(name = "company_state", length = 50)
-    private String companyState;
+    private String companyState; 
+    
 
+    // Localização
     @Column(name = "company_country", length = 50, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
-
+    
+    
     @Column(name = "timezone", length = 50, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
@@ -111,29 +106,34 @@ public class Account {
     @Column(name = "locale", length = 10, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
+    
 
     @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
-
-    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
+    
+    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY,
+            cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-
+    
+    
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
 
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
 
+    // Soft delete
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+    
     @PrePersist
     protected void onCreate() {
         // ✅ aqui NÃO usar tempo
@@ -154,10 +154,27 @@ public class Account {
                     UUID.randomUUID().toString().substring(0, 8);
         }
     }
+    
+    
+    
+    
+    
 
     // =========================
-    // Regras clock-aware
+    // Semântica / helpers
     // =========================
+
+    public boolean isTenantAccount() {
+        return type == AccountType.TENANT;
+    }
+
+    public boolean isSystemAccount() {
+        return type == AccountType.SYSTEM;
+    }
+
+    public boolean isDeleted() {
+        return deleted || deletedAt != null;
+    }
 
     public boolean isTrialActive(LocalDateTime now) {
         return this.status == AccountStatus.FREE_TRIAL
@@ -167,6 +184,10 @@ public class Account {
     }
 
     public boolean isActive(LocalDateTime now) {
+        if (isDeleted()) return false;
+        // SYSTEM sempre ativa (a menos que você queira permitir suspensão do system)
+        if (isSystemAccount()) return true;
+
         return this.status == AccountStatus.ACTIVE
                 || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
     }
@@ -179,15 +200,8 @@ public class Account {
 
     public long getDaysRemainingInTrial(LocalDateTime now) {
         if (now == null) return 0;
-        if (this.trialEndDate == null || !isTrialActive(now)) return 0;
-        return ChronoUnit.DAYS.between(now, this.trialEndDate);
-    }
-
-    public void ensureTrialEndDate(LocalDateTime now, long trialDays) {
-        if (this.trialEndDate == null) {
-            if (now == null) throw new IllegalArgumentException("now is required");
-            this.trialEndDate = now.plusDays(trialDays);
-        }
+        if (!isTrialActive(now)) return 0;
+        return ChronoUnit.DAYS.between(now.toLocalDate(), this.trialEndDate.toLocalDate());
     }
 
     public void softDelete(LocalDateTime now) {
@@ -204,10 +218,9 @@ public class Account {
 
         this.deleted = false;
         this.deletedAt = null;
-        this.status = AccountStatus.ACTIVE;
-    }
 
-    public boolean isSystemAccount() {
-        return this.systemAccount || "public".equals(this.schemaName);
+        // para TENANT restaurado: volta ACTIVE (padrão seu)
+        // para SYSTEM: continua ACTIVE
+        this.status = AccountStatus.ACTIVE;
     }
 }

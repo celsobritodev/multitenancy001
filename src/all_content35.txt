@@ -335,22 +335,17 @@ import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUse
 import java.time.LocalDateTime;
 
 public record AccountResponse(
-    Long id,
-    String name,
-    String slug,
-    String schemaName,
-    String status,
-    LocalDateTime createdAt,
-    LocalDateTime trialEndDate,
-    ControlPlaneAdminUserSummaryResponse admin,
-    boolean systemAccount
-) {
-    
-   
-  
-    
-  
-}package brito.com.multitenancy001.controlplane.api.dto.accounts;
+	    Long id,
+	    String name,
+	    String slug,
+	    String schemaName,
+	    String status,
+	    String accountType,
+	    LocalDateTime createdAt,
+	    LocalDateTime trialEndDate,
+	    ControlPlaneAdminUserSummaryResponse platformAdmin
+	) {}
+package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import jakarta.validation.constraints.NotNull;
@@ -693,36 +688,38 @@ public class AccountApiMapper {
 	
 	
 
-    public AccountResponse toResponse(Account account) {
-        return new AccountResponse(
-            account.getId(),
-            account.getName(),
-            account.getSlug(),
-            account.getSchemaName(),
-            account.getStatus().name(),
-            account.getCreatedAt(),
-            account.getTrialEndDate(),
-            null,
-            account.isSystemAccount()
-        );
-    }
+	public AccountResponse toResponse(Account account) {
+	    return new AccountResponse(
+	        account.getId(),
+	        account.getName(),
+	        account.getSlug(),
+	        account.getSchemaName(),
+	        account.getStatus().name(),
+	        account.getType().name(),
+	        account.getCreatedAt(),
+	        account.getTrialEndDate(),
+	        null
+	    );
+	}
 
-    public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
-        ControlPlaneAdminUserSummaryResponse adminResponse =
+
+   public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
+    ControlPlaneAdminUserSummaryResponse adminResponse =
             adminUser != null ? controlPlaneUserApiMapper.toAdminSummary(adminUser) : null;
 
-        return new AccountResponse(
+    return new AccountResponse(
             account.getId(),
             account.getName(),
             account.getSlug(),
             account.getSchemaName(),
             account.getStatus().name(),
+            account.getType().name(),
             account.getCreatedAt(),
             account.getTrialEndDate(),
-            adminResponse,
-            account.isSystemAccount()
-        );
-    }
+            adminResponse
+    );
+}
+
 }
 package brito.com.multitenancy001.controlplane.api.mapper;
 
@@ -784,6 +781,47 @@ public class ControlPlaneUserApiMapper {
                 user.isSuspendedByAdmin(),
                 enabled
         );
+    }
+}
+package brito.com.multitenancy001.controlplane.application;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AccountEntitlementsProvisioningService {
+
+    private final AccountEntitlementsRepository entitlementsRepository;
+
+    @Transactional(transactionManager = "publicTransactionManager")
+    public void ensureDefaultEntitlementsForTenant(Account account) {
+        if (account == null || account.getId() == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+        }
+
+        if (account.isSystemAccount()) {
+            // SYSTEM não tem entitlements
+            return;
+        }
+
+        if (entitlementsRepository.existsById(account.getId())) {
+            return;
+        }
+
+        AccountEntitlements ent = AccountEntitlements.builder()
+                .account(account)
+                .maxUsers(5)
+                .maxProducts(100)
+                .maxStorageMb(100)
+                .build();
+
+        entitlementsRepository.save(ent);
     }
 }
 package brito.com.multitenancy001.controlplane.application;
@@ -1599,7 +1637,10 @@ package brito.com.multitenancy001.controlplane.application;
 
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.domain.account.AccountType;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -1619,92 +1660,89 @@ import java.util.UUID;
 @Transactional(transactionManager = "publicTransactionManager")
 public class PublicAccountService {
 
-    private final AccountRepository accountRepository;
-    private final AppClock appClock;
+	private final AccountRepository accountRepository;
+	private final AccountEntitlementsRepository entitlementsRepository;
+	private final AppClock appClock;
 
-    public Account createAccountFromSignup(SignupRequest signupRequest) {
-        TenantContext.clear();
+	public Account createAccountFromSignup(SignupRequest signupRequest) {
+		TenantContext.clear();
 
-        int maxAttempts = 5;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            String slug = generateSlug(signupRequest.name());
-            String schemaName = generateSchemaName(signupRequest.name());
+		int maxAttempts = 5;
+		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+			String slug = generateSlug(signupRequest.name());
+			String schemaName = generateSchemaName(signupRequest.name());
 
-            try {
-                LocalDateTime now = appClock.now();
+			try {
+				LocalDateTime now = appClock.now();
 
-                Account account = new Account();
-                account.setName(signupRequest.name());
-                account.setSlug(slug);
-                account.setSchemaName(schemaName);
+				Account account = new Account();
+				account.setType(AccountType.TENANT);
+				account.setName(signupRequest.name());
+				account.setSlug(slug);
+				account.setSchemaName(schemaName);
 
-                account.setCompanyEmail(signupRequest.companyEmail());
-                account.setCompanyDocType(signupRequest.companyDocType());
-                account.setCompanyDocNumber(signupRequest.companyDocNumber());
+				account.setCompanyEmail(signupRequest.companyEmail());
+				account.setCompanyDocType(signupRequest.companyDocType());
+				account.setCompanyDocNumber(signupRequest.companyDocNumber());
 
-                // ✅ negócio (clock-aware)
-                account.setTrialEndDate(now.plusDays(30));
-                account.setStatus(AccountStatus.FREE_TRIAL);
-                account.setSystemAccount(false);
+				account.setTrialEndDate(now.plusDays(30));
+				account.setStatus(AccountStatus.FREE_TRIAL);
 
-                // Defaults
-                account.setSubscriptionPlan("FREE");
-                account.setMaxUsers(5);
-                account.setMaxProducts(100);
-                account.setMaxStorageMb(100);
-                account.setCompanyCountry("Brasil");
-                account.setTimezone("America/Sao_Paulo");
-                account.setLocale("pt_BR");
-                account.setCurrency("BRL");
+				account.setSubscriptionPlan("FREE");
+				account.setCompanyCountry("Brasil");
+				account.setTimezone("America/Sao_Paulo");
+				account.setLocale("pt_BR");
+				account.setCurrency("BRL");
 
-                return accountRepository.save(account);
+				Account saved = accountRepository.save(account);
 
-            } catch (DataIntegrityViolationException e) {
-                if (!isSlugOrSchemaUniqueViolation(e)) throw e;
-                log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}",
-                        attempt, maxAttempts, slug, schemaName);
-            }
-        }
+				// ✅ Entitlements só para TENANT
+				AccountEntitlements ent = AccountEntitlements.builder().account(saved).maxUsers(5).maxProducts(100)
+						.maxStorageMb(100).build();
 
-        throw new ApiException(
-                "ACCOUNT_CREATE_FAILED",
-                "Não foi possível criar conta (colisão de identificadores). Tente novamente.",
-                409
-        );
-    }
+				entitlementsRepository.save(ent);
 
-    private String generateSlug(String name) {
-        String base = (name == null ? "conta" : name.toLowerCase())
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("(^-|-$)", "");
+				return saved;
 
-        String slug = base;
-        int i = 1;
+			} catch (DataIntegrityViolationException e) {
+				if (!isSlugOrSchemaUniqueViolation(e))
+					throw e;
+				log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}", attempt, maxAttempts, slug, schemaName);
+			}
+		}
 
-        while (accountRepository.findBySlugAndDeletedFalse(slug).isPresent()) {
-            slug = base + "-" + (i++);
-        }
-        return slug;
-    }
+		throw new ApiException("ACCOUNT_CREATE_FAILED",
+				"Não foi possível criar conta (colisão de identificadores). Tente novamente.", 409);
+	}
 
-    private String generateSchemaName(String name) {
-        String base = (name == null ? "tenant" : name.toLowerCase())
-                .replaceAll("[^a-z0-9]", "_");
-        return "tenant_" + base + "_" + UUID.randomUUID().toString().substring(0, 8);
-    }
+	private String generateSlug(String name) {
+		String base = (name == null ? "conta" : name.toLowerCase()).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)",
+				"");
 
-    private boolean isSlugOrSchemaUniqueViolation(Throwable e) {
-        Throwable t = e;
-        while (t.getCause() != null) t = t.getCause();
-        String msg = (t.getMessage() == null) ? "" : t.getMessage().toLowerCase();
+		String slug = base;
+		int i = 1;
 
-        return msg.contains("ux_accounts_slug_active")
-                || msg.contains("uk_accounts_slug")
-                || msg.contains("uk_accounts_schema_name")
-                || msg.contains("accounts_slug_key")
-                || msg.contains("accounts_schema_name_key")
-                || msg.contains("company_email");
-    }
+		while (accountRepository.findBySlugAndDeletedFalse(slug).isPresent()) {
+			slug = base + "-" + (i++);
+		}
+		return slug;
+	}
+
+	private String generateSchemaName(String name) {
+		String base = (name == null ? "tenant" : name.toLowerCase()).replaceAll("[^a-z0-9]", "_");
+		return "tenant_" + base + "_" + UUID.randomUUID().toString().substring(0, 8);
+	}
+
+	private boolean isSlugOrSchemaUniqueViolation(Throwable e) {
+		Throwable t = e;
+		while (t.getCause() != null)
+			t = t.getCause();
+		String msg = (t.getMessage() == null) ? "" : t.getMessage().toLowerCase();
+
+		return msg.contains("ux_accounts_slug_active") || msg.contains("uk_accounts_slug")
+				|| msg.contains("uk_accounts_schema_name") || msg.contains("accounts_slug_key")
+				|| msg.contains("accounts_schema_name_key") || msg.contains("company_email");
+	}
 }
 package brito.com.multitenancy001.controlplane.application.user;
 
@@ -1894,17 +1932,19 @@ public class ControlPlaneUserService {
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.ArrayList;
+
 
 @Entity
 @Table(name = "accounts")
@@ -1919,9 +1959,10 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "is_system_account", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
     @Builder.Default
-    private boolean systemAccount = false;
+    private AccountType type = AccountType.TENANT;
 
     @Column(nullable = false, length = 150)
     private String name;
@@ -1937,7 +1978,7 @@ public class Account {
     @Builder.Default
     private AccountStatus status = AccountStatus.FREE_TRIAL;
 
-    // ✅ AUDITORIA (técnico)
+    // Auditoria (técnico)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -1946,7 +1987,7 @@ public class Account {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ✅ NEGÓCIO
+    // Datas de negócio
     @Column(name = "trial_end_date")
     private LocalDateTime trialEndDate;
 
@@ -1960,18 +2001,7 @@ public class Account {
     @Builder.Default
     private String subscriptionPlan = "FREE";
 
-    @Column(name = "max_users", nullable = false)
-    @Builder.Default
-    private Integer maxUsers = 5;
-
-    @Column(name = "max_products", nullable = false)
-    @Builder.Default
-    private Integer maxProducts = 100;
-
-    @Column(name = "max_storage_mb", nullable = false)
-    @Builder.Default
-    private Integer maxStorageMb = 100;
-
+    // Identidade empresa
     @Column(name = "company_email", nullable = false, length = 150)
     private String companyEmail;
 
@@ -1981,7 +2011,7 @@ public class Account {
 
     @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
-
+    
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
 
@@ -1992,12 +2022,15 @@ public class Account {
     private String companyCity;
 
     @Column(name = "company_state", length = 50)
-    private String companyState;
+    private String companyState; 
+    
 
+    // Localização
     @Column(name = "company_country", length = 50, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
-
+    
+    
     @Column(name = "timezone", length = 50, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
@@ -2005,29 +2038,34 @@ public class Account {
     @Column(name = "locale", length = 10, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
+    
 
     @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
-
-    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL, orphanRemoval = true)
+    
+    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY,
+            cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-
+    
+    
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
 
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
 
+    // Soft delete
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+    
     @PrePersist
     protected void onCreate() {
         // ✅ aqui NÃO usar tempo
@@ -2048,10 +2086,27 @@ public class Account {
                     UUID.randomUUID().toString().substring(0, 8);
         }
     }
+    
+    
+    
+    
+    
 
     // =========================
-    // Regras clock-aware
+    // Semântica / helpers
     // =========================
+
+    public boolean isTenantAccount() {
+        return type == AccountType.TENANT;
+    }
+
+    public boolean isSystemAccount() {
+        return type == AccountType.SYSTEM;
+    }
+
+    public boolean isDeleted() {
+        return deleted || deletedAt != null;
+    }
 
     public boolean isTrialActive(LocalDateTime now) {
         return this.status == AccountStatus.FREE_TRIAL
@@ -2061,6 +2116,10 @@ public class Account {
     }
 
     public boolean isActive(LocalDateTime now) {
+        if (isDeleted()) return false;
+        // SYSTEM sempre ativa (a menos que você queira permitir suspensão do system)
+        if (isSystemAccount()) return true;
+
         return this.status == AccountStatus.ACTIVE
                 || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
     }
@@ -2073,15 +2132,8 @@ public class Account {
 
     public long getDaysRemainingInTrial(LocalDateTime now) {
         if (now == null) return 0;
-        if (this.trialEndDate == null || !isTrialActive(now)) return 0;
-        return ChronoUnit.DAYS.between(now, this.trialEndDate);
-    }
-
-    public void ensureTrialEndDate(LocalDateTime now, long trialDays) {
-        if (this.trialEndDate == null) {
-            if (now == null) throw new IllegalArgumentException("now is required");
-            this.trialEndDate = now.plusDays(trialDays);
-        }
+        if (!isTrialActive(now)) return 0;
+        return ChronoUnit.DAYS.between(now.toLocalDate(), this.trialEndDate.toLocalDate());
     }
 
     public void softDelete(LocalDateTime now) {
@@ -2098,12 +2150,43 @@ public class Account {
 
         this.deleted = false;
         this.deletedAt = null;
+
+        // para TENANT restaurado: volta ACTIVE (padrão seu)
+        // para SYSTEM: continua ACTIVE
         this.status = AccountStatus.ACTIVE;
     }
+}
+package brito.com.multitenancy001.controlplane.domain.account;
 
-    public boolean isSystemAccount() {
-        return this.systemAccount || "public".equals(this.schemaName);
-    }
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "account_entitlements")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class AccountEntitlements {
+
+    @Id
+    @Column(name = "account_id")
+    private Long accountId;
+
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @Column(name = "max_users", nullable = false)
+    private Integer maxUsers;
+
+    @Column(name = "max_products", nullable = false)
+    private Integer maxProducts;
+
+    @Column(name = "max_storage_mb", nullable = false)
+    private Integer maxStorageMb;
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
@@ -2159,6 +2242,12 @@ public enum AccountStatus {
         return this == CANCELLED || this == EXPIRED;
     }
 }package brito.com.multitenancy001.controlplane.domain.account;
+
+public enum AccountType {
+    TENANT,
+    SYSTEM
+}
+package brito.com.multitenancy001.controlplane.domain.account;
 
 import lombok.Getter;
 
@@ -2431,6 +2520,7 @@ import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -2466,7 +2556,7 @@ public class ControlPlaneUser {
     @Column(name = "role", nullable = false, length = 50)
     private ControlPlaneRole role;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
@@ -2541,7 +2631,7 @@ public class ControlPlaneUser {
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    private Set<String> permissions = new LinkedHashSet<>();
 
     
     @PrePersist
@@ -2593,6 +2683,13 @@ public class ControlPlaneUser {
 }
 package brito.com.multitenancy001.controlplane.persistence.account;
 
+import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface AccountEntitlementsRepository extends JpaRepository<AccountEntitlements, Long> {
+}
+package brito.com.multitenancy001.controlplane.persistence.account;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -2608,7 +2705,11 @@ import java.util.Optional;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
+	
+   
 
+    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
+	
     boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
 
     // ✅ docType + docNumber juntos
@@ -3536,6 +3637,57 @@ public class PublicPersistenceConfig {
             @Qualifier("publicEntityManagerFactory") EntityManagerFactory emf
     ) {
         return new JpaTransactionManager(emf);
+    }
+}
+package brito.com.multitenancy001.infrastructure.persistence;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+
+import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration
+@RequiredArgsConstructor
+public class PublicSchemaHibernateConfig {
+
+    private final DataSource dataSource;
+
+    /**
+     * ✅ EMF "default" que o Spring Boot normalmente criaria.
+     * Como você criou um EMF manual (tenantEntityManagerFactory),
+     * o Boot recuou e NÃO criou mais o entityManagerFactory.
+     *
+     * Então criamos explicitamente aqui.
+     */
+    @Bean(name = "entityManagerFactory")
+    @Primary
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
+
+        var emf = new LocalContainerEntityManagerFactoryBean();
+        emf.setDataSource(dataSource);
+
+        // Entidades do PUBLIC (ControlPlane)
+        emf.setPackagesToScan("brito.com.multitenancy001.controlplane.domain");
+
+        emf.setPersistenceUnitName("PUBLIC_PU");
+        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
+        Map<String, Object> props = new HashMap<>();
+        props.put("hibernate.hbm2ddl.auto", "none");
+        props.put("hibernate.show_sql", true);
+        props.put("hibernate.format_sql", true);
+
+        // opcional (Postgres): garantir que o default é public
+        props.put("hibernate.default_schema", "public");
+
+        emf.setJpaPropertyMap(props);
+        return emf;
     }
 }
 package brito.com.multitenancy001.infrastructure.persistence;
@@ -4594,6 +4746,147 @@ public class Multitenancy001Application {
 		SpringApplication.run(Multitenancy001Application.class, args);
 	}
 
+}
+package brito.com.multitenancy001.shared.account;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AccountEntitlementsService {
+
+    private final AccountEntitlementsRepository entitlementsRepository;
+
+    /**
+     * Resolve entitlements efetivos da conta:
+     * - SYSTEM => ilimitado
+     * - TENANT => lê de account_entitlements
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public AccountEntitlementsSnapshot resolveEffective(Account account) {
+        if (account == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+        }
+
+        if (account.isSystemAccount()) {
+            return AccountEntitlementsSnapshot.ofUnlimited();
+        }
+
+        AccountEntitlements ent = entitlementsRepository.findById(account.getId())
+                .orElseThrow(() -> new ApiException(
+                        "ENTITLEMENTS_NOT_FOUND",
+                        "Entitlements não encontrados para a conta " + account.getId(),
+                        500
+                ));
+
+        Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
+        Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
+        Integer maxStorageMb = safePositive(ent.getMaxStorageMb(), "maxStorageMb");
+
+        return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
+    }
+
+    /**
+     * Valida quota para criação de usuário.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public boolean canCreateUser(Account account, long currentUsers) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+        return currentUsers < eff.maxUsers();
+    }
+
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanCreateUser(Account account, long currentUsers) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+
+        if (currentUsers >= eff.maxUsers()) {
+            throw new ApiException(
+                    "QUOTA_MAX_USERS_REACHED",
+                    "Limite de usuários atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    /**
+     * Valida quota para criação de produtos.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanCreateProduct(Account account, long currentProducts) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+
+        if (currentProducts >= eff.maxProducts()) {
+            throw new ApiException(
+                    "QUOTA_MAX_PRODUCTS_REACHED",
+                    "Limite de produtos atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    /**
+     * Valida quota de armazenamento.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
+        if (deltaMb < 0) {
+            throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
+        }
+
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+        long after = currentStorageMb + deltaMb;
+
+        if (after > eff.maxStorageMb()) {
+            throw new ApiException(
+                    "QUOTA_MAX_STORAGE_REACHED",
+                    "Limite de armazenamento atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    // =========================
+    // Helpers
+    // =========================
+
+    private Integer safePositive(Integer value, String field) {
+        if (value == null || value <= 0) {
+            throw new ApiException(
+                    "INVALID_ENTITLEMENT",
+                    "Entitlement inválido: " + field,
+                    500
+            );
+        }
+        return value;
+    }
+}
+package brito.com.multitenancy001.shared.account;
+
+public record AccountEntitlementsSnapshot(
+        int maxUsers,
+        int maxProducts,
+        int maxStorageMb,
+        boolean unlimited
+) {
+
+    public static AccountEntitlementsSnapshot ofUnlimited() {
+        return new AccountEntitlementsSnapshot(
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                true
+        );
+    }
+
+    public static AccountEntitlementsSnapshot ofLimited(int maxUsers, int maxProducts, int maxStorageMb) {
+        return new AccountEntitlementsSnapshot(maxUsers, maxProducts, maxStorageMb, false);
+    }
 }
 package brito.com.multitenancy001.shared.account;
 
@@ -6863,13 +7156,13 @@ public class TenantUserTxService {
             throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
         }
 
-        String u = username.trim().toLowerCase();
-        String e = email.trim().toLowerCase();
+        String usernameNew = username.trim().toLowerCase();
+        String emailNew = email.trim().toLowerCase();
 
-        if (tenantUserRepository.existsByUsernameAndAccountId(u, accountId)) {
+        if (tenantUserRepository.existsByUsernameAndAccountId(usernameNew, accountId)) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe nesta conta", 409);
         }
-        if (tenantUserRepository.existsByEmailAndAccountId(e, accountId)) {
+        if (tenantUserRepository.existsByEmailAndAccountId(emailNew, accountId)) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
         }
 
@@ -6886,8 +7179,8 @@ public class TenantUserTxService {
         TenantUser user = TenantUser.builder()
                 .accountId(accountId)
                 .name(name.trim())
-                .username(u)
-                .email(e)
+                .username(usernameNew)
+                .email(emailNew)
                 .password(passwordEncoder.encode(rawPassword))
                 .role(roleEnum)
                 .suspendedByAccount(false)
@@ -7586,6 +7879,7 @@ import java.util.UUID;
 public class Sale {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
@@ -7595,7 +7889,6 @@ public class Sale {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
-    // Snapshot do cliente (se você não tem uma entidade Customer)
     @Column(name = "customer_name", length = 200)
     private String customerName;
 
@@ -7628,8 +7921,6 @@ public class Sale {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    // ========= helpers =========
 
     public void addItem(SaleItem item) {
         if (item == null) return;
@@ -7681,6 +7972,7 @@ import java.util.UUID;
 public class SaleItem {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
@@ -7692,11 +7984,11 @@ public class SaleItem {
     )
     private Sale sale;
 
-    // ✅ Sem FK para products. Referência fraca (histórico)
+    // Sem FK para products. Referência fraca (histórico)
     @Column(name = "product_id")
     private UUID productId;
 
-    // ✅ Snapshot obrigatório do produto no momento da venda
+    // Snapshot obrigatório do produto no momento da venda
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
@@ -7708,8 +8000,6 @@ public class SaleItem {
 
     @Column(name = "total_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalPrice;
-
-    // ========= helpers =========
 
     public void recalcTotal() {
         if (quantity == null || unitPrice == null) {
@@ -7859,6 +8149,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -7924,7 +8215,7 @@ public class TenantUser {
     )
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    private Set<String> permissions = new LinkedHashSet<>();
 
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
@@ -8439,24 +8730,16 @@ SET search_path TO public;
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
 
-    -- Flag para identificar contas do sistema
-    is_system_account BOOLEAN NOT NULL DEFAULT false,
+    account_type VARCHAR(20) NOT NULL DEFAULT 'TENANT',
 
     name VARCHAR(150) NOT NULL,
 
-    -- Infra
     schema_name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) NOT NULL,
 
-    -- Status / Plano
     status VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
     subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    max_users INTEGER NOT NULL DEFAULT 5,
-    max_products INTEGER NOT NULL DEFAULT 100,
-    max_storage_mb INTEGER NOT NULL DEFAULT 100,
-
-    -- Identidade da empresa (CRÍTICO)
     company_doc_type VARCHAR(10) NOT NULL,
     company_doc_number VARCHAR(20) NOT NULL,
     company_email VARCHAR(150) NOT NULL,
@@ -8465,18 +8748,15 @@ CREATE TABLE IF NOT EXISTS accounts (
     company_address VARCHAR(500),
     company_city VARCHAR(100),
     company_state VARCHAR(50),
-    company_country VARCHAR(50) NOT NULL DEFAULT 'Brasil',
+    company_country VARCHAR(60),
 
-    -- Localização
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
-    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
+    timezone VARCHAR(60),
+    locale VARCHAR(20),
+    currency VARCHAR(10),
 
-    -- Auditoria
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
 
-    -- Datas de negócio
     trial_end_date TIMESTAMP,
     payment_due_date TIMESTAMP,
     next_billing_date TIMESTAMP,
@@ -8485,10 +8765,13 @@ CREATE TABLE IF NOT EXISTS accounts (
     metadata_json TEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMP,
-    
-    CONSTRAINT chk_accounts_currency_len CHECK (char_length(currency) = 3)
+    deleted_at TIMESTAMP
 );
+
+-- Opcional (recomendado): garante valores válidos do enum no banco
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_account_type
+    CHECK (account_type IN ('TENANT', 'SYSTEM'));
 
 -- Unicidade de documento por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active
@@ -8506,7 +8789,22 @@ ON accounts (schema_name);
 
 -- Unicidade de slug (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
-ON accounts (slug);-- V2__create_controlplane_users.sql
+ON accounts (slug);
+-- V2__create_account_entitlements.sql
+SET search_path TO public;
+
+CREATE TABLE IF NOT EXISTS account_entitlements (
+  account_id BIGINT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+  max_users INT NOT NULL,
+  max_products INT NOT NULL,
+  max_storage_mb INT NOT NULL
+);
+
+-- (opcional) coerência básica
+ALTER TABLE account_entitlements
+    ADD CONSTRAINT chk_entitlements_positive
+    CHECK (max_users > 0 AND max_products > 0 AND max_storage_mb > 0);
+-- V3__create_controlplane_users.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_users (
@@ -8530,8 +8828,8 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     must_change_password BOOLEAN NOT NULL DEFAULT false,
     password_changed_at TIMESTAMP,
 
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -8545,61 +8843,29 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     avatar_url VARCHAR(500),
 
     CONSTRAINT fk_controlplane_users_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-
-    CONSTRAINT ux_controlplane_users_username UNIQUE (account_id, username),
-    CONSTRAINT ux_controlplane_users_email UNIQUE (account_id, email)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
--- V3__create_controlplane_user_permissions.sql
-CREATE TABLE IF NOT EXISTS public.controlplane_user_permissions (
-    user_id BIGINT NOT NULL,
-    permission VARCHAR(120) NOT NULL,
+-- Unicidade por conta (apenas ativos)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_username_active
+ON controlplane_users (account_id, username)
+WHERE deleted = false;
 
-    PRIMARY KEY (user_id, permission),
-
-    CONSTRAINT fk_controlplane_user_permissions_user
-        FOREIGN KEY (user_id)
-        REFERENCES public.controlplane_users(id)
-        ON DELETE CASCADE
-);
-
--- V3__insert_controlplane_account.sql
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
+ON controlplane_users (account_id, email)
+WHERE deleted = false;
+-- V4__seed_controlplane_account.sql
 SET search_path TO public;
 
-INSERT INTO accounts (
-    is_system_account,
-    name,
-    schema_name,
-    slug,
-    status,
-    subscription_plan,
-    company_doc_type,
-    company_doc_number,
-    company_email,
-    company_country,
-    deleted
-)
-SELECT
-    true,
-    'ControlPlane',
-    'public',
-    'controlplane',
-    'ACTIVE',
-    'FREE',
-    'CNPJ',
-    '00000000000000',
-    'controlplane@system.com',
-    'Brasil',
-    false
-WHERE NOT EXISTS (
-    SELECT 1
+-- Cria 4 usuários padrão do Control Plane no account SYSTEM (slug controlplane)
+-- Se já existirem (ativos) com o mesmo username/email, não duplica.
+
+WITH cp_account AS (
+    SELECT id
     FROM accounts
     WHERE slug = 'controlplane'
-);
--- V4__insert_controlplane_super_admin.sql
-SET search_path TO public;
-
+    LIMIT 1
+)
 INSERT INTO controlplane_users (
     name,
     username,
@@ -8608,27 +8874,66 @@ INSERT INTO controlplane_users (
     role,
     account_id,
     suspended_by_account,
-    suspended_by_admin
+    suspended_by_admin,
+    must_change_password
 )
 SELECT
-    'ControlPlane Super Admin',
-    'superadmin',
-    'admin@controlplane.com',
-    '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
-    'CONTROLPLANE_OWNER',
+    u.name,
+    u.username,
+    u.email,
+    u.password,
+    u.role,
     a.id,
     false,
-    false
-FROM accounts a
-WHERE a.slug = 'controlplane'
-AND NOT EXISTS (
-    SELECT 1
-    FROM controlplane_users u
-    WHERE u.account_id = a.id
-      AND (u.username = 'superadmin' OR u.email = 'admin@controlplane.com')
-);
+    false,
+    u.must_change_password
+FROM cp_account a
+JOIN (
+    VALUES
+      -- OWNER (superadmin)
+      ('ControlPlane Super Admin', 'superadmin', 'admin@controlplane.com',
+       '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
+       'CONTROLPLANE_OWNER', false),
 
--- V5__create_payments.sql
+      -- BILLING MANAGER
+      ('ControlPlane Billing Manager', 'billing', 'billing@controlplane.com',
+       '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
+       'CONTROLPLANE_BILLING_MANAGER', true),
+
+      -- SUPPORT
+      ('ControlPlane Support', 'support', 'support@controlplane.com',
+       '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
+       'CONTROLPLANE_SUPPORT', true),
+
+      -- OPERATOR
+      ('ControlPlane Operator', 'operator', 'operator@controlplane.com',
+       '$2a$10$NHoV1pUU3gMGp87cYuvtReeq1iMqDOeHknZhrgzAcaygIVSuLFSQy',
+       'CONTROLPLANE_OPERATOR', true)
+
+) AS u(name, username, email, password, role, must_change_password)
+ON TRUE
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM controlplane_users existing
+    WHERE existing.account_id = a.id
+      AND existing.deleted = false
+      AND (existing.username = u.username OR existing.email = u.email)
+);
+-- V5__create_controlplane_user_permissions.sql
+SET search_path TO public;
+
+CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
+    user_id BIGINT NOT NULL,
+    permission VARCHAR(120) NOT NULL,
+
+    PRIMARY KEY (user_id, permission),
+
+    CONSTRAINT fk_cp_user_permissions_user
+        FOREIGN KEY (user_id)
+        REFERENCES controlplane_users(id)
+        ON DELETE CASCADE
+);
+-- V7__create_payments.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS payments (

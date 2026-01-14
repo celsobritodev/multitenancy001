@@ -4,24 +4,16 @@ SET search_path TO public;
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
 
-    -- Flag para identificar contas do sistema
-    is_system_account BOOLEAN NOT NULL DEFAULT false,
+    account_type VARCHAR(20) NOT NULL DEFAULT 'TENANT',
 
     name VARCHAR(150) NOT NULL,
 
-    -- Infra
     schema_name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) NOT NULL,
 
-    -- Status / Plano
     status VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
     subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    max_users INTEGER NOT NULL DEFAULT 5,
-    max_products INTEGER NOT NULL DEFAULT 100,
-    max_storage_mb INTEGER NOT NULL DEFAULT 100,
-
-    -- Identidade da empresa (CRÍTICO)
     company_doc_type VARCHAR(10) NOT NULL,
     company_doc_number VARCHAR(20) NOT NULL,
     company_email VARCHAR(150) NOT NULL,
@@ -30,18 +22,15 @@ CREATE TABLE IF NOT EXISTS accounts (
     company_address VARCHAR(500),
     company_city VARCHAR(100),
     company_state VARCHAR(50),
-    company_country VARCHAR(50) NOT NULL DEFAULT 'Brasil',
+    company_country VARCHAR(60),
 
-    -- Localização
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
-    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
+    timezone VARCHAR(60),
+    locale VARCHAR(20),
+    currency VARCHAR(10),
 
-    -- Auditoria
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
 
-    -- Datas de negócio
     trial_end_date TIMESTAMP,
     payment_due_date TIMESTAMP,
     next_billing_date TIMESTAMP,
@@ -50,10 +39,13 @@ CREATE TABLE IF NOT EXISTS accounts (
     metadata_json TEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMP,
-    
-    CONSTRAINT chk_accounts_currency_len CHECK (char_length(currency) = 3)
+    deleted_at TIMESTAMP
 );
+
+-- Opcional (recomendado): garante valores válidos do enum no banco
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_account_type
+    CHECK (account_type IN ('TENANT', 'SYSTEM'));
 
 -- Unicidade de documento por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active

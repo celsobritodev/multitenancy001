@@ -1,4 +1,4 @@
--- V2__create_controlplane_users.sql
+-- V3__create_controlplane_users.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_users (
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     must_change_password BOOLEAN NOT NULL DEFAULT false,
     password_changed_at TIMESTAMP,
 
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -37,9 +37,14 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     avatar_url VARCHAR(500),
 
     CONSTRAINT fk_controlplane_users_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-
-    CONSTRAINT ux_controlplane_users_username UNIQUE (account_id, username),
-    CONSTRAINT ux_controlplane_users_email UNIQUE (account_id, email)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
+-- Unicidade por conta (apenas ativos)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_username_active
+ON controlplane_users (account_id, username)
+WHERE deleted = false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
+ON controlplane_users (account_id, email)
+WHERE deleted = false;

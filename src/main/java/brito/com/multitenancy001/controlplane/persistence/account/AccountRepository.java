@@ -15,7 +15,11 @@ import java.util.Optional;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
+	
+   
 
+    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
+	
     boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
 
     // ✅ docType + docNumber juntos
