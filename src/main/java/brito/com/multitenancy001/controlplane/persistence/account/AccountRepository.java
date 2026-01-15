@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.domain.account.AccountType;
 import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
 
 import java.time.LocalDateTime;
@@ -16,7 +17,7 @@ import java.util.Optional;
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
 	
-   
+	boolean existsByTypeAndDeletedFalse(AccountType type);
 
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
 	

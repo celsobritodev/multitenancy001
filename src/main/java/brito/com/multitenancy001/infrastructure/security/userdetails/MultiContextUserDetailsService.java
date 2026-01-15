@@ -79,8 +79,8 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     public UserDetails loadTenantUser(String username, Long accountId) {
-        String schema = TenantContext.getOrNull();
-        if (schema == null || "public".equalsIgnoreCase(schema)) {
+        String schemaName = TenantContext.getOrNull();
+        if (schemaName == null || "public".equalsIgnoreCase(schemaName)) {
             throw new ApiException(
                     "TENANT_CONTEXT_REQUIRED",
                     "TenantContext não está bindado para autenticar usuário tenant",
@@ -103,6 +103,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return new AuthenticatedUserContext(user, schema, now, authorities);
+        return new AuthenticatedUserContext(user, schemaName, now, authorities);
     }
 }

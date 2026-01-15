@@ -274,6 +274,11 @@ public class PaymentService {
         if (account.isDeleted()) {
             throw new ApiException("ACCOUNT_DELETED", "Conta deletada", 410);
         }
+        
+        if (account.isSystemAccount()) {
+            throw new ApiException("SYSTEM_ACCOUNT_NO_BILLING", "Conta SYSTEM não possui billing", 409);
+        }
+ 
 
         Optional<Payment> activePayment = paymentRepository.findActivePayment(account.getId(), now);
 

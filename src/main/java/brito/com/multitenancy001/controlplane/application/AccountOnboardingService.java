@@ -47,7 +47,7 @@ public class AccountOnboardingService {
             signupRequest.password()
         );
 
-        log.info("✅ Account criada | accountId={} | schema={} | slug={}",
+        log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
                 account.getId(), account.getSchemaName(), account.getSlug());
 
         return accountApiMapper.toResponse(account);

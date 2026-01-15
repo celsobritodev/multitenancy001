@@ -46,6 +46,15 @@ CREATE TABLE IF NOT EXISTS accounts (
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_account_type
     CHECK (account_type IN ('TENANT', 'SYSTEM'));
+    
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_subscription_plan
+    CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'SYSTEM'));
+    
+CREATE UNIQUE INDEX ux_accounts_single_system
+ON accounts (account_type)
+WHERE account_type = 'SYSTEM';
+    
 
 -- Unicidade de documento por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active

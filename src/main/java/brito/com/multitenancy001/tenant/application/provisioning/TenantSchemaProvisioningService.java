@@ -36,19 +36,19 @@ public class TenantSchemaProvisioningService {
 
     private void validateSchemaNameOrThrow(String schemaName) {
         if (!StringUtils.hasText(schemaName)) {
-            throw new ApiException("INVALID_SCHEMA", "Schema inválido", 400);
+            throw new ApiException("INVALID_SCHEMA", "SchemaName inválido", 400);
         }
 
         String trimmed = schemaName.trim();
 
         if ("public".equalsIgnoreCase(trimmed)) {
-            throw new ApiException("INVALID_SCHEMA", "Schema 'public' não é permitido", 400);
+            throw new ApiException("INVALID_SCHEMA", "SchemaName 'public' não é permitido", 400);
         }
 
         if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
             throw new ApiException(
                     "INVALID_SCHEMA",
-                    "Schema inválido: use apenas letras, números e _ (underscore)",
+                    "SchemaName inválido: use apenas letras, números e _ (underscore)",
                     400
             );
         }
@@ -89,7 +89,7 @@ public class TenantSchemaProvisioningService {
 
 
         if (!schemaExists(normalized)) {
-            log.info("📦 Criando schema {}", normalized);
+            log.info("📦 Criando schemaName {}", normalized);
             jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + normalized + "\"");
         }
 

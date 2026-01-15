@@ -4,13 +4,14 @@ import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUse
 import java.time.LocalDateTime;
 
 public record AccountResponse(
-	    Long id,
-	    String name,
-	    String slug,
-	    String schemaName,
-	    String status,
-	    String accountType,
-	    LocalDateTime createdAt,
-	    LocalDateTime trialEndDate,
-	    ControlPlaneAdminUserSummaryResponse platformAdmin
-	) {}
+        Long id,
+        String name,
+        String slug,
+        String schemaName,
+        String status,
+        String accountType,
+        String subscriptionPlan, // NOVO
+        LocalDateTime createdAt,
+        LocalDateTime trialEndDate,
+        ControlPlaneAdminUserSummaryResponse platformAdmin
+) {}

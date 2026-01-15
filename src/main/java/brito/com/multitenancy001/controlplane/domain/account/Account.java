@@ -6,6 +6,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.domain.DomainException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -65,9 +66,10 @@ public class Account {
     @Column(name = "next_billing_date")
     private LocalDateTime nextBillingDate;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "subscription_plan", nullable = false, length = 50)
     @Builder.Default
-    private String subscriptionPlan = "FREE";
+    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
     // Identidade empresa
     @Column(name = "company_email", nullable = false, length = 150)
@@ -156,9 +158,6 @@ public class Account {
     }
     
     
-    
-    
-    
 
     // =========================
     // Semântica / helpers
@@ -223,4 +222,66 @@ public class Account {
         // para SYSTEM: continua ACTIVE
         this.status = AccountStatus.ACTIVE;
     }
+    
+    
+ // =========================
+ // Regras de domínio: SYSTEM != cliente
+ // =========================
+
+ public void setSubscriptionPlan(SubscriptionPlan plan) {
+     if (plan == null) {
+         throw new DomainException("subscriptionPlan is required");
+     }
+     if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
+         throw new DomainException("SYSTEM account must use SYSTEM plan");
+     }
+     this.subscriptionPlan = plan;
+ }
+
+ public void setStatus(AccountStatus status) {
+     if (status == null) {
+         throw new DomainException("status is required");
+     }
+     if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
+         throw new DomainException("SYSTEM account must be ACTIVE");
+     }
+     this.status = status;
+ }
+
+ public void setTrialEndDate(LocalDateTime trialEndDate) {
+     if (this.isSystemAccount() && trialEndDate != null) {
+         throw new DomainException("SYSTEM account must not have trialEndDate");
+     }
+     this.trialEndDate = trialEndDate;
+ }
+
+ public void setPaymentDueDate(LocalDateTime paymentDueDate) {
+     if (this.isSystemAccount() && paymentDueDate != null) {
+         throw new DomainException("SYSTEM account must not have paymentDueDate");
+     }
+     this.paymentDueDate = paymentDueDate;
+ }
+
+ /**
+  * Quando muda para SYSTEM, aplica defaults coerentes:
+  * - status ACTIVE
+  * - plan SYSTEM
+  * - sem trial/billing dates
+  */
+ public void setType(AccountType type) {
+     if (type == null) {
+         throw new DomainException("accountType is required");
+     }
+     this.type = type;
+
+     if (this.isSystemAccount()) {
+         // defaults do SYSTEM
+         this.subscriptionPlan = SubscriptionPlan.SYSTEM;
+         this.status = AccountStatus.ACTIVE;
+         this.trialEndDate = null;
+         this.paymentDueDate = null;
+         this.nextBillingDate = null;
+     }
+ }
+
 }

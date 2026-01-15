@@ -5,10 +5,12 @@ import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
+import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.domain.DomainException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,11 +55,17 @@ public class PublicAccountService {
 				account.setTrialEndDate(now.plusDays(30));
 				account.setStatus(AccountStatus.FREE_TRIAL);
 
-				account.setSubscriptionPlan("FREE");
+				account.setSubscriptionPlan(SubscriptionPlan.FREE);
+
 				account.setCompanyCountry("Brasil");
 				account.setTimezone("America/Sao_Paulo");
 				account.setLocale("pt_BR");
 				account.setCurrency("BRL");
+				
+				if (account.getType() == AccountType.SYSTEM && accountRepository.existsByTypeAndDeletedFalse(AccountType.SYSTEM)) {
+				    throw new DomainException("Only one SYSTEM account is allowed");
+				}
+
 
 				Account saved = accountRepository.save(account);
 
@@ -72,7 +80,7 @@ public class PublicAccountService {
 			} catch (DataIntegrityViolationException e) {
 				if (!isSlugOrSchemaUniqueViolation(e))
 					throw e;
-				log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schema={}", attempt, maxAttempts, slug, schemaName);
+				log.warn("⚠️ Colisão (tentativa {}/{}) | slug={} | schemaName={}", attempt, maxAttempts, slug, schemaName);
 			}
 		}
 

@@ -11,7 +11,20 @@ public final class ControlPlaneRolePermissions {
         if (role == null) return Set.of();
 
         return switch (role) {
-            case CONTROLPLANE_OWNER -> EnumSet.allOf(ControlPlanePermission.class);
+            case CONTROLPLANE_OWNER -> EnumSet.of(
+                // ✅ mínimo para gestão de usuários de plataforma
+                ControlPlanePermission.CP_USER_READ,
+                ControlPlanePermission.CP_USER_WRITE
+
+                // (opcional) se você permitir deleção de usuários
+                // , ControlPlanePermission.CP_USER_DELETE
+
+                // (opcional) se o OWNER também gerencia contas/tenants
+                // , ControlPlanePermission.CP_TENANT_READ
+                // , ControlPlanePermission.CP_TENANT_SUSPEND
+                // , ControlPlanePermission.CP_TENANT_ACTIVATE
+                // , ControlPlanePermission.CP_TENANT_DELETE
+            );
 
             case CONTROLPLANE_BILLING_MANAGER -> EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,

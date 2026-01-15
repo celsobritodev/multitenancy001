@@ -7,6 +7,7 @@ import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
+import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
@@ -18,8 +19,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -30,6 +33,8 @@ public class ControlPlaneUserService {
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
+    private final SecurityUtils securityUtils;
+
 
     private Account getControlPlaneAccount() {
         TenantContext.clear(); // PUBLIC
@@ -40,6 +45,58 @@ public class ControlPlaneUserService {
                         500
                 ));
     }
+    
+ // ===== Policy switches (mude para true se quiser liberar) =====
+  
+
+    private static final Set<ControlPlaneRole> OWNER_CAN_CREATE = EnumSet.of(
+            ControlPlaneRole.CONTROLPLANE_SUPPORT,
+            ControlPlaneRole.CONTROLPLANE_OPERATOR,
+            ControlPlaneRole.CONTROLPLANE_BILLING_MANAGER
+    );
+
+    private static final Set<ControlPlaneRole> SUPPORT_CAN_CREATE = EnumSet.of(
+            ControlPlaneRole.CONTROLPLANE_OPERATOR
+            // (opcional) ControlPlaneRole.CONTROLPLANE_SUPPORT se ALLOW_SUPPORT_CREATE_SUPPORT=true
+    );
+
+   private void assertCanCreateRole(ControlPlaneRole creatorRole, ControlPlaneRole targetRole) {
+    if (creatorRole == null) {
+        throw new ApiException("FORBIDDEN", "Role do criador não encontrada", 403);
+    }
+    if (targetRole == null) {
+        throw new ApiException("INVALID_ROLE", "Role alvo é obrigatória", 400);
+    }
+
+    // OWNER
+    if (creatorRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
+        // ❌ aqui, por padrão, OWNER NÃO cria outro OWNER (mais seguro)
+        if (targetRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
+            throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar outro CONTROLPLANE_OWNER", 403);
+        }
+        if (!OWNER_CAN_CREATE.contains(targetRole)) {
+            throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar a role: " + targetRole, 403);
+        }
+        return;
+    }
+
+    // SUPPORT
+    if (creatorRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
+        // ❌ aqui, por padrão, SUPPORT NÃO cria outro SUPPORT (mais seguro)
+        if (targetRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
+            throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar outro CONTROLPLANE_SUPPORT", 403);
+        }
+        if (!SUPPORT_CAN_CREATE.contains(targetRole)) {
+            throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar a role: " + targetRole, 403);
+        }
+        return;
+    }
+
+    // BILLING_MANAGER e OPERATOR: não criam ninguém
+    throw new ApiException("FORBIDDEN", "Sua role não pode criar usuários de plataforma", 403);
+}
+
+    
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
         TenantContext.clear();
@@ -57,6 +114,17 @@ public class ControlPlaneUserService {
 
         // ✅ role já tipada
         ControlPlaneRole roleEnum = req.role();
+        
+     // ✅ policy: "quem pode criar quem"
+        ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
+        assertCanCreateRole(creatorRole, roleEnum);
+
+        // ✅ opcional (recomendado): só OWNER pode enviar permissions explícitas no payload
+        if (req.permissions() != null && !req.permissions().isEmpty() && creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+            throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode definir permissions explícitas", 403);
+        }
+
+        
 
         if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);

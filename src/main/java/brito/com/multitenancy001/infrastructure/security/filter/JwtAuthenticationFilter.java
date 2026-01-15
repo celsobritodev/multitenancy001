@@ -55,15 +55,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
             final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
-            // ✅ TRAVA: token tem que bater com a rota
-            if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(authDomain)) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
-                return;
-            }
-            if (requiresTenant(httpServletRequest) && !"TENANT".equals(authDomain)) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
-                return;
-            }
+         // ✅ TRAVA FORTE (403): token tem que bater com a rota
+         // Regra: se tokenType == TENANT e path startsWith /api/admin => 403
+         if (requiresControlPlane(httpServletRequest) && "TENANT".equals(authDomain)) {
+             httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+             return;
+         }
+
+         // (opcional mas recomendado) Regra simétrica: token CONTROLPLANE não entra em /api/tenant => 403
+         if (requiresTenant(httpServletRequest) && "CONTROLPLANE".equals(authDomain)) {
+             httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+             return;
+         }
+
+         // Se chegou aqui, o domínio bate com a área
+         if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(authDomain)) {
+             filterChain.doFilter(httpServletRequest, httpServletResponse);
+             return;
+         }
+         if (requiresTenant(httpServletRequest) && !"TENANT".equals(authDomain)) {
+             filterChain.doFilter(httpServletRequest, httpServletResponse);
+             return;
+         }
+
 
             // só aceitamos TENANT / CONTROLPLANE aqui
             if (!"TENANT".equals(authDomain) && !"CONTROLPLANE".equals(authDomain)) {

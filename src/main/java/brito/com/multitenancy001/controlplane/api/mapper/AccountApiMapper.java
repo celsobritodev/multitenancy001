@@ -11,41 +11,39 @@ import lombok.RequiredArgsConstructor;
 @Component
 @RequiredArgsConstructor
 public class AccountApiMapper {
-	
-	private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
-	
-	
 
-	public AccountResponse toResponse(Account account) {
-	    return new AccountResponse(
-	        account.getId(),
-	        account.getName(),
-	        account.getSlug(),
-	        account.getSchemaName(),
-	        account.getStatus().name(),
-	        account.getType().name(),
-	        account.getCreatedAt(),
-	        account.getTrialEndDate(),
-	        null
-	    );
-	}
+    private final ControlPlaneUserApiMapper controlPlaneUserApiMapper;
 
+    public AccountResponse toResponse(Account account) {
+        return new AccountResponse(
+                account.getId(),
+                account.getName(),
+                account.getSlug(),
+                account.getSchemaName(),
+                account.getStatus().name(),
+                account.getType().name(),
+                account.getSubscriptionPlan().name(), // NOVO
+                account.getCreatedAt(),
+                account.getTrialEndDate(),
+                null
+        );
+    }
 
-   public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
-    ControlPlaneAdminUserSummaryResponse adminResponse =
-            adminUser != null ? controlPlaneUserApiMapper.toAdminSummary(adminUser) : null;
+    public AccountResponse toResponse(Account account, ControlPlaneUser adminUser) {
+        ControlPlaneAdminUserSummaryResponse adminResponse =
+                adminUser != null ? controlPlaneUserApiMapper.toAdminSummary(adminUser) : null;
 
-    return new AccountResponse(
-            account.getId(),
-            account.getName(),
-            account.getSlug(),
-            account.getSchemaName(),
-            account.getStatus().name(),
-            account.getType().name(),
-            account.getCreatedAt(),
-            account.getTrialEndDate(),
-            adminResponse
-    );
-}
-
+        return new AccountResponse(
+                account.getId(),
+                account.getName(),
+                account.getSlug(),
+                account.getSchemaName(),
+                account.getStatus().name(),
+                account.getType().name(),
+                account.getSubscriptionPlan().name(), // NOVO
+                account.getCreatedAt(),
+                account.getTrialEndDate(),
+                adminResponse
+        );
+    }
 }
