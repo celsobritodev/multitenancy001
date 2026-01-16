@@ -16,42 +16,43 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class AdminAuthService {
+public class ControlPlaneAuthService {
 
     private static final String DEFAULT_SCHEMA = "public";
-	private final AuthenticationManager authenticationManager;
+
+    private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
-    public JwtResponse loginSuperAdmin(ControlPlaneAdminLoginRequest controlPlaneAdminLoginRequest) {
-
+    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
 
         TenantContext.clear();
 
+        // 1) busca user (public)
         ControlPlaneUser user = controlPlaneUserRepository
-                .findByUsernameAndDeletedFalse(controlPlaneAdminLoginRequest.username())
+                .findByUsernameAndDeletedFalse(req.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
-                        "Super admin não encontrado",
+                        "Usuário de plataforma não encontrado",
                         404
                 ));
 
-        // 🔒 Regras de negócio
-        if (user.isSuspendedByAccount() ) {
-            throw new ApiException(
-                    "ACCESS_DENIED",
-                    "Usuário não autorizado",
-                    403
-            );
+        // 2) regra: suspenso por conta -> bloqueia
+        if (user.isSuspendedByAccount()) {
+            throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
         }
 
+        // 3) autentica de fato (senha)
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        controlPlaneAdminLoginRequest.username(),
-                        controlPlaneAdminLoginRequest.password()
-                )
+                new UsernamePasswordAuthenticationToken(req.username(), req.password())
         );
 
+        // ✅ IMPORTANTE:
+        // Não bloquear must_change_password no login.
+        // O bloqueio de rotas deve acontecer no MustChangePasswordFilter,
+        // permitindo apenas /api/admin/me/password.
+
+        // 4) tokens
         String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),

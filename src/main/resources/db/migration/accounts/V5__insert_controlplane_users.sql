@@ -17,6 +17,7 @@ INSERT INTO controlplane_users (
     password,
     role,
     account_id,
+    is_system_user,          -- ✅ NOVO
     suspended_by_account,
     suspended_by_admin,
     must_change_password
@@ -28,6 +29,7 @@ SELECT
     u.password,
     u.role,
     a.id,
+    true,                   -- ✅ sempre true para esses 4
     false,
     false,
     u.must_change_password

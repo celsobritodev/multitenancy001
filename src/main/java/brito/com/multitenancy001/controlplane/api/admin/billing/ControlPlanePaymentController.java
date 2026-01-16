@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.api.controller.billing;
+package brito.com.multitenancy001.controlplane.api.admin.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;

@@ -18,6 +18,7 @@ public class AuthenticatedUserContext implements UserDetails {
     private final String username;
     private final String email;
     private final String password;
+    private final boolean mustChangePassword;
 
     private final boolean enabled;
     private final boolean accountNonLocked;
@@ -30,6 +31,11 @@ public class AuthenticatedUserContext implements UserDetails {
 
     // ✅ permission-only
     private final Collection<? extends GrantedAuthority> authorities;
+    
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+    
 
     public AuthenticatedUserContext(
             ControlPlaneUser user,
@@ -51,6 +57,8 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = user.isEnabledForLogin();
         this.accountNonLocked = user.isAccountNonLocked(now);
+        this.mustChangePassword = Boolean.TRUE.equals(user.getMustChangePassword());
+
     }
 
     public AuthenticatedUserContext(
@@ -73,6 +81,8 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
         this.accountNonLocked = user.getLockedUntil() == null || !user.getLockedUntil().isAfter(now);
+        this.mustChangePassword = Boolean.TRUE.equals(user.getMustChangePassword());
+
     }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }

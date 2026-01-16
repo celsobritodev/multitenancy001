@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.controlplane.api.controller.accounts.admin;
+package brito.com.multitenancy001.controlplane.api.admin.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
@@ -20,26 +20,26 @@ import java.util.List;
 @RequestMapping("/api/admin/accounts")
 @RequiredArgsConstructor
 @Slf4j
-public class AccountAdminController {
+public class ControlPlaneAccountController {
 
     private final AccountLifecycleService accountLifecycleService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountResponse>> listAllAccounts() {
+    public ResponseEntity<List<AccountResponse>> listAccounts() {
         log.info("Listando todas as contas");
-        return ResponseEntity.ok(accountLifecycleService.listAllAccounts());
+        return ResponseEntity.ok(accountLifecycleService.listAccounts());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<AccountResponse> getAccountById(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.getAccountById(id));
+    public ResponseEntity<AccountResponse> getAccount(@PathVariable Long id) {
+        return ResponseEntity.ok(accountLifecycleService.getAccount(id));
     }
 
     @GetMapping("/{id}/details")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<AccountAdminDetailsResponse> getAccountByIdDetails(@PathVariable Long id) {
+    public ResponseEntity<AccountAdminDetailsResponse> getAccountDetails(@PathVariable Long id) {
         return ResponseEntity.ok(accountLifecycleService.getAccountAdminDetails(id));
     }
 
@@ -58,7 +58,7 @@ public class AccountAdminController {
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_ACTIVATE')")
-    public ResponseEntity<AccountStatusChangeResponse> changeStatusAccount(
+    public ResponseEntity<AccountStatusChangeResponse> changeAccountStatus(
             @PathVariable Long id,
             @Valid @RequestBody AccountStatusChangeRequest accountStatusChangeRequest
     ) {

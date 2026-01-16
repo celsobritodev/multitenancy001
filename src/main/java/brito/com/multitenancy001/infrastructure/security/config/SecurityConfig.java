@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Bean
+    public MustChangePasswordFilter mustChangePasswordFilter() {
+        return new MustChangePasswordFilter();
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -52,6 +58,9 @@ public class SecurityConfig {
                     "/api/admin/auth/login",
                     "/api/admin/auth/refresh"
                 ).permitAll()
+
+                // ✅ troca de senha do próprio usuário (precisa estar autenticado)
+                .requestMatchers("/api/admin/me/password").authenticated()
 
                 // =========================
                 // 🔓 AUTH TENANT
@@ -91,6 +100,10 @@ public class SecurityConfig {
             );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ MustChangePassword precisa rodar DEPOIS do JWT filter
+        http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+
         return http.build();
     }
 }

@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     account_id BIGINT NOT NULL,
 
+    -- ✅ identifica usuários padrão do sistema (readonly)
+    is_system_user BOOLEAN NOT NULL DEFAULT FALSE,
+
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
@@ -37,7 +40,17 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     avatar_url VARCHAR(500),
 
     CONSTRAINT fk_controlplane_users_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+
+    -- ✅ BLOQUEIO NO BANCO:
+    -- impede que qualquer user NÃO-system use usernames reservados
+    CONSTRAINT chk_cp_reserved_usernames_block
+    CHECK (
+        NOT (
+            lower(username) IN ('superadmin','billing','support','operator')
+            AND is_system_user = false
+        )
+    )
 );
 
 -- Unicidade por conta (apenas ativos)

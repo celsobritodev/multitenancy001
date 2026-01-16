@@ -24,7 +24,7 @@ public class AccountOnboardingService {
     private final AccountApiMapper accountApiMapper;
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
-    private final PublicAccountService publicAccountService;
+    private final PublicAccountCreationService publicAccountService;
     private final TenantProvisioningBridge tenantProvisioningBridge;
     private final TenantUserAdminBridge tenantUserAdminBridge;
     private final AccountRepository accountRepository;

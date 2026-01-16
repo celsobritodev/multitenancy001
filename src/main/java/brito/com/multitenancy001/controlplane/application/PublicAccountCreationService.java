@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(transactionManager = "publicTransactionManager")
-public class PublicAccountService {
+public class PublicAccountCreationService {
 
 	private final AccountRepository accountRepository;
 	private final AccountEntitlementsRepository entitlementsRepository;

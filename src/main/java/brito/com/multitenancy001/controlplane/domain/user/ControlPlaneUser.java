@@ -52,6 +52,11 @@ public class ControlPlaneUser {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
+    
+    @Column(name = "is_system_user", nullable = false)
+    @Builder.Default
+    private boolean systemUser = false;
+    
 
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
@@ -137,7 +142,9 @@ public class ControlPlaneUser {
         permissions = PermissionScopeValidator.normalizeControlPlane(permissions);
     }
 
-
+    public boolean isSystemUser() {
+        return systemUser;
+    }
     
 
     // ✅ se lockedUntil estiver no futuro: lock
@@ -155,17 +162,22 @@ public class ControlPlaneUser {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-    public void softDelete(LocalDateTime now, long uniqueSuffix) {
-        if (deleted) return;
-        deleted = true;
-        deletedAt = now;
-
-        suspendedByAccount = true;
-        suspendedByAdmin = true;
-
-        username = "deleted_" + username + "_" + uniqueSuffix;
-        email = "deleted_" + email + "_" + uniqueSuffix;
+   public void softDelete(LocalDateTime now, long uniqueSuffix) {
+    if (systemUser) {
+        throw new IllegalStateException("SYSTEM_USER_READONLY");
     }
+    if (deleted) return;
+
+    deleted = true;
+    deletedAt = now;
+
+    suspendedByAccount = true;
+    suspendedByAdmin = true;
+
+    username = "deleted_" + username + "_" + uniqueSuffix;
+    email = "deleted_" + email + "_" + uniqueSuffix;
+}
+
 
     public void restore() {
         this.deleted = false;

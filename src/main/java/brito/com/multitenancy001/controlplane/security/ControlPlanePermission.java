@@ -16,7 +16,10 @@ public enum ControlPlanePermission implements PermissionAuthority {
 
     CP_USER_READ,
     CP_USER_WRITE,
-    CP_USER_DELETE;
+    CP_USER_DELETE,
+
+    // ✅ NOVA (somente superadmin deve ter)
+    CP_USER_RESET_PASSWORD;
 
     @Override
     public String asAuthority() {

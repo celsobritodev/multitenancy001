@@ -1,58 +1,75 @@
 package brito.com.multitenancy001.infrastructure.security.userdetails;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRolePermissions;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
-
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.util.StringUtils;
 
-import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 
 public final class AuthoritiesFactory {
 
     private AuthoritiesFactory() {}
 
-    public static Collection<? extends GrantedAuthority> forControlPlane(ControlPlaneUser user) {
-    	LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    public static Set<GrantedAuthority> forControlPlane(ControlPlaneUser user) {
+        Set<String> merged = new LinkedHashSet<>();
 
-        // 1) role -> permissions (enum -> name)
-        ControlPlaneRolePermissions.permissionsFor(user.getRole())
-                .forEach(p -> permissions.add(p.name()));
-
-        // 2) permissions explícitas do user
-        if (user.getPermissions() != null) {
-            permissions.addAll(user.getPermissions());
+        // defaults da role (enum -> string)
+        for (ControlPlanePermission p : ControlPlaneRolePermissions.permissionsFor(user.getRole())) {
+            merged.add(p.name());
         }
 
-        // 3) normaliza CP_ e bloqueia TEN_
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlane(permissions);
+        // permissions explícitas do banco
+        if (user.getPermissions() != null) {
+            for (String raw : user.getPermissions()) {
+                if (!StringUtils.hasText(raw)) continue;
+                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            }
+        }
 
-        return normalized.stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        // normaliza e bloqueia escopo errado (TEN_ dentro do CP, etc.)
+        merged = PermissionScopeValidator.normalizeControlPlane(merged);
+
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        for (String perm : merged) {
+            authorities.add(new SimpleGrantedAuthority(perm));
+        }
+        return authorities;
     }
 
-    public static Collection<? extends GrantedAuthority> forTenant(TenantUser user) {
-    	LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    public static Set<GrantedAuthority> forTenant(TenantUser user) {
+        Set<String> merged = new LinkedHashSet<>();
 
-        // 1) role -> permissions (enum -> name)
-        TenantRolePermissions.permissionsFor(user.getRole())
-                .forEach(p -> permissions.add(p.name()));
-
-        // 2) permissions explícitas do user (List<String>)
-        if (user.getPermissions() != null) {
-            permissions.addAll(user.getPermissions());
+        // ✅ defaults por role (igual sua entidade faz)
+        if (user.getRole() != null) {
+            for (TenantPermission p : TenantRolePermissions.permissionsFor(user.getRole())) {
+                merged.add(p.name());
+            }
         }
 
-        // 3) normaliza TEN_ e bloqueia CP_
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeTenant(permissions);
+        // permissions explícitas do banco
+        if (user.getPermissions() != null) {
+            for (String raw : user.getPermissions()) {
+                if (!StringUtils.hasText(raw)) continue;
+                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            }
+        }
 
-        return normalized.stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        // ✅ normaliza SEMPRE e bloqueia CP_ dentro do tenant
+        merged = PermissionScopeValidator.normalizeTenant(merged);
+
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        for (String perm : merged) {
+            authorities.add(new SimpleGrantedAuthority(perm));
+        }
+        return authorities;
     }
 }

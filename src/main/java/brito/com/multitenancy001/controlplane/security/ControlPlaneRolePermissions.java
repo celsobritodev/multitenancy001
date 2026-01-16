@@ -14,7 +14,10 @@ public final class ControlPlaneRolePermissions {
             case CONTROLPLANE_OWNER -> EnumSet.of(
                 // ✅ mínimo para gestão de usuários de plataforma
                 ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_USER_WRITE
+                ControlPlanePermission.CP_USER_WRITE,
+                
+             // ✅ reset de senha de usuários (billing/support/operator/etc)
+                ControlPlanePermission.CP_USER_RESET_PASSWORD
 
                 // (opcional) se você permitir deleção de usuários
                 // , ControlPlanePermission.CP_USER_DELETE

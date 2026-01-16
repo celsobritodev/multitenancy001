@@ -48,13 +48,13 @@ public class AccountLifecycleService {
 	 */
 
 	@Transactional(readOnly = true)
-	public List<AccountResponse> listAllAccounts() {
+	public List<AccountResponse> listAccounts() {
 		return publicExecutor.run(
 				() -> accountRepository.findAllByDeletedFalse().stream().map(accountApiMapper::toResponse).toList());
 	}
 
 	@Transactional(readOnly = true)
-	public AccountResponse getAccountById(Long accountId) {
+	public AccountResponse getAccount(Long accountId) {
 		return publicExecutor.run(() -> {
 			Account account = accountRepository.findByIdAndDeletedFalse(accountId)
 					.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
