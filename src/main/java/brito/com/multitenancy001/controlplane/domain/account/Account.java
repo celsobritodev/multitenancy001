@@ -1,19 +1,34 @@
 package brito.com.multitenancy001.controlplane.domain.account;
 
-import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.shared.domain.DomainException;
-
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
-import java.util.ArrayList;
-
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "accounts")
@@ -81,7 +96,7 @@ public class Account {
 
     @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
-    
+
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
 
@@ -92,41 +107,37 @@ public class Account {
     private String companyCity;
 
     @Column(name = "company_state", length = 50)
-    private String companyState; 
-    
+    private String companyState;
 
     // Localização
-    @Column(name = "company_country", length = 50, nullable = false)
+    @Column(name = "company_country", length = 60, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
-    
-    
-    @Column(name = "timezone", length = 50, nullable = false)
+
+    @Column(name = "timezone", length = 60, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10, nullable = false)
+    @Column(name = "locale", length = 20, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
-    
 
-    @Column(name = "currency", length = 3, nullable = false)
+    // ✅ alinhado com sua migration (VARCHAR(10))
+    @Column(name = "currency", length = 10, nullable = false)
     @Builder.Default
     private String currency = "BRL";
-    
+
     @OneToMany(mappedBy = "account", fetch = FetchType.LAZY,
             cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-    
-    
+
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
 
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
-
 
     // Soft delete
     @Column(name = "deleted", nullable = false)
@@ -135,10 +146,15 @@ public class Account {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
-    
+
     @PrePersist
     protected void onCreate() {
-        // ✅ aqui NÃO usar tempo
+        // defaults defensivos (mantém coerente mesmo se alguém setar null/blank)
+        if (this.companyCountry == null || this.companyCountry.isBlank()) this.companyCountry = "Brasil";
+        if (this.timezone == null || this.timezone.isBlank()) this.timezone = "America/Sao_Paulo";
+        if (this.locale == null || this.locale.isBlank()) this.locale = "pt_BR";
+        if (this.currency == null || this.currency.isBlank()) this.currency = "BRL";
+
         // slug
         if (this.slug == null || this.slug.isBlank()) {
             this.slug = (this.name == null ? "conta" : this.name)
@@ -156,8 +172,6 @@ public class Account {
                     UUID.randomUUID().toString().substring(0, 8);
         }
     }
-    
-    
 
     // =========================
     // Semântica / helpers
@@ -222,66 +236,64 @@ public class Account {
         // para SYSTEM: continua ACTIVE
         this.status = AccountStatus.ACTIVE;
     }
-    
-    
- // =========================
- // Regras de domínio: SYSTEM != cliente
- // =========================
 
- public void setSubscriptionPlan(SubscriptionPlan plan) {
-     if (plan == null) {
-         throw new DomainException("subscriptionPlan is required");
-     }
-     if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
-         throw new DomainException("SYSTEM account must use SYSTEM plan");
-     }
-     this.subscriptionPlan = plan;
- }
+    // =========================
+    // Regras de domínio: SYSTEM != cliente
+    // =========================
 
- public void setStatus(AccountStatus status) {
-     if (status == null) {
-         throw new DomainException("status is required");
-     }
-     if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
-         throw new DomainException("SYSTEM account must be ACTIVE");
-     }
-     this.status = status;
- }
+    public void setSubscriptionPlan(SubscriptionPlan plan) {
+        if (plan == null) {
+            throw new DomainException("subscriptionPlan is required");
+        }
+        if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
+            throw new DomainException("SYSTEM account must use SYSTEM plan");
+        }
+        this.subscriptionPlan = plan;
+    }
 
- public void setTrialEndDate(LocalDateTime trialEndDate) {
-     if (this.isSystemAccount() && trialEndDate != null) {
-         throw new DomainException("SYSTEM account must not have trialEndDate");
-     }
-     this.trialEndDate = trialEndDate;
- }
+    public void setStatus(AccountStatus status) {
+        if (status == null) {
+            throw new DomainException("status is required");
+        }
+        if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
+            throw new DomainException("SYSTEM account must be ACTIVE");
+        }
+        this.status = status;
+    }
 
- public void setPaymentDueDate(LocalDateTime paymentDueDate) {
-     if (this.isSystemAccount() && paymentDueDate != null) {
-         throw new DomainException("SYSTEM account must not have paymentDueDate");
-     }
-     this.paymentDueDate = paymentDueDate;
- }
+    public void setTrialEndDate(LocalDateTime trialEndDate) {
+        if (this.isSystemAccount() && trialEndDate != null) {
+            throw new DomainException("SYSTEM account must not have trialEndDate");
+        }
+        this.trialEndDate = trialEndDate;
+    }
 
- /**
-  * Quando muda para SYSTEM, aplica defaults coerentes:
-  * - status ACTIVE
-  * - plan SYSTEM
-  * - sem trial/billing dates
-  */
- public void setType(AccountType type) {
-     if (type == null) {
-         throw new DomainException("accountType is required");
-     }
-     this.type = type;
+    public void setPaymentDueDate(LocalDateTime paymentDueDate) {
+        if (this.isSystemAccount() && paymentDueDate != null) {
+            throw new DomainException("SYSTEM account must not have paymentDueDate");
+        }
+        this.paymentDueDate = paymentDueDate;
+    }
 
-     if (this.isSystemAccount()) {
-         // defaults do SYSTEM
-         this.subscriptionPlan = SubscriptionPlan.SYSTEM;
-         this.status = AccountStatus.ACTIVE;
-         this.trialEndDate = null;
-         this.paymentDueDate = null;
-         this.nextBillingDate = null;
-     }
- }
+    /**
+     * Quando muda para SYSTEM, aplica defaults coerentes:
+     * - status ACTIVE
+     * - plan SYSTEM
+     * - sem trial/billing dates
+     */
+    public void setType(AccountType type) {
+        if (type == null) {
+            throw new DomainException("accountType is required");
+        }
+        this.type = type;
 
+        if (this.isSystemAccount()) {
+            // defaults do SYSTEM
+            this.subscriptionPlan = SubscriptionPlan.SYSTEM;
+            this.status = AccountStatus.ACTIVE;
+            this.trialEndDate = null;
+            this.paymentDueDate = null;
+            this.nextBillingDate = null;
+        }
+    }
 }

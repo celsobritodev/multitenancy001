@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
 
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP,

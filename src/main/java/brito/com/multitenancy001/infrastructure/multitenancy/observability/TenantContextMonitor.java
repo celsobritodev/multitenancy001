@@ -13,21 +13,29 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 @Slf4j
 public class TenantContextMonitor {
     
-    @Around("@within(org.springframework.stereotype.Service)")
-    public Object monitorServiceMethods(ProceedingJoinPoint joinPoint) throws Throwable {
-        String methodName = joinPoint.getSignature().toShortString();
-        String currentTenant = TenantContext.getOrNull();
-        
-        log.debug("🏁 INÍCIO {} - Tenant: {}", methodName, currentTenant);
-        
-        try {
-            Object result = joinPoint.proceed();
-            log.debug("✅ FIM {} - Tenant: {}", methodName, TenantContext.getOrNull());
-            return result;
-        } catch (Exception e) {
-            log.error("❌ ERRO {} - Tenant: {} - Erro: {}", 
-                     methodName, currentTenant, e.getMessage());
-            throw e;
-        }
-    }
+	@Around("@within(org.springframework.stereotype.Service)")
+	public Object monitorServiceMethods(ProceedingJoinPoint joinPoint) throws Throwable {
+	    String methodName = joinPoint.getSignature().toShortString();
+
+	    String boundTenant = TenantContext.getOrNull();               // null ou tenant real
+	    String effectiveTenant = TenantContext.getOrDefaultPublic();  // tenant ou "public"
+
+	    log.debug("🏁 INÍCIO {} - Tenant(bound={}, effective={})", methodName, boundTenant, effectiveTenant);
+
+	    try {
+	        Object result = joinPoint.proceed();
+
+	        String boundAfter = TenantContext.getOrNull();
+	        String effectiveAfter = TenantContext.getOrDefaultPublic();
+
+	        log.debug("✅ FIM {} - Tenant(bound={}, effective={})", methodName, boundAfter, effectiveAfter);
+	        return result;
+
+	    } catch (Exception e) {
+	        log.error("❌ ERRO {} - Tenant(bound={}, effective={}) - Erro: {}",
+	                methodName, boundTenant, effectiveTenant, e.getMessage());
+	        throw e;
+	    }
+	}
+
 }

@@ -57,7 +57,7 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = user.isEnabledForLogin();
         this.accountNonLocked = user.isAccountNonLocked(now);
-        this.mustChangePassword = Boolean.TRUE.equals(user.getMustChangePassword());
+        this.mustChangePassword = user.isMustChangePassword();
 
     }
 
@@ -81,7 +81,7 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
         this.accountNonLocked = user.getLockedUntil() == null || !user.getLockedUntil().isAfter(now);
-        this.mustChangePassword = Boolean.TRUE.equals(user.getMustChangePassword());
+        this.mustChangePassword = user.isMustChangePassword();
 
     }
 

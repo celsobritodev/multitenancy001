@@ -9,14 +9,33 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantContext {
 
+    public static final String PUBLIC_SCHEMA = "public";
+
+    /**
+     * ✅ Retorna o tenant REALMENTE bindado (ou null).
+     * Não mascara com "public".
+     */
     public static String getOrNull() {
-        return CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
+        return CurrentTenantSchemaResolver.resolveBoundTenantOrNull();
+    }
+
+    /**
+     * ✅ Quando você quer um fallback explícito para public.
+     */
+    public static String getOrDefaultPublic() {
+        String t = getOrNull();
+        return (t != null ? t : PUBLIC_SCHEMA);
+    }
+
+    public static boolean isPublic() {
+        String t = getOrNull();
+        return t == null || PUBLIC_SCHEMA.equalsIgnoreCase(t);
     }
 
     public static void bind(String tenantId) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            log.error("🔥 ERRO GRAVE: bindTenant chamado DENTRO de transação! tenant={}", tenantId);
-        }
+    	if (TransactionSynchronizationManager.isActualTransactionActive()) {
+    	    throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
+    	}
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
 
@@ -37,13 +56,13 @@ public class TenantContext {
         log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
     }
 
-    // ✅ NOVO: escopo seguro
+    // ✅ escopo seguro
     public static Scope scope(String tenantId) {
         bind(tenantId);
         return new Scope();
     }
 
-    // ✅ NOVO: escopo PUBLIC explícito (garante que não ficou tenant pendurado)
+    // ✅ escopo PUBLIC explícito (garante que não ficou tenant pendurado)
     public static Scope publicScope() {
         clear();
         return new Scope();

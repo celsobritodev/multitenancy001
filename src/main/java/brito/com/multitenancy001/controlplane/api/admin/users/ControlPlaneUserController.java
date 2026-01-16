@@ -98,7 +98,7 @@ public class ControlPlaneUserController {
     
     
     @PatchMapping("/{userId}/reset-password")
-    @PreAuthorize("hasAuthority('CP_USER_RESET_PASSWORD')")
+    @PreAuthorize("hasAuthority('CP_USER_PASSWORD_RESET')")
     public ResponseEntity<Void> resetPassword(
             @PathVariable Long userId,
             @Valid @RequestBody brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest request

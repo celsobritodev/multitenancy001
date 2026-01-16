@@ -128,7 +128,7 @@ public class TenantSchemaProvisioningService {
                 .username(normUsername)
                 .email(normEmail)
                 .password(passwordEncoder.encode(rawPassword))
-                .role(TenantRole.TENANT_ACCOUNT_OWNER)
+                .role(TenantRole.TENANT_OWNER)
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .timezone(account.getTimezone() != null ? account.getTimezone() : "America/Sao_Paulo")

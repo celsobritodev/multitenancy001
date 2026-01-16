@@ -16,14 +16,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
-@Table(
-    name = "controlplane_users",
-    schema = "public",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "ux_controlplane_users_username", columnNames = {"account_id", "username"}),
-        @UniqueConstraint(name = "ux_controlplane_users_email", columnNames = {"account_id", "email"})
-    }
-)
+@Table(name = "controlplane_users")
+
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = { "account", "password" })
 public class ControlPlaneUser {
@@ -72,24 +66,24 @@ public class ControlPlaneUser {
 
     @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
-    private Integer failedLoginAttempts = 0;
+    private int failedLoginAttempts = 0;
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
-    private Boolean mustChangePassword = false;
+    private boolean mustChangePassword = false;
 
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
     // ✅ ESTES CAMPOS EXISTEM NA MIGRATION
-    @Column(name = "timezone", nullable=false,length = 50)
+    @Column(name = "timezone", nullable=false,length = 60)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", nullable=false,length = 10)
+    @Column(name = "locale", nullable=false,length = 20)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -162,7 +156,7 @@ public class ControlPlaneUser {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-   public void softDelete(LocalDateTime now, long uniqueSuffix) {
+  public void softDelete(LocalDateTime now) {
     if (systemUser) {
         throw new IllegalStateException("SYSTEM_USER_READONLY");
     }
@@ -171,12 +165,13 @@ public class ControlPlaneUser {
     deleted = true;
     deletedAt = now;
 
+    // (opcional) se você quer garantir que não faça login após delete:
     suspendedByAccount = true;
     suspendedByAdmin = true;
 
-    username = "deleted_" + username + "_" + uniqueSuffix;
-    email = "deleted_" + email + "_" + uniqueSuffix;
+    // ✅ Estratégia A: NÃO altera username/email
 }
+
 
 
     public void restore() {

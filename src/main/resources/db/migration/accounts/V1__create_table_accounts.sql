@@ -24,9 +24,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     company_state VARCHAR(50),
     company_country VARCHAR(60),
 
-    timezone VARCHAR(60),
-    locale VARCHAR(20),
-    currency VARCHAR(10),
+    -- ✅ alinhado com a entity Account: nullable=false + defaults
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
+    currency VARCHAR(10) NOT NULL DEFAULT 'BRL',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -46,15 +47,14 @@ CREATE TABLE IF NOT EXISTS accounts (
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_account_type
     CHECK (account_type IN ('TENANT', 'SYSTEM'));
-    
+
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_subscription_plan
     CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'SYSTEM'));
-    
+
 CREATE UNIQUE INDEX ux_accounts_single_system
 ON accounts (account_type)
 WHERE account_type = 'SYSTEM';
-    
 
 -- Unicidade de documento por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active

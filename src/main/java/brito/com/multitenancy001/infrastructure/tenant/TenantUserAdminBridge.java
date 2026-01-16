@@ -78,7 +78,7 @@ public class TenantUserAdminBridge {
                     u.setName("Administrador");
                     u.setEmail(email);
                     u.setPassword(passwordEncoder.encode(rawPassword));
-                    u.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+                    u.setRole(TenantRole.TENANT_OWNER);
                     u.setSuspendedByAccount(false);
                     u.setSuspendedByAdmin(false);
 

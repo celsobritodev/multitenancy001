@@ -86,7 +86,6 @@ import brito.com.multitenancy001.controlplane.application.ControlPlaneAuthServic
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -95,14 +94,15 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ControlPlaneAuthController {
 
-	private final ControlPlaneAuthService controlPlaneAuthService;
+    private final ControlPlaneAuthService controlPlaneAuthService;
 
-	@PostMapping("/login")
-	public ResponseEntity<JwtResponse> loginControlPlaneUser(@Valid @RequestBody ControlPlaneAdminLoginRequest request) {
-
-		JwtResponse response = controlPlaneAuthService.loginControlPlaneUser(request);
-		return ResponseEntity.ok(response);
-	}
+    @PostMapping("/login")
+    public ResponseEntity<JwtResponse> loginControlPlaneUser(
+            @Valid @RequestBody ControlPlaneAdminLoginRequest request
+    ) {
+        JwtResponse response = controlPlaneAuthService.loginControlPlaneUser(request);
+        return ResponseEntity.ok(response);
+    }
 }
 package brito.com.multitenancy001.controlplane.api.admin.billing;
 
@@ -203,10 +203,45 @@ public class ControlPlanePaymentController {
             String reason
     ) {}
 }
+package brito.com.multitenancy001.controlplane.api.admin.me;
+
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneMeResponse;
+import brito.com.multitenancy001.controlplane.application.user.ControlPlaneUserService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/admin/me")
+@RequiredArgsConstructor
+public class ControlPlaneMeController {
+
+    private final ControlPlaneUserService controlPlaneUserService;
+
+    // ✅ usado pelo front mesmo quando mustChangePassword=true
+    @GetMapping
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    public ResponseEntity<ControlPlaneMeResponse> me() {
+        return ResponseEntity.ok(controlPlaneUserService.getMe());
+    }
+
+    // ✅ autenticado: qualquer user CP pode trocar a própria senha
+    @PatchMapping("/password")
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    public ResponseEntity<Void> changeMyPassword(@Valid @RequestBody ControlPlaneChangeMyPasswordRequest request) {
+        controlPlaneUserService.changeMyPassword(request);
+        return ResponseEntity.noContent().build();
+    }
+}
 package brito.com.multitenancy001.controlplane.api.admin.users;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPermissionsUpdateRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserUpdateRequest;
 import brito.com.multitenancy001.controlplane.application.user.ControlPlaneUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -226,7 +261,9 @@ public class ControlPlaneUserController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
-    public ResponseEntity<ControlPlaneUserDetailsResponse> createControlPlaneUser(@Valid @RequestBody ControlPlaneUserCreateRequest request) {
+    public ResponseEntity<ControlPlaneUserDetailsResponse> createControlPlaneUser(
+            @Valid @RequestBody ControlPlaneUserCreateRequest request
+    ) {
         ControlPlaneUserDetailsResponse response = controlPlaneUserService.createControlPlaneUser(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -243,12 +280,45 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.getControlPlaneUser(userId));
     }
 
+    /**
+     * ✅ Update geral:
+     * - name/email/role/username/permissions (se você decidir aceitar tudo aqui)
+     * - Service faz as barreiras:
+     *   - bloqueia update se systemUser=true
+     *   - bloqueia rename para username reservado
+     *   - bloqueia alterar permissions se não for OWNER (e bloqueia se systemUser=true)
+     */
+    @PatchMapping("/{userId}")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUser(
+            @PathVariable Long userId,
+            @Valid @RequestBody ControlPlaneUserUpdateRequest request
+    ) {
+        return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUser(userId, request));
+    }
+
     @PatchMapping("/{userId}/status")
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserStatus(
             @PathVariable Long userId,
-            @RequestParam boolean active) {
+            @RequestParam boolean active
+    ) {
         return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUserStatus(userId, active));
+    }
+
+    /**
+     * ✅ Endpoint dedicado para permissions:
+     * - Service faz as barreiras:
+     *   - bloqueia se systemUser=true
+     *   - só OWNER pode
+     */
+    @PatchMapping("/{userId}/permissions")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserPermissions(
+            @PathVariable Long userId,
+            @Valid @RequestBody ControlPlaneUserPermissionsUpdateRequest request
+    ) {
+        return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUserPermissions(userId, request));
     }
 
     @DeleteMapping("/{userId}")
@@ -263,6 +333,19 @@ public class ControlPlaneUserController {
     public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }
+    
+    
+    @PatchMapping("/{userId}/reset-password")
+    @PreAuthorize("hasAuthority('CP_USER_RESET_PASSWORD')")
+    public ResponseEntity<Void> resetPassword(
+            @PathVariable Long userId,
+            @Valid @RequestBody brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest request
+    ) {
+        controlPlaneUserService.resetControlPlaneUserPassword(userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+
 }
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
@@ -485,6 +568,38 @@ public record ControlPlaneAdminUserSummaryResponse(
 }
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record ControlPlaneChangeMyPasswordRequest(
+
+        @NotBlank(message = "Senha atual é obrigatória")
+        @Size(min = 8, max = 72, message = "Senha atual deve ter entre 8 e 72 caracteres")
+        String currentPassword,
+
+        @NotBlank(message = "Nova senha é obrigatória")
+        @Size(min = 8, max = 72, message = "Nova senha deve ter entre 8 e 72 caracteres")
+        String newPassword,
+
+        @NotBlank(message = "Confirmar senha é obrigatório")
+        @Size(min = 8, max = 72, message = "Confirmar senha deve ter entre 8 e 72 caracteres")
+        String confirmPassword
+) {}
+package brito.com.multitenancy001.controlplane.api.dto.users;
+
+import java.util.List;
+
+public record ControlPlaneMeResponse(
+        Long userId,
+        String username,
+        String email,
+        String roleAuthority,
+        Long accountId,
+        boolean mustChangePassword,
+        List<String> authorities
+) {}
+package brito.com.multitenancy001.controlplane.api.dto.users;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -571,7 +686,80 @@ public record ControlPlaneUserDetailsResponse(
             permissions = List.of();
         }
     }
-}package brito.com.multitenancy001.controlplane.api.dto.users.summary;
+}package brito.com.multitenancy001.controlplane.api.dto.users;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record ControlPlaneUserPasswordResetRequest(
+
+        @NotBlank(message = "Nova senha é obrigatória")
+        @Size(min = 8, max = 72, message = "Senha deve ter entre 8 e 72 caracteres")
+        String newPassword,
+
+        @NotBlank(message = "Confirmar senha é obrigatório")
+        @Size(min = 8, max = 72, message = "Confirmar senha deve ter entre 8 e 72 caracteres")
+        String confirmPassword
+
+) {}
+package brito.com.multitenancy001.controlplane.api.dto.users;
+
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
+
+import java.util.List;
+
+public record ControlPlaneUserPermissionsUpdateRequest(
+
+        @NotEmpty(message = "Lista de permissões não pode ser vazia")
+        List<
+            @Pattern(
+                regexp = "^CP_[A-Z0-9_]+$",
+                message = "Permissões de ControlPlane devem começar com CP_"
+            )
+            String
+        > permissions
+) {}
+package brito.com.multitenancy001.controlplane.api.dto.users;
+
+import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+import java.util.List;
+
+public record ControlPlaneUserUpdateRequest(
+
+        @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
+        String name,
+
+        @Email(message = "Email inválido")
+        @Size(max = 150, message = "Email deve ter no máximo 150 caracteres")
+        String email,
+
+        // opcional: só pode alterar se NÃO for system user (validado no service)
+        @Pattern(
+                regexp = ValidationPatterns.USERNAME_PATTERN,
+                message = "Username inválido"
+        )
+        @Size(min = 3, max = 100, message = "Username deve ter entre 3 e 100 caracteres")
+        String username,
+
+        // opcional: troca de role (policy no service)
+        ControlPlaneRole role,
+
+        // opcional: só OWNER pode enviar e não pode ser system user (policy no service)
+        List<
+            @Pattern(
+                regexp = "^CP_[A-Z0-9_]+$",
+                message = "Permissões de ControlPlane devem começar com CP_"
+            )
+            String
+        > permissions
+) {}
+package brito.com.multitenancy001.controlplane.api.dto.users.summary;
 
 public record AccountTenantUserSummaryResponse(
         Long id,
@@ -1581,39 +1769,40 @@ import lombok.RequiredArgsConstructor;
 public class ControlPlaneAuthService {
 
     private static final String DEFAULT_SCHEMA = "public";
-	private final AuthenticationManager authenticationManager;
+
+    private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
-    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest controlPlaneAdminLoginRequest) {
-
+    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
 
         TenantContext.clear();
 
+        // 1) busca user (public)
         ControlPlaneUser user = controlPlaneUserRepository
-                .findByUsernameAndDeletedFalse(controlPlaneAdminLoginRequest.username())
+                .findByUsernameAndDeletedFalse(req.username())
                 .orElseThrow(() -> new ApiException(
                         "USER_NOT_FOUND",
                         "Usuário de plataforma não encontrado",
                         404
                 ));
 
-        // 🔒 Regras de negócio
-        if (user.isSuspendedByAccount() ) {
-            throw new ApiException(
-                    "ACCESS_DENIED",
-                    "Usuário não autorizado",
-                    403
-            );
+        // 2) regra: suspenso por conta -> bloqueia
+        if (user.isSuspendedByAccount()) {
+            throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
         }
 
+        // 3) autentica de fato (senha)
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        controlPlaneAdminLoginRequest.username(),
-                        controlPlaneAdminLoginRequest.password()
-                )
+                new UsernamePasswordAuthenticationToken(req.username(), req.password())
         );
 
+        // ✅ IMPORTANTE:
+        // Não bloquear must_change_password no login.
+        // O bloqueio de rotas deve acontecer no MustChangePasswordFilter,
+        // permitindo apenas /api/admin/me/password.
+
+        // 4) tokens
         String accessToken = jwtTokenProvider.generateControlPlaneToken(
                 authentication,
                 user.getAccount().getId(),
@@ -1758,13 +1947,17 @@ public class PublicAccountCreationService {
 }
 package brito.com.multitenancy001.controlplane.application.user;
 
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneMeResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPermissionsUpdateRequest;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserUpdateRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -1772,6 +1965,9 @@ import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -1780,6 +1976,7 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -1793,19 +1990,20 @@ public class ControlPlaneUserService {
     private final AppClock appClock;
     private final SecurityUtils securityUtils;
 
+    // ✅ usernames reservados do sistema (nunca pode criar outro com esses nomes)
+    private static final Set<String> RESERVED_USERNAMES = Set.of(
+            "superadmin", "billing", "support", "operator"
+    );
 
     private Account getControlPlaneAccount() {
         TenantContext.clear(); // PUBLIC
         return accountRepository.findBySlugAndDeletedFalse("controlplane")
                 .orElseThrow(() -> new ApiException(
                         "CONTROLPLANE_ACCOUNT_NOT_FOUND",
-                        "Conta controlplane não encontrada. Rode a migration V3__insert_controlplane_account.sql",
+                        "Conta controlplane não encontrada. Rode a migration V4__insert_controlplane_account.sql",
                         500
                 ));
     }
-    
- // ===== Policy switches (mude para true se quiser liberar) =====
-  
 
     private static final Set<ControlPlaneRole> OWNER_CAN_CREATE = EnumSet.of(
             ControlPlaneRole.CONTROLPLANE_SUPPORT,
@@ -1815,50 +2013,88 @@ public class ControlPlaneUserService {
 
     private static final Set<ControlPlaneRole> SUPPORT_CAN_CREATE = EnumSet.of(
             ControlPlaneRole.CONTROLPLANE_OPERATOR
-            // (opcional) ControlPlaneRole.CONTROLPLANE_SUPPORT se ALLOW_SUPPORT_CREATE_SUPPORT=true
     );
 
-   private void assertCanCreateRole(ControlPlaneRole creatorRole, ControlPlaneRole targetRole) {
-    if (creatorRole == null) {
-        throw new ApiException("FORBIDDEN", "Role do criador não encontrada", 403);
-    }
-    if (targetRole == null) {
-        throw new ApiException("INVALID_ROLE", "Role alvo é obrigatória", 400);
+    private void assertCanCreateRole(ControlPlaneRole creatorRole, ControlPlaneRole targetRole) {
+        if (creatorRole == null) {
+            throw new ApiException("FORBIDDEN", "Role do criador não encontrada", 403);
+        }
+        if (targetRole == null) {
+            throw new ApiException("INVALID_ROLE", "Role alvo é obrigatória", 400);
+        }
+
+        if (creatorRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
+            if (targetRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
+                throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar outro CONTROLPLANE_OWNER", 403);
+            }
+            if (!OWNER_CAN_CREATE.contains(targetRole)) {
+                throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar a role: " + targetRole, 403);
+            }
+            return;
+        }
+
+        if (creatorRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
+            if (targetRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
+                throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar outro CONTROLPLANE_SUPPORT", 403);
+            }
+            if (!SUPPORT_CAN_CREATE.contains(targetRole)) {
+                throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar a role: " + targetRole, 403);
+            }
+            return;
+        }
+
+        throw new ApiException("FORBIDDEN", "Sua role não pode criar usuários de plataforma", 403);
     }
 
-    // OWNER
-    if (creatorRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
-        // ❌ aqui, por padrão, OWNER NÃO cria outro OWNER (mais seguro)
-        if (targetRole == ControlPlaneRole.CONTROLPLANE_OWNER) {
-            throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar outro CONTROLPLANE_OWNER", 403);
-        }
-        if (!OWNER_CAN_CREATE.contains(targetRole)) {
-            throw new ApiException("FORBIDDEN", "CONTROLPLANE_OWNER não pode criar a role: " + targetRole, 403);
-        }
-        return;
+    // =========================
+    // ✅ GUARDS (regras novas)
+    // =========================
+
+    private String normalizeUsername(String username) {
+        return username == null ? null : username.trim().toLowerCase(Locale.ROOT);
     }
 
-    // SUPPORT
-    if (creatorRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
-        // ❌ aqui, por padrão, SUPPORT NÃO cria outro SUPPORT (mais seguro)
-        if (targetRole == ControlPlaneRole.CONTROLPLANE_SUPPORT) {
-            throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar outro CONTROLPLANE_SUPPORT", 403);
+    private void assertUsernameNotReserved(String username) {
+        if (username == null) return;
+        String u = normalizeUsername(username);
+        if (RESERVED_USERNAMES.contains(u)) {
+            throw new ApiException("RESERVED_USERNAME", "Username reservado do sistema: " + u, 409);
         }
-        if (!SUPPORT_CAN_CREATE.contains(targetRole)) {
-            throw new ApiException("FORBIDDEN", "CONTROLPLANE_SUPPORT não pode criar a role: " + targetRole, 403);
-        }
-        return;
     }
 
-    // BILLING_MANAGER e OPERATOR: não criam ninguém
-    throw new ApiException("FORBIDDEN", "Sua role não pode criar usuários de plataforma", 403);
-}
+    private void assertNotSystemUserReadonly(ControlPlaneUser user, String action) {
+        if (user.isSystemUser()) {
+            throw new ApiException("SYSTEM_USER_READONLY",
+                    "Usuário padrão do sistema é readonly e não pode sofrer ação: " + action,
+                    409);
+        }
+    }
 
-    
+    private void assertReservedUsernameOnlyAllowedForSystemUsers(String username, boolean isSystemUser) {
+        if (username == null) return;
+        String u = normalizeUsername(username);
+        if (RESERVED_USERNAMES.contains(u) && !isSystemUser) {
+            throw new ApiException("RESERVED_USERNAME", "Username reservado do sistema: " + u, 409);
+        }
+    }
+
+    private ControlPlaneUser loadActiveUserOr404(Long userId, Long accountId) {
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndAccountId(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+
+        if (user.isDeleted()) {
+            throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
+        }
+        return user;
+    }
+
+    // =========================
+    // CREATE
+    // =========================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
         TenantContext.clear();
-
         Account controlPlaneAccount = getControlPlaneAccount();
 
         if (req.username() == null || req.username().isBlank()) {
@@ -1868,26 +2104,30 @@ public class ControlPlaneUserService {
             throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
         }
 
-        String username = req.username().toLowerCase().trim();
+        String username = normalizeUsername(req.username());
 
-        // ✅ role já tipada
+        // ✅ bloqueia username reservado (superadmin/billing/support/operator)
+        assertReservedUsernameOnlyAllowedForSystemUsers(username, false);
+
         ControlPlaneRole roleEnum = req.role();
-        
-     // ✅ policy: "quem pode criar quem"
+
         ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
         assertCanCreateRole(creatorRole, roleEnum);
 
-        // ✅ opcional (recomendado): só OWNER pode enviar permissions explícitas no payload
-        if (req.permissions() != null && !req.permissions().isEmpty() && creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+        if (req.permissions() != null && !req.permissions().isEmpty()
+                && creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
             throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode definir permissions explícitas", 403);
         }
 
-        
+        // ✅ email trim (evita duplicidade por espaços)
+        String email = req.email() == null ? null : req.email().trim();
 
-        if (controlPlaneUserRepository.existsByUsernameAndAccountId(username, controlPlaneAccount.getId())) {
+        // ✅ unicidade ativa + case-insensitive (deleted=false)
+        if (controlPlaneUserRepository.existsActiveByUsernameIgnoreCase(controlPlaneAccount.getId(), username)) {
             throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
         }
-        if (controlPlaneUserRepository.existsByEmailAndAccountId(req.email(), controlPlaneAccount.getId())) {
+        if (email != null && !email.isBlank()
+                && controlPlaneUserRepository.existsActiveByEmailIgnoreCase(controlPlaneAccount.getId(), email)) {
             throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
         }
 
@@ -1901,10 +2141,11 @@ public class ControlPlaneUserService {
         ControlPlaneUser user = ControlPlaneUser.builder()
                 .name(req.name())
                 .username(username)
-                .email(req.email())
+                .email(email)
                 .password(passwordEncoder.encode(req.password()))
                 .role(roleEnum)
                 .account(controlPlaneAccount)
+                .systemUser(false) // ✅ usuários criados pela API nunca são system users
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .permissions(normalizedPermissions)
@@ -1912,6 +2153,10 @@ public class ControlPlaneUserService {
 
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
+
+    // =========================
+    // READ
+    // =========================
 
     @Transactional(readOnly = true)
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
@@ -1927,33 +2172,138 @@ public class ControlPlaneUserService {
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
-
-        ControlPlaneUser user = controlPlaneUserRepository
-                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
-
-        if (user.isDeleted()) {
-            throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
-        }
-
+        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
         return mapToResponse(user);
     }
+
+    // =========================
+    // UPDATE
+    // =========================
+
+    public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest req) {
+        TenantContext.clear();
+        Account controlPlaneAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+
+        // ✅ system user é readonly: não pode renomear / trocar email / role / permissions / etc.
+        assertNotSystemUserReadonly(user, "UPDATE_USER");
+
+        // name
+        if (req.name() != null && !req.name().isBlank()) {
+            user.setName(req.name().trim());
+        }
+
+        // email (se veio)
+        if (req.email() != null && !req.email().isBlank()) {
+            String newEmail = req.email().trim();
+
+            if (user.getEmail() == null || !newEmail.equalsIgnoreCase(user.getEmail())) {
+                boolean existsOther = controlPlaneUserRepository.existsOtherActiveByEmailIgnoreCase(
+                        controlPlaneAccount.getId(),
+                        newEmail,
+                        user.getId()
+                );
+                if (existsOther) {
+                    throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+                }
+                user.setEmail(newEmail);
+            }
+        }
+
+        // username (rename)
+        if (req.username() != null && !req.username().isBlank()) {
+            String newUsername = normalizeUsername(req.username());
+
+            if (!newUsername.matches(ValidationPatterns.USERNAME_PATTERN)) {
+                throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
+            }
+
+            // ✅ reservado só pode existir se systemUser=true (aqui é false pois já bloqueou system users)
+            assertReservedUsernameOnlyAllowedForSystemUsers(newUsername, false);
+
+            if (!newUsername.equalsIgnoreCase(user.getUsername())) {
+                // ✅ impede colisão com outro ativo (case-insensitive)
+                boolean existsOther = controlPlaneUserRepository.existsOtherActiveByUsernameIgnoreCase(
+                        controlPlaneAccount.getId(),
+                        newUsername,
+                        user.getId()
+                );
+                if (existsOther) {
+                    throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
+                }
+
+                user.setUsername(newUsername);
+            }
+        }
+
+        // role (opcional)
+        if (req.role() != null) {
+            ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
+            if (creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+                throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode alterar role", 403);
+            }
+            user.setRole(req.role());
+        }
+
+        // permissions (opcional)
+        if (req.permissions() != null) {
+            ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
+            if (creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+                throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode definir permissions explícitas", 403);
+            }
+
+            LinkedHashSet<String> normalized;
+            try {
+                normalized = PermissionScopeValidator.normalizeControlPlane(req.permissions());
+            } catch (IllegalArgumentException e) {
+                throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
+            }
+            user.setPermissions(normalized);
+        }
+
+        return mapToResponse(controlPlaneUserRepository.save(user));
+    }
+
+    public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
+            Long userId,
+            ControlPlaneUserPermissionsUpdateRequest req
+    ) {
+        TenantContext.clear();
+        Account controlPlaneAccount = getControlPlaneAccount();
+
+        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+
+        // ✅ system user não pode ter permissions alteradas
+        assertNotSystemUserReadonly(user, "UPDATE_PERMISSIONS");
+
+        ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
+        if (creatorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+            throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode alterar permissions", 403);
+        }
+
+        LinkedHashSet<String> normalized;
+        try {
+            normalized = PermissionScopeValidator.normalizeControlPlane(req.permissions());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_PERMISSION", e.getMessage(), 400);
+        }
+
+        user.setPermissions(normalized);
+        return mapToResponse(controlPlaneUserRepository.save(user));
+    }
+
+    // =========================
+    // STATUS / DELETE / RESTORE
+    // =========================
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserStatus(Long userId, boolean active) {
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = controlPlaneUserRepository
-                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
 
-        if (user.isDeleted()) {
-            throw new ApiException("USER_DELETED", "Usuário está removido", 409);
-        }
-
-        // ✅ ação manual do admin da plataforma
         user.setSuspendedByAdmin(!active);
-
         return mapToResponse(controlPlaneUserRepository.save(user));
     }
 
@@ -1961,18 +2311,16 @@ public class ControlPlaneUserService {
         TenantContext.clear();
         Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = controlPlaneUserRepository
-                .findByIdAndAccountId(userId, controlPlaneAccount.getId())
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
 
-        if (user.isDeleted()) {
-            throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
-        }
+        // ✅ bloqueia delete de system user
+        assertNotSystemUserReadonly(user, "DELETE");
 
         LocalDateTime now = appClock.now();
-        long suffix = appClock.epochMillis();
 
-        user.softDelete(now, suffix);
+        // ✅ Estratégia A: NÃO altera username/email, NÃO usa suffix
+        user.softDelete(now);
+
         controlPlaneUserRepository.save(user);
     }
 
@@ -1989,7 +2337,147 @@ public class ControlPlaneUserService {
         }
 
         user.restore();
+
+        // ✅ regra extra: não permitir restaurar como username reservado se alguém tentou burlar no banco
+        assertUsernameNotReserved(user.getUsername());
+
         return mapToResponse(controlPlaneUserRepository.save(user));
+    }
+
+    public void resetControlPlaneUserPassword(Long targetUserId,
+            brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest req) {
+
+        TenantContext.clear();
+        Account controlPlaneAccount = getControlPlaneAccount();
+
+        if (req == null) {
+            throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+        }
+        if (req.newPassword() == null || req.newPassword().isBlank()) {
+            throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+        }
+        if (!req.newPassword().equals(req.confirmPassword())) {
+            throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
+        }
+
+        ControlPlaneRole actorRole = securityUtils.getCurrentControlPlaneRole();
+        if (actorRole != ControlPlaneRole.CONTROLPLANE_OWNER) {
+            throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode resetar senha", 403);
+        }
+
+        ControlPlaneUser superAdmin = controlPlaneUserRepository.findActiveSuperAdmin()
+                .orElseThrow(() -> new ApiException(
+                        "SUPERADMIN_NOT_FOUND",
+                        "Superadmin não encontrado. Rode a seed V5__insert_controlplane_users.sql",
+                        500
+                ));
+
+        if (superAdmin.getId().equals(targetUserId)) {
+            throw new ApiException("SUPERADMIN_CANNOT_RESET_SELF",
+                    "Superadmin não pode resetar a própria senha", 409);
+        }
+
+        ControlPlaneUser target = controlPlaneUserRepository
+                .findActiveByIdAndAccountId(targetUserId, controlPlaneAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (target.getRole() == ControlPlaneRole.CONTROLPLANE_OWNER) {
+            throw new ApiException("OWNER_PASSWORD_RESET_BLOCKED",
+                    "Não é permitido resetar senha de CONTROLPLANE_OWNER", 409);
+        }
+
+        target.setPassword(passwordEncoder.encode(req.newPassword()));
+        target.setMustChangePassword(true);
+        target.setPasswordChangedAt(appClock.now());
+
+        target.setFailedLoginAttempts(0);
+        target.setLockedUntil(null);
+        target.setPasswordResetToken(null);
+        target.setPasswordResetExpires(null);
+
+        controlPlaneUserRepository.save(target);
+    }
+
+    public void changeMyPassword(brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest req) {
+        TenantContext.clear();
+        Account controlPlaneAccount = getControlPlaneAccount();
+
+        if (req == null) {
+            throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+        }
+        if (req.newPassword() == null || req.newPassword().isBlank()) {
+            throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+        }
+        if (!req.newPassword().equals(req.confirmPassword())) {
+            throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
+        }
+
+        Long meId = securityUtils.getCurrentUserId();
+        if (meId == null) {
+            throw new ApiException("UNAUTHORIZED", "Usuário não autenticado", 401);
+        }
+
+        ControlPlaneUser me = controlPlaneUserRepository
+                .findActiveByIdAndAccountId(meId, controlPlaneAccount.getId())
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (me.isDeleted()) {
+            throw new ApiException("USER_DELETED", "Usuário removido", 409);
+        }
+        if (me.isSuspendedByAccount() || me.isSuspendedByAdmin()) {
+            throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+        }
+
+        if (!passwordEncoder.matches(req.currentPassword(), me.getPassword())) {
+            throw new ApiException("INVALID_CURRENT_PASSWORD", "Senha atual inválida", 400);
+        }
+
+        if (passwordEncoder.matches(req.newPassword(), me.getPassword())) {
+            throw new ApiException("PASSWORD_REUSE", "Nova senha não pode ser igual à senha atual", 400);
+        }
+
+        me.setPassword(passwordEncoder.encode(req.newPassword()));
+        me.setMustChangePassword(false);
+        me.setPasswordChangedAt(appClock.now());
+
+        me.setFailedLoginAttempts(0);
+        me.setLockedUntil(null);
+        me.setPasswordResetToken(null);
+        me.setPasswordResetExpires(null);
+
+        controlPlaneUserRepository.save(me);
+    }
+
+    @Transactional(readOnly = true)
+    public ControlPlaneMeResponse getMe() {
+        TenantContext.clear();
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        }
+
+        Object principal = auth.getPrincipal();
+        if (!(principal instanceof AuthenticatedUserContext ctx)) {
+            throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        }
+
+        List<String> authorities = (ctx.getAuthorities() == null)
+                ? List.of()
+                : ctx.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .sorted()
+                .toList();
+
+        return new ControlPlaneMeResponse(
+                ctx.getUserId(),
+                ctx.getUsername(),
+                ctx.getEmail(),
+                ctx.getRoleAuthority(),
+                ctx.getAccountId(),
+                ctx.isMustChangePassword(),
+                authorities
+        );
     }
 
     private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
@@ -2012,20 +2500,35 @@ public class ControlPlaneUserService {
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
-import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.shared.domain.DomainException;
-
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
-import java.util.ArrayList;
-
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "accounts")
@@ -2093,7 +2596,7 @@ public class Account {
 
     @Column(name = "company_doc_number", nullable = false, length = 20)
     private String companyDocNumber;
-    
+
     @Column(name = "company_phone", length = 20)
     private String companyPhone;
 
@@ -2104,41 +2607,37 @@ public class Account {
     private String companyCity;
 
     @Column(name = "company_state", length = 50)
-    private String companyState; 
-    
+    private String companyState;
 
     // Localização
-    @Column(name = "company_country", length = 50, nullable = false)
+    @Column(name = "company_country", length = 60, nullable = false)
     @Builder.Default
     private String companyCountry = "Brasil";
-    
-    
-    @Column(name = "timezone", length = 50, nullable = false)
+
+    @Column(name = "timezone", length = 60, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", length = 10, nullable = false)
+    @Column(name = "locale", length = 20, nullable = false)
     @Builder.Default
     private String locale = "pt_BR";
-    
 
-    @Column(name = "currency", length = 3, nullable = false)
+    // ✅ alinhado com sua migration (VARCHAR(10))
+    @Column(name = "currency", length = 10, nullable = false)
     @Builder.Default
     private String currency = "BRL";
-    
+
     @OneToMany(mappedBy = "account", fetch = FetchType.LAZY,
             cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-    
-    
+
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
 
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
-
 
     // Soft delete
     @Column(name = "deleted", nullable = false)
@@ -2147,10 +2646,15 @@ public class Account {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
-    
+
     @PrePersist
     protected void onCreate() {
-        // ✅ aqui NÃO usar tempo
+        // defaults defensivos (mantém coerente mesmo se alguém setar null/blank)
+        if (this.companyCountry == null || this.companyCountry.isBlank()) this.companyCountry = "Brasil";
+        if (this.timezone == null || this.timezone.isBlank()) this.timezone = "America/Sao_Paulo";
+        if (this.locale == null || this.locale.isBlank()) this.locale = "pt_BR";
+        if (this.currency == null || this.currency.isBlank()) this.currency = "BRL";
+
         // slug
         if (this.slug == null || this.slug.isBlank()) {
             this.slug = (this.name == null ? "conta" : this.name)
@@ -2168,8 +2672,6 @@ public class Account {
                     UUID.randomUUID().toString().substring(0, 8);
         }
     }
-    
-    
 
     // =========================
     // Semântica / helpers
@@ -2234,68 +2736,66 @@ public class Account {
         // para SYSTEM: continua ACTIVE
         this.status = AccountStatus.ACTIVE;
     }
-    
-    
- // =========================
- // Regras de domínio: SYSTEM != cliente
- // =========================
 
- public void setSubscriptionPlan(SubscriptionPlan plan) {
-     if (plan == null) {
-         throw new DomainException("subscriptionPlan is required");
-     }
-     if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
-         throw new DomainException("SYSTEM account must use SYSTEM plan");
-     }
-     this.subscriptionPlan = plan;
- }
+    // =========================
+    // Regras de domínio: SYSTEM != cliente
+    // =========================
 
- public void setStatus(AccountStatus status) {
-     if (status == null) {
-         throw new DomainException("status is required");
-     }
-     if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
-         throw new DomainException("SYSTEM account must be ACTIVE");
-     }
-     this.status = status;
- }
+    public void setSubscriptionPlan(SubscriptionPlan plan) {
+        if (plan == null) {
+            throw new DomainException("subscriptionPlan is required");
+        }
+        if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
+            throw new DomainException("SYSTEM account must use SYSTEM plan");
+        }
+        this.subscriptionPlan = plan;
+    }
 
- public void setTrialEndDate(LocalDateTime trialEndDate) {
-     if (this.isSystemAccount() && trialEndDate != null) {
-         throw new DomainException("SYSTEM account must not have trialEndDate");
-     }
-     this.trialEndDate = trialEndDate;
- }
+    public void setStatus(AccountStatus status) {
+        if (status == null) {
+            throw new DomainException("status is required");
+        }
+        if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
+            throw new DomainException("SYSTEM account must be ACTIVE");
+        }
+        this.status = status;
+    }
 
- public void setPaymentDueDate(LocalDateTime paymentDueDate) {
-     if (this.isSystemAccount() && paymentDueDate != null) {
-         throw new DomainException("SYSTEM account must not have paymentDueDate");
-     }
-     this.paymentDueDate = paymentDueDate;
- }
+    public void setTrialEndDate(LocalDateTime trialEndDate) {
+        if (this.isSystemAccount() && trialEndDate != null) {
+            throw new DomainException("SYSTEM account must not have trialEndDate");
+        }
+        this.trialEndDate = trialEndDate;
+    }
 
- /**
-  * Quando muda para SYSTEM, aplica defaults coerentes:
-  * - status ACTIVE
-  * - plan SYSTEM
-  * - sem trial/billing dates
-  */
- public void setType(AccountType type) {
-     if (type == null) {
-         throw new DomainException("accountType is required");
-     }
-     this.type = type;
+    public void setPaymentDueDate(LocalDateTime paymentDueDate) {
+        if (this.isSystemAccount() && paymentDueDate != null) {
+            throw new DomainException("SYSTEM account must not have paymentDueDate");
+        }
+        this.paymentDueDate = paymentDueDate;
+    }
 
-     if (this.isSystemAccount()) {
-         // defaults do SYSTEM
-         this.subscriptionPlan = SubscriptionPlan.SYSTEM;
-         this.status = AccountStatus.ACTIVE;
-         this.trialEndDate = null;
-         this.paymentDueDate = null;
-         this.nextBillingDate = null;
-     }
- }
+    /**
+     * Quando muda para SYSTEM, aplica defaults coerentes:
+     * - status ACTIVE
+     * - plan SYSTEM
+     * - sem trial/billing dates
+     */
+    public void setType(AccountType type) {
+        if (type == null) {
+            throw new DomainException("accountType is required");
+        }
+        this.type = type;
 
+        if (this.isSystemAccount()) {
+            // defaults do SYSTEM
+            this.subscriptionPlan = SubscriptionPlan.SYSTEM;
+            this.status = AccountStatus.ACTIVE;
+            this.trialEndDate = null;
+            this.paymentDueDate = null;
+            this.nextBillingDate = null;
+        }
+    }
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
@@ -2677,14 +3177,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
-@Table(
-    name = "controlplane_users",
-    schema = "public",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "ux_controlplane_users_username", columnNames = {"account_id", "username"}),
-        @UniqueConstraint(name = "ux_controlplane_users_email", columnNames = {"account_id", "email"})
-    }
-)
+@Table(name = "controlplane_users")
+
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = { "account", "password" })
 public class ControlPlaneUser {
@@ -2713,6 +3207,11 @@ public class ControlPlaneUser {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
+    
+    @Column(name = "is_system_user", nullable = false)
+    @Builder.Default
+    private boolean systemUser = false;
+    
 
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
@@ -2728,24 +3227,24 @@ public class ControlPlaneUser {
 
     @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
-    private Integer failedLoginAttempts = 0;
+    private int failedLoginAttempts = 0;
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
-    private Boolean mustChangePassword = false;
+    private boolean mustChangePassword = false;
 
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
     // ✅ ESTES CAMPOS EXISTEM NA MIGRATION
-    @Column(name = "timezone", nullable=false,length = 50)
+    @Column(name = "timezone", nullable=false,length = 60)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", nullable=false,length = 10)
+    @Column(name = "locale", nullable=false,length = 20)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -2798,7 +3297,9 @@ public class ControlPlaneUser {
         permissions = PermissionScopeValidator.normalizeControlPlane(permissions);
     }
 
-
+    public boolean isSystemUser() {
+        return systemUser;
+    }
     
 
     // ✅ se lockedUntil estiver no futuro: lock
@@ -2816,17 +3317,23 @@ public class ControlPlaneUser {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-    public void softDelete(LocalDateTime now, long uniqueSuffix) {
-        if (deleted) return;
-        deleted = true;
-        deletedAt = now;
-
-        suspendedByAccount = true;
-        suspendedByAdmin = true;
-
-        username = "deleted_" + username + "_" + uniqueSuffix;
-        email = "deleted_" + email + "_" + uniqueSuffix;
+  public void softDelete(LocalDateTime now) {
+    if (systemUser) {
+        throw new IllegalStateException("SYSTEM_USER_READONLY");
     }
+    if (deleted) return;
+
+    deleted = true;
+    deletedAt = now;
+
+    // (opcional) se você quer garantir que não faça login após delete:
+    suspendedByAccount = true;
+    suspendedByAdmin = true;
+
+    // ✅ Estratégia A: NÃO altera username/email
+}
+
+
 
     public void restore() {
         this.deleted = false;
@@ -2968,8 +3475,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByTransactionId(String transactionId);
 }package brito.com.multitenancy001.controlplane.persistence.user;
 
-
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -2982,37 +3487,132 @@ import java.util.Optional;
 
 @Repository
 public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
-	
-	Optional<ControlPlaneUser> findByUsernameAndAccount_IdAndDeletedFalse(String username, Long accountId);
 
+    @Query("SELECT u FROM ControlPlaneUser u WHERE u.id = :id AND u.account.id = :accountId AND u.deleted = false")
+    Optional<ControlPlaneUser> findActiveByIdAndAccountId(@Param("id") Long id, @Param("accountId") Long accountId);
 
-	long countByAccountIdAndDeletedFalse(Long accountId);
-	
-	Optional<ControlPlaneUser> findFirstByAccountIdAndDeletedFalse(Long accountId);
-    
+    @Query("SELECT u FROM ControlPlaneUser u WHERE lower(u.username) = 'superadmin' AND u.deleted = false")
+    Optional<ControlPlaneUser> findActiveSuperAdmin();
+
+    Optional<ControlPlaneUser> findByUsernameAndAccount_IdAndDeletedFalse(String username, Long accountId);
+
+    long countByAccountIdAndDeletedFalse(Long accountId);
+
+    Optional<ControlPlaneUser> findFirstByAccountIdAndDeletedFalse(Long accountId);
+
     Optional<ControlPlaneUser> findByUsername(String username);
-    
+
     Optional<ControlPlaneUser> findByEmail(String email);
-    
+
     List<ControlPlaneUser> findByAccountId(Long accountId);
-    
-    @Query("SELECT (COUNT(u) > 0) FROM ControlPlaneUser u " +
-    	       "WHERE u.username = :username AND u.account.id = :accountId AND u.deleted = false")
-    	boolean existsByUsernameAndAccountId(@Param("username") String username,
-    	                                     @Param("accountId") Long accountId);
-    
-    
-    
-    @Query("SELECT (COUNT(u) > 0) FROM ControlPlaneUser u " +
-    	       "WHERE u.email = :email AND u.account.id = :accountId AND u.deleted = false")
-    	boolean existsByEmailAndAccountId(@Param("email") String email,
-    	                                  @Param("accountId") Long accountId);    
+
     Optional<ControlPlaneUser> findByIdAndAccountId(Long id, Long accountId);
-    
+
     Optional<ControlPlaneUser> findByUsernameAndDeletedFalse(String username);
-    
+
     Optional<ControlPlaneUser> findByEmailAndDeletedFalse(String email);
-}package brito.com.multitenancy001.controlplane.security;
+
+    // =========================================================
+    // ✅ NOVOS: unicidade ativa (deleted=false) e case-insensitive
+    // =========================================================
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND lower(u.username) = lower(:username)
+    """)
+    boolean existsActiveByUsernameIgnoreCase(
+            @Param("accountId") Long accountId,
+            @Param("username") String username
+    );
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND lower(u.email) = lower(:email)
+    """)
+    boolean existsActiveByEmailIgnoreCase(
+            @Param("accountId") Long accountId,
+            @Param("email") String email
+    );
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND lower(u.username) = lower(:username)
+           AND u.id <> :userId
+    """)
+    boolean existsOtherActiveByUsernameIgnoreCase(
+            @Param("accountId") Long accountId,
+            @Param("username") String username,
+            @Param("userId") Long userId
+    );
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND lower(u.email) = lower(:email)
+           AND u.id <> :userId
+    """)
+    boolean existsOtherActiveByEmailIgnoreCase(
+            @Param("accountId") Long accountId,
+            @Param("email") String email,
+            @Param("userId") Long userId
+    );
+
+    // ✅ NOVO: checagem útil
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND u.systemUser = true
+           AND u.id = :userId
+    """)
+    boolean isSystemUserActive(@Param("accountId") Long accountId, @Param("userId") Long userId);
+
+    // =========================================================
+    // (opcional) manter seus métodos antigos por compatibilidade
+    // =========================================================
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.username = :username
+           AND u.account.id = :accountId
+           AND u.deleted = false
+    """)
+    boolean existsByUsernameAndAccountId(@Param("username") String username, @Param("accountId") Long accountId);
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.email = :email
+           AND u.account.id = :accountId
+           AND u.deleted = false
+    """)
+    boolean existsByEmailAndAccountId(@Param("email") String email, @Param("accountId") Long accountId);
+
+    @Query("""
+        SELECT (COUNT(u) > 0)
+          FROM ControlPlaneUser u
+         WHERE u.account.id = :accountId
+           AND u.deleted = false
+           AND u.username = :username
+           AND u.id <> :userId
+    """)
+    boolean existsOtherActiveByUsername(@Param("accountId") Long accountId,
+                                       @Param("username") String username,
+                                       @Param("userId") Long userId);
+}
+package brito.com.multitenancy001.controlplane.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
 
@@ -3026,11 +3626,14 @@ public enum ControlPlanePermission implements PermissionAuthority {
     CP_BILLING_READ,
     CP_BILLING_WRITE,
 
-    CP_SUPPORT_RESET_PASSWORD,
+    CP_SUPPORT_PASSWORD_RESET,
 
     CP_USER_READ,
     CP_USER_WRITE,
-    CP_USER_DELETE;
+    CP_USER_DELETE,
+
+    // ✅ NOVA (somente superadmin deve ter)
+    CP_USER_PASSWORD_RESET;
 
     @Override
     public String asAuthority() {
@@ -3074,43 +3677,32 @@ public final class ControlPlaneRolePermissions {
         if (role == null) return Set.of();
 
         return switch (role) {
-            case CONTROLPLANE_OWNER -> EnumSet.of(
-                // ✅ mínimo para gestão de usuários de plataforma
-                ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_USER_WRITE
 
-                // (opcional) se você permitir deleção de usuários
-                // , ControlPlanePermission.CP_USER_DELETE
-
-                // (opcional) se o OWNER também gerencia contas/tenants
-                // , ControlPlanePermission.CP_TENANT_READ
-                // , ControlPlanePermission.CP_TENANT_SUSPEND
-                // , ControlPlanePermission.CP_TENANT_ACTIVATE
-                // , ControlPlanePermission.CP_TENANT_DELETE
-            );
+            // 🔐 Super Admin = todas as permissões da plataforma
+            case CONTROLPLANE_OWNER -> EnumSet.allOf(ControlPlanePermission.class);
 
             case CONTROLPLANE_BILLING_MANAGER -> EnumSet.of(
-                ControlPlanePermission.CP_TENANT_READ,
-                ControlPlanePermission.CP_TENANT_SUSPEND,
-                ControlPlanePermission.CP_TENANT_ACTIVATE,
-                ControlPlanePermission.CP_BILLING_READ,
-                ControlPlanePermission.CP_BILLING_WRITE,
-                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
+                    ControlPlanePermission.CP_TENANT_READ,
+                    ControlPlanePermission.CP_TENANT_SUSPEND,
+                    ControlPlanePermission.CP_TENANT_ACTIVATE,
+                    ControlPlanePermission.CP_BILLING_READ,
+                    ControlPlanePermission.CP_BILLING_WRITE,
+                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
             );
 
             case CONTROLPLANE_SUPPORT -> EnumSet.of(
-                ControlPlanePermission.CP_TENANT_READ,
-                ControlPlanePermission.CP_TENANT_SUSPEND,
-                ControlPlanePermission.CP_TENANT_ACTIVATE,
-                ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_USER_WRITE,
-                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
+                    ControlPlanePermission.CP_TENANT_READ,
+                    ControlPlanePermission.CP_TENANT_SUSPEND,
+                    ControlPlanePermission.CP_TENANT_ACTIVATE,
+                    ControlPlanePermission.CP_USER_READ,
+                    ControlPlanePermission.CP_USER_WRITE,
+                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
             );
 
             case CONTROLPLANE_OPERATOR -> EnumSet.of(
-                ControlPlanePermission.CP_TENANT_READ,
-                ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_SUPPORT_RESET_PASSWORD
+                    ControlPlanePermission.CP_TENANT_READ,
+                    ControlPlanePermission.CP_USER_READ,
+                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
             );
         };
     }
@@ -3891,6 +4483,7 @@ public class AuthenticatedUserContext implements UserDetails {
     private final String username;
     private final String email;
     private final String password;
+    private final boolean mustChangePassword;
 
     private final boolean enabled;
     private final boolean accountNonLocked;
@@ -3903,6 +4496,11 @@ public class AuthenticatedUserContext implements UserDetails {
 
     // ✅ permission-only
     private final Collection<? extends GrantedAuthority> authorities;
+    
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+    
 
     public AuthenticatedUserContext(
             ControlPlaneUser user,
@@ -3924,6 +4522,8 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = user.isEnabledForLogin();
         this.accountNonLocked = user.isAccountNonLocked(now);
+        this.mustChangePassword = user.isMustChangePassword();
+
     }
 
     public AuthenticatedUserContext(
@@ -3946,6 +4546,8 @@ public class AuthenticatedUserContext implements UserDetails {
 
         this.enabled = !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
         this.accountNonLocked = user.getLockedUntil() == null || !user.getLockedUntil().isAfter(now);
+        this.mustChangePassword = user.isMustChangePassword();
+
     }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }
@@ -3960,6 +4562,7 @@ public class AuthenticatedUserContext implements UserDetails {
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -3981,6 +4584,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Bean
+    public MustChangePasswordFilter mustChangePasswordFilter() {
+        return new MustChangePasswordFilter();
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -4011,6 +4619,9 @@ public class SecurityConfig {
                     "/api/admin/auth/login",
                     "/api/admin/auth/refresh"
                 ).permitAll()
+
+                // ✅ troca de senha do próprio usuário (precisa estar autenticado)
+                .requestMatchers("/api/admin/me/password").authenticated()
 
                 // =========================
                 // 🔓 AUTH TENANT
@@ -4050,6 +4661,10 @@ public class SecurityConfig {
             );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ MustChangePassword precisa rodar DEPOIS do JWT filter
+        http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+
         return http.build();
     }
 }
@@ -4215,6 +4830,96 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean requiresTenant(HttpServletRequest httpServletRequest) {
         String path = httpServletRequest.getRequestURI();
         return path.startsWith("/api/tenant/");
+    }
+}
+package brito.com.multitenancy001.infrastructure.security.filter;
+
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.Map;
+
+public class MustChangePasswordFilter extends OncePerRequestFilter {
+
+    private static final String CHANGE_PASSWORD_PATH = "/api/admin/me/password";
+    private static final String ME_PATH              = "/api/admin/me";
+
+    private static final String LOGIN_PATH   = "/api/admin/auth/login";
+    private static final String REFRESH_PATH = "/api/admin/auth/refresh";
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        String method = request.getMethod();
+        String path = request.getRequestURI();
+
+        // ✅ libera preflight (CORS)
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // ✅ libera login/refresh
+        if (path.startsWith(LOGIN_PATH) || path.startsWith(REFRESH_PATH)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // ✅ libera troca de senha
+        if (path.startsWith(CHANGE_PASSWORD_PATH)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // ✅ libera GET /api/admin/me (para o front exibir estado e mensagem)
+        if ("GET".equalsIgnoreCase(method) && path.equals(ME_PATH)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // só aplica no escopo do controlplane (/api/admin/**)
+        if (!path.startsWith("/api/admin/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof AuthenticatedUserContext ctx) {
+
+            if (ctx.isMustChangePassword()) {
+                response.setStatus(428); // Precondition Required
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+                Map<String, Object> body = Map.of(
+                        "error", "MUST_CHANGE_PASSWORD",
+                        "message", "Você precisa alterar a senha antes de continuar.",
+                        "status", 428,
+                        "details", Map.of(
+                                "userId", ctx.getUserId(),
+                                "username", ctx.getUsername(),
+                                "accountId", ctx.getAccountId()
+                        )
+                );
+
+                response.getWriter().write(objectMapper.writeValueAsString(body));
+                return;
+            }
+        }
+
+        filterChain.doFilter(request, response);
     }
 }
 package brito.com.multitenancy001.infrastructure.security.jwt;
@@ -4570,59 +5275,76 @@ public class SecurityUtils {
 }package brito.com.multitenancy001.infrastructure.security.userdetails;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRolePermissions;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
-
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.util.StringUtils;
 
-import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 
 public final class AuthoritiesFactory {
 
     private AuthoritiesFactory() {}
 
-    public static Collection<? extends GrantedAuthority> forControlPlane(ControlPlaneUser user) {
-    	LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    public static Set<GrantedAuthority> forControlPlane(ControlPlaneUser user) {
+        Set<String> merged = new LinkedHashSet<>();
 
-        // 1) role -> permissions (enum -> name)
-        ControlPlaneRolePermissions.permissionsFor(user.getRole())
-                .forEach(p -> permissions.add(p.name()));
-
-        // 2) permissions explícitas do user
-        if (user.getPermissions() != null) {
-            permissions.addAll(user.getPermissions());
+        // defaults da role (enum -> string)
+        for (ControlPlanePermission p : ControlPlaneRolePermissions.permissionsFor(user.getRole())) {
+            merged.add(p.name());
         }
 
-        // 3) normaliza CP_ e bloqueia TEN_
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlane(permissions);
+        // permissions explícitas do banco
+        if (user.getPermissions() != null) {
+            for (String raw : user.getPermissions()) {
+                if (!StringUtils.hasText(raw)) continue;
+                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            }
+        }
 
-        return normalized.stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        // normaliza e bloqueia escopo errado (TEN_ dentro do CP, etc.)
+        merged = PermissionScopeValidator.normalizeControlPlane(merged);
+
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        for (String perm : merged) {
+            authorities.add(new SimpleGrantedAuthority(perm));
+        }
+        return authorities;
     }
 
-    public static Collection<? extends GrantedAuthority> forTenant(TenantUser user) {
-    	LinkedHashSet<String> permissions = new LinkedHashSet<>();
+    public static Set<GrantedAuthority> forTenant(TenantUser user) {
+        Set<String> merged = new LinkedHashSet<>();
 
-        // 1) role -> permissions (enum -> name)
-        TenantRolePermissions.permissionsFor(user.getRole())
-                .forEach(p -> permissions.add(p.name()));
-
-        // 2) permissions explícitas do user (List<String>)
-        if (user.getPermissions() != null) {
-            permissions.addAll(user.getPermissions());
+        // ✅ defaults por role (igual sua entidade faz)
+        if (user.getRole() != null) {
+            for (TenantPermission p : TenantRolePermissions.permissionsFor(user.getRole())) {
+                merged.add(p.name());
+            }
         }
 
-        // 3) normaliza TEN_ e bloqueia CP_
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeTenant(permissions);
+        // permissions explícitas do banco
+        if (user.getPermissions() != null) {
+            for (String raw : user.getPermissions()) {
+                if (!StringUtils.hasText(raw)) continue;
+                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            }
+        }
 
-        return normalized.stream()
-                .map(SimpleGrantedAuthority::new)
-                .toList();
+        // ✅ normaliza SEMPRE e bloqueia CP_ dentro do tenant
+        merged = PermissionScopeValidator.normalizeTenant(merged);
+
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        for (String perm : merged) {
+            authorities.add(new SimpleGrantedAuthority(perm));
+        }
+        return authorities;
     }
 }
 package brito.com.multitenancy001.infrastructure.security.userdetails;
@@ -4830,7 +5552,7 @@ public class TenantUserAdminBridge {
                     u.setName("Administrador");
                     u.setEmail(email);
                     u.setPassword(passwordEncoder.encode(rawPassword));
-                    u.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+                    u.setRole(TenantRole.TENANT_OWNER);
                     u.setSuspendedByAccount(false);
                     u.setSuspendedByAdmin(false);
 
@@ -7026,7 +7748,7 @@ public class TenantSchemaProvisioningService {
                 .username(normUsername)
                 .email(normEmail)
                 .password(passwordEncoder.encode(rawPassword))
-                .role(TenantRole.TENANT_ACCOUNT_OWNER)
+                .role(TenantRole.TENANT_OWNER)
                 .suspendedByAccount(false)
                 .suspendedByAdmin(false)
                 .timezone(account.getTimezone() != null ? account.getTimezone() : "America/Sao_Paulo")
@@ -7643,15 +8365,15 @@ public class TenantUserTxService {
 
     public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
         TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_OWNER não encontrado", 404));
 
         TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
 
         LocalDateTime now = now();
 
-        from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
-        to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+        from.setRole(TenantRole.TENANT_ADMIN);
+        to.setRole(TenantRole.TENANT_OWNER);
 
         from.setUpdatedAt(now);
         to.setUpdatedAt(now);
@@ -8445,14 +9167,14 @@ public class TenantUser {
 
     @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
-    private Integer failedLoginAttempts = 0;
+    private int failedLoginAttempts = 0;
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
-    private Boolean mustChangePassword = false;
+    private boolean mustChangePassword = false;
 
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
@@ -8463,11 +9185,11 @@ public class TenantUser {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(name = "timezone", nullable = false, length = 50)
+    @Column(name = "timezone", nullable = false, length = 60)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", nullable = false, length = 10)
+    @Column(name = "locale", nullable = false, length = 20)
     @Builder.Default
     private String locale = "pt_BR";
 
@@ -8873,8 +9595,8 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 
 public enum TenantRole implements RoleAuthority {
 
-    TENANT_ACCOUNT_OWNER,
-    TENANT_ACCOUNT_ADMIN,
+    TENANT_OWNER,
+    TENANT_ADMIN,
     TENANT_PRODUCT_MANAGER,
     TENANT_SALES_MANAGER,
     TENANT_BILLING_MANAGER,
@@ -8887,7 +9609,7 @@ public enum TenantRole implements RoleAuthority {
     }
 
     public boolean isTenantOwner() {
-        return this == TENANT_ACCOUNT_OWNER;
+        return this == TENANT_OWNER;
     }
 }
 package brito.com.multitenancy001.tenant.security;
@@ -8900,22 +9622,47 @@ public final class TenantRolePermissions {
     private TenantRolePermissions() {}
 
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
-        return switch (role) {
-            case TENANT_ACCOUNT_OWNER -> EnumSet.allOf(TenantPermission.class);
+        if (role == null) return Set.of();
 
-            case TENANT_ACCOUNT_ADMIN -> EnumSet.of(
+        return switch (role) {
+            case TENANT_OWNER -> EnumSet.allOf(TenantPermission.class);
+
+            // ADMIN = “administra tudo” do tenant (conforme seu set de TenantPermission)
+            case TENANT_ADMIN -> EnumSet.of(
+                    // Users
                     TenantPermission.TEN_USER_READ,
                     TenantPermission.TEN_USER_CREATE,
                     TenantPermission.TEN_USER_UPDATE,
                     TenantPermission.TEN_USER_SUSPEND,
                     TenantPermission.TEN_USER_RESTORE,
+                    TenantPermission.TEN_USER_DELETE,
+
+                    // Transfer ownership/admin
+                    TenantPermission.TEN_ROLE_TRANSFER,
+
+                    // Products + Inventory
                     TenantPermission.TEN_PRODUCT_READ,
                     TenantPermission.TEN_PRODUCT_WRITE,
                     TenantPermission.TEN_INVENTORY_READ,
+                    TenantPermission.TEN_INVENTORY_WRITE,
+
+                    // Catalog
+                    TenantPermission.TEN_CATEGORY_READ,
+                    TenantPermission.TEN_CATEGORY_WRITE,
+                    TenantPermission.TEN_SUPPLIER_READ,
+                    TenantPermission.TEN_SUPPLIER_WRITE,
+
+                    // Sales + Reports
+                    TenantPermission.TEN_SALE_READ,
+                    TenantPermission.TEN_SALE_WRITE,
+                    TenantPermission.TEN_SALE_ISSUES_READ,
+                    TenantPermission.TEN_REPORT_SALES_READ,
+
+                    // Billing + Settings
                     TenantPermission.TEN_BILLING_READ,
+                    TenantPermission.TEN_BILLING_WRITE,
                     TenantPermission.TEN_SETTINGS_READ,
-                    TenantPermission.TEN_SETTINGS_WRITE,
-                    TenantPermission.TEN_INVENTORY_WRITE
+                    TenantPermission.TEN_SETTINGS_WRITE
             );
 
             case TENANT_PRODUCT_MANAGER -> EnumSet.of(
@@ -8927,7 +9674,9 @@ public final class TenantRolePermissions {
 
             case TENANT_SALES_MANAGER -> EnumSet.of(
                     TenantPermission.TEN_SALE_READ,
-                    TenantPermission.TEN_SALE_WRITE
+                    TenantPermission.TEN_SALE_WRITE,
+                    TenantPermission.TEN_SALE_ISSUES_READ,
+                    TenantPermission.TEN_REPORT_SALES_READ
             );
 
             case TENANT_BILLING_MANAGER -> EnumSet.of(
@@ -8941,8 +9690,12 @@ public final class TenantRolePermissions {
                     TenantPermission.TEN_USER_READ
             );
 
+            // OPERATOR “operacional” (não administra usuários/config/billing)
             case TENANT_OPERATOR -> EnumSet.of(
-                    TenantPermission.TEN_PRODUCT_READ
+                    TenantPermission.TEN_PRODUCT_READ,
+                    TenantPermission.TEN_INVENTORY_READ,
+                    TenantPermission.TEN_INVENTORY_WRITE,
+                    TenantPermission.TEN_SALE_READ
             );
         };
     }
@@ -8973,9 +9726,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     company_state VARCHAR(50),
     company_country VARCHAR(60),
 
-    timezone VARCHAR(60),
-    locale VARCHAR(20),
-    currency VARCHAR(10),
+    -- ✅ alinhado com a entity Account: nullable=false + defaults
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
+    currency VARCHAR(10) NOT NULL DEFAULT 'BRL',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -8995,15 +9749,14 @@ CREATE TABLE IF NOT EXISTS accounts (
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_account_type
     CHECK (account_type IN ('TENANT', 'SYSTEM'));
-    
+
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_subscription_plan
     CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'SYSTEM'));
-    
+
 CREATE UNIQUE INDEX ux_accounts_single_system
 ON accounts (account_type)
 WHERE account_type = 'SYSTEM';
-    
 
 -- Unicidade de documento por conta ativa
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active
@@ -9051,6 +9804,9 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     account_id BIGINT NOT NULL,
 
+    -- ✅ identifica usuários padrão do sistema (readonly)
+    is_system_user BOOLEAN NOT NULL DEFAULT FALSE,
+
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
@@ -9075,7 +9831,17 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     avatar_url VARCHAR(500),
 
     CONSTRAINT fk_controlplane_users_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+
+    -- ✅ BLOQUEIO NO BANCO:
+    -- impede que qualquer user NÃO-system use usernames reservados
+    CONSTRAINT chk_cp_reserved_usernames_block
+    CHECK (
+        NOT (
+            lower(username) IN ('superadmin','billing','support','operator')
+            AND is_system_user = false
+        )
+    )
 );
 
 -- Unicidade por conta (apenas ativos)
@@ -9142,6 +9908,7 @@ INSERT INTO controlplane_users (
     password,
     role,
     account_id,
+    is_system_user,          -- ✅ NOVO
     suspended_by_account,
     suspended_by_admin,
     must_change_password
@@ -9153,6 +9920,7 @@ SELECT
     u.password,
     u.role,
     a.id,
+    true,                   -- ✅ sempre true para esses 4
     false,
     false,
     u.must_change_password
@@ -9270,8 +10038,8 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
 
-    timezone VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
+    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
+    locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP,

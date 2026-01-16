@@ -12,14 +12,14 @@ public enum ControlPlanePermission implements PermissionAuthority {
     CP_BILLING_READ,
     CP_BILLING_WRITE,
 
-    CP_SUPPORT_RESET_PASSWORD,
+    CP_SUPPORT_PASSWORD_RESET,
 
     CP_USER_READ,
     CP_USER_WRITE,
     CP_USER_DELETE,
 
     // ✅ NOVA (somente superadmin deve ter)
-    CP_USER_RESET_PASSWORD;
+    CP_USER_PASSWORD_RESET;
 
     @Override
     public String asAuthority() {

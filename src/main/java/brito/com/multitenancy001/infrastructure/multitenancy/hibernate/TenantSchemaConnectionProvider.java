@@ -6,6 +6,8 @@ import org.hibernate.engine.jdbc.connections.spi.AbstractDataSourceBasedMultiTen
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.shared.context.TenantContext;
+
 import javax.sql.DataSource;
 import java.sql.*;
 
@@ -16,7 +18,8 @@ public class TenantSchemaConnectionProvider
         extends AbstractDataSourceBasedMultiTenantConnectionProviderImpl<String> {
 
     private static final long serialVersionUID = 1L;
-    private static final String DEFAULT_SCHEMA = "public";
+    private static final String DEFAULT_SCHEMA = TenantContext.PUBLIC_SCHEMA;
+
 
     private final DataSource dataSource;
 
@@ -33,9 +36,12 @@ public class TenantSchemaConnectionProvider
     @Override
     public Connection getConnection(String tenantIdentifier) throws SQLException {
 
-        long threadId = Thread.currentThread().threadId();
-        String threadTenant = CurrentTenantSchemaResolver.resolveBoundTenantOrDefault();
+    	long threadId = Thread.currentThread().threadId();
+    	String threadTenant = TenantContext.getOrDefaultPublic();
 
+        
+        
+        
         String effectiveTenant = StringUtils.hasText(tenantIdentifier)
                 ? tenantIdentifier
                 : DEFAULT_SCHEMA;

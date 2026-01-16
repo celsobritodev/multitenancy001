@@ -318,15 +318,15 @@ public class TenantUserTxService {
 
     public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
         TenantUser from = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(fromUserId, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_OWNER não encontrado", 404));
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_OWNER não encontrado", 404));
 
         TenantUser to = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(toUserId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "TENANT_ACCOUNT_ADMIN alvo não encontrado", 404));
 
         LocalDateTime now = now();
 
-        from.setRole(TenantRole.TENANT_ACCOUNT_ADMIN);
-        to.setRole(TenantRole.TENANT_ACCOUNT_OWNER);
+        from.setRole(TenantRole.TENANT_ADMIN);
+        to.setRole(TenantRole.TENANT_OWNER);
 
         from.setUpdatedAt(now);
         to.setUpdatedAt(now);

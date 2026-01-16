@@ -85,14 +85,14 @@ public class TenantUser {
 
     @Column(name = "failed_login_attempts", nullable = false)
     @Builder.Default
-    private Integer failedLoginAttempts = 0;
+    private int failedLoginAttempts = 0;
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
-    private Boolean mustChangePassword = false;
+    private boolean mustChangePassword = false;
 
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
@@ -103,11 +103,11 @@ public class TenantUser {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(name = "timezone", nullable = false, length = 50)
+    @Column(name = "timezone", nullable = false, length = 60)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
 
-    @Column(name = "locale", nullable = false, length = 10)
+    @Column(name = "locale", nullable = false, length = 20)
     @Builder.Default
     private String locale = "pt_BR";
 
