@@ -20,8 +20,8 @@ public final class ControlPlaneRolePermissions {
                     ControlPlanePermission.CP_TENANT_SUSPEND,
                     ControlPlanePermission.CP_TENANT_ACTIVATE,
                     ControlPlanePermission.CP_BILLING_READ,
-                    ControlPlanePermission.CP_BILLING_WRITE,
-                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
+                    ControlPlanePermission.CP_BILLING_WRITE
+                    
             );
 
             case CONTROLPLANE_SUPPORT -> EnumSet.of(
@@ -30,13 +30,13 @@ public final class ControlPlaneRolePermissions {
                     ControlPlanePermission.CP_TENANT_ACTIVATE,
                     ControlPlanePermission.CP_USER_READ,
                     ControlPlanePermission.CP_USER_WRITE,
-                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
+                    ControlPlanePermission.CP_USER_PASSWORD_RESET
             );
 
             case CONTROLPLANE_OPERATOR -> EnumSet.of(
                     ControlPlanePermission.CP_TENANT_READ,
-                    ControlPlanePermission.CP_USER_READ,
-                    ControlPlanePermission.CP_SUPPORT_PASSWORD_RESET
+                    ControlPlanePermission.CP_USER_READ
+                   
             );
         };
     }

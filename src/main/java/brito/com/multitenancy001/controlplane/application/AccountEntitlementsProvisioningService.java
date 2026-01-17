@@ -20,8 +20,8 @@ public class AccountEntitlementsProvisioningService {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
         }
 
-        if (account.isSystemAccount()) {
-            // SYSTEM não tem entitlements
+        if (account.isBuiltInAccount()) {
+            // BUILTIN não tem entitlements
             return;
         }
 

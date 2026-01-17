@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     id BIGSERIAL PRIMARY KEY,
 
     name VARCHAR(100) NOT NULL,
+
     username VARCHAR(100) NOT NULL,
     password VARCHAR(255) NOT NULL,
     email VARCHAR(150) NOT NULL,
@@ -13,8 +14,8 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     account_id BIGINT NOT NULL,
 
-    -- ✅ identifica usuários padrão do sistema (readonly)
-    is_system_user BOOLEAN NOT NULL DEFAULT FALSE,
+    -- ✅ origem do usuário (substitui is_built_in_user)
+    user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
@@ -42,18 +43,18 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     CONSTRAINT fk_controlplane_users_account
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
 
-    -- ✅ BLOQUEIO NO BANCO:
-    -- impede que qualquer user NÃO-system use usernames reservados
+    CONSTRAINT chk_cp_user_origin
+        CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API')),
+
     CONSTRAINT chk_cp_reserved_usernames_block
-    CHECK (
-        NOT (
-            lower(username) IN ('superadmin','billing','support','operator')
-            AND is_system_user = false
+        CHECK (
+            NOT (
+                lower(username) IN ('superadmin','billing','support','operator')
+                AND user_origin <> 'BUILT_IN'
+            )
         )
-    )
 );
 
--- Unicidade por conta (apenas ativos)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_username_active
 ON controlplane_users (account_id, username)
 WHERE deleted = false;

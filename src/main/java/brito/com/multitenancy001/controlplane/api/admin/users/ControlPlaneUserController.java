@@ -46,9 +46,9 @@ public class ControlPlaneUserController {
      * ✅ Update geral:
      * - name/email/role/username/permissions (se você decidir aceitar tudo aqui)
      * - Service faz as barreiras:
-     *   - bloqueia update se systemUser=true
+     *   - bloqueia update se builtInUser =true
      *   - bloqueia rename para username reservado
-     *   - bloqueia alterar permissions se não for OWNER (e bloqueia se systemUser=true)
+     *   - bloqueia alterar permissions se não for OWNER (e bloqueia se builtInUser =true)
      */
     @PatchMapping("/{userId}")
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
@@ -71,7 +71,7 @@ public class ControlPlaneUserController {
     /**
      * ✅ Endpoint dedicado para permissions:
      * - Service faz as barreiras:
-     *   - bloqueia se systemUser=true
+     *   - bloqueia se builtInUser =true
      *   - só OWNER pode
      */
     @PatchMapping("/{userId}/permissions")

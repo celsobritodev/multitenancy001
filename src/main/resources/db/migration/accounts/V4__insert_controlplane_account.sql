@@ -3,6 +3,7 @@ SET search_path TO public;
 
 INSERT INTO accounts (
     account_type,
+    account_origin,
     name,
     schema_name,
     slug,
@@ -18,12 +19,13 @@ INSERT INTO accounts (
     deleted
 )
 SELECT
-    'SYSTEM',
+    'PLATFORM',
+    'BUILT_IN',
     'Control Plane',
     'public',
     'controlplane',
     'ACTIVE',
-    'SYSTEM',
+    'BUILT_IN_PLAN',
     'CNPJ',
     '00000000000000',
     'admin@controlplane.com',

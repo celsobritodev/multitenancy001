@@ -275,8 +275,8 @@ public class PaymentService {
             throw new ApiException("ACCOUNT_DELETED", "Conta deletada", 410);
         }
         
-        if (account.isSystemAccount()) {
-            throw new ApiException("SYSTEM_ACCOUNT_NO_BILLING", "Conta SYSTEM não possui billing", 409);
+        if (account.isBuiltInAccount()) {
+            throw new ApiException("BUILTIN ACCOUNT_NO_BILLING", "Conta BUILTIN não possui billing", 409);
         }
  
 

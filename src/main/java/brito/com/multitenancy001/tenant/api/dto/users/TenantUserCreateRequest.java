@@ -37,6 +37,11 @@ public record TenantUserCreateRequest(
     @NotNull(message = "Role é obrigatória")
     TenantRole role,
     
+    @NotBlank
+    @Pattern(
+        regexp = "^TEN_[A-Z0-9_]+$",
+        message = "Permission must follow TEN_* pattern (e.g. TEN_USER_CREATE)"
+    )
     LinkedHashSet<String> permissions,
     
     // 🔹 CAMPOS NOVOS para UserTenant

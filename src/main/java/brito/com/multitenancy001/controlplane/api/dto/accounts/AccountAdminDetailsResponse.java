@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
-import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 import java.time.LocalDateTime;
 
 public record AccountAdminDetailsResponse(
@@ -14,7 +14,7 @@ public record AccountAdminDetailsResponse(
     String status,
 
     // Dados legais (sempre em conjunto)
-    DocumentType companyDocType,
+    TaxIdType companyDocType,
     String companyDocNumber,
 
     // Datas

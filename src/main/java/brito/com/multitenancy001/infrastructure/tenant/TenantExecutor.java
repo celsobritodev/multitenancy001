@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.executor;
+package brito.com.multitenancy001.infrastructure.tenant;
 
 import java.util.function.Supplier;
 

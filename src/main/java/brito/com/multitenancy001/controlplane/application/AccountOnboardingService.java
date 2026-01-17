@@ -8,11 +8,11 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
-import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantProvisioningBridge;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.TxExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,7 +24,7 @@ public class AccountOnboardingService {
     private final AccountApiMapper accountApiMapper;
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
-    private final PublicAccountCreationService publicAccountService;
+    private final PublicAccountCreationService publicAccountCreationService;
     private final TenantProvisioningBridge tenantProvisioningBridge;
     private final TenantUserAdminBridge tenantUserAdminBridge;
     private final AccountRepository accountRepository;
@@ -35,7 +35,7 @@ public class AccountOnboardingService {
         log.info("Tentando criar conta");
 
         Account account = txExecutor.publicTx(() ->
-            publicExecutor.run(() -> publicAccountService.createAccountFromSignup(signupRequest))
+            publicExecutor.run(() -> publicAccountCreationService.createAccountFromSignup(signupRequest))
         );
 
         tenantProvisioningBridge.ensureSchemaExistsAndMigrate(account.getSchemaName());

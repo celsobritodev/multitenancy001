@@ -111,25 +111,60 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    @Transactional(readOnly = true)
-    public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountId) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
-        }
-        if (!StringUtils.hasText(usernameOrEmail)) {
-            throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
-        }
-
-        String login = usernameOrEmail.trim().toLowerCase();
-
-        if (login.contains("@")) {
-            return tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(login, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-        }
-
-        return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(login, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+@Transactional(readOnly = true)
+public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountId) {
+    if (accountId == null) {
+        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
     }
+    if (!StringUtils.hasText(usernameOrEmail)) {
+        throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
+    }
+
+    String login = usernameOrEmail.trim().toLowerCase();
+
+    if (login.contains("@")) {
+        // ✅ usa o método que estava “só interface”
+        TenantUser user = tenantUserRepository.findByEmailAndAccountId(login, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        if (user.isDeleted()) {
+            throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
+        }
+        return user;
+    }
+
+    // ✅ username: já filtra deleted
+    return tenantUserRepository.findByUsernameAndAccountIdAndDeletedFalse(login, accountId)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+}
+
+
+    
+    public TenantUser updateUserEmail(Long userId, Long accountId, String newEmail) {
+        if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+        if (!StringUtils.hasText(newEmail)) throw new ApiException("INVALID_EMAIL", "Email obrigatório", 400);
+
+        String emailNew = newEmail.trim().toLowerCase();
+
+        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+        // ✅ usa o método que estava “só interface”
+        if (tenantUserRepository.existsByEmailAndAccountIdAndIdNot(emailNew, accountId, userId)) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
+        }
+
+        LocalDateTime now = now();
+        user.setEmail(emailNew);
+        user.setUpdatedAt(now);
+
+        return tenantUserRepository.save(user);
+    }
+
+    
+    
+    
 
     public TenantUser updateProfile(
             Long userId,
@@ -277,37 +312,54 @@ public class TenantUserTxService {
         return tenantUserRepository.save(user);
     }
 
-    // =========================
-    // RESET PASSWORD (TOKEN)
-    // =========================
-    public void resetPasswordWithToken(Long accountId, String username, String token, String newPassword) {
-        if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
-        }
-
-        TenantUser user = tenantUserRepository.findByUsernameAndAccountId(username, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-
-        if (user.getPasswordResetToken() == null || !user.getPasswordResetToken().equals(token)) {
-            throw new ApiException("INVALID_TOKEN", "Token não confere", 400);
-        }
-
-        LocalDateTime now = now();
-
-        if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
-            throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
-        }
-
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(now);
-        user.setMustChangePassword(false);
-
-        user.setPasswordResetToken(null);
-        user.setPasswordResetExpires(null);
-
-        user.setUpdatedAt(now);
-        tenantUserRepository.save(user);
+   // =========================
+// RESET PASSWORD (TOKEN)
+// =========================
+// =========================
+// RESET PASSWORD (TOKEN)
+// =========================
+public void resetPasswordWithToken(Long accountId, String username, String token, String newPassword) {
+    if (!StringUtils.hasText(newPassword) || !newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+        throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
     }
+    if (accountId == null) {
+        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+    }
+    if (!StringUtils.hasText(token)) {
+        throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
+    }
+
+    LocalDateTime now = now();
+
+    // ✅ usa o método que estava “só interface”
+    TenantUser user = tenantUserRepository
+            .findByPasswordResetTokenAndAccountId(token, accountId)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+    if (user.isDeleted()) {
+        throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
+    }
+
+    // opcional (mantém coerência com o token que também carrega username)
+    if (StringUtils.hasText(username) && !user.getUsername().equals(username)) {
+        throw new ApiException("INVALID_TOKEN", "Token não confere", 400);
+    }
+
+    if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
+        throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
+    }
+
+    user.setPassword(passwordEncoder.encode(newPassword));
+    user.setPasswordChangedAt(now);
+    user.setMustChangePassword(false);
+
+    user.setPasswordResetToken(null);
+    user.setPasswordResetExpires(null);
+
+    user.setUpdatedAt(now);
+    tenantUserRepository.save(user);
+}
+
 
     // usado no generatePasswordResetToken
     public TenantUser save(TenantUser user) {

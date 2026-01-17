@@ -17,7 +17,7 @@ public record ControlPlaneUserUpdateRequest(
         @Size(max = 150, message = "Email deve ter no máximo 150 caracteres")
         String email,
 
-        // opcional: só pode alterar se NÃO for system user (validado no service)
+        // opcional: só pode alterar se NÃO for builtIn user (validado no service)
         @Pattern(
                 regexp = ValidationPatterns.USERNAME_PATTERN,
                 message = "Username inválido"
@@ -28,7 +28,7 @@ public record ControlPlaneUserUpdateRequest(
         // opcional: troca de role (policy no service)
         ControlPlaneRole role,
 
-        // opcional: só OWNER pode enviar e não pode ser system user (policy no service)
+        // opcional: só OWNER pode enviar e não pode ser builtIn user (policy no service)
         List<
             @Pattern(
                 regexp = "^CP_[A-Z0-9_]+$",

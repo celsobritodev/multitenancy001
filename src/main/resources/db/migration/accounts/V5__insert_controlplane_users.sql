@@ -1,7 +1,7 @@
 -- V5__insert_controlplane_users.sql
 SET search_path TO public;
 
--- Cria 4 usuários padrão do Control Plane no account SYSTEM (slug controlplane)
+-- Cria 4 usuários padrão do Control Plane no account PLATFORM (slug controlplane)
 -- Se já existirem (ativos) com o mesmo username/email, não duplica.
 
 WITH cp_account AS (
@@ -17,7 +17,7 @@ INSERT INTO controlplane_users (
     password,
     role,
     account_id,
-    is_system_user,          -- ✅ NOVO
+    user_origin,              -- ✅ novo
     suspended_by_account,
     suspended_by_admin,
     must_change_password
@@ -29,7 +29,7 @@ SELECT
     u.password,
     u.role,
     a.id,
-    true,                   -- ✅ sempre true para esses 4
+    'BUILT_IN',               -- ✅ sempre BUILT_IN para esses 4
     false,
     false,
     u.must_change_password

@@ -3,6 +3,7 @@ package brito.com.multitenancy001.controlplane.application;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
+import brito.com.multitenancy001.controlplane.domain.account.AccountOrigin;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
 import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
@@ -44,6 +45,7 @@ public class PublicAccountCreationService {
 
 				Account account = new Account();
 				account.setType(AccountType.TENANT);
+				account.setOrigin(AccountOrigin.ADMIN); // ✅ novo
 				account.setName(signupRequest.name());
 				account.setSlug(slug);
 				account.setSchemaName(schemaName);
@@ -62,8 +64,8 @@ public class PublicAccountCreationService {
 				account.setLocale("pt_BR");
 				account.setCurrency("BRL");
 				
-				if (account.getType() == AccountType.SYSTEM && accountRepository.existsByTypeAndDeletedFalse(AccountType.SYSTEM)) {
-				    throw new DomainException("Only one SYSTEM account is allowed");
+				if (account.getType() == AccountType.PLATFORM && accountRepository.existsByTypeAndDeletedFalse(AccountType.PLATFORM)) {
+				    throw new DomainException("Only one PLATFORM account is allowed");
 				}
 
 

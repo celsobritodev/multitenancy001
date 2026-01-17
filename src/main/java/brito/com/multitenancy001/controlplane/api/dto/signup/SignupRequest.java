@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 public record SignupRequest(
@@ -21,7 +21,7 @@ public record SignupRequest(
     String companyEmail,
 
     @NotNull(message = "Tipo de documento é obrigatório (CPF ou CNPJ)")
-    DocumentType companyDocType,
+    TaxIdType companyDocType,
 
     @NotBlank(message = "Número do documento é obrigatório")
     String companyDocNumber,

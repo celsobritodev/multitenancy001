@@ -7,10 +7,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.executor.TenantExecutor;
-import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
+import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.application.username.generator.UsernameGeneratorService;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -24,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantUserAdminBridge {
 
-    private static final String TENANT_USERS_TABLE = "tenant_users";
+    private static final String REQUIRED_TABLE = "tenant_users";
 
     private final TenantExecutor tenantExecutor;
     private final TxExecutor txExecutor;
@@ -36,7 +35,7 @@ public class TenantUserAdminBridge {
     private final AppClock appClock;
 
     public List<UserSummaryData> listUserSummaries(String schemaName, Long accountId, boolean onlyActive) {
-        tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantReadOnlyTx(() -> {
@@ -63,7 +62,7 @@ public class TenantUserAdminBridge {
     }
 
     public TenantUser createTenantOwner(String schemaName, Long accountId, String email, String rawPassword) {
-        tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantTx(() -> {
@@ -102,7 +101,7 @@ public class TenantUserAdminBridge {
     }
 
     public List<TenantUser> listUsers(String schemaName, Long accountId, boolean onlyActive) {
-        tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantReadOnlyTx(() -> onlyActive
@@ -113,7 +112,7 @@ public class TenantUserAdminBridge {
     }
 
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
-        tenantExecutor.assertReadyOrThrow(schemaName, TENANT_USERS_TABLE);
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantTx(() -> {
@@ -128,7 +127,7 @@ public class TenantUserAdminBridge {
 
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-                schemaName, TENANT_USERS_TABLE,
+                schemaName, REQUIRED_TABLE,
                 () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
                 0
         );
@@ -136,7 +135,7 @@ public class TenantUserAdminBridge {
 
     public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-                schemaName, TENANT_USERS_TABLE,
+                schemaName, REQUIRED_TABLE,
                 () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
                 0
         );
@@ -144,7 +143,7 @@ public class TenantUserAdminBridge {
 
     public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-                schemaName, TENANT_USERS_TABLE,
+                schemaName, REQUIRED_TABLE,
                 () -> txExecutor.tenantRequiresNew(() -> {
                     List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
 
@@ -170,7 +169,7 @@ public class TenantUserAdminBridge {
 
     public int restoreAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
-                schemaName, TENANT_USERS_TABLE,
+                schemaName, REQUIRED_TABLE,
                 () -> txExecutor.tenantRequiresNew(() -> {
                     List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
 

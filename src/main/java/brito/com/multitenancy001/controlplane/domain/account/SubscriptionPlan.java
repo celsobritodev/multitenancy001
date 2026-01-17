@@ -7,7 +7,7 @@ public enum SubscriptionPlan {
 
     /**
      * Plano interno do sistema (Control Plane).
-     * SYSTEM != cliente, não tem trial, não tem billing, não tem entitlements.
+     * BUILTIN != cliente, não tem trial, não tem billing, não tem entitlements.
      */
-    SYSTEM
+    BUILT_IN_PLAN
 }

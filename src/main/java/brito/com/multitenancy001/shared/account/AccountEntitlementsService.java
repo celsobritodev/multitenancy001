@@ -16,7 +16,7 @@ public class AccountEntitlementsService {
 
     /**
      * Resolve entitlements efetivos da conta:
-     * - SYSTEM => ilimitado
+     * - PLATFORM => ilimitado
      * - TENANT => lê de account_entitlements
      */
     @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
@@ -25,7 +25,7 @@ public class AccountEntitlementsService {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
         }
 
-        if (account.isSystemAccount()) {
+        if (account.isBuiltInAccount()) {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 

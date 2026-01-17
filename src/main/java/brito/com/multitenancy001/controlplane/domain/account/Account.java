@@ -43,18 +43,46 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // =========
+    // TYPE / ORIGIN
+    // =========
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_type", nullable = false, length = 20)
     @Builder.Default
     private AccountType type = AccountType.TENANT;
 
-    @Column(nullable = false, length = 150)
-    private String name;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_origin", nullable = false, length = 20)
+    @Builder.Default
+    private AccountOrigin origin = AccountOrigin.ADMIN;
+
+    // =========
+    // CORE IDENTITY
+    // =========
+
+    /**
+     * Nome de exibição (UI): "Foton Devices", "Sandra Severo", etc.
+     */
+    @Column(name = "display_name", nullable = false, length = 150)
+    private String displayName;
+
+    /**
+     * Nome legal (opcional): Razão Social ou Nome completo.
+     * Pode ser preenchido depois.
+     */
+    @Column(name = "legal_name", length = 200)
+    private String legalName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "legal_entity_type", nullable = false, length = 20)
+    @Builder.Default
+    private LegalEntityType legalEntityType = LegalEntityType.COMPANY;
 
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
     private String schemaName;
 
-    @Column(name = "slug", nullable = false, unique = true, length = 50)
+    @Column(name = "slug", nullable = false, unique = true, length = 80)
     private String slug;
 
     @Enumerated(EnumType.STRING)
@@ -62,7 +90,10 @@ public class Account {
     @Builder.Default
     private AccountStatus status = AccountStatus.FREE_TRIAL;
 
-    // Auditoria (técnico)
+    // =========
+    // AUDIT (técnico)
+    // =========
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -71,7 +102,10 @@ public class Account {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Datas de negócio
+    // =========
+    // BUSINESS DATES
+    // =========
+
     @Column(name = "trial_end_date")
     private LocalDateTime trialEndDate;
 
@@ -86,33 +120,62 @@ public class Account {
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
-    // Identidade empresa
-    @Column(name = "company_email", nullable = false, length = 150)
-    private String companyEmail;
+    // =========
+    // EMAILS (neutro)
+    // =========
+
+    /**
+     * Email principal (login / owner contact) do onboarding.
+     * (Você pode manter como "loginEmail" mesmo se no futuro login for por CP User.)
+     */
+    @Column(name = "login_email", nullable = false, length = 150)
+    private String loginEmail;
+
+    /**
+     * Email para cobrança (opcional).
+     * Padrão SaaS moderno: permite financeiro diferente do owner.
+     */
+    @Column(name = "billing_email", length = 150)
+    private String billingEmail;
+
+    // =========
+    // TAX ID / DOCUMENT (neutro PF/PJ)
+    // =========
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "company_doc_type", nullable = false, length = 10)
-    private DocumentType companyDocType;
+    @Column(name = "tax_id_type", length = 20)
+    private TaxIdType taxIdType; // opcional: pode ser null
 
-    @Column(name = "company_doc_number", nullable = false, length = 20)
-    private String companyDocNumber;
+    @Column(name = "tax_id_number", length = 40)
+    private String taxIdNumber; // opcional: pode ser null
 
-    @Column(name = "company_phone", length = 20)
-    private String companyPhone;
-
-    @Column(name = "company_address", length = 500)
-    private String companyAddress;
-
-    @Column(name = "company_city", length = 100)
-    private String companyCity;
-
-    @Column(name = "company_state", length = 50)
-    private String companyState;
-
-    // Localização
-    @Column(name = "company_country", length = 60, nullable = false)
+    @Column(name = "tax_country_code", length = 2, nullable = false)
     @Builder.Default
-    private String companyCountry = "Brasil";
+    private String taxCountryCode = "BR";
+
+    // =========
+    // CONTACT DATA
+    // =========
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Column(name = "address", length = 500)
+    private String address;
+
+    @Column(name = "city", length = 100)
+    private String city;
+
+    @Column(name = "state", length = 50)
+    private String state;
+
+    @Column(name = "country", length = 60, nullable = false)
+    @Builder.Default
+    private String country = "Brasil";
+
+    // =========
+    // LOCALE SETTINGS
+    // =========
 
     @Column(name = "timezone", length = 60, nullable = false)
     @Builder.Default
@@ -122,16 +185,22 @@ public class Account {
     @Builder.Default
     private String locale = "pt_BR";
 
-    // ✅ alinhado com sua migration (VARCHAR(10))
     @Column(name = "currency", length = 10, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 
-    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY,
-            cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+    // =========
+    // RELATIONSHIPS
+    // =========
+
+    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
+
+    // =========
+    // JSON FIELDS
+    // =========
 
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
@@ -139,7 +208,10 @@ public class Account {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    // Soft delete
+    // =========
+    // SOFT DELETE
+    // =========
+
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
@@ -149,27 +221,51 @@ public class Account {
 
     @PrePersist
     protected void onCreate() {
-        // defaults defensivos (mantém coerente mesmo se alguém setar null/blank)
-        if (this.companyCountry == null || this.companyCountry.isBlank()) this.companyCountry = "Brasil";
-        if (this.timezone == null || this.timezone.isBlank()) this.timezone = "America/Sao_Paulo";
-        if (this.locale == null || this.locale.isBlank()) this.locale = "pt_BR";
-        if (this.currency == null || this.currency.isBlank()) this.currency = "BRL";
+
+        if (origin == null) origin = AccountOrigin.ADMIN;
+
+        if (country == null || country.isBlank()) country = "Brasil";
+        if (timezone == null || timezone.isBlank()) timezone = "America/Sao_Paulo";
+        if (locale == null || locale.isBlank()) locale = "pt_BR";
+        if (currency == null || currency.isBlank()) currency = "BRL";
+        if (taxCountryCode == null || taxCountryCode.isBlank()) taxCountryCode = "BR";
+
+        // displayName defensivo (se ainda existir "name" em algum builder antigo)
+        if (displayName == null || displayName.isBlank()) {
+            throw new DomainException("displayName is required");
+        }
 
         // slug
-        if (this.slug == null || this.slug.isBlank()) {
-            this.slug = (this.name == null ? "conta" : this.name)
-                    .toLowerCase()
+        if (slug == null || slug.isBlank()) {
+            slug = displayName.toLowerCase()
                     .replaceAll("[^a-z0-9]+", "-")
                     .replaceAll("(^-|-$)", "");
         }
 
         // schemaName
-        if (this.schemaName == null || this.schemaName.isBlank()) {
-            this.schemaName =
-                    "tenant_" +
-                    this.slug.replace("-", "_") +
-                    "_" +
-                    UUID.randomUUID().toString().substring(0, 8);
+        if (schemaName == null || schemaName.isBlank()) {
+            schemaName = "tenant_" + slug.replace("-", "_") + "_"
+                    + UUID.randomUUID().toString().substring(0, 8);
+        }
+
+        // Normalização leve de email
+        if (loginEmail != null) loginEmail = loginEmail.trim().toLowerCase();
+        if (billingEmail != null && !billingEmail.isBlank()) billingEmail = billingEmail.trim().toLowerCase();
+        if (billingEmail != null && billingEmail.isBlank()) billingEmail = null;
+
+        // Normalização doc (recomendação: guardar só dígitos)
+        if (taxIdNumber != null) {
+            taxIdNumber = taxIdNumber.replaceAll("\\D+", "");
+            if (taxIdNumber.isBlank()) taxIdNumber = null;
+        }
+
+        // coerência: se um vem, o outro deve vir
+        if ((taxIdType == null) != (taxIdNumber == null)) {
+            throw new DomainException("taxIdType and taxIdNumber must be provided together");
+        }
+
+        if (isBuiltInAccount()) {
+            applyBuiltInDefaults();
         }
     }
 
@@ -181,8 +277,12 @@ public class Account {
         return type == AccountType.TENANT;
     }
 
-    public boolean isSystemAccount() {
-        return type == AccountType.SYSTEM;
+    public boolean isPlatformAccount() {
+        return type == AccountType.PLATFORM;
+    }
+
+    public boolean isBuiltInAccount() {
+        return origin == AccountOrigin.BUILT_IN;
     }
 
     public boolean isDeleted() {
@@ -190,110 +290,113 @@ public class Account {
     }
 
     public boolean isTrialActive(LocalDateTime now) {
-        return this.status == AccountStatus.FREE_TRIAL
-                && this.trialEndDate != null
+        return status == AccountStatus.FREE_TRIAL
+                && trialEndDate != null
                 && now != null
-                && this.trialEndDate.isAfter(now);
+                && trialEndDate.isAfter(now);
     }
 
     public boolean isActive(LocalDateTime now) {
         if (isDeleted()) return false;
-        // SYSTEM sempre ativa (a menos que você queira permitir suspensão do system)
-        if (isSystemAccount()) return true;
-
-        return this.status == AccountStatus.ACTIVE
-                || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
+        if (isBuiltInAccount()) return true;
+        return status == AccountStatus.ACTIVE || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
     }
 
     public boolean isPaymentOverdue(LocalDateTime now) {
-        return this.paymentDueDate != null
-                && now != null
-                && this.paymentDueDate.isBefore(now);
+        return paymentDueDate != null && now != null && paymentDueDate.isBefore(now);
     }
 
     public long getDaysRemainingInTrial(LocalDateTime now) {
         if (now == null) return 0;
         if (!isTrialActive(now)) return 0;
-        return ChronoUnit.DAYS.between(now.toLocalDate(), this.trialEndDate.toLocalDate());
+        return ChronoUnit.DAYS.between(now.toLocalDate(), trialEndDate.toLocalDate());
     }
 
     public void softDelete(LocalDateTime now) {
-        if (this.deleted) return;
+        if (deleted) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
-        this.deleted = true;
-        this.deletedAt = now;
-        this.status = AccountStatus.CANCELLED;
+        if (isBuiltInAccount()) {
+            throw new DomainException("BUILT_IN account cannot be deleted");
+        }
+
+        deleted = true;
+        deletedAt = now;
+        status = AccountStatus.CANCELLED;
     }
 
     public void restore() {
-        if (!this.deleted) return;
+        if (!deleted) return;
 
-        this.deleted = false;
-        this.deletedAt = null;
+        deleted = false;
+        deletedAt = null;
+        status = AccountStatus.ACTIVE;
 
-        // para TENANT restaurado: volta ACTIVE (padrão seu)
-        // para SYSTEM: continua ACTIVE
-        this.status = AccountStatus.ACTIVE;
+        if (isBuiltInAccount()) {
+            applyBuiltInDefaults();
+        }
     }
 
     // =========================
-    // Regras de domínio: SYSTEM != cliente
+    // Regras de domínio: BUILT_IN governa restrições
     // =========================
 
     public void setSubscriptionPlan(SubscriptionPlan plan) {
-        if (plan == null) {
-            throw new DomainException("subscriptionPlan is required");
+        if (plan == null) throw new DomainException("subscriptionPlan is required");
+        if (isBuiltInAccount() && plan != SubscriptionPlan.BUILT_IN_PLAN) {
+            throw new DomainException("BUILT_IN account must use BUILT_IN_PLAN");
         }
-        if (this.isSystemAccount() && plan != SubscriptionPlan.SYSTEM) {
-            throw new DomainException("SYSTEM account must use SYSTEM plan");
-        }
-        this.subscriptionPlan = plan;
+        subscriptionPlan = plan;
     }
 
-    public void setStatus(AccountStatus status) {
-        if (status == null) {
-            throw new DomainException("status is required");
+    public void setStatus(AccountStatus newStatus) {
+        if (newStatus == null) throw new DomainException("status is required");
+        if (isBuiltInAccount() && newStatus != AccountStatus.ACTIVE) {
+            throw new DomainException("BUILT_IN account must be ACTIVE");
         }
-        if (this.isSystemAccount() && status != AccountStatus.ACTIVE) {
-            throw new DomainException("SYSTEM account must be ACTIVE");
-        }
-        this.status = status;
+        status = newStatus;
     }
 
-    public void setTrialEndDate(LocalDateTime trialEndDate) {
-        if (this.isSystemAccount() && trialEndDate != null) {
-            throw new DomainException("SYSTEM account must not have trialEndDate");
+    public void setTrialEndDate(LocalDateTime newTrialEndDate) {
+        if (isBuiltInAccount() && newTrialEndDate != null) {
+            throw new DomainException("BUILT_IN account must not have trialEndDate");
         }
-        this.trialEndDate = trialEndDate;
+        trialEndDate = newTrialEndDate;
     }
 
-    public void setPaymentDueDate(LocalDateTime paymentDueDate) {
-        if (this.isSystemAccount() && paymentDueDate != null) {
-            throw new DomainException("SYSTEM account must not have paymentDueDate");
+    public void setPaymentDueDate(LocalDateTime newPaymentDueDate) {
+        if (isBuiltInAccount() && newPaymentDueDate != null) {
+            throw new DomainException("BUILT_IN account must not have paymentDueDate");
         }
-        this.paymentDueDate = paymentDueDate;
+        paymentDueDate = newPaymentDueDate;
     }
 
-    /**
-     * Quando muda para SYSTEM, aplica defaults coerentes:
-     * - status ACTIVE
-     * - plan SYSTEM
-     * - sem trial/billing dates
-     */
-    public void setType(AccountType type) {
-        if (type == null) {
-            throw new DomainException("accountType is required");
-        }
-        this.type = type;
+    public void setType(AccountType newType) {
+        if (newType == null) throw new DomainException("accountType is required");
+        type = newType;
 
-        if (this.isSystemAccount()) {
-            // defaults do SYSTEM
-            this.subscriptionPlan = SubscriptionPlan.SYSTEM;
-            this.status = AccountStatus.ACTIVE;
-            this.trialEndDate = null;
-            this.paymentDueDate = null;
-            this.nextBillingDate = null;
+        if (origin == AccountOrigin.BUILT_IN && type != AccountType.PLATFORM) {
+            throw new DomainException("BUILT_IN account must be PLATFORM");
         }
+    }
+
+    public void setOrigin(AccountOrigin newOrigin) {
+        if (newOrigin == null) throw new DomainException("accountOrigin is required");
+        origin = newOrigin;
+
+        if (origin == AccountOrigin.BUILT_IN) {
+            type = AccountType.PLATFORM;
+            applyBuiltInDefaults();
+        }
+    }
+
+    private void applyBuiltInDefaults() {
+        subscriptionPlan = SubscriptionPlan.BUILT_IN_PLAN;
+        status = AccountStatus.ACTIVE;
+        trialEndDate = null;
+        paymentDueDate = null;
+        nextBillingDate = null;
+        deleted = false;
+        deletedAt = null;
     }
 }

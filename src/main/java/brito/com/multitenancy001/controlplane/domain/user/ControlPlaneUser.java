@@ -25,6 +25,17 @@ public class ControlPlaneUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_origin", nullable = false, length = 20)
+    @Builder.Default
+    private ControlPlaneUserOrigin origin = ControlPlaneUserOrigin.ADMIN;
+
+    public boolean isBuiltInUser() {
+        return this.origin == ControlPlaneUserOrigin.BUILT_IN;
+    }
+
+    
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -47,11 +58,7 @@ public class ControlPlaneUser {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
     
-    @Column(name = "is_system_user", nullable = false)
-    @Builder.Default
-    private boolean systemUser = false;
-    
-
+  
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
     private boolean suspendedByAccount = false;
@@ -136,9 +143,7 @@ public class ControlPlaneUser {
         permissions = PermissionScopeValidator.normalizeControlPlane(permissions);
     }
 
-    public boolean isSystemUser() {
-        return systemUser;
-    }
+  
     
 
     // ✅ se lockedUntil estiver no futuro: lock
@@ -156,8 +161,8 @@ public class ControlPlaneUser {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-  public void softDelete(LocalDateTime now) {
-    if (systemUser) {
+ public void softDelete(LocalDateTime now) {
+    if (isBuiltInUser()) {
         throw new IllegalStateException("SYSTEM_USER_READONLY");
     }
     if (deleted) return;

@@ -5,10 +5,10 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.executor.PublicExecutor;
-import brito.com.multitenancy001.infrastructure.executor.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -98,8 +98,8 @@ public class AccountStatusService {
 
             Account account = getAccountByIdRaw(accountId);
 
-            if (account.isSystemAccount()) {
-                throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
+            if (account.isBuiltInAccount()) {
+                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED",
                         "Não é permitido excluir contas do sistema", 403);
             }
 
@@ -117,8 +117,8 @@ public class AccountStatusService {
 
             Account account = getAccountByIdRaw(accountId);
 
-            if (account.isSystemAccount() && account.isDeleted()) {
-                throw new ApiException("SYSTEM_ACCOUNT_PROTECTED",
+            if (account.isBuiltInAccount() && account.isDeleted()) {
+                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED",
                         "Contas do sistema não podem ser restauradas via este endpoint", 403);
             }
 
