@@ -201,7 +201,7 @@ public class AccountLifecycleService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountResponse> searchAccountsByName(String term, Pageable pageable) {
+    public Page<AccountResponse> searchAccountsByDisplayName(String term, Pageable pageable) {
         if (term == null || term.isBlank()) {
             throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
         }
@@ -209,7 +209,7 @@ public class AccountLifecycleService {
         Pageable p = normalizePageable(pageable);
 
         return publicExecutor.run(() ->
-                accountRepository.searchByName(term.trim(), p)
+                accountRepository.searchByDisplayName(term.trim(), p)
                         .map(accountApiMapper::toResponse)
         );
     }

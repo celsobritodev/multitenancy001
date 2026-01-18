@@ -101,7 +101,7 @@ public class ControlPlaneAccountController {
         }
 
         Pageable p = PageRequest.of(page, size);
-        return ResponseEntity.ok(accountLifecycleService.searchAccountsByName(term, p));
+        return ResponseEntity.ok(accountLifecycleService.searchAccountsByDisplayName(term, p));
     }
 
     @GetMapping
@@ -430,21 +430,21 @@ public class ControlPlaneUserController {
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
-import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 import java.time.LocalDateTime;
 
 public record AccountAdminDetailsResponse(
 
     // Identificação
     Long id,
-    String name,
+    String displayName,
     String slug,
     String schemaName,
     String status,
 
     // Dados legais (sempre em conjunto)
-    DocumentType companyDocType,
-    String companyDocNumber,
+    TaxIdType taxIdType,
+    String taxIdNumber,
 
     // Datas
     LocalDateTime createdAt,
@@ -474,12 +474,12 @@ import java.time.LocalDateTime;
 
 public record AccountResponse(
         Long id,
-        String name,
+        String displayName,
         String slug,
         String schemaName,
         String status,
         String accountType,
-        String subscriptionPlan, // NOVO
+        String subscriptionPlan,
         LocalDateTime createdAt,
         LocalDateTime trialEndDate,
         ControlPlaneAdminUserSummaryResponse platformAdmin
@@ -589,7 +589,7 @@ public record PaymentResponse(
 	    LocalDateTime createdAt,
 	    LocalDateTime updatedAt
 	) {}
-// src/main/java/brito/com/multitenancy001/dtos/SignupRequest.java
+
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import jakarta.validation.constraints.AssertTrue;
@@ -598,24 +598,24 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 public record SignupRequest(
 
     @NotBlank(message = "Nome da empresa é obrigatório")
     @Size(min = 2, max = 100, message = "Nome deve ter entre 2 e 100 caracteres")
-    String name,
+    String displayName,
 
     @NotBlank(message = "Email da empresa é obrigatório")
     @Email(message = "Email inválido")
-    String companyEmail,
+    String loginEmail,
 
     @NotNull(message = "Tipo de documento é obrigatório (CPF ou CNPJ)")
-    DocumentType companyDocType,
+    TaxIdType taxIdType,
 
     @NotBlank(message = "Número do documento é obrigatório")
-    String companyDocNumber,
+    String taxIdNumber,
 
     @NotBlank(message = "Senha é obrigatória")
     @Pattern(
@@ -890,13 +890,13 @@ public class AccountAdminDetailsApiMapper {
 
         return new AccountAdminDetailsResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
 
-                account.getCompanyDocType(),
-                account.getCompanyDocNumber(),
+                account.getTaxIdType(),
+                account.getTaxIdNumber(),
 
                 account.getCreatedAt(),
                 account.getTrialEndDate(),
@@ -933,7 +933,7 @@ public class AccountApiMapper {
     public AccountResponse toResponse(Account account) {
         return new AccountResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
@@ -951,7 +951,7 @@ public class AccountApiMapper {
 
         return new AccountResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
@@ -1293,7 +1293,7 @@ public class AccountLifecycleService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountResponse> searchAccountsByName(String term, Pageable pageable) {
+    public Page<AccountResponse> searchAccountsByDisplayName(String term, Pageable pageable) {
         if (term == null || term.isBlank()) {
             throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
         }
@@ -1351,7 +1351,7 @@ public class AccountOnboardingService {
         tenantUserAdminBridge.createTenantOwner(
             account.getSchemaName(),
             account.getId(),
-            signupRequest.companyEmail(),
+            signupRequest.loginEmail(),
             signupRequest.password()
         );
 
@@ -1362,23 +1362,31 @@ public class AccountOnboardingService {
     }
 
     private void validateSignupRequest(SignupRequest signupRequest) {
-        if (!StringUtils.hasText(signupRequest.name())) {
+    	
+    	if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+    	        "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
+    	)) {
+    	    throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
+    	}
+
+    	
+        if (!StringUtils.hasText(signupRequest.displayName())) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.companyEmail())) {
+        if (!StringUtils.hasText(signupRequest.loginEmail())) {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
 
-        if (!signupRequest.companyEmail().contains("@")) {
+        if (!signupRequest.loginEmail().contains("@")) {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
-        if (signupRequest.companyDocType() == null) {
+        if (signupRequest.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.companyDocNumber())) {
+        if (!StringUtils.hasText(signupRequest.taxIdNumber())) {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
@@ -1390,12 +1398,12 @@ public class AccountOnboardingService {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        if (accountRepository.existsByCompanyEmailAndDeletedFalse(signupRequest.companyEmail())) {
+        if (accountRepository.existsByLoginEmailAndDeletedFalse(signupRequest.loginEmail())) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        if (accountRepository.existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(
-                signupRequest.companyDocType(), signupRequest.companyDocNumber()
+        if (accountRepository.existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                signupRequest.taxIdType(), signupRequest.taxIdNumber()
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }
@@ -1915,11 +1923,11 @@ public class PaymentService {
     }
 
     private void sendSuspensionEmail(Account account, String reason) {
-        log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
+        log.info("Enviando email de suspensão para: {}", account.getLoginEmail());
     }
 
     private void sendPaymentConfirmationEmail(Account account, Payment payment) {
-        log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
+        log.info("Enviando confirmação de pagamento para: {}", account.getLoginEmail());
     }
 
     private LocalDateTime calculateNextDueDate(LocalDateTime validUntil, LocalDateTime now) {
@@ -2058,8 +2066,8 @@ public class PublicAccountCreationService {
 
 		int maxAttempts = 5;
 		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-			String slug = generateSlug(signupRequest.name());
-			String schemaName = generateSchemaName(signupRequest.name());
+			String slug = generateSlug(signupRequest.displayName());
+			String schemaName = generateSchemaName(signupRequest.displayName());
 
 			try {
 				LocalDateTime now = appClock.now();
@@ -2067,20 +2075,20 @@ public class PublicAccountCreationService {
 				Account account = new Account();
 				account.setType(AccountType.TENANT);
 				account.setOrigin(AccountOrigin.ADMIN); // ✅ novo
-				account.setName(signupRequest.name());
+				account.setDisplayName(signupRequest.displayName());
 				account.setSlug(slug);
 				account.setSchemaName(schemaName);
 
-				account.setCompanyEmail(signupRequest.companyEmail());
-				account.setCompanyDocType(signupRequest.companyDocType());
-				account.setCompanyDocNumber(signupRequest.companyDocNumber());
+				account.setLoginEmail(signupRequest.loginEmail());
+				account.setTaxIdType(signupRequest.taxIdType());
+				account.setTaxIdNumber(signupRequest.taxIdNumber());
 
 				account.setTrialEndDate(now.plusDays(30));
 				account.setStatus(AccountStatus.FREE_TRIAL);
 
 				account.setSubscriptionPlan(SubscriptionPlan.FREE);
 
-				account.setCompanyCountry("Brasil");
+				account.setCountry("Brasil");
 				account.setTimezone("America/Sao_Paulo");
 				account.setLocale("pt_BR");
 				account.setCurrency("BRL");
@@ -2135,9 +2143,13 @@ public class PublicAccountCreationService {
 			t = t.getCause();
 		String msg = (t.getMessage() == null) ? "" : t.getMessage().toLowerCase();
 
-		return msg.contains("ux_accounts_slug_active") || msg.contains("uk_accounts_slug")
-				|| msg.contains("uk_accounts_schema_name") || msg.contains("accounts_slug_key")
-				|| msg.contains("accounts_schema_name_key") || msg.contains("company_email");
+		return msg.contains("ux_accounts_slug_active")
+		        || msg.contains("uk_accounts_slug")
+		        || msg.contains("uk_accounts_schema_name")
+		        || msg.contains("accounts_slug_key")
+		        || msg.contains("accounts_schema_name_key")
+		        || msg.contains("ux_accounts_login_email_active")
+		        || msg.contains("login_email");
 	}
 }
 package brito.com.multitenancy001.controlplane.application.user;
@@ -2721,312 +2733,366 @@ import lombok.ToString;
 @Builder
 public class Account {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // =========
+    // TYPE / ORIGIN
+    // =========
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
+    @Builder.Default
+    private AccountType type = AccountType.TENANT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_origin", nullable = false, length = 20)
+    @Builder.Default
+    private AccountOrigin origin = AccountOrigin.ADMIN;
+
+    // =========
+    // CORE IDENTITY
+    // =========
+
+    /**
+     * Nome de exibição (UI): "Foton Devices", "Sandra Severo", etc.
+     */
+    @Column(name = "display_name", nullable = false, length = 150)
+    private String displayName;
+
+    /**
+     * Nome legal (opcional): Razão Social ou Nome completo.
+     * Pode ser preenchido depois.
+     */
+    @Column(name = "legal_name", length = 200)
+    private String legalName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "legal_entity_type", nullable = false, length = 20)
+    @Builder.Default
+    private LegalEntityType legalEntityType = LegalEntityType.COMPANY;
+
+    @Column(name = "schema_name", nullable = false, unique = true, length = 100)
+    private String schemaName;
+
+    @Column(name = "slug", nullable = false, unique = true, length = 80)
+    private String slug;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    @Builder.Default
+    private AccountStatus status = AccountStatus.FREE_TRIAL;
+
+    // =========
+    // AUDIT (técnico)
+    // =========
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // =========
+    // BUSINESS DATES
+    // =========
+
+    @Column(name = "trial_end_date")
+    private LocalDateTime trialEndDate;
+
+    @Column(name = "payment_due_date")
+    private LocalDateTime paymentDueDate;
+
+    @Column(name = "next_billing_date")
+    private LocalDateTime nextBillingDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_plan", nullable = false, length = 50)
+    @Builder.Default
+    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
+
+    // =========
+    // EMAILS (neutro)
+    // =========
+
+    /**
+     * Email principal (login / owner contact) do onboarding.
+     * (Você pode manter como "loginEmail" mesmo se no futuro login for por CP User.)
+     */
+    @Column(name = "login_email", nullable = false, length = 150)
+    private String loginEmail;
+
+    /**
+     * Email para cobrança (opcional).
+     * Padrão SaaS moderno: permite financeiro diferente do owner.
+     */
+    @Column(name = "billing_email", length = 150)
+    private String billingEmail;
+
+    // =========
+    // TAX ID / DOCUMENT (neutro PF/PJ)
+    // =========
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "account_type", nullable = false, length = 20)
-	@Builder.Default
-	private AccountType type = AccountType.TENANT;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tax_id_type", length = 20)
+    private TaxIdType taxIdType; // opcional: pode ser null
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "account_origin", nullable = false, length = 20)
-	@Builder.Default
-	private AccountOrigin origin = AccountOrigin.ADMIN;
+    @Column(name = "tax_id_number", length = 40)
+    private String taxIdNumber; // opcional: pode ser null
 
-	@Column(nullable = false, length = 150)
-	private String name;
+    @Column(name = "tax_country_code", length = 2, nullable = false)
+    @Builder.Default
+    private String taxCountryCode = "BR";
+
+    // =========
+    // CONTACT DATA
+    // =========
+
+    @Column(name = "phone", length = 20)
+    private String phone;
 
-	@Column(name = "schema_name", nullable = false, unique = true, length = 100)
-	private String schemaName;
-
-	@Column(name = "slug", nullable = false, unique = true, length = 50)
-	private String slug;
-
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 50)
-	@Builder.Default
-	private AccountStatus status = AccountStatus.FREE_TRIAL;
-
-	// Auditoria (técnico)
-	@CreationTimestamp
-	@Column(name = "created_at", nullable = false, updatable = false)
-	private LocalDateTime createdAt;
-
-	@UpdateTimestamp
-	@Column(name = "updated_at")
-	private LocalDateTime updatedAt;
-
-	// Datas de negócio
-	@Column(name = "trial_end_date")
-	private LocalDateTime trialEndDate;
-
-	@Column(name = "payment_due_date")
-	private LocalDateTime paymentDueDate;
-
-	@Column(name = "next_billing_date")
-	private LocalDateTime nextBillingDate;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "subscription_plan", nullable = false, length = 50)
-	@Builder.Default
-	private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
-
-	// Identidade empresa
-	@Column(name = "company_email", nullable = false, length = 150)
-	private String companyEmail;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "company_doc_type", nullable = false, length = 10)
-	private DocumentType companyDocType;
-
-	@Column(name = "company_doc_number", nullable = false, length = 20)
-	private String companyDocNumber;
-
-	@Column(name = "company_phone", length = 20)
-	private String companyPhone;
-
-	@Column(name = "company_address", length = 500)
-	private String companyAddress;
-
-	@Column(name = "company_city", length = 100)
-	private String companyCity;
-
-	@Column(name = "company_state", length = 50)
-	private String companyState;
-
-	// Localização
-	@Column(name = "company_country", length = 60, nullable = false)
-	@Builder.Default
-	private String companyCountry = "Brasil";
-
-	@Column(name = "timezone", length = 60, nullable = false)
-	@Builder.Default
-	private String timezone = "America/Sao_Paulo";
-
-	@Column(name = "locale", length = 20, nullable = false)
-	@Builder.Default
-	private String locale = "pt_BR";
-
-	@Column(name = "currency", length = 10, nullable = false)
-	@Builder.Default
-	private String currency = "BRL";
-
-	@OneToMany(mappedBy = "account", fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
-	@Builder.Default
-	@ToString.Exclude
-	private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-
-	@Column(name = "settings_json", columnDefinition = "TEXT")
-	private String settingsJson;
-
-	@Column(name = "metadata_json", columnDefinition = "TEXT")
-	private String metadataJson;
-
-	// Soft delete
-	@Column(name = "deleted", nullable = false)
-	@Builder.Default
-	private boolean deleted = false;
-
-	@Column(name = "deleted_at")
-	private LocalDateTime deletedAt;
-
-	@PrePersist
-	protected void onCreate() {
-
-		// ✅ origin default defensivo
-		if (this.origin == null)
-			this.origin = AccountOrigin.ADMIN;
-
-		// defaults defensivos
-		if (this.companyCountry == null || this.companyCountry.isBlank())
-			this.companyCountry = "Brasil";
-		if (this.timezone == null || this.timezone.isBlank())
-			this.timezone = "America/Sao_Paulo";
-		if (this.locale == null || this.locale.isBlank())
-			this.locale = "pt_BR";
-		if (this.currency == null || this.currency.isBlank())
-			this.currency = "BRL";
-
-		// slug
-		if (this.slug == null || this.slug.isBlank()) {
-			this.slug = (this.name == null ? "conta" : this.name).toLowerCase().replaceAll("[^a-z0-9]+", "-")
-					.replaceAll("(^-|-$)", "");
-		}
-
-		// schemaName
-		if (this.schemaName == null || this.schemaName.isBlank()) {
-			this.schemaName = "tenant_" + this.slug.replace("-", "_") + "_"
-					+ UUID.randomUUID().toString().substring(0, 8);
-		}
-
-		// ✅ Se for BUILT_IN, aplica defaults coerentes
-		if (isBuiltInAccount()) {
-			applyBuiltInDefaults();
-		}
-	}
-
-	// =========================
-	// Semântica / helpers
-	// =========================
-
-	public boolean isTenantAccount() {
-		return type == AccountType.TENANT;
-	}
-
-	public boolean isPlatformAccount() {
-		return this.type == AccountType.PLATFORM;
-	}
-
-	public boolean isBuiltInAccount() {
-		return this.origin == AccountOrigin.BUILT_IN;
-	}
-
-	public boolean isDeleted() {
-		return deleted || deletedAt != null;
-	}
-
-	public boolean isTrialActive(LocalDateTime now) {
-		return this.status == AccountStatus.FREE_TRIAL && this.trialEndDate != null && now != null
-				&& this.trialEndDate.isAfter(now);
-	}
-
-	public boolean isActive(LocalDateTime now) {
-		if (isDeleted())
-			return false;
-
-		// BUILT_IN sempre ativa (pela sua regra atual)
-		if (isBuiltInAccount())
-			return true;
-
-		return this.status == AccountStatus.ACTIVE || (this.status == AccountStatus.FREE_TRIAL && isTrialActive(now));
-	}
-
-	public boolean isPaymentOverdue(LocalDateTime now) {
-		return this.paymentDueDate != null && now != null && this.paymentDueDate.isBefore(now);
-	}
-
-	public long getDaysRemainingInTrial(LocalDateTime now) {
-		if (now == null)
-			return 0;
-		if (!isTrialActive(now))
-			return 0;
-		return ChronoUnit.DAYS.between(now.toLocalDate(), this.trialEndDate.toLocalDate());
-	}
-
-	public void softDelete(LocalDateTime now) {
-		if (this.deleted)
-			return;
-		if (now == null)
-			throw new IllegalArgumentException("now is required");
-
-		if (isBuiltInAccount()) {
-			throw new DomainException("BUILT_IN account cannot be deleted");
-		}
-
-		this.deleted = true;
-		this.deletedAt = now;
-		this.status = AccountStatus.CANCELLED;
-	}
-
-	public void restore() {
-		if (!this.deleted)
-			return;
-
-		this.deleted = false;
-		this.deletedAt = null;
-
-		// TENANT restaurado volta ACTIVE (seu padrão)
-		this.status = AccountStatus.ACTIVE;
-
-		// BUILT_IN: força defaults (por segurança)
-		if (isBuiltInAccount()) {
-			applyBuiltInDefaults();
-		}
-	}
-
-	// =========================
-	// Regras de domínio: origem BUILT_IN governa restrições
-	// =========================
-
-	public void setSubscriptionPlan(SubscriptionPlan plan) {
-		if (plan == null) {
-			throw new DomainException("subscriptionPlan is required");
-		}
-		if (this.isBuiltInAccount() && plan != SubscriptionPlan.BUILT_IN_PLAN) {
-			throw new DomainException("BUILT_IN account must use BUILT_IN_PLAN");
-		}
-		this.subscriptionPlan = plan;
-	}
-
-	public void setStatus(AccountStatus status) {
-		if (status == null) {
-			throw new DomainException("status is required");
-		}
-		if (this.isBuiltInAccount() && status != AccountStatus.ACTIVE) {
-			throw new DomainException("BUILT_IN account must be ACTIVE");
-		}
-		this.status = status;
-	}
-
-	public void setTrialEndDate(LocalDateTime trialEndDate) {
-		if (this.isBuiltInAccount() && trialEndDate != null) {
-			throw new DomainException("BUILT_IN account must not have trialEndDate");
-		}
-		this.trialEndDate = trialEndDate;
-	}
-
-	public void setPaymentDueDate(LocalDateTime paymentDueDate) {
-		if (this.isBuiltInAccount() && paymentDueDate != null) {
-			throw new DomainException("BUILT_IN account must not have paymentDueDate");
-		}
-		this.paymentDueDate = paymentDueDate;
-	}
-
-	public void setType(AccountType type) {
-		if (type == null) {
-			throw new DomainException("accountType is required");
-		}
-		this.type = type;
-
-		// se já for BUILT_IN, garante coerência
-		if (this.origin == AccountOrigin.BUILT_IN && this.type != AccountType.PLATFORM) {
-			throw new DomainException("BUILT_IN account must be PLATFORM");
-		}
-	}
-
-	public void setOrigin(AccountOrigin origin) {
-		if (origin == null) {
-			throw new DomainException("accountOrigin is required");
-		}
-		this.origin = origin;
-
-		if (this.origin == AccountOrigin.BUILT_IN) {
-			// BUILT_IN deve ser PLATFORM
-			this.type = AccountType.PLATFORM;
-
-			// defaults do BUILT_IN
-			this.subscriptionPlan = SubscriptionPlan.BUILT_IN_PLAN;
-			this.status = AccountStatus.ACTIVE;
-			this.trialEndDate = null;
-			this.paymentDueDate = null;
-			this.nextBillingDate = null;
-
-			this.deleted = false;
-			this.deletedAt = null;
-		}
-	}
-
-	private void applyBuiltInDefaults() {
-		this.subscriptionPlan = SubscriptionPlan.BUILT_IN_PLAN;
-		this.status = AccountStatus.ACTIVE;
-		this.trialEndDate = null;
-		this.paymentDueDate = null;
-		this.nextBillingDate = null;
-		this.deleted = false;
-		this.deletedAt = null;
-	}
+    @Column(name = "address", length = 500)
+    private String address;
+
+    @Column(name = "city", length = 100)
+    private String city;
+
+    @Column(name = "state", length = 50)
+    private String state;
+
+    @Column(name = "country", length = 60, nullable = false)
+    @Builder.Default
+    private String country = "Brasil";
+
+    // =========
+    // LOCALE SETTINGS
+    // =========
+
+    @Column(name = "timezone", length = 60, nullable = false)
+    @Builder.Default
+    private String timezone = "America/Sao_Paulo";
+
+    @Column(name = "locale", length = 20, nullable = false)
+    @Builder.Default
+    private String locale = "pt_BR";
+
+    @Column(name = "currency", length = 10, nullable = false)
+    @Builder.Default
+    private String currency = "BRL";
+
+    // =========
+    // RELATIONSHIPS
+    // =========
+
+    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+    @Builder.Default
+    @ToString.Exclude
+    private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
+
+    // =========
+    // JSON FIELDS
+    // =========
+
+    @Column(name = "settings_json", columnDefinition = "TEXT")
+    private String settingsJson;
+
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    private String metadataJson;
+
+    // =========
+    // SOFT DELETE
+    // =========
+
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @PrePersist
+    protected void onCreate() {
+
+        if (origin == null) origin = AccountOrigin.ADMIN;
+
+        if (country == null || country.isBlank()) country = "Brasil";
+        if (timezone == null || timezone.isBlank()) timezone = "America/Sao_Paulo";
+        if (locale == null || locale.isBlank()) locale = "pt_BR";
+        if (currency == null || currency.isBlank()) currency = "BRL";
+        if (taxCountryCode == null || taxCountryCode.isBlank()) taxCountryCode = "BR";
+
+        // displayName defensivo (se ainda existir "name" em algum builder antigo)
+        if (displayName == null || displayName.isBlank()) {
+            throw new DomainException("displayName is required");
+        }
+
+        // slug
+        if (slug == null || slug.isBlank()) {
+            slug = displayName.toLowerCase()
+                    .replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("(^-|-$)", "");
+        }
+
+        // schemaName
+        if (schemaName == null || schemaName.isBlank()) {
+            schemaName = "tenant_" + slug.replace("-", "_") + "_"
+                    + UUID.randomUUID().toString().substring(0, 8);
+        }
+
+        // Normalização leve de email
+        if (loginEmail != null) loginEmail = loginEmail.trim().toLowerCase();
+        if (billingEmail != null && !billingEmail.isBlank()) billingEmail = billingEmail.trim().toLowerCase();
+        if (billingEmail != null && billingEmail.isBlank()) billingEmail = null;
+
+        // Normalização doc (recomendação: guardar só dígitos)
+        if (taxIdNumber != null) {
+            taxIdNumber = taxIdNumber.replaceAll("\\D+", "");
+            if (taxIdNumber.isBlank()) taxIdNumber = null;
+        }
+
+        // coerência: se um vem, o outro deve vir
+        if ((taxIdType == null) != (taxIdNumber == null)) {
+            throw new DomainException("taxIdType and taxIdNumber must be provided together");
+        }
+
+        if (isBuiltInAccount()) {
+            applyBuiltInDefaults();
+        }
+    }
+
+    // =========================
+    // Semântica / helpers
+    // =========================
+
+    public boolean isTenantAccount() {
+        return type == AccountType.TENANT;
+    }
+
+    public boolean isPlatformAccount() {
+        return type == AccountType.PLATFORM;
+    }
+
+    public boolean isBuiltInAccount() {
+        return origin == AccountOrigin.BUILT_IN;
+    }
+
+    public boolean isDeleted() {
+        return deleted || deletedAt != null;
+    }
+
+    public boolean isTrialActive(LocalDateTime now) {
+        return status == AccountStatus.FREE_TRIAL
+                && trialEndDate != null
+                && now != null
+                && trialEndDate.isAfter(now);
+    }
+
+    public boolean isActive(LocalDateTime now) {
+        if (isDeleted()) return false;
+        if (isBuiltInAccount()) return true;
+        return status == AccountStatus.ACTIVE || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
+    }
+
+    public boolean isPaymentOverdue(LocalDateTime now) {
+        return paymentDueDate != null && now != null && paymentDueDate.isBefore(now);
+    }
+
+    public long getDaysRemainingInTrial(LocalDateTime now) {
+        if (now == null) return 0;
+        if (!isTrialActive(now)) return 0;
+        return ChronoUnit.DAYS.between(now.toLocalDate(), trialEndDate.toLocalDate());
+    }
+
+    public void softDelete(LocalDateTime now) {
+        if (deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
+        if (isBuiltInAccount()) {
+            throw new DomainException("BUILT_IN account cannot be deleted");
+        }
+
+        deleted = true;
+        deletedAt = now;
+        status = AccountStatus.CANCELLED;
+    }
+
+    public void restore() {
+        if (!deleted) return;
+
+        deleted = false;
+        deletedAt = null;
+        status = AccountStatus.ACTIVE;
+
+        if (isBuiltInAccount()) {
+            applyBuiltInDefaults();
+        }
+    }
+
+    // =========================
+    // Regras de domínio: BUILT_IN governa restrições
+    // =========================
+
+    public void setSubscriptionPlan(SubscriptionPlan plan) {
+        if (plan == null) throw new DomainException("subscriptionPlan is required");
+        if (isBuiltInAccount() && plan != SubscriptionPlan.BUILT_IN_PLAN) {
+            throw new DomainException("BUILT_IN account must use BUILT_IN_PLAN");
+        }
+        subscriptionPlan = plan;
+    }
+
+    public void setStatus(AccountStatus newStatus) {
+        if (newStatus == null) throw new DomainException("status is required");
+        if (isBuiltInAccount() && newStatus != AccountStatus.ACTIVE) {
+            throw new DomainException("BUILT_IN account must be ACTIVE");
+        }
+        status = newStatus;
+    }
+
+    public void setTrialEndDate(LocalDateTime newTrialEndDate) {
+        if (isBuiltInAccount() && newTrialEndDate != null) {
+            throw new DomainException("BUILT_IN account must not have trialEndDate");
+        }
+        trialEndDate = newTrialEndDate;
+    }
+
+    public void setPaymentDueDate(LocalDateTime newPaymentDueDate) {
+        if (isBuiltInAccount() && newPaymentDueDate != null) {
+            throw new DomainException("BUILT_IN account must not have paymentDueDate");
+        }
+        paymentDueDate = newPaymentDueDate;
+    }
+
+    public void setType(AccountType newType) {
+        if (newType == null) throw new DomainException("accountType is required");
+        type = newType;
+
+        if (origin == AccountOrigin.BUILT_IN && type != AccountType.PLATFORM) {
+            throw new DomainException("BUILT_IN account must be PLATFORM");
+        }
+    }
+
+    public void setOrigin(AccountOrigin newOrigin) {
+        if (newOrigin == null) throw new DomainException("accountOrigin is required");
+        origin = newOrigin;
+
+        if (origin == AccountOrigin.BUILT_IN) {
+            type = AccountType.PLATFORM;
+            applyBuiltInDefaults();
+        }
+    }
+
+    private void applyBuiltInDefaults() {
+        subscriptionPlan = SubscriptionPlan.BUILT_IN_PLAN;
+        status = AccountStatus.ACTIVE;
+        trialEndDate = null;
+        paymentDueDate = null;
+        nextBillingDate = null;
+        deleted = false;
+        deletedAt = null;
+    }
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
@@ -3128,15 +3194,10 @@ public enum AccountType {
 }
 package brito.com.multitenancy001.controlplane.domain.account;
 
-import lombok.Getter;
-
-@Getter
-public enum DocumentType {
-    CPF,
-    CNPJ;
-
-   
-    }
+public enum LegalEntityType {
+    INDIVIDUAL,   // pessoa física
+    COMPANY       // pessoa jurídica
+}
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum SubscriptionPlan {
@@ -3150,6 +3211,17 @@ public enum SubscriptionPlan {
      */
     BUILT_IN_PLAN
 }
+package brito.com.multitenancy001.controlplane.domain.account;
+
+import lombok.Getter;
+
+@Getter
+public enum TaxIdType {
+    CPF,
+    CNPJ;
+
+   
+    }
 package brito.com.multitenancy001.controlplane.domain.billing;
 
 import jakarta.persistence.*;
@@ -3601,6 +3673,10 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
 }
 package brito.com.multitenancy001.controlplane.persistence.account;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -3611,26 +3687,28 @@ import org.springframework.stereotype.Repository;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
-import brito.com.multitenancy001.controlplane.domain.account.DocumentType;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
+	
+	boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+	        String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
+	);
+
 
     boolean existsByTypeAndDeletedFalse(AccountType type);
 
-    boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
+    boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
 
-    boolean existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(
-            DocumentType companyDocType, String companyDocNumber
-    );
+    boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
 
     List<Account> findAllByDeletedFalse();
 
     Optional<Account> findBySlugAndDeletedFalse(String slug);
+
+    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
+
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
     List<Account> findByStatus(AccountStatus status);
@@ -3647,35 +3725,36 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
     // =========================================================
-    // ✅ MÉTODOS PARA ADMIN (com paginação onde faz sentido)
+    // ADMIN (mantendo os nomes que seu service chama)
     // =========================================================
 
-    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = 'ACTIVE'")
-    long countActiveAccounts();
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
+    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
 
-    boolean existsByNameAndDeletedFalse(String name);
+    // ✅ para manter compatível com AccountLifecycleService.countActiveAccounts()
+    default long countActiveAccounts() {
+        return countByStatusAndDeletedFalse(AccountStatus.ACTIVE);
+    }
 
-    boolean existsBySchemaNameAndDeletedFalse(String schemaName);
-
-    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
-
-    // latest (paginado)
     Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
 
-    // by status (paginado)
     Page<Account> findByStatusAndDeletedFalse(AccountStatus status, Pageable pageable);
 
-    // created between (paginado)
-    @Query("SELECT a FROM Account a " +
-           "WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")
     Page<Account> findAccountsCreatedBetween(@Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // search by name (paginado)
-    @Query("SELECT a FROM Account a " +
-           "WHERE a.deleted = false " +
-           "AND LOWER(a.name) LIKE LOWER(CONCAT('%', :term, '%'))")
+    // ✅ para manter compatível com AccountLifecycleService.searchAccountsByName()
+    // agora busca em displayName e também em legalName
+    @Query("""
+        SELECT a FROM Account a
+        WHERE a.deleted = false
+          AND (
+            LOWER(a.displayName) LIKE LOWER(CONCAT('%', :term, '%'))
+            OR (a.legalName IS NOT NULL AND LOWER(a.legalName) LIKE LOWER(CONCAT('%', :term, '%')))
+          )
+    """)
     Page<Account> searchByName(@Param("term") String term, Pageable pageable);
 }
 package brito.com.multitenancy001.controlplane.persistence.billing;
@@ -6162,27 +6241,27 @@ public class GlobalExceptionHandler {
 
         log.debug("DataIntegrityViolationException: {}", errorMessage);
 
-        if (errorMessage.contains("company_doc_number")) {
-            String cnpj = extractValue(errorMessage, "company_doc_number");
+        if (errorMessage.contains("tax_id_number")) {
+            String cnpj = extractValue(errorMessage, "tax_id_number");
             return ResponseEntity.status(409).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(now())
-                            .error("DUPLICATE_CNPJ")
-                            .message("Já existe uma conta com o CNPJ " + cnpj)
-                            .field("companyDocNumber")
+                            .error("DUPLICATE_NUMBER")
+                            .message("Já existe uma conta com o Number: " + cnpj)
+                            .field("taxIdNumber")
                             .invalidValue(cnpj)
                             .build()
             );
         }
 
-        if (errorMessage.contains("company_email")) {
-            String email = extractValue(errorMessage, "company_email");
+        if (errorMessage.contains("LoginEmail")) {
+            String email = extractValue(errorMessage, "LoginEmail");
             return ResponseEntity.status(409).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(now())
                             .error("DUPLICATE_EMAIL")
                             .message("Já existe uma conta com o email " + email)
-                            .field("companyEmail")
+                            .field("loginEmail")
                             .invalidValue(email)
                             .build()
             );
@@ -6223,12 +6302,12 @@ public class GlobalExceptionHandler {
 
     private String extractValue(String message, String fieldName) {
         try {
-            // PostgreSQL pt-BR: "Chave (company_doc_number)=(...) já existe."
+            // PostgreSQL pt-BR: "Chave (tax_id_number)=(...) já existe."
             Pattern pattern = Pattern.compile("\\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) return matcher.group(1);
 
-            // Alternativo EN: "Key (company_doc_number)=(...) already exists."
+            // Alternativo EN: "Key (tax_id_number)=(...) already exists."
             Pattern pattern2 = Pattern.compile("Key \\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher2 = pattern2.matcher(message);
             if (matcher2.find()) return matcher2.group(1);
@@ -10030,25 +10109,34 @@ CREATE TABLE IF NOT EXISTS accounts (
     account_type   VARCHAR(20) NOT NULL DEFAULT 'TENANT',
     account_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
-    name VARCHAR(150) NOT NULL,
+    -- Core identity (neutro)
+    display_name VARCHAR(150) NOT NULL,
+    legal_name   VARCHAR(200),
+    legal_entity_type VARCHAR(20) NOT NULL DEFAULT 'COMPANY', -- INDIVIDUAL | COMPANY
 
     schema_name VARCHAR(100) NOT NULL,
-    slug VARCHAR(50) NOT NULL,
+    slug        VARCHAR(80)  NOT NULL,
 
-    status VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
+    status            VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
     subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    company_doc_type VARCHAR(10) NOT NULL,
-    company_doc_number VARCHAR(20) NOT NULL,
-    company_email VARCHAR(150) NOT NULL,
+    -- Emails (neutro)
+    login_email   VARCHAR(150) NOT NULL,
+    billing_email VARCHAR(150),
 
-    company_phone VARCHAR(20),
-    company_address VARCHAR(500),
-    company_city VARCHAR(100),
-    company_state VARCHAR(50),
-    company_country VARCHAR(60) NOT NULL DEFAULT 'Brasil',
+    -- Documento fiscal/identificador legal (neutro)
+    tax_id_type      VARCHAR(20),
+    tax_id_number    VARCHAR(40),
+    tax_country_code VARCHAR(2)  NOT NULL DEFAULT 'BR',
 
+    -- Contato / Endereço (neutro)
+    phone   VARCHAR(20),
+    address VARCHAR(500),
+    city    VARCHAR(100),
+    state   VARCHAR(50),
+    country VARCHAR(60) NOT NULL DEFAULT 'Brasil',
 
+    -- Preferências
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
     currency VARCHAR(10) NOT NULL DEFAULT 'BRL',
@@ -10056,18 +10144,20 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
 
-    trial_end_date TIMESTAMP,
+    trial_end_date   TIMESTAMP,
     payment_due_date TIMESTAMP,
     next_billing_date TIMESTAMP,
 
     settings_json TEXT,
     metadata_json TEXT,
 
-    deleted BOOLEAN NOT NULL DEFAULT false,
+    deleted   BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP
 );
 
--- enums válidos no banco
+-- =========================
+-- CHECK constraints (enums)
+-- =========================
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_account_type
     CHECK (account_type IN ('TENANT', 'PLATFORM'));
@@ -10076,35 +10166,64 @@ ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_account_origin
     CHECK (account_origin IN ('BUILT_IN', 'ADMIN', 'API'));
 
--- ⚠️ Ajuste conforme seu enum SubscriptionPlan real:
--- aqui inclui o valor que você já usa no V4: BUILT_IN_PLAN
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_subscription_plan
     CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'BUILT_IN_PLAN'));
+
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_legal_entity_type
+    CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
+
+-- tax_id_type: hoje você usa CPF/CNPJ, mas deixei neutro para crescer.
+-- se quiser travar estrito em CPF/CNPJ por enquanto, use a versão "estreita" abaixo.
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_tax_id_type
+    CHECK (tax_id_type IS NULL OR tax_id_type IN ('CPF', 'CNPJ'));
+
+-- Coerência: ou preenche ambos ou nenhum
+ALTER TABLE accounts
+    ADD CONSTRAINT chk_accounts_tax_id_pair
+    CHECK (
+        (tax_id_type IS NULL AND tax_id_number IS NULL)
+        OR
+        (tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL)
+    );
+
+-- =========================
+-- Índices / Uniques
+-- =========================
 
 -- Só 1 PLATFORM no banco (seu requisito)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_single_system
 ON accounts (account_type)
 WHERE account_type = 'PLATFORM';
 
+-- Unicidade de documento por conta ativa (neutro)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
+ON accounts (tax_country_code, tax_id_type, tax_id_number)
+WHERE deleted = false AND tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL;
 
--- Unicidade de documento por conta ativa
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_doc_active
-ON accounts (company_doc_type, company_doc_number)
+-- Unicidade de email principal por conta ativa (sua regra atual)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_login_email_active
+ON accounts (login_email)
 WHERE deleted = false;
 
--- Unicidade de email por conta ativa
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_company_email_active
-ON accounts (company_email)
-WHERE deleted = false;
-
--- Unicidade de schema (global)
+-- schema e slug globais
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
 ON accounts (schema_name);
 
--- Unicidade de slug (global)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_billing_email_active
+ON accounts (billing_email)
+WHERE deleted = false AND billing_email IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_accounts_display_name
+ON accounts (display_name);
+
+
+
 -- V2__create_table_account_entitlements.sql
 SET search_path TO public;
 
@@ -10189,15 +10308,19 @@ SET search_path TO public;
 INSERT INTO accounts (
     account_type,
     account_origin,
-    name,
+    display_name,
+    legal_name,
+    legal_entity_type,
     schema_name,
     slug,
     status,
     subscription_plan,
-    company_doc_type,
-    company_doc_number,
-    company_email,
-    company_country,
+    tax_id_type,
+    tax_id_number,
+    tax_country_code,
+    login_email,
+    billing_email,
+    country,
     timezone,
     locale,
     currency,
@@ -10207,13 +10330,17 @@ SELECT
     'PLATFORM',
     'BUILT_IN',
     'Control Plane',
+    NULL,
+    'COMPANY',
     'public',
     'controlplane',
     'ACTIVE',
     'BUILT_IN_PLAN',
     'CNPJ',
     '00000000000000',
+    'BR',
     'admin@controlplane.com',
+    NULL,
     'Brasil',
     'America/Sao_Paulo',
     'pt_BR',

@@ -1,4 +1,4 @@
-// src/main/java/brito/com/multitenancy001/dtos/SignupRequest.java
+
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import jakarta.validation.constraints.AssertTrue;
@@ -14,17 +14,17 @@ public record SignupRequest(
 
     @NotBlank(message = "Nome da empresa é obrigatório")
     @Size(min = 2, max = 100, message = "Nome deve ter entre 2 e 100 caracteres")
-    String name,
+    String displayName,
 
     @NotBlank(message = "Email da empresa é obrigatório")
     @Email(message = "Email inválido")
-    String companyEmail,
+    String loginEmail,
 
     @NotNull(message = "Tipo de documento é obrigatório (CPF ou CNPJ)")
-    TaxIdType companyDocType,
+    TaxIdType taxIdType,
 
     @NotBlank(message = "Número do documento é obrigatório")
-    String companyDocNumber,
+    String taxIdNumber,
 
     @NotBlank(message = "Senha é obrigatória")
     @Pattern(

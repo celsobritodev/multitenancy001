@@ -86,7 +86,7 @@ public class ControlPlaneAccountController {
 
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Page<AccountResponse>> searchByName(
+    public ResponseEntity<Page<AccountResponse>> searchByDisplayName(
             @RequestParam("term") String term,
             @RequestParam("page") int page,
             @RequestParam("size") int size
@@ -101,7 +101,7 @@ public class ControlPlaneAccountController {
         }
 
         Pageable p = PageRequest.of(page, size);
-        return ResponseEntity.ok(accountLifecycleService.searchAccountsByName(term, p));
+        return ResponseEntity.ok(accountLifecycleService.searchAccountsByDisplayName(term, p));
     }
 
     @GetMapping

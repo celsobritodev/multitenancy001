@@ -112,3 +112,13 @@ ON accounts (schema_name);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
 ON accounts (slug);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_billing_email_active
+ON accounts (billing_email)
+WHERE deleted = false AND billing_email IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_accounts_display_name
+ON accounts (display_name);
+
+
+

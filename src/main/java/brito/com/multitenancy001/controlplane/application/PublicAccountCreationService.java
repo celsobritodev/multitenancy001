@@ -37,8 +37,8 @@ public class PublicAccountCreationService {
 
 		int maxAttempts = 5;
 		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-			String slug = generateSlug(signupRequest.name());
-			String schemaName = generateSchemaName(signupRequest.name());
+			String slug = generateSlug(signupRequest.displayName());
+			String schemaName = generateSchemaName(signupRequest.displayName());
 
 			try {
 				LocalDateTime now = appClock.now();
@@ -46,20 +46,20 @@ public class PublicAccountCreationService {
 				Account account = new Account();
 				account.setType(AccountType.TENANT);
 				account.setOrigin(AccountOrigin.ADMIN); // ✅ novo
-				account.setName(signupRequest.name());
+				account.setDisplayName(signupRequest.displayName());
 				account.setSlug(slug);
 				account.setSchemaName(schemaName);
 
-				account.setCompanyEmail(signupRequest.companyEmail());
-				account.setCompanyDocType(signupRequest.companyDocType());
-				account.setCompanyDocNumber(signupRequest.companyDocNumber());
+				account.setLoginEmail(signupRequest.loginEmail());
+				account.setTaxIdType(signupRequest.taxIdType());
+				account.setTaxIdNumber(signupRequest.taxIdNumber());
 
 				account.setTrialEndDate(now.plusDays(30));
 				account.setStatus(AccountStatus.FREE_TRIAL);
 
 				account.setSubscriptionPlan(SubscriptionPlan.FREE);
 
-				account.setCompanyCountry("Brasil");
+				account.setCountry("Brasil");
 				account.setTimezone("America/Sao_Paulo");
 				account.setLocale("pt_BR");
 				account.setCurrency("BRL");
@@ -114,8 +114,12 @@ public class PublicAccountCreationService {
 			t = t.getCause();
 		String msg = (t.getMessage() == null) ? "" : t.getMessage().toLowerCase();
 
-		return msg.contains("ux_accounts_slug_active") || msg.contains("uk_accounts_slug")
-				|| msg.contains("uk_accounts_schema_name") || msg.contains("accounts_slug_key")
-				|| msg.contains("accounts_schema_name_key") || msg.contains("company_email");
+		return msg.contains("ux_accounts_slug_active")
+		        || msg.contains("uk_accounts_slug")
+		        || msg.contains("uk_accounts_schema_name")
+		        || msg.contains("accounts_slug_key")
+		        || msg.contains("accounts_schema_name_key")
+		        || msg.contains("ux_accounts_login_email_active")
+		        || msg.contains("login_email");
 	}
 }

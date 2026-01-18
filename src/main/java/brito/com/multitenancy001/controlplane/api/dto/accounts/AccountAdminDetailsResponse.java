@@ -8,14 +8,14 @@ public record AccountAdminDetailsResponse(
 
     // Identificação
     Long id,
-    String name,
+    String displayName,
     String slug,
     String schemaName,
     String status,
 
     // Dados legais (sempre em conjunto)
-    TaxIdType companyDocType,
-    String companyDocNumber,
+    TaxIdType taxIdType,
+    String taxIdNumber,
 
     // Datas
     LocalDateTime createdAt,

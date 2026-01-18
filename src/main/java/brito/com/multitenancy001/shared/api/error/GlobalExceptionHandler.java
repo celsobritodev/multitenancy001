@@ -75,27 +75,27 @@ public class GlobalExceptionHandler {
 
         log.debug("DataIntegrityViolationException: {}", errorMessage);
 
-        if (errorMessage.contains("company_doc_number")) {
-            String cnpj = extractValue(errorMessage, "company_doc_number");
+        if (errorMessage.contains("tax_id_number")) {
+            String cnpj = extractValue(errorMessage, "tax_id_number");
             return ResponseEntity.status(409).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(now())
-                            .error("DUPLICATE_CNPJ")
-                            .message("Já existe uma conta com o CNPJ " + cnpj)
-                            .field("companyDocNumber")
+                            .error("DUPLICATE_NUMBER")
+                            .message("Já existe uma conta com o Number: " + cnpj)
+                            .field("taxIdNumber")
                             .invalidValue(cnpj)
                             .build()
             );
         }
 
-        if (errorMessage.contains("company_email")) {
-            String email = extractValue(errorMessage, "company_email");
+        if (errorMessage.contains("LoginEmail")) {
+            String email = extractValue(errorMessage, "LoginEmail");
             return ResponseEntity.status(409).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(now())
                             .error("DUPLICATE_EMAIL")
                             .message("Já existe uma conta com o email " + email)
-                            .field("companyEmail")
+                            .field("loginEmail")
                             .invalidValue(email)
                             .build()
             );
@@ -136,12 +136,12 @@ public class GlobalExceptionHandler {
 
     private String extractValue(String message, String fieldName) {
         try {
-            // PostgreSQL pt-BR: "Chave (company_doc_number)=(...) já existe."
+            // PostgreSQL pt-BR: "Chave (tax_id_number)=(...) já existe."
             Pattern pattern = Pattern.compile("\\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) return matcher.group(1);
 
-            // Alternativo EN: "Key (company_doc_number)=(...) already exists."
+            // Alternativo EN: "Key (tax_id_number)=(...) already exists."
             Pattern pattern2 = Pattern.compile("Key \\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher2 = pattern2.matcher(message);
             if (matcher2.find()) return matcher2.group(1);

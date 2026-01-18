@@ -305,11 +305,11 @@ public class PaymentService {
     }
 
     private void sendSuspensionEmail(Account account, String reason) {
-        log.info("Enviando email de suspensão para: {}", account.getCompanyEmail());
+        log.info("Enviando email de suspensão para: {}", account.getLoginEmail());
     }
 
     private void sendPaymentConfirmationEmail(Account account, Payment payment) {
-        log.info("Enviando confirmação de pagamento para: {}", account.getCompanyEmail());
+        log.info("Enviando confirmação de pagamento para: {}", account.getLoginEmail());
     }
 
     private LocalDateTime calculateNextDueDate(LocalDateTime validUntil, LocalDateTime now) {

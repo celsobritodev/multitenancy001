@@ -43,7 +43,7 @@ public class AccountOnboardingService {
         tenantUserAdminBridge.createTenantOwner(
             account.getSchemaName(),
             account.getId(),
-            signupRequest.companyEmail(),
+            signupRequest.loginEmail(),
             signupRequest.password()
         );
 
@@ -54,23 +54,31 @@ public class AccountOnboardingService {
     }
 
     private void validateSignupRequest(SignupRequest signupRequest) {
-        if (!StringUtils.hasText(signupRequest.name())) {
+    	
+    	if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+    	        "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
+    	)) {
+    	    throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
+    	}
+
+    	
+        if (!StringUtils.hasText(signupRequest.displayName())) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.companyEmail())) {
+        if (!StringUtils.hasText(signupRequest.loginEmail())) {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
 
-        if (!signupRequest.companyEmail().contains("@")) {
+        if (!signupRequest.loginEmail().contains("@")) {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
-        if (signupRequest.companyDocType() == null) {
+        if (signupRequest.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.companyDocNumber())) {
+        if (!StringUtils.hasText(signupRequest.taxIdNumber())) {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
@@ -82,12 +90,12 @@ public class AccountOnboardingService {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        if (accountRepository.existsByCompanyEmailAndDeletedFalse(signupRequest.companyEmail())) {
+        if (accountRepository.existsByLoginEmailAndDeletedFalse(signupRequest.loginEmail())) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        if (accountRepository.existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(
-                signupRequest.companyDocType(), signupRequest.companyDocNumber()
+        if (accountRepository.existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                signupRequest.taxIdType(), signupRequest.taxIdNumber()
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }

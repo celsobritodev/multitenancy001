@@ -36,13 +36,13 @@ public class AccountAdminDetailsApiMapper {
 
         return new AccountAdminDetailsResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
 
-                account.getCompanyDocType(),
-                account.getCompanyDocNumber(),
+                account.getTaxIdType(),
+                account.getTaxIdNumber(),
 
                 account.getCreatedAt(),
                 account.getTrialEndDate(),

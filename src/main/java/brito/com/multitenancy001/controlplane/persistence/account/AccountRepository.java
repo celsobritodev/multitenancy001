@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.controlplane.persistence.account;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,24 +16,26 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
 import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
+	
+	boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+	        String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
+	);
+
 
     boolean existsByTypeAndDeletedFalse(AccountType type);
 
-    boolean existsByCompanyEmailAndDeletedFalse(String companyEmail);
+    boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
 
-    boolean existsByCompanyDocTypeAndCompanyDocNumberAndDeletedFalse(
-            TaxIdType companyDocType, String companyDocNumber
-    );
+    boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
 
     List<Account> findAllByDeletedFalse();
 
     Optional<Account> findBySlugAndDeletedFalse(String slug);
+
+    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
+
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
     List<Account> findByStatus(AccountStatus status);
@@ -46,34 +52,35 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
     // =========================================================
-    // ✅ MÉTODOS PARA ADMIN (com paginação onde faz sentido)
+    // ADMIN (mantendo os nomes que seu service chama)
     // =========================================================
 
-    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = 'ACTIVE'")
-    long countActiveAccounts();
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
+    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
 
-    boolean existsByNameAndDeletedFalse(String name);
+    // ✅ para manter compatível com AccountLifecycleService.countActiveAccounts()
+    default long countActiveAccounts() {
+        return countByStatusAndDeletedFalse(AccountStatus.ACTIVE);
+    }
 
-    boolean existsBySchemaNameAndDeletedFalse(String schemaName);
-
-    Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
-
-    // latest (paginado)
     Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
 
-    // by status (paginado)
     Page<Account> findByStatusAndDeletedFalse(AccountStatus status, Pageable pageable);
 
-    // created between (paginado)
-    @Query("SELECT a FROM Account a " +
-           "WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")
     Page<Account> findAccountsCreatedBetween(@Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // search by name (paginado)
-    @Query("SELECT a FROM Account a " +
-           "WHERE a.deleted = false " +
-           "AND LOWER(a.name) LIKE LOWER(CONCAT('%', :term, '%'))")
-    Page<Account> searchByName(@Param("term") String term, Pageable pageable);
+    // ✅ para manter compatível com AccountLifecycleService.searchAccountsByName()
+    // agora busca em displayName e também em legalName
+    @Query("""
+        SELECT a FROM Account a
+        WHERE a.deleted = false
+          AND (
+            LOWER(a.displayName) LIKE LOWER(CONCAT('%', :term, '%'))
+            OR (a.legalName IS NOT NULL AND LOWER(a.legalName) LIKE LOWER(CONCAT('%', :term, '%')))
+          )
+    """)
+    Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
 }

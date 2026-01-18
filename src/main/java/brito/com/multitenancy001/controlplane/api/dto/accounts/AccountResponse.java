@@ -5,12 +5,12 @@ import java.time.LocalDateTime;
 
 public record AccountResponse(
         Long id,
-        String name,
+        String displayName,
         String slug,
         String schemaName,
         String status,
         String accountType,
-        String subscriptionPlan, // NOVO
+        String subscriptionPlan,
         LocalDateTime createdAt,
         LocalDateTime trialEndDate,
         ControlPlaneAdminUserSummaryResponse platformAdmin

@@ -1,1531 +1,1531 @@
 {
-	"info": {
-		"_postman_id": "ee84adf6-b577-48af-8dee-4ca9228ebaef",
-		"name": "multitenancy001",
-		"description": "# 🚀 Get started here\n\nThis template guides you through CRUD operations (GET, POST, PUT, DELETE), variables, and tests.\n\n## 🔖 **How to use this template**\n\n#### **Step 1: Send requests**\n\nRESTful APIs allow you to perform CRUD operations using the POST, GET, PUT, and DELETE HTTP methods.\n\nThis collection contains each of these [request](https://learning.postman.com/docs/sending-requests/requests/) types. Open each request and click \"Send\" to see what happens.\n\n#### **Step 2: View responses**\n\nObserve the response tab for status code (200 OK), response time, and size.\n\n#### **Step 3: Send new Body data**\n\nUpdate or add new data in \"Body\" in the POST request. Typically, Body data is also used in PUT request.\n\n```\n{\n    \"name\": \"Add your name in the body\"\n}\n\n ```\n\n#### **Step 4: Update the variable**\n\nVariables enable you to store and reuse values in Postman. We have created a [variable](https://learning.postman.com/docs/sending-requests/variables/) called `base_url` with the sample request [https://postman-api-learner.glitch.me](https://postman-api-learner.glitch.me). Replace it with your API endpoint to customize this collection.\n\n#### **Step 5: Add tests in the \"Scripts\" tab**\n\nAdding tests to your requests can help you confirm that your API is working as expected. You can write test scripts in JavaScript and view the output in the \"Test Results\" tab.\n\n<img src=\"https://content.pstmn.io/fa30ea0a-373d-4545-a668-e7b283cca343/aW1hZ2UucG5n\" alt=\"\" height=\"1530\" width=\"2162\">\n\n## 💪 Pro tips\n\n- Use folders to group related requests and organize the collection.\n    \n- Add more [scripts](https://learning.postman.com/docs/writing-scripts/intro-to-scripts/) to verify if the API works as expected and execute workflows.\n    \n\n## 💡Related templates\n\n[API testing basics](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=e9a37a28-055b-49cd-8c7e-97494a21eb54&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)  \n[API documentation](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=e9c28f47-1253-44af-a2f3-20dce4da1f18&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)  \n[Authorization methods](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=31a9a6ed-4cdf-4ced-984c-d12c9aec1c27&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "22901965"
-	},
-	"item": [
-		{
-			"name": "health",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Status code is 200\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});"
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/actuator/health",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"actuator",
-						"health"
-					]
-				},
-				"description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
-			},
-			"response": []
-		},
-		{
-			"name": "signupAccount1",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"Foton Devices\",\n  \"companyEmail\": \"vendas@fotondevices.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"12345678000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/signup",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"signup"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "signupAccount3",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"Unadoc\",\n  \"companyEmail\": \"contact@unadoc.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"12545455445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/signup",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"signup"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "signupAccount4",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"TandyShop\",\n  \"companyEmail\": \"tandy@tshop.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"232554545445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/signup",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"signup"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "signupAccount2",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"Opta\",\n  \"companyEmail\": \"vendas@optashop.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"1672s8000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/signup",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"signup"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "createUser",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQxNzczMCwiZXhwIjoxNzY1NDIxMzMwfQ.eG0twAFvDLzngHhB6MtMFcr_Kza9-L50zye7FIG4gcpeuOgNVWgpJsUkRlPIDxpnjugiYqYI8gNCylORApxyww",
-							"type": "string"
-						}
-					]
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"Marina Brito\",\n  \"email\": \"marybrito@gmail.com\",\n  \"password\": \"mary2025\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "createControlPlaneUser1",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQxNzczMCwiZXhwIjoxNzY1NDIxMzMwfQ.eG0twAFvDLzngHhB6MtMFcr_Kza9-L50zye7FIG4gcpeuOgNVWgpJsUkRlPIDxpnjugiYqYI8gNCylORApxyww",
-							"type": "string"
-						}
-					]
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"Administrador Plataforma\",\n  \"username\": \"admin.platform\",\n  \"email\": \"admin@fotondevices.com\",\n  \"password\": \"Admin@123\",\n  \"role\": \"PLATFORM_OWNER\",\n  \"permissions\": [\n    \"CP_ACCOUNT_READ\",\n    \"CP_ACCOUNT_WRITE\",\n    \"CP_USER_READ\",\n    \"CP_USER_WRITE\",\n    \"CP_BILLING_READ\",\n    \"CP_BILLING_WRITE\",\n    \"CP_SUPPORT_READ\",\n    \"CP_SUPPORT_WRITE\"\n  ],\n  \"timezone\": \"America/Sao_Paulo\",\n  \"locale\": \"pt_BR\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/controlplane-users",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"controlplane-users"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "updateUserStatus",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2MzEyNywiZXhwIjoxNzY1MzY2NzI3fQ.mz2H2DSKRXW8D6jJVZGmrnm65MlmxjvOu1OVTjqSjNTY88BZl6lKLS46MuvRBxY1dwnmspHgLFq7VChydgar2g",
-							"type": "string"
-						}
-					]
-				},
-				"method": "PATCH",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/2/status?active=false",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users",
-						"2",
-						"status"
-					],
-					"query": [
-						{
-							"key": "active",
-							"value": "false"
-						}
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "listUsersByAccount",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2/users",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts",
-						"2",
-						"users"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "listAllAccounts",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "listAccount",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/3",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts",
-						"3"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "listAccountDetails",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/3/details",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts",
-						"3",
-						"details"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "setAccountStatus",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDk2NzEsImV4cCI6MTc2NzU1MzI3MX0.PNL4l3aPsXPtuy2C8pBXxfO-25orNxJO70otVAe9PgMNr4_aqAZ4iBvYwI9RkEi_deg3rf4_JhoN7NCReVMVKQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "PATCH",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "\n{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Teste\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2/status",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts",
-						"2",
-						"status"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "listActiveUsersByAccount",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/accounts/2/users/active",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"accounts",
-						"2",
-						"users",
-						"active"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginTenant",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"slug\": \"tandyshop\",\n  \"username\": \"master\",\n  \"password\": \"main123456\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/tenant/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"tenant",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginControlPlaneUser1",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"admin123\"\n}\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginControlPlaneUser2",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"username\": \"billing\",\n  \"password\": \"admin123\"\n}\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginControlPlaneUser3",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"username\": \"support\",\n  \"password\": \"admin123\"\n}\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginControlPlaneUser4",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"username\": \"operator\",\n  \"password\": \"admin123\"\n}\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "loginControlPlaneUser4 Copy",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"username\": \"operator\",\n  \"password\": \"admin123\"\n}\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/admin/auth/login",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"admin",
-						"auth",
-						"login"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "checkUser",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123456\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/auth/checkuser",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"auth",
-						"checkuser"
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "forgotPassword(token)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/auth/forgot-password?email=sandrafase@gmail.com",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"auth",
-						"forgot-password"
-					],
-					"query": [
-						{
-							"key": "email",
-							"value": "sandrafase@gmail.com"
-						}
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "resetPassword(token)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/auth/reset-password?token370d0c49-2fa7-4cdc-9875-ff304ba642e0&newPassword=delta",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"auth",
-						"reset-password"
-					],
-					"query": [
-						{
-							"key": "token370d0c49-2fa7-4cdc-9875-ff304ba642e0",
-							"value": null
-						},
-						{
-							"key": "newPassword",
-							"value": "delta"
-						}
-					]
-				},
-				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "Update data",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"type": "text/javascript",
-						"exec": [
-							"pm.test(\"Successful PUT request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
-							"});",
-							""
-						]
-					}
-				}
-			],
-			"request": {
-				"method": "PUT",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n\t\"name\": \"Add your name in the body\"\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/info?id=1",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"info"
-					],
-					"query": [
-						{
-							"key": "id",
-							"value": "1"
-						}
-					]
-				},
-				"description": "This is a PUT request and it is used to overwrite an existing piece of data. For instance, after you create an entity with a POST request, you may want to modify that later. You can do that using a PUT request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful PUT request typically returns a `200 OK`, `201 Created`, or `204 No Content` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "softDeleteUser",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful DELETE request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
-							"type": "string"
-						}
-					]
-				},
-				"method": "DELETE",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/5",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users",
-						"5"
-					]
-				},
-				"description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "hardDeleteUser",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful DELETE request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
-							"type": "string"
-						}
-					]
-				},
-				"method": "DELETE",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/2/hard",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users",
-						"2",
-						"hard"
-					]
-				},
-				"description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "restoreUser",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful DELETE request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
-							"type": "string"
-						}
-					]
-				},
-				"method": "PATCH",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/5/restore",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users",
-						"5",
-						"restore"
-					]
-				},
-				"description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
-			},
-			"response": []
-		},
-		{
-			"name": "resetPassword(admin)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Successful DELETE request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
-							"});",
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"request": {
-				"auth": {
-					"type": "bearer",
-					"bearer": [
-						{
-							"key": "token",
-							"value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
-							"type": "string"
-						}
-					]
-				},
-				"method": "PATCH",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{base_url}}/api/accounts/1/users/5/reset-password?newPassword=cebola",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"api",
-						"accounts",
-						"1",
-						"users",
-						"5",
-						"reset-password"
-					],
-					"query": [
-						{
-							"key": "newPassword",
-							"value": "cebola"
-						}
-					]
-				},
-				"description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
-			},
-			"response": []
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					""
-				]
-			}
-		}
-	],
-	"variable": [
-		{
-			"key": "id",
-			"value": "1"
-		},
-		{
-			"key": "base_url",
-			"value": "https://template.postman-echo.com"
-		}
-	]
+  "info": {
+    "_postman_id": "ee84adf6-b577-48af-8dee-4ca9228ebaef",
+    "name": "multitenancy001",
+    "description": "# 🚀 Get started here\n\nThis template guides you through CRUD operations (GET, POST, PUT, DELETE), variables, and tests.\n\n## 🔖 **How to use this template**\n\n#### **Step 1: Send requests**\n\nRESTful APIs allow you to perform CRUD operations using the POST, GET, PUT, and DELETE HTTP methods.\n\nThis collection contains each of these [request](https://learning.postman.com/docs/sending-requests/requests/) types. Open each request and click \"Send\" to see what happens.\n\n#### **Step 2: View responses**\n\nObserve the response tab for status code (200 OK), response time, and size.\n\n#### **Step 3: Send new Body data**\n\nUpdate or add new data in \"Body\" in the POST request. Typically, Body data is also used in PUT request.\n\n```\n{\n    \"name\": \"Add your name in the body\"\n}\n\n ```\n\n#### **Step 4: Update the variable**\n\nVariables enable you to store and reuse values in Postman. We have created a [variable](https://learning.postman.com/docs/sending-requests/variables/) called `base_url` with the sample request [https://postman-api-learner.glitch.me](https://postman-api-learner.glitch.me). Replace it with your API endpoint to customize this collection.\n\n#### **Step 5: Add tests in the \"Scripts\" tab**\n\nAdding tests to your requests can help you confirm that your API is working as expected. You can write test scripts in JavaScript and view the output in the \"Test Results\" tab.\n\n<img src=\"https://content.pstmn.io/fa30ea0a-373d-4545-a668-e7b283cca343/aW1hZ2UucG5n\" alt=\"\" height=\"1530\" width=\"2162\">\n\n## 💪 Pro tips\n\n- Use folders to group related requests and organize the collection.\n    \n- Add more [scripts](https://learning.postman.com/docs/writing-scripts/intro-to-scripts/) to verify if the API works as expected and execute workflows.\n    \n\n## 💡Related templates\n\n[API testing basics](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=e9a37a28-055b-49cd-8c7e-97494a21eb54&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)  \n[API documentation](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=e9c28f47-1253-44af-a2f3-20dce4da1f18&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)  \n[Authorization methods](https://go.postman.co/redirect/workspace?type=personal&collectionTemplateId=31a9a6ed-4cdf-4ced-984c-d12c9aec1c27&sourceTemplateId=ddb19591-3097-41cf-82af-c84273e56719)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "22901965"
+  },
+  "item": [
+    {
+      "name": "health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/actuator/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+      },
+      "response": []
+    },
+    {
+      "name": "signupAccount1",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Foton Devices\",\n  \"companyEmail\": \"vendas@fotondevices.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"12345678000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/signup",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "signup"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "signupAccount3",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Unadoc\",\n  \"companyEmail\": \"contact@unadoc.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"12545455445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/signup",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "signup"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "signupAccount4",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"TandyShop\",\n  \"companyEmail\": \"tandy@tshop.com\",\n  \"companyDocType\": \"CPF\",\n  \"companyDocNumber\": \"232554545445\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/signup",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "signup"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "signupAccount2",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Opta\",\n  \"companyEmail\": \"vendas@optashop.com\",\n  \"companyDocType\": \"CNPJ\",\n  \"companyDocNumber\": \"1672s8000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n \n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/signup",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "signup"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "createUser",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQxNzczMCwiZXhwIjoxNzY1NDIxMzMwfQ.eG0twAFvDLzngHhB6MtMFcr_Kza9-L50zye7FIG4gcpeuOgNVWgpJsUkRlPIDxpnjugiYqYI8gNCylORApxyww",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Marina Brito\",\n  \"email\": \"marybrito@gmail.com\",\n  \"password\": \"mary2025\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "createControlPlaneUser1",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQxNzczMCwiZXhwIjoxNzY1NDIxMzMwfQ.eG0twAFvDLzngHhB6MtMFcr_Kza9-L50zye7FIG4gcpeuOgNVWgpJsUkRlPIDxpnjugiYqYI8gNCylORApxyww",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Administrador Plataforma\",\n  \"username\": \"admin.platform\",\n  \"email\": \"admin@fotondevices.com\",\n  \"password\": \"Admin@123\",\n  \"role\": \"PLATFORM_OWNER\",\n  \"permissions\": [\n    \"CP_ACCOUNT_READ\",\n    \"CP_ACCOUNT_WRITE\",\n    \"CP_USER_READ\",\n    \"CP_USER_WRITE\",\n    \"CP_BILLING_READ\",\n    \"CP_BILLING_WRITE\",\n    \"CP_SUPPORT_READ\",\n    \"CP_SUPPORT_WRITE\"\n  ],\n  \"timezone\": \"America/Sao_Paulo\",\n  \"locale\": \"pt_BR\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/controlplane-users",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "controlplane-users"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "updateUserStatus",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2MzEyNywiZXhwIjoxNzY1MzY2NzI3fQ.mz2H2DSKRXW8D6jJVZGmrnm65MlmxjvOu1OVTjqSjNTY88BZl6lKLS46MuvRBxY1dwnmspHgLFq7VChydgar2g",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users/2/status?active=false",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users",
+            "2",
+            "status"
+          ],
+          "query": [
+            {
+              "key": "active",
+              "value": "false"
+            }
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "listUsersByAccount",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts/2/users",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts",
+            "2",
+            "users"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "listAllAccounts",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "listAccount",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts/3",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts",
+            "3"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "listAccountDetails",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts/3/details",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts",
+            "3",
+            "details"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "setAccountStatus",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDk2NzEsImV4cCI6MTc2NzU1MzI3MX0.PNL4l3aPsXPtuy2C8pBXxfO-25orNxJO70otVAe9PgMNr4_aqAZ4iBvYwI9RkEi_deg3rf4_JhoN7NCReVMVKQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "\n{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Teste\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts/2/status",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts",
+            "2",
+            "status"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "listActiveUsersByAccount",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOiJST0xFX1NVUEVSX0FETUlOIiwidHlwZSI6IlBMQVRGT1JNIiwiY29udGV4dCI6InB1YmxpYyIsImFjY291bnRJZCI6MSwidXNlcklkIjoxLCJpYXQiOjE3Njc1NDYxMjMsImV4cCI6MTc2NzU0OTcyM30.oZ9Eyhff313mndfehfauksw0ZyU6VgjJSm3MzdpfINY0UalmZ1rmbz2SMgYmsHti6cqRL6N9LlqnDoZ6TtAKFQ\",",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"João da Silva\",\n  \"email\": \"joao.silva@example.com\",\n  \"password\": \"senha123456\",\n  \"role\": \"ADMIN\",\n  \"permissions\": [\n    \"CREATE_USER\",\n    \"DELETE_USER\",\n    \"VIEW_REPORTS\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/accounts/2/users/active",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "accounts",
+            "2",
+            "users",
+            "active"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginTenant",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slug\": \"tandyshop\",\n  \"username\": \"master\",\n  \"password\": \"main123456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/tenant/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "tenant",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginControlPlaneUser1",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"superadmin\",\n  \"password\": \"admin123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginControlPlaneUser2",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"billing\",\n  \"password\": \"admin123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginControlPlaneUser3",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"support\",\n  \"password\": \"admin123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginControlPlaneUser4",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"operator\",\n  \"password\": \"admin123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "loginControlPlaneUser4 Copy",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"operator\",\n  \"password\": \"admin123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "auth",
+            "login"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "checkUser",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"admin\",  // ou o username que você criou\n    \"password\": \"admin123456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/auth/checkuser",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "auth",
+            "checkuser"
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "forgotPassword(token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/auth/forgot-password?email=sandrafase@gmail.com",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "auth",
+            "forgot-password"
+          ],
+          "query": [
+            {
+              "key": "email",
+              "value": "sandrafase@gmail.com"
+            }
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "resetPassword(token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/auth/reset-password?token370d0c49-2fa7-4cdc-9875-ff304ba642e0&newPassword=delta",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "auth",
+            "reset-password"
+          ],
+          "query": [
+            {
+              "key": "token370d0c49-2fa7-4cdc-9875-ff304ba642e0",
+              "value": null
+            },
+            {
+              "key": "newPassword",
+              "value": "delta"
+            }
+          ]
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "Update data",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Successful PUT request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+              "});",
+              ""
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n\t\"name\": \"Add your name in the body\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/info?id=1",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "info"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "This is a PUT request and it is used to overwrite an existing piece of data. For instance, after you create an entity with a POST request, you may want to modify that later. You can do that using a PUT request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful PUT request typically returns a `200 OK`, `201 Created`, or `204 No Content` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "softDeleteUser",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful DELETE request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users/5",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users",
+            "5"
+          ]
+        },
+        "description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "hardDeleteUser",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful DELETE request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTM2NTExOSwiZXhwIjoxNzY1MzY4NzE5fQ.K1jubJD9BS_BdtaFQ8vHaqpopGcQgv6SukPbhG_u98Ut00wYSW6D9acHQn3wk2KTuT7qs2_Bc-lgOBWMQVpa8Q",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users/2/hard",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users",
+            "2",
+            "hard"
+          ]
+        },
+        "description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "restoreUser",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful DELETE request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users/5/restore",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users",
+            "5",
+            "restore"
+          ]
+        },
+        "description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "resetPassword(admin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful DELETE request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]);",
+              "});",
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzUxMiJ9.eyJhY2NvdW50SWQiOjEsInJvbGVzIjoiQURNSU4iLCJ0ZW5hbnRTY2hlbWEiOiJ0ZW5hbnRfbWluaGFfZW1wcmVzYV8wYzYxMjIxOSIsInVzZXJJZCI6MSwiZW1haWwiOiJhZG1pbkBlbXByZXNhLmNvbSIsInN1YiI6Im1pbmhhZW1wcmVzYV9hZG1pbl83ODE1YTZlYSIsImlhdCI6MTc2NTQ1MzY3NywiZXhwIjoxNzY1NDU3Mjc3fQ.CdzuN_bG370J6KHWPJ8jTtgSw0kih5ybtUNkFIHGD47Mv5XSYVxjg4BfZ9mgD6EQc27xtuRhIJ3TFlcFCdDTBQ",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/accounts/1/users/5/reset-password?newPassword=cebola",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "accounts",
+            "1",
+            "users",
+            "5",
+            "reset-password"
+          ],
+          "query": [
+            {
+              "key": "newPassword",
+              "value": "cebola"
+            }
+          ]
+        },
+        "description": "This is a DELETE request, and it is used to delete data that was previously created via a POST request. You typically identify the entity being updated by including an identifier in the URL (eg. `id=1`).\n\nA successful DELETE request typically returns a `200 OK`, `202 Accepted`, or `204 No Content` response code."
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "id",
+      "value": "1"
+    },
+    {
+      "key": "base_url",
+      "value": "https://template.postman-echo.com"
+    }
+  ]
 }

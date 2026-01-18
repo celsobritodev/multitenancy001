@@ -17,7 +17,7 @@ public class AccountApiMapper {
     public AccountResponse toResponse(Account account) {
         return new AccountResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
@@ -35,7 +35,7 @@ public class AccountApiMapper {
 
         return new AccountResponse(
                 account.getId(),
-                account.getName(),
+                account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus().name(),
