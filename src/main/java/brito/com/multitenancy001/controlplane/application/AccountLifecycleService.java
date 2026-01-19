@@ -213,4 +213,57 @@ public class AccountLifecycleService {
                         .map(accountApiMapper::toResponse)
         );
     }
+    
+    
+ // =========================================================
+ // ✅ 5) QUERIES ADMIN (usar métodos do AccountRepository)
+ // =========================================================
+
+ @Transactional(readOnly = true)
+ public long countAccountsByStatus(AccountStatus status) {
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+     return publicExecutor.run(() -> accountRepository.countByStatusAndDeletedFalse(status));
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
+     if (statuses == null || statuses.isEmpty()) {
+         throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
+     }
+
+     return publicExecutor.run(() ->
+             accountRepository.findByStatuses(statuses).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listExpiredTrials(LocalDateTime date, AccountStatus status) {
+     // defaults seguros
+     LocalDateTime d = (date != null ? date : LocalDateTime.now());
+     AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
+
+     return publicExecutor.run(() ->
+             accountRepository.findExpiredTrials(d, st).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
+     // defaults seguros
+     LocalDateTime t = (today != null ? today : LocalDateTime.now());
+     AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
+
+     return publicExecutor.run(() ->
+             accountRepository.findOverdueAccounts(st, t).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
 }

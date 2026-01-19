@@ -8,7 +8,7 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.billing.Payment;
 import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.controlplane.persistence.billing.PaymentRepository;
+import brito.com.multitenancy001.controlplane.persistence.billing.ControlPlanePaymentRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -27,36 +27,45 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PaymentService {
+public class ControlPLanePaymentService {
 
     private final AccountRepository accountRepository;
-    private final PaymentRepository paymentRepository;
+    private final ControlPlanePaymentRepository paymentRepository;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
+    
+    
+@Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
+public void checkPayments() {
+    log.info("Iniciando verificação de pagamentos...");
+    LocalDateTime now = appClock.now();
 
-    @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
-    public void checkPayments() {
-        log.info("Iniciando verificação de pagamentos...");
-        LocalDateTime now = appClock.now();
+    // Trials expirados
+    List<Account> expiredTrials =
+            accountRepository.findExpiredTrials(now, AccountStatus.FREE_TRIAL);
 
-        List<Account> expiredTrials = accountRepository.findByStatus(AccountStatus.FREE_TRIAL).stream()
-                .filter(account -> account.getTrialEndDate() != null && account.getTrialEndDate().isBefore(now))
-                .collect(Collectors.toList());
-
-        for (Account account : expiredTrials) {
+    for (Account account : expiredTrials) {
+        if (account.getStatus() != AccountStatus.SUSPENDED) {
             suspendAccount(account, "Trial expirado");
         }
-
-        List<Account> overdueAccounts = accountRepository.findByPaymentDueDateBefore(now);
-
-        for (Account account : overdueAccounts) {
-            if (account.getStatus() == AccountStatus.ACTIVE) {
-                suspendAccount(account, "Pagamento atrasado");
-            }
-        }
-
-        checkExpiredPendingPayments(now);
     }
+
+    // Pagamentos vencidos
+    List<Account> overdueAccounts =
+            accountRepository.findOverdueAccounts(AccountStatus.ACTIVE, now);
+
+    for (Account account : overdueAccounts) {
+        if (account.getStatus() != AccountStatus.SUSPENDED) {
+            suspendAccount(account, "Pagamento atrasado");
+        }
+    }
+
+    checkExpiredPendingPayments(now);
+}
+
+    
+    
+    
 
     private void suspendAccount(Account account, String reason) {
         account.setStatus(AccountStatus.SUSPENDED);
@@ -286,23 +295,98 @@ public class PaymentService {
             throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
         }
     }
+    
+    
+ // =========================================================
+ // ✅ QUERIES / HELPERS para usar métodos do PaymentRepository
+ // =========================================================
 
-    private PaymentResponse mapToResponse(Payment payment) {
-        return new PaymentResponse(
-                payment.getId(),
-                payment.getAccount().getId(),
-                payment.getAmount(),
-                payment.getPaymentDate(),
-                payment.getValidUntil(),
-                payment.getStatus().name(),
-                payment.getTransactionId(),
-                payment.getPaymentMethod(),
-                payment.getPaymentGateway(),
-                payment.getDescription(),
-                payment.getCreatedAt(),
-                payment.getUpdatedAt()
-        );
-    }
+ @Transactional(readOnly = true)
+ public boolean paymentExistsForAccount(Long paymentId, Long accountId) {
+     if (paymentId == null) {
+         throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+     }
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+     return paymentRepository.existsByIdAndAccountId(paymentId, accountId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+
+     return paymentRepository.findByAccountIdAndStatus(accountId, status).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public PaymentResponse getPaymentByTransactionId(String transactionId) {
+     if (transactionId == null || transactionId.isBlank()) {
+         throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+     }
+
+     Payment payment = paymentRepository.findByTransactionId(transactionId.trim())
+             .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+     return mapToResponse(payment);
+ }
+
+ @Transactional(readOnly = true)
+ public boolean existsByTransactionId(String transactionId) {
+     if (transactionId == null || transactionId.isBlank()) {
+         throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+     }
+     return paymentRepository.existsByTransactionId(transactionId.trim());
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status) {
+     if (date == null) {
+         throw new ApiException("INVALID_DATE", "date é obrigatório", 400);
+     }
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+
+     return paymentRepository.findByValidUntilBeforeAndStatus(date, status).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getCompletedPaymentsByAccount(Long accountId) {
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+
+     return paymentRepository.findCompletedPaymentsByAccount(accountId).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsInPeriod(LocalDateTime startDate, LocalDateTime endDate) {
+     if (startDate == null || endDate == null) {
+         throw new ApiException("INVALID_DATE_RANGE", "startDate e endDate são obrigatórios", 400);
+     }
+     if (endDate.isBefore(startDate)) {
+         throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
+     }
+
+     return paymentRepository.findPaymentsInPeriod(startDate, endDate).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+
+   
 
     private void sendSuspensionEmail(Account account, String reason) {
         log.info("Enviando email de suspensão para: {}", account.getLoginEmail());
@@ -329,5 +413,22 @@ public class PaymentService {
             log.error("Erro ao processar pagamento no gateway", e);
             return false;
         }
+    }
+    
+    private PaymentResponse mapToResponse(Payment payment) {
+        return new PaymentResponse(
+                payment.getId(),
+                payment.getAccount().getId(),
+                payment.getAmount(),
+                payment.getPaymentDate(),
+                payment.getValidUntil(),
+                payment.getStatus().name(),
+                payment.getTransactionId(),
+                payment.getPaymentMethod(),
+                payment.getPaymentGateway(),
+                payment.getDescription(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
+        );
     }
 }

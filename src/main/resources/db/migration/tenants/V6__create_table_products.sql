@@ -1,7 +1,8 @@
--- V6__create_products.sql
+-- V6__create_table_products.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS products (
-  id UUID PRIMARY KEY,
+CREATE TABLE products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name VARCHAR(200) NOT NULL,
   description TEXT,
@@ -44,19 +45,38 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
 
   CONSTRAINT fk_product_supplier
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+
+  CONSTRAINT ck_products_sku_not_blank
+    CHECK (length(trim(sku)) > 0)
 );
 
--- sku único apenas quando preenchido e produto ativo
-CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_active
-ON products(sku)
+-- ✅ SKU único para produtos não deletados (soft delete)
+CREATE UNIQUE INDEX ux_products_sku_not_deleted
+ON products (sku)
 WHERE deleted = false;
 
-CREATE INDEX IF NOT EXISTS idx_product_name       ON products(name);
-CREATE INDEX IF NOT EXISTS idx_product_supplier   ON products(supplier_id);
-CREATE INDEX IF NOT EXISTS idx_product_created_at ON products(created_at);
+-- IgnoreCase em name/brand (LOWER(..))
+CREATE INDEX idx_products_name_lower
+ON products (LOWER(name));
 
-CREATE INDEX IF NOT EXISTS idx_products_category_id    ON products(category_id);
-CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products(subcategory_id);
+CREATE INDEX idx_products_brand_lower
+ON products (LOWER(brand));
 
-CREATE INDEX IF NOT EXISTS idx_products_deleted ON products(deleted) WHERE deleted = false;
+-- findByActiveTrueAndDeletedFalse()
+CREATE INDEX idx_products_active_deleted
+ON products (active, deleted);
+
+-- filtros comuns
+CREATE INDEX idx_products_supplier_id
+ON products (supplier_id);
+
+CREATE INDEX idx_products_category_id
+ON products (category_id);
+
+CREATE INDEX idx_products_subcategory_id
+ON products (subcategory_id);
+
+-- listagens recentes
+CREATE INDEX idx_products_created_at
+ON products (created_at);

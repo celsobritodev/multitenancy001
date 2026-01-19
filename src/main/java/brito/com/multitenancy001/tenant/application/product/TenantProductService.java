@@ -8,14 +8,15 @@ package brito.com.multitenancy001.tenant.application.product;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.products.SupplierProductCountResponse;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
-import brito.com.multitenancy001.tenant.persistence.category.CategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.category.SubcategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.product.ProductRepository;
-import brito.com.multitenancy001.tenant.persistence.supplier.SupplierRepository;
+import brito.com.multitenancy001.tenant.persistence.category.TenantCategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.category.TenantSubcategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.product.TenantProductRepository;
+import brito.com.multitenancy001.tenant.persistence.supplier.TenantSupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,20 +35,20 @@ import java.util.UUID;
 @Slf4j
 public class TenantProductService {
 
-    private final ProductRepository productRepository;
-    private final SupplierRepository supplierRepository;
-    private final CategoryRepository categoryRepository;
-    private final SubcategoryRepository subcategoryRepository;
+    private final TenantProductRepository tenantProductRepository;
+    private final TenantSupplierRepository supplierRepository;
+    private final TenantCategoryRepository categoryRepository;
+    private final TenantSubcategoryRepository subcategoryRepository;
     private final AppClock appClock;
 
     @Transactional(readOnly = true)
     public Page<Product> findAll(Pageable pageable) {
-        return productRepository.findAll(pageable);
+        return tenantProductRepository.findAll(pageable);
     }
 
     @Transactional(readOnly = true)
     public Product findById(UUID id) {
-        return productRepository.findById(id)
+        return tenantProductRepository.findById(id)
             .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
                 "Produto não encontrado com ID: " + id, 404));
     }
@@ -60,7 +61,7 @@ public class TenantProductService {
         resolveSupplier(product);
         validateSubcategoryBelongsToCategory(product);
 
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
@@ -76,7 +77,7 @@ public class TenantProductService {
         }
 
         if (StringUtils.hasText(productDetails.getSku())) {
-            Optional<Product> productWithSku = productRepository.findBySku(productDetails.getSku());
+            Optional<Product> productWithSku = tenantProductRepository.findBySku(productDetails.getSku());
             if (productWithSku.isPresent() && !productWithSku.get().getId().equals(id)) {
                 throw new ApiException("SKU_ALREADY_EXISTS",
                     "SKU já cadastrado: " + productDetails.getSku(), 409);
@@ -100,17 +101,19 @@ public class TenantProductService {
             existingProduct.setCategory(category);
         }
 
-        // ✅ subcategory (se veio ID)
-        if (productDetails.getSubcategory() != null && productDetails.getSubcategory().getId() != null) {
-            Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
-                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
-            existingProduct.setSubcategory(sub);
+     // ✅ subcategory: só mexe se veio no payload
+        if (productDetails.getSubcategory() != null) {
+            if (productDetails.getSubcategory().getId() != null) {
+                Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
+                        .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
+                existingProduct.setSubcategory(sub);
+            } else {
+                // veio "subcategory": {} (ou sem id) => limpa
+                existingProduct.setSubcategory(null);
+            }
         }
 
-        // ✅ se veio explicitamente subcategory = null -> limpa
-        if (productDetails.getSubcategory() == null) {
-            existingProduct.setSubcategory(null);
-        }
+
 
         // ✅ supplier
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
@@ -121,7 +124,7 @@ public class TenantProductService {
 
         validateSubcategoryBelongsToCategory(existingProduct);
 
-        return productRepository.save(existingProduct);
+        return tenantProductRepository.save(existingProduct);
     }
 
     private void resolveSupplier(Product product) {
@@ -180,14 +183,15 @@ public class TenantProductService {
     // ======= outros métodos =======
 
     @Transactional(readOnly = true)
-    public List<Product> searchProducts(String name, String sku, BigDecimal minPrice,
+    public List<Product> searchProducts(String name, BigDecimal minPrice,
                                         BigDecimal maxPrice, Integer minStock, Integer maxStock) {
-        return productRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
+        return tenantProductRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
     }
+
 
     @Transactional(readOnly = true)
     public List<Product> findLowStock(Integer threshold) {
-        return productRepository.findByStockQuantityLessThan(threshold);
+        return tenantProductRepository.findByStockQuantityLessThan(threshold);
     }
 
     @Transactional
@@ -195,7 +199,7 @@ public class TenantProductService {
         Product product = findById(id);
         if (quantityChange > 0) product.addToStock(quantityChange);
         else if (quantityChange < 0) product.removeFromStock(Math.abs(quantityChange));
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
@@ -203,14 +207,14 @@ public class TenantProductService {
         validatePrice(newPrice);
         Product product = findById(id);
         product.updatePrice(newPrice);
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
         product.softDelete(appClock.now());
-        productRepository.save(product);
+        tenantProductRepository.save(product);
     }
 
     private void validateProduct(Product product) {
@@ -238,37 +242,171 @@ public class TenantProductService {
 
     @Transactional(readOnly = true)
     public List<Product> findByCategoryId(Long categoryId) {
-        return productRepository.findByCategory_Id(categoryId);
+        if (categoryId == null) {
+            throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByCategoryId(categoryId);
     }
+
 
     @Transactional(readOnly = true)
     public List<Product> findByBrand(String brand) {
-        return productRepository.findAll().stream()
-            .filter(p -> brand.equals(p.getBrand()))
-            .toList();
+        if (!StringUtils.hasText(brand)) {
+            throw new ApiException("INVALID_BRAND", "brand é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByBrandIgnoreCase(brand.trim());
     }
+
+
 
     @Transactional(readOnly = true)
     public List<Product> findActiveProducts() {
-        return productRepository.findAll().stream()
-            .filter(p -> Boolean.TRUE.equals(p.getActive()) && !Boolean.TRUE.equals(p.getDeleted()))
-            .toList();
+        return tenantProductRepository.findByActiveTrueAndDeletedFalse();
     }
+
 
     @Transactional
     public Product updateCostPrice(UUID id, BigDecimal costPrice) {
         Product product = findById(id);
         product.updateCostPrice(costPrice);
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalInventoryValue() {
-        return productRepository.calculateTotalInventoryValue();
+        return tenantProductRepository.calculateTotalInventoryValue();
     }
 
     @Transactional(readOnly = true)
     public Long countLowStockProducts(Integer threshold) {
-        return productRepository.countLowStock(threshold);
+        return tenantProductRepository.countLowStock(threshold);
     }
+    
+ // =========================================================
+ // ✅ QUERIES PARA "DAR USO" AOS MÉTODOS DO ProductRepository
+ // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<Product> findBySubcategoryId(Long subcategoryId) {
+        if (subcategoryId == null) {
+            throw new ApiException("SUBCATEGORY_REQUIRED", "subcategoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedBySubcategoryId(subcategoryId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Product> findByCategoryAndOptionalSubcategory(Long categoryId, Long subcategoryId) {
+        if (categoryId == null) {
+            throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByCategoryAndOptionalSubcategory(categoryId, subcategoryId);
+    }
+
+
+ @Transactional(readOnly = true)
+ public List<Product> findByName(String name) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     return tenantProductRepository.findByNameContainingIgnoreCase(name.trim());
+ }
+
+ @Transactional(readOnly = true)
+ public Page<Product> findByNamePaged(String name, Pageable pageable) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     return tenantProductRepository.findByNameContainingIgnoreCase(name.trim(), pageable);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice) {
+     if (minPrice == null || maxPrice == null) {
+         throw new ApiException("INVALID_PRICE_RANGE", "minPrice e maxPrice são obrigatórios", 400);
+     }
+     if (maxPrice.compareTo(minPrice) < 0) {
+         throw new ApiException("INVALID_PRICE_RANGE", "maxPrice deve ser >= minPrice", 400);
+     }
+     return tenantProductRepository.findByPriceBetween(minPrice, maxPrice);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findBySupplierId(UUID supplierId) {
+     if (supplierId == null) {
+         throw new ApiException("SUPPLIER_REQUIRED", "supplierId é obrigatório", 400);
+     }
+     return tenantProductRepository.findBySupplier_Id(supplierId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findByNameAndPriceAndStock(
+         String name,
+         BigDecimal minPrice,
+         BigDecimal maxPrice,
+         Integer minStock,
+         Integer maxStock
+ ) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     if (minPrice == null || maxPrice == null) {
+         throw new ApiException("INVALID_PRICE_RANGE", "minPrice e maxPrice são obrigatórios", 400);
+     }
+     if (maxPrice.compareTo(minPrice) < 0) {
+         throw new ApiException("INVALID_PRICE_RANGE", "maxPrice deve ser >= minPrice", 400);
+     }
+     if (minStock == null || maxStock == null) {
+         throw new ApiException("INVALID_STOCK_RANGE", "minStock e maxStock são obrigatórios", 400);
+     }
+     if (maxStock < minStock) {
+         throw new ApiException("INVALID_STOCK_RANGE", "maxStock deve ser >= minStock", 400);
+     }
+
+     return tenantProductRepository.findByNameContainingIgnoreCaseAndPriceBetweenAndStockQuantityBetween(
+             name.trim(), minPrice, maxPrice, minStock, maxStock
+     );
+ }
+
+ /**
+  * Usa o @Query:
+  * SELECT p.supplier.id, COUNT(p) FROM Product p GROUP BY p.supplier.id
+  */
+ @Transactional(readOnly = true)
+ public List<SupplierProductCountResponse> countProductsBySupplier() {
+     List<Object[]> rows = tenantProductRepository.countProductsBySupplier();
+
+     return rows.stream()
+             .map(row -> new SupplierProductCountResponse(
+                     (UUID) row[0],
+                     ((Number) row[1]).longValue()
+             ))
+             .toList();
+ }
+
+ 
+ @Transactional
+ public Product toggleActive(UUID id) {
+     Product product = findById(id);
+
+     if (Boolean.TRUE.equals(product.getDeleted())) {
+         throw new ApiException("PRODUCT_DELETED", "Não é permitido alterar produto deletado", 409);
+     }
+
+     boolean next = !Boolean.TRUE.equals(product.getActive());
+     product.setActive(next);
+
+     return tenantProductRepository.save(product);
+ }
+ 
+ @Transactional(readOnly = true)
+ public List<Product> findByCategoryId(Long categoryId, boolean includeDeleted, boolean includeInactive) {
+     if (categoryId == null) {
+         throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+     }
+     return tenantProductRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
+ }
+
+
+ 
+    
 }

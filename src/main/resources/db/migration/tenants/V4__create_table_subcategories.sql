@@ -1,4 +1,4 @@
--- V4__create_subcategories.sql
+-- V4__create_table_subcategories.sql
 
 CREATE TABLE IF NOT EXISTS subcategories (
   id BIGSERIAL PRIMARY KEY,

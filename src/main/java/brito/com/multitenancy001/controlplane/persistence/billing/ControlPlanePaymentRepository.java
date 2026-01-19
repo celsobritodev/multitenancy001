@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
+public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
 	
 	Optional<Payment> findByIdAndAccountId(Long id, Long accountId);
 	

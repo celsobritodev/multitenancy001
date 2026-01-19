@@ -1,4 +1,4 @@
--- V7__create_sales.sql
+-- V7__create_table_sales.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

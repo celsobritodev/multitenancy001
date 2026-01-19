@@ -158,4 +158,53 @@ public class ControlPlaneAccountController {
         accountLifecycleService.restoreAccount(id);
         return ResponseEntity.noContent().build();
     }
+    
+ // =========================================================
+ // ✅ NOVOS ENDPOINTS (usar queries do AccountRepository)
+ // =========================================================
+
+ @GetMapping("/count/by-status/{status}")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<Long> countByStatus(@PathVariable AccountStatus status) {
+     return ResponseEntity.ok(accountLifecycleService.countAccountsByStatus(status));
+ }
+
+ @GetMapping("/by-statuses")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listByStatuses(
+         @RequestParam("statuses") List<AccountStatus> statuses
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listAccountsByStatuses(statuses));
+ }
+
+ /**
+  * Ex.: /api/admin/accounts/expired-trials
+  * Ex.: /api/admin/accounts/expired-trials?date=2026-01-18T10:00:00&status=FREE_TRIAL
+  */
+ @GetMapping("/expired-trials")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listExpiredTrials(
+         @RequestParam(value = "date", required = false)
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
+
+         @RequestParam(value = "status", required = false) AccountStatus status
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listExpiredTrials(date, status));
+ }
+
+ /**
+  * Ex.: /api/admin/accounts/overdue
+  * Ex.: /api/admin/accounts/overdue?today=2026-01-18T10:00:00&status=ACTIVE
+  */
+ @GetMapping("/overdue")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listOverdue(
+         @RequestParam(value = "today", required = false)
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime today,
+
+         @RequestParam(value = "status", required = false) AccountStatus status
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listOverdueAccounts(today, status));
+ }
+
 }

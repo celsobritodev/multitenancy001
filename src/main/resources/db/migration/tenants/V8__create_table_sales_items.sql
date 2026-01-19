@@ -1,4 +1,4 @@
--- V8__create_sales_items.sql
+-- V8__create_table_sales_items.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

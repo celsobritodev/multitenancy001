@@ -1,4 +1,4 @@
--- V5__create_suppliers.sql
+-- V5__create_table_suppliers.sql
 
 -- 1) Habilita função de UUID (Postgres)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

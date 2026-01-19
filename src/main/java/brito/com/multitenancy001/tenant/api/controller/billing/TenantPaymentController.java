@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.api.controller.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.controlplane.application.billing.PaymentService;
+import brito.com.multitenancy001.controlplane.application.billing.ControlPLanePaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantPaymentController {
 
-    private final PaymentService paymentService;
+    private final ControlPLanePaymentService paymentService;
 
     // =========================
     // MY TENANT (SAFE DEFAULT)
