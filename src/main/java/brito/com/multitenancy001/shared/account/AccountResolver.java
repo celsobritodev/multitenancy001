@@ -29,7 +29,7 @@ public class AccountResolver {
 		Account account = accountRepository.findBySlugAndDeletedFalse(slug)
 				.orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-		if (!account.isActive(now)) {
+		if (!account.isOperational(now)) {
 			throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
 		}
 

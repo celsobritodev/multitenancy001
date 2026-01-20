@@ -61,11 +61,20 @@ public class TenantUserController {
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
             @PathVariable Long userId,
-            @RequestParam boolean active
+            @RequestParam(required = false) Boolean suspended,
+            @RequestParam(required = false) Boolean active
     ) {
-        TenantUserSummaryResponse response = tenantUserService.updateTenantUserStatus(userId, active);
+        // compat: se cliente antigo mandar active, converte
+        boolean finalSuspended = (suspended != null)
+                ? suspended
+                : (active != null && !active);
+
+        TenantUserSummaryResponse response =
+                tenantUserService.setTenantUserSuspendedByAdmin(userId, finalSuspended);
+
         return ResponseEntity.ok(response);
     }
+
 
     @DeleteMapping("/{userId}")
     @PreAuthorize("hasAuthority('TEN_USER_DELETE')")

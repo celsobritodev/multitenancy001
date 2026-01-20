@@ -147,15 +147,16 @@ public class TenantUserService {
         });
     }
 
-    public TenantUserSummaryResponse updateTenantUserStatus(Long userId, boolean active) {
+    public TenantUserSummaryResponse setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
         return runInTenant(schema, () -> {
-            TenantUser updated = tenantUserTxService.updateStatus(userId, accountId, active);
+            TenantUser updated = tenantUserTxService.setSuspendedByAdmin(userId, accountId, suspended);
             return tenantUserApiMapper.toSummary(updated);
         });
     }
+
 
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -258,4 +259,9 @@ public class TenantUserService {
             return tenantUserApiMapper.toDetails(updated);
         });
     }
+    
+    public TenantUserSummaryResponse setTenantUserActiveByAdmin(Long userId, boolean active) {
+        return setTenantUserSuspendedByAdmin(userId, !active);
+    }
+
 }

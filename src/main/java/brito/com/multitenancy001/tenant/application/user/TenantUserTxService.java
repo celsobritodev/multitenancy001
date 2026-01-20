@@ -237,30 +237,8 @@ public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountI
         return user;
     }
 
-    // =========================
-    // UPDATE STATUS
-    // =========================
-    public TenantUser updateStatus(Long userId, Long accountId, boolean active) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-        if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
-
-        LocalDateTime now = now();
-
-        user.setSuspendedByAdmin(!active);
-        user.setUpdatedAt(now);
-
-        return tenantUserRepository.save(user);
-    }
-
-    // =========================
-    // CONTAGEM
-    // =========================
-    @Transactional(readOnly = true)
-    public long countActiveUsers(Long accountId) {
-        return tenantUserRepository.countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
-    }
+  
 
 
     public void softDelete(Long userId, Long accountId) {
@@ -389,37 +367,38 @@ public void resetPasswordWithToken(Long accountId, String username, String token
         tenantUserRepository.save(to);
     }
     
-    @Transactional(readOnly = true)
-    public long countNotDeletedUsers(Long accountId) {
-        return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
-    }
-    
-    @Transactional(readOnly = true)
-    public long countUsersForLimit(Long accountId, UserLimitPolicy policy) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
-        }
-        if (policy == null) {
-            policy = UserLimitPolicy.SEATS_IN_USE;
-        }
+  
+ // =========================
+ // CONTAGEM / LIMITES
+ // =========================
 
-        return switch (policy) {
-            case SEATS_IN_USE ->
-                    tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+ @Transactional(readOnly = true)
+ public long countUsersForLimit(Long accountId, UserLimitPolicy policy) {
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+     }
+     if (policy == null) {
+         policy = UserLimitPolicy.SEATS_IN_USE;
+     }
 
-            case ACTIVE_USERS_ONLY ->
-                    tenantUserRepository.countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
-        };
-    }
+     return switch (policy) {
+         case SEATS_IN_USE ->
+                 tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
 
+         case ACTIVE_USERS_ONLY ->
+                 tenantUserRepository.countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+     };
+ }
+
+ /**
+  * Política A (SEATS): usuários em uso = deleted=false
+  */
+ @Transactional(readOnly = true)
+ public long countSeatsInUse(Long accountId) {
+     return countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE);
+ }
 
  
-    @Transactional(readOnly = true)
-    public long countSeatsInUse(Long accountId) {
-        return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
-    }
-
-   
     
 
 }

@@ -265,5 +265,19 @@ public class AccountLifecycleService {
                      .toList()
      );
  }
+ 
+ @Transactional(readOnly = true)
+ public long countOperationalAccounts() {
+     return publicExecutor.run(accountRepository::countActiveAccounts);
+ }
+
+ /** @deprecated use countOperationalAccounts */
+ @Deprecated
+ @Transactional(readOnly = true)
+ public long countActiveAccounts() {
+     return countOperationalAccounts();
+ }
+
+ 
 
 }

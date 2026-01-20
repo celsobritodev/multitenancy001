@@ -59,7 +59,7 @@ public class TenantAuthService {
                     ));
 
 
-            if (user.isSuspendedByAccount() || user.isDeleted()) {
+            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
                 throw new ApiException(
                         "USER_INACTIVE",
                         "Usuário inativo",

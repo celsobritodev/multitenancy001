@@ -25,20 +25,20 @@ public class AccountTenantUserService {
     private final TenantUserAdminBridge tenantUserAdminBridge;
     private final AccountUserApiMapper accountUserApiMapper;
 
-    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-
+    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
         Account account = publicExecutor.run(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
         List<UserSummaryData> data = tenantUserAdminBridge
-                .listUserSummaries(account.getSchemaName(), account.getId(), onlyActive);
+                .listUserSummaries(account.getSchemaName(), account.getId(), onlyOperational);
 
         return data.stream()
                 .map(accountUserApiMapper::toAccountUserSummary)
                 .toList();
     }
+
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 

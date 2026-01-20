@@ -56,7 +56,7 @@ public class AccountAdminDetailsApiMapper {
                 admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
 
                 totalUsers,
-                account.isActive(now) // ✅ agora clock-aware
+                account.isOperational(now) // ✅ agora clock-aware
         );
     }
 }

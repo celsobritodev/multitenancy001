@@ -52,6 +52,8 @@ public class ControlPlaneAccountController {
     public ResponseEntity<Long> countActiveAccounts() {
         return ResponseEntity.ok(accountLifecycleService.countActiveAccounts());
     }
+    
+    
 
     @GetMapping("/latest")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
@@ -206,5 +208,29 @@ public class ControlPlaneAccountController {
  ) {
      return ResponseEntity.ok(accountLifecycleService.listOverdueAccounts(today, status));
  }
+ 
+ @GetMapping("/count/operational")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<Long> countOperationalAccounts() {
+     return ResponseEntity.ok(accountLifecycleService.countOperationalAccounts());
+ }
+
+ /** @deprecated use /count/operational */
+ @Deprecated
+ @GetMapping("/count/active")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<Long> countActiveAccounts() {
+     return ResponseEntity.ok(accountLifecycleService.countOperationalAccounts());
+ }
+
+ @GetMapping("/{id}/users/operational")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountTenantUserSummaryResponse>> listOperationalUsersByAccount(@PathVariable Long id) {
+     return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
+ } 
+ 
+ 
+ 
+ 
 
 }

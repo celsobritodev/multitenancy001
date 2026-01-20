@@ -295,12 +295,20 @@ public class Account {
                 && now != null
                 && trialEndDate.isAfter(now);
     }
-
-    public boolean isActive(LocalDateTime now) {
+    
+    /**
+     * Conta operacional = pode usar o sistema (não deletada, e status permite uso).
+     * Não confundir com "usuário suspenso".
+     */
+    public boolean isOperational(LocalDateTime now) {
         if (isDeleted()) return false;
         if (isBuiltInAccount()) return true;
-        return status == AccountStatus.ACTIVE || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
+        return status == AccountStatus.ACTIVE
+                || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
     }
+    
+
+  
 
     public boolean isPaymentOverdue(LocalDateTime now) {
         return paymentDueDate != null && now != null && paymentDueDate.isBefore(now);
