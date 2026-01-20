@@ -1,23 +1,24 @@
 package brito.com.multitenancy001.tenant.persistence.user;
 
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import jakarta.transaction.Transactional;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
-	
-	
-	 // ✅ Suspende por CONTA (sem mexer na suspensão por admin)
+
+    // ==========================
+    // Bulk operations (Tenant)
+    // ==========================
+
+    // ✅ Suspende por CONTA (sem mexer na suspensão por admin)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -39,7 +40,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int unsuspendAllByAccount(@Param("accountId") Long accountId);
 
-  
+    // ✅ Suspende/Reativa por ADMIN (1 usuário)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -55,10 +56,10 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("suspended") boolean suspended
     );
 
-  
+    // ==========================
+    // Finds (login / reset)
+    // ==========================
 
-	
-    
     Optional<TenantUser> findByPasswordResetTokenAndAccountId(String passwordResetToken, Long accountId);
 
     Optional<TenantUser> findByUsernameAndDeletedFalse(String username);
@@ -69,8 +70,11 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
     Optional<TenantUser> findByUsernameAndAccountId(String username, Long accountId);
 
-    // (se você quiser filtrar deletados no login)
     Optional<TenantUser> findByUsernameAndAccountIdAndDeletedFalse(String username, Long accountId);
+
+    // ==========================
+    // Exists
+    // ==========================
 
     boolean existsByUsernameAndAccountId(String username, Long accountId);
 
@@ -79,40 +83,41 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     boolean existsByEmailAndAccountIdAndIdNot(String email, Long accountId, Long id);
 
     // ==========================
-    // Listagens (Tenant)
+    // Lists (Tenant)
     // ==========================
+
     List<TenantUser> findByAccountId(Long accountId);
 
     List<TenantUser> findByAccountIdAndDeletedFalse(Long accountId);
 
-    // CORREÇÃO: Removido o método que usa "ActiveTrue" pois não existe na entidade
-    // List<TenantUser> findByAccountIdAndActiveTrueAndDeletedFalse(Long accountId);
-    
-    // NOVO: Método para buscar usuários ativos usando lógica customizada
-    @Query("SELECT u FROM TenantUser u WHERE u.accountId = :accountId " +
-           "AND u.deleted = false " +
-           "AND u.suspendedByAccount = false " +
-           "AND u.suspendedByAdmin = false")
-    List<TenantUser> findActiveUsersByAccount(@Param("accountId") Long accountId);
+    // "Ativos" = não deletado e não suspenso (por conta e por admin)
+    List<TenantUser> findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
+
+    // ✅ Alias legível (evita nome gigante espalhado no projeto)
+    default List<TenantUser> findActiveUsersByAccount(Long accountId) {
+        return findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+    }
 
     // ==========================
-    // Contagem / Limites
+    // Counts / Limits
     // ==========================
-    // CORREÇÃO: Removido método que não funciona
-    // long countByAccountIdAndActiveTrueAndDeletedFalse(Long accountId);
-    
-    // NOVO: Contagem de usuários ativos
-    @Query("SELECT COUNT(u) FROM TenantUser u WHERE u.accountId = :accountId " +
-           "AND u.deleted = false " +
-           "AND u.suspendedByAccount = false " +
-           "AND u.suspendedByAdmin = false")
-    long countActiveUsersByAccount(@Param("accountId") Long accountId);
+
+    // SEATS (Política A): conta todos não deletados
+    long countByAccountIdAndDeletedFalse(Long accountId);
+
+    // ACTIVE_USERS_ONLY: conta não deletados e não suspensos
+    long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
+
+    // ✅ Alias legível (opcional)
+    default long countActiveUsersByAccount(Long accountId) {
+        return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+    }
 
     // ==========================
-    // Busca por ID com scoping de conta
+    // Scoped ID
     // ==========================
+
     Optional<TenantUser> findByIdAndAccountId(Long id, Long accountId);
 
-    // (se quiser reforçar deletado false)
     Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
 }

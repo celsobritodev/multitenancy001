@@ -2,8 +2,10 @@ package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.account.AccountEntitlementsGuard;
 import brito.com.multitenancy001.shared.account.AccountResolver;
 import brito.com.multitenancy001.shared.account.AccountSnapshot;
+import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -31,6 +33,8 @@ public class TenantUserService {
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
+    private final AccountEntitlementsGuard accountEntitlementsGuard;
+
 
 
     // ===== helpers =====
@@ -70,35 +74,39 @@ public class TenantUserService {
         );
     }
 
-    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
+  public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
     Long accountId = securityUtils.getCurrentAccountId();
     String schema = securityUtils.getCurrentSchema();
-
-  
 
     String name = tenantUserCreateRequest.name().trim();
     String username = tenantUserCreateRequest.username().trim().toLowerCase();
     String email = tenantUserCreateRequest.email().trim().toLowerCase();
-
 
     final LinkedHashSet<String> perms =
             (tenantUserCreateRequest.permissions() == null || tenantUserCreateRequest.permissions().isEmpty())
                     ? null
                     : new LinkedHashSet<>(tenantUserCreateRequest.permissions());
 
-    return runInTenant(schema, () -> {
-    	TenantUser created = tenantUserTxService.createTenantUser(
-    	        accountId,
-    	        name,                             // já trimado
-    	        username,
-    	        email,
-    	        tenantUserCreateRequest.password(),
-    	        tenantUserCreateRequest.role(),
-    	        tenantUserCreateRequest.phone(),
-    	        tenantUserCreateRequest.avatarUrl(),
-    	        perms
-    	);
+    // 1) conta usuários no TENANT schema
+    long currentUsers = runInTenant(schema,
+            () -> tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE));
 
+    // 2) valida quota no PUBLIC (sem o Tenant precisar importar domínio do ControlPlane)
+    accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
+
+    // 3) cria no TENANT schema
+    return runInTenant(schema, () -> {
+        TenantUser created = tenantUserTxService.createTenantUser(
+                accountId,
+                name,
+                username,
+                email,
+                tenantUserCreateRequest.password(),
+                tenantUserCreateRequest.role(),
+                tenantUserCreateRequest.phone(),
+                tenantUserCreateRequest.avatarUrl(),
+                perms
+        );
 
         return tenantUserApiMapper.toDetails(created);
     });

@@ -40,9 +40,9 @@ public class TenantUserAdminBridge {
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantReadOnlyTx(() -> {
 
-                    var users = onlyActive
-                            ? tenantUserRepository.findActiveUsersByAccount(accountId)
-                            : tenantUserRepository.findByAccountId(accountId);
+                	var users = onlyActive
+                	        ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
+                	        : tenantUserRepository.findByAccountId(accountId);
 
                     return users.stream()
                             .map(u -> new UserSummaryData(
@@ -104,11 +104,12 @@ public class TenantUserAdminBridge {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantReadOnlyTx(() -> onlyActive
-                        ? tenantUserRepository.findActiveUsersByAccount(accountId)
-                        : tenantUserRepository.findByAccountId(accountId)
-                )
-        );
+        txExecutor.tenantReadOnlyTx(() -> onlyActive
+                ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
+                : tenantUserRepository.findByAccountId(accountId)
+        )
+);
+
     }
 
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {

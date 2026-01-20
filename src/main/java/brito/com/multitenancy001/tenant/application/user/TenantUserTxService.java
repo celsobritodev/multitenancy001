@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.application.user;
 
+import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -258,8 +259,9 @@ public TenantUser getUserByUsernameOrEmail(String usernameOrEmail, Long accountI
     // =========================
     @Transactional(readOnly = true)
     public long countActiveUsers(Long accountId) {
-        return tenantUserRepository.countActiveUsersByAccount(accountId);
+        return tenantUserRepository.countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
     }
+
 
     public void softDelete(Long userId, Long accountId) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
@@ -386,4 +388,38 @@ public void resetPasswordWithToken(Long accountId, String username, String token
         tenantUserRepository.save(from);
         tenantUserRepository.save(to);
     }
+    
+    @Transactional(readOnly = true)
+    public long countNotDeletedUsers(Long accountId) {
+        return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+    }
+    
+    @Transactional(readOnly = true)
+    public long countUsersForLimit(Long accountId, UserLimitPolicy policy) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+        }
+        if (policy == null) {
+            policy = UserLimitPolicy.SEATS_IN_USE;
+        }
+
+        return switch (policy) {
+            case SEATS_IN_USE ->
+                    tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+
+            case ACTIVE_USERS_ONLY ->
+                    tenantUserRepository.countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+        };
+    }
+
+
+ 
+    @Transactional(readOnly = true)
+    public long countSeatsInUse(Long accountId) {
+        return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+    }
+
+   
+    
+
 }

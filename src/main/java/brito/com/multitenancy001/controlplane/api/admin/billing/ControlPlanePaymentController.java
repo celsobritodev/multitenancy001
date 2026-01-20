@@ -2,7 +2,7 @@ package brito.com.multitenancy001.controlplane.api.admin.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.controlplane.application.billing.ControlPLanePaymentService;
+import brito.com.multitenancy001.controlplane.application.billing.ControlPlanePaymentService;
 import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
@@ -25,7 +25,7 @@ import java.util.List;
 @Validated
 public class ControlPlanePaymentController {
 
-    private final ControlPLanePaymentService controlPlanePaymentService;
+    private final ControlPlanePaymentService controlPlanePaymentService;
 
     // =========================================================
     // ADMIN / CROSS-TENANT

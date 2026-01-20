@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ControlPLanePaymentService {
+public class ControlPlanePaymentService {
 
     private final AccountRepository accountRepository;
     private final ControlPlanePaymentRepository paymentRepository;

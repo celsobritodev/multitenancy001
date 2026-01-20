@@ -158,6 +158,55 @@ public class ControlPlaneAccountController {
         accountLifecycleService.restoreAccount(id);
         return ResponseEntity.noContent().build();
     }
+    
+ // =========================================================
+ // ✅ NOVOS ENDPOINTS (usar queries do AccountRepository)
+ // =========================================================
+
+ @GetMapping("/count/by-status/{status}")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<Long> countByStatus(@PathVariable AccountStatus status) {
+     return ResponseEntity.ok(accountLifecycleService.countAccountsByStatus(status));
+ }
+
+ @GetMapping("/by-statuses")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listByStatuses(
+         @RequestParam("statuses") List<AccountStatus> statuses
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listAccountsByStatuses(statuses));
+ }
+
+ /**
+  * Ex.: /api/admin/accounts/expired-trials
+  * Ex.: /api/admin/accounts/expired-trials?date=2026-01-18T10:00:00&status=FREE_TRIAL
+  */
+ @GetMapping("/expired-trials")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listExpiredTrials(
+         @RequestParam(value = "date", required = false)
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
+
+         @RequestParam(value = "status", required = false) AccountStatus status
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listExpiredTrials(date, status));
+ }
+
+ /**
+  * Ex.: /api/admin/accounts/overdue
+  * Ex.: /api/admin/accounts/overdue?today=2026-01-18T10:00:00&status=ACTIVE
+  */
+ @GetMapping("/overdue")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+ public ResponseEntity<List<AccountResponse>> listOverdue(
+         @RequestParam(value = "today", required = false)
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime today,
+
+         @RequestParam(value = "status", required = false) AccountStatus status
+ ) {
+     return ResponseEntity.ok(accountLifecycleService.listOverdueAccounts(today, status));
+ }
+
 }
 package brito.com.multitenancy001.controlplane.api.admin.auth;
 
@@ -188,7 +237,8 @@ package brito.com.multitenancy001.controlplane.api.admin.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.controlplane.application.billing.PaymentService;
+import brito.com.multitenancy001.controlplane.application.billing.ControlPLanePaymentService;
+import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -210,7 +260,7 @@ import java.util.List;
 @Validated
 public class ControlPlanePaymentController {
 
-    private final PaymentService paymentService;
+    private final ControlPLanePaymentService controlPlanePaymentService;
 
     // =========================================================
     // ADMIN / CROSS-TENANT
@@ -231,26 +281,26 @@ public class ControlPlanePaymentController {
                 body.description()
         );
 
-        PaymentResponse response = paymentService.processPaymentForAccount(adminPaymentRequest);
+        PaymentResponse response = controlPlanePaymentService.processPaymentForAccount(adminPaymentRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/by-account/{accountId}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAdmin(@PathVariable Long accountId) {
-        return ResponseEntity.ok(paymentService.getPaymentsByAccount(accountId));
+        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccount(accountId));
     }
 
     @GetMapping("/by-account/{accountId}/active")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<Boolean> hasActivePaymentAdmin(@PathVariable Long accountId) {
-        return ResponseEntity.ok(paymentService.hasActivePayment(accountId));
+        return ResponseEntity.ok(controlPlanePaymentService.hasActivePayment(accountId));
     }
 
     @PostMapping("/{paymentId}/complete-manual")
     @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
     public ResponseEntity<PaymentResponse> completeManually(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(paymentService.completePaymentManually(paymentId));
+        return ResponseEntity.ok(controlPlanePaymentService.completePaymentManually(paymentId));
     }
 
     @PostMapping("/{paymentId}/refund")
@@ -260,7 +310,7 @@ public class ControlPlanePaymentController {
             @Valid @RequestBody RefundRequest refundRequest
     ) {
         PaymentResponse response =
-                paymentService.refundPayment(paymentId, refundRequest.amount(), refundRequest.reason());
+                controlPlanePaymentService.refundPayment(paymentId, refundRequest.amount(), refundRequest.reason());
         return ResponseEntity.ok(response);
     }
 
@@ -272,7 +322,7 @@ public class ControlPlanePaymentController {
             @RequestParam("end")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
-        return ResponseEntity.ok(paymentService.getTotalRevenue(startDate, endDate));
+        return ResponseEntity.ok(controlPlanePaymentService.getTotalRevenue(startDate, endDate));
     }
 
     public record RefundRequest(
@@ -282,6 +332,70 @@ public class ControlPlanePaymentController {
             @NotBlank(message = "reason é obrigatório")
             String reason
     ) {}
+    
+ // =========================================================
+ // ✅ NOVOS ENDPOINTS (usar métodos do PaymentRepository)
+ // =========================================================
+
+ @GetMapping("/by-account/{accountId}/exists/{paymentId}")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<Boolean> existsByIdAndAccountId(
+         @PathVariable Long accountId,
+         @PathVariable Long paymentId
+ ) {
+     return ResponseEntity.ok(controlPlanePaymentService.paymentExistsForAccount(paymentId, accountId));
+ }
+
+ @GetMapping("/by-account/{accountId}/status/{status}")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAndStatus(
+         @PathVariable Long accountId,
+         @PathVariable PaymentStatus status
+ ) {
+     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccountAndStatus(accountId, status));
+ }
+
+ @GetMapping("/by-transaction/{transactionId}")
+ @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<PaymentResponse> getByTransactionId(@PathVariable String transactionId) {
+     return ResponseEntity.ok(controlPlanePaymentService.getPaymentByTransactionId(transactionId));
+ }
+
+ @GetMapping("/exists/by-transaction/{transactionId}")
+ @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<Boolean> existsByTransactionId(@PathVariable String transactionId) {
+     return ResponseEntity.ok(controlPlanePaymentService.existsByTransactionId(transactionId));
+ }
+
+ @GetMapping("/valid-until-before")
+ @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<List<PaymentResponse>> listByValidUntilBeforeAndStatus(
+         @RequestParam("date")
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
+         @RequestParam("status") PaymentStatus status
+ ) {
+     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByValidUntilBeforeAndStatus(date, status));
+ }
+
+ @GetMapping("/by-account/{accountId}/completed")
+ @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<List<PaymentResponse>> getCompletedPaymentsByAccount(@PathVariable Long accountId) {
+     return ResponseEntity.ok(controlPlanePaymentService.getCompletedPaymentsByAccount(accountId));
+ }
+
+ @GetMapping("/period")
+ @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+ public ResponseEntity<List<PaymentResponse>> listPaymentsInPeriod(
+         @RequestParam("start")
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+         @RequestParam("end")
+         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+ ) {
+     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsInPeriod(startDate, endDate));
+ }
+
+    
+    
 }
 package brito.com.multitenancy001.controlplane.api.admin.me;
 
@@ -1305,6 +1419,59 @@ public class AccountLifecycleService {
                         .map(accountApiMapper::toResponse)
         );
     }
+    
+    
+ // =========================================================
+ // ✅ 5) QUERIES ADMIN (usar métodos do AccountRepository)
+ // =========================================================
+
+ @Transactional(readOnly = true)
+ public long countAccountsByStatus(AccountStatus status) {
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+     return publicExecutor.run(() -> accountRepository.countByStatusAndDeletedFalse(status));
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
+     if (statuses == null || statuses.isEmpty()) {
+         throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
+     }
+
+     return publicExecutor.run(() ->
+             accountRepository.findByStatuses(statuses).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listExpiredTrials(LocalDateTime date, AccountStatus status) {
+     // defaults seguros
+     LocalDateTime d = (date != null ? date : LocalDateTime.now());
+     AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
+
+     return publicExecutor.run(() ->
+             accountRepository.findExpiredTrials(d, st).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
+ @Transactional(readOnly = true)
+ public List<AccountResponse> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
+     // defaults seguros
+     LocalDateTime t = (today != null ? today : LocalDateTime.now());
+     AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
+
+     return publicExecutor.run(() ->
+             accountRepository.findOverdueAccounts(st, t).stream()
+                     .map(accountApiMapper::toResponse)
+                     .toList()
+     );
+ }
+
 }
 package brito.com.multitenancy001.controlplane.application;
 
@@ -1626,7 +1793,7 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.billing.Payment;
 import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.controlplane.persistence.billing.PaymentRepository;
+import brito.com.multitenancy001.controlplane.persistence.billing.ControlPlanePaymentRepository;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -1645,36 +1812,45 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PaymentService {
+public class ControlPLanePaymentService {
 
     private final AccountRepository accountRepository;
-    private final PaymentRepository paymentRepository;
+    private final ControlPlanePaymentRepository paymentRepository;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
+    
+    
+@Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
+public void checkPayments() {
+    log.info("Iniciando verificação de pagamentos...");
+    LocalDateTime now = appClock.now();
 
-    @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
-    public void checkPayments() {
-        log.info("Iniciando verificação de pagamentos...");
-        LocalDateTime now = appClock.now();
+    // Trials expirados
+    List<Account> expiredTrials =
+            accountRepository.findExpiredTrials(now, AccountStatus.FREE_TRIAL);
 
-        List<Account> expiredTrials = accountRepository.findByStatus(AccountStatus.FREE_TRIAL).stream()
-                .filter(account -> account.getTrialEndDate() != null && account.getTrialEndDate().isBefore(now))
-                .collect(Collectors.toList());
-
-        for (Account account : expiredTrials) {
+    for (Account account : expiredTrials) {
+        if (account.getStatus() != AccountStatus.SUSPENDED) {
             suspendAccount(account, "Trial expirado");
         }
-
-        List<Account> overdueAccounts = accountRepository.findByPaymentDueDateBefore(now);
-
-        for (Account account : overdueAccounts) {
-            if (account.getStatus() == AccountStatus.ACTIVE) {
-                suspendAccount(account, "Pagamento atrasado");
-            }
-        }
-
-        checkExpiredPendingPayments(now);
     }
+
+    // Pagamentos vencidos
+    List<Account> overdueAccounts =
+            accountRepository.findOverdueAccounts(AccountStatus.ACTIVE, now);
+
+    for (Account account : overdueAccounts) {
+        if (account.getStatus() != AccountStatus.SUSPENDED) {
+            suspendAccount(account, "Pagamento atrasado");
+        }
+    }
+
+    checkExpiredPendingPayments(now);
+}
+
+    
+    
+    
 
     private void suspendAccount(Account account, String reason) {
         account.setStatus(AccountStatus.SUSPENDED);
@@ -1904,23 +2080,98 @@ public class PaymentService {
             throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
         }
     }
+    
+    
+ // =========================================================
+ // ✅ QUERIES / HELPERS para usar métodos do PaymentRepository
+ // =========================================================
 
-    private PaymentResponse mapToResponse(Payment payment) {
-        return new PaymentResponse(
-                payment.getId(),
-                payment.getAccount().getId(),
-                payment.getAmount(),
-                payment.getPaymentDate(),
-                payment.getValidUntil(),
-                payment.getStatus().name(),
-                payment.getTransactionId(),
-                payment.getPaymentMethod(),
-                payment.getPaymentGateway(),
-                payment.getDescription(),
-                payment.getCreatedAt(),
-                payment.getUpdatedAt()
-        );
-    }
+ @Transactional(readOnly = true)
+ public boolean paymentExistsForAccount(Long paymentId, Long accountId) {
+     if (paymentId == null) {
+         throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+     }
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+     return paymentRepository.existsByIdAndAccountId(paymentId, accountId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+
+     return paymentRepository.findByAccountIdAndStatus(accountId, status).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public PaymentResponse getPaymentByTransactionId(String transactionId) {
+     if (transactionId == null || transactionId.isBlank()) {
+         throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+     }
+
+     Payment payment = paymentRepository.findByTransactionId(transactionId.trim())
+             .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+     return mapToResponse(payment);
+ }
+
+ @Transactional(readOnly = true)
+ public boolean existsByTransactionId(String transactionId) {
+     if (transactionId == null || transactionId.isBlank()) {
+         throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+     }
+     return paymentRepository.existsByTransactionId(transactionId.trim());
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status) {
+     if (date == null) {
+         throw new ApiException("INVALID_DATE", "date é obrigatório", 400);
+     }
+     if (status == null) {
+         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+     }
+
+     return paymentRepository.findByValidUntilBeforeAndStatus(date, status).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getCompletedPaymentsByAccount(Long accountId) {
+     if (accountId == null) {
+         throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+     }
+
+     return paymentRepository.findCompletedPaymentsByAccount(accountId).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+ @Transactional(readOnly = true)
+ public List<PaymentResponse> getPaymentsInPeriod(LocalDateTime startDate, LocalDateTime endDate) {
+     if (startDate == null || endDate == null) {
+         throw new ApiException("INVALID_DATE_RANGE", "startDate e endDate são obrigatórios", 400);
+     }
+     if (endDate.isBefore(startDate)) {
+         throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
+     }
+
+     return paymentRepository.findPaymentsInPeriod(startDate, endDate).stream()
+             .map(this::mapToResponse)
+             .toList();
+ }
+
+
+   
 
     private void sendSuspensionEmail(Account account, String reason) {
         log.info("Enviando email de suspensão para: {}", account.getLoginEmail());
@@ -1947,6 +2198,23 @@ public class PaymentService {
             log.error("Erro ao processar pagamento no gateway", e);
             return false;
         }
+    }
+    
+    private PaymentResponse mapToResponse(Payment payment) {
+        return new PaymentResponse(
+                payment.getId(),
+                payment.getAccount().getId(),
+                payment.getAmount(),
+                payment.getPaymentDate(),
+                payment.getValidUntil(),
+                payment.getStatus().name(),
+                payment.getTransactionId(),
+                payment.getPaymentMethod(),
+                payment.getPaymentGateway(),
+                payment.getDescription(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
+        );
     }
 }
 package brito.com.multitenancy001.controlplane.application;
@@ -3777,7 +4045,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
+public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
 	
 	Optional<Payment> findByIdAndAccountId(Long id, Long accountId);
 	
@@ -6972,7 +7240,7 @@ package brito.com.multitenancy001.tenant.api.controller.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.controlplane.application.billing.PaymentService;
+import brito.com.multitenancy001.controlplane.application.billing.ControlPLanePaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -6987,7 +7255,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantPaymentController {
 
-    private final PaymentService paymentService;
+    private final ControlPLanePaymentService paymentService;
 
     // =========================
     // MY TENANT (SAFE DEFAULT)
@@ -7018,10 +7286,207 @@ public class TenantPaymentController {
         return ResponseEntity.ok(paymentService.hasActivePaymentMyAccount());
     }
 }
+package brito.com.multitenancy001.tenant.api.controller.categories;
+
+import brito.com.multitenancy001.tenant.application.category.TenantCategoryService;
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/tenant/categories")
+@RequiredArgsConstructor
+public class TenantCategoryController {
+
+    private final TenantCategoryService tenantCategoryService;
+
+    // ======================
+    // READ
+    // ======================
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Category>> listAll() {
+        return ResponseEntity.ok(tenantCategoryService.findAll());
+    }
+
+    @GetMapping("/active")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Category>> listActive() {
+        return ResponseEntity.ok(tenantCategoryService.findActive());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<Category> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantCategoryService.findById(id));
+    }
+
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Category>> search(@RequestParam("name") String name) {
+        return ResponseEntity.ok(tenantCategoryService.searchByName(name));
+    }
+
+    // Admin flags
+    @GetMapping("/admin")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Category>> listAdmin(
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        return ResponseEntity.ok(tenantCategoryService.findWithFlags(includeDeleted, includeInactive));
+    }
+
+    // ======================
+    // WRITE
+    // ======================
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Category> create(@Valid @RequestBody Category category) {
+        Category saved = tenantCategoryService.create(category);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Category> update(@PathVariable Long id, @RequestBody Category category) {
+        return ResponseEntity.ok(tenantCategoryService.update(id, category));
+    }
+
+    @PatchMapping("/{id}/toggle-active")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Category> toggleActive(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantCategoryService.toggleActive(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Void> softDelete(@PathVariable Long id) {
+        tenantCategoryService.softDelete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Category> restore(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantCategoryService.restore(id));
+    }
+}
+package brito.com.multitenancy001.tenant.api.controller.categories;
+
+import brito.com.multitenancy001.tenant.application.category.TenantSubcategoryService;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/tenant/subcategories")
+@RequiredArgsConstructor
+public class TenantSubcategoryController {
+
+    private final TenantSubcategoryService tenantSubcategoryService;
+
+    // ======================
+    // READ
+    // ======================
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Subcategory>> listAll() {
+        return ResponseEntity.ok(tenantSubcategoryService.findAll());
+    }
+
+    @GetMapping("/active")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Subcategory>> listActive() {
+        return ResponseEntity.ok(tenantSubcategoryService.findActive());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<Subcategory> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantSubcategoryService.findById(id));
+    }
+
+    // subcategories por categoria (default: somente active + notDeleted)
+    @GetMapping("/category/{categoryId}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Subcategory>> listByCategory(@PathVariable Long categoryId) {
+        return ResponseEntity.ok(tenantSubcategoryService.findByCategoryId(categoryId));
+    }
+
+    // admin flags (deletados/inativos)
+    @GetMapping("/category/{categoryId}/admin")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Subcategory>> listByCategoryAdmin(
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        return ResponseEntity.ok(
+                tenantSubcategoryService.findByCategoryIdAdmin(categoryId, includeDeleted, includeInactive)
+        );
+    }
+
+    // ======================
+    // WRITE
+    // ======================
+
+    // cria subcategoria dentro de uma categoria
+    @PostMapping("/category/{categoryId}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Subcategory> create(
+            @PathVariable Long categoryId,
+            @Valid @RequestBody Subcategory subcategory
+    ) {
+        Subcategory saved = tenantSubcategoryService.create(categoryId, subcategory);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Subcategory> update(@PathVariable Long id, @RequestBody Subcategory subcategory) {
+        return ResponseEntity.ok(tenantSubcategoryService.update(id, subcategory));
+    }
+
+    @PatchMapping("/{id}/toggle-active")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Subcategory> toggleActive(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantSubcategoryService.toggleActive(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Void> softDelete(@PathVariable Long id) {
+        tenantSubcategoryService.softDelete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
+    public ResponseEntity<Subcategory> restore(@PathVariable Long id) {
+        return ResponseEntity.ok(tenantSubcategoryService.restore(id));
+    }
+}
 package brito.com.multitenancy001.tenant.api.controller.products;
 
 import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
 import brito.com.multitenancy001.tenant.api.dto.products.ProductUpsertRequest;
+import brito.com.multitenancy001.tenant.api.dto.products.SupplierProductCountResponse;
 import brito.com.multitenancy001.tenant.api.mapper.ProductApiMapper;
 import brito.com.multitenancy001.tenant.application.product.TenantProductService;
 import brito.com.multitenancy001.tenant.domain.category.Category;
@@ -7030,6 +7495,8 @@ import brito.com.multitenancy001.tenant.domain.product.Product;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -7046,11 +7513,55 @@ public class TenantProductController {
 
     private final ProductApiMapper productApiMapper;
     private final TenantProductService tenantProductService;
+    
+    
+    @GetMapping("/category/{categoryId}/admin")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')") // ou uma permissão mais forte se quiser
+    public ResponseEntity<List<ProductResponse>> getProductsByCategoryAdmin(
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        List<Product> products = tenantProductService.findByCategoryId(categoryId, includeDeleted, includeInactive);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+
+    // =========================================================
+    // READ
+    // =========================================================
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<ProductResponse> getById(@PathVariable UUID id) {
+        Product product = tenantProductService.findById(id);
+        return ResponseEntity.ok(productApiMapper.toResponse(product));
+    }
 
     @GetMapping("/category/{categoryId}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = tenantProductService.findByCategoryId(categoryId);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/category/{categoryId}/optional")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByCategoryOptionalSubcategory(
+            @PathVariable Long categoryId,
+            @RequestParam(value = "subcategoryId", required = false) Long subcategoryId
+    ) {
+        List<Product> products = tenantProductService.findByCategoryAndOptionalSubcategory(categoryId, subcategoryId);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/subcategory/{subcategoryId}")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsBySubcategory(@PathVariable Long subcategoryId) {
+        List<Product> products = tenantProductService.findBySubcategoryId(subcategoryId);
         List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
         return ResponseEntity.ok(dtos);
     }
@@ -7071,14 +7582,63 @@ public class TenantProductController {
         return ResponseEntity.ok(dtos);
     }
 
-    @PatchMapping("/{id}/cost-price")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
-    public ResponseEntity<ProductResponse> updateCostPrice(
-            @PathVariable UUID id,
-            @RequestParam BigDecimal costPrice
+    @GetMapping("/name")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByName(@RequestParam("name") String name) {
+        List<Product> products = tenantProductService.findByName(name);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/name/paged")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<Page<ProductResponse>> getProductsByNamePaged(
+            @RequestParam("name") String name,
+            Pageable pageable
     ) {
-        Product updatedProduct = tenantProductService.updateCostPrice(id, costPrice);
-        return ResponseEntity.ok(productApiMapper.toResponse(updatedProduct));
+        Page<Product> page = tenantProductService.findByNamePaged(name, pageable);
+        Page<ProductResponse> dtoPage = page.map(productApiMapper::toResponse);
+        return ResponseEntity.ok(dtoPage);
+    }
+
+    @GetMapping("/price-between")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByPriceBetween(
+            @RequestParam("minPrice") BigDecimal minPrice,
+            @RequestParam("maxPrice") BigDecimal maxPrice
+    ) {
+        List<Product> products = tenantProductService.findByPriceBetween(minPrice, maxPrice);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/supplier/{supplierId}")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsBySupplier(@PathVariable UUID supplierId) {
+        List<Product> products = tenantProductService.findBySupplierId(supplierId);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/filter")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> filterProducts(
+            @RequestParam("name") String name,
+            @RequestParam("minPrice") BigDecimal minPrice,
+            @RequestParam("maxPrice") BigDecimal maxPrice,
+            @RequestParam("minStock") Integer minStock,
+            @RequestParam("maxStock") Integer maxStock
+    ) {
+        List<Product> products =
+                tenantProductService.findByNameAndPriceAndStock(name, minPrice, maxPrice, minStock, maxStock);
+        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/stats/count-by-supplier")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<SupplierProductCountResponse>> countBySupplier() {
+        return ResponseEntity.ok(tenantProductService.countProductsBySupplier());
     }
 
     @GetMapping("/inventory-value")
@@ -7095,52 +7655,162 @@ public class TenantProductController {
         return ResponseEntity.ok(count != null ? count : 0L);
     }
 
+    // =========================================================
+    // WRITE
+    // =========================================================
+
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
     public ResponseEntity<ProductResponse> toggleActive(@PathVariable UUID id) {
-        Product product = tenantProductService.findById(id);
-        product.setActive(!Boolean.TRUE.equals(product.getActive()));
-        tenantProductService.create(product);
-        return ResponseEntity.ok(productApiMapper.toResponse(product));
+        Product updated = tenantProductService.toggleActive(id);
+        return ResponseEntity.ok(productApiMapper.toResponse(updated));
+    }
+
+    @PatchMapping("/{id}/cost-price")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    public ResponseEntity<ProductResponse> updateCostPrice(
+            @PathVariable UUID id,
+            @RequestParam BigDecimal costPrice
+    ) {
+        Product updatedProduct = tenantProductService.updateCostPrice(id, costPrice);
+        return ResponseEntity.ok(productApiMapper.toResponse(updatedProduct));
     }
 
     @PostMapping("/detailed")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
-    public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest productUpsertRequest) {
+    public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest req) {
 
         Product product = new Product();
-        product.setName(productUpsertRequest.name());
-        product.setDescription(productUpsertRequest.description());
-        product.setSku(productUpsertRequest.sku());
-        product.setPrice(productUpsertRequest.price());
-        product.setStockQuantity(productUpsertRequest.stockQuantity());
-        product.setMinStock(productUpsertRequest.minStock());
-        product.setMaxStock(productUpsertRequest.maxStock());
-        product.setCostPrice(productUpsertRequest.costPrice());
-        product.setBrand(productUpsertRequest.brand());
-        product.setWeightKg(productUpsertRequest.weightKg());
-        product.setDimensions(productUpsertRequest.dimensions());
-        product.setBarcode(productUpsertRequest.barcode());
-        product.setActive(productUpsertRequest.active());
+        product.setName(req.name());
+        product.setDescription(req.description());
+        product.setSku(req.sku());
+        product.setPrice(req.price());
+        product.setStockQuantity(req.stockQuantity());
+        product.setMinStock(req.minStock());
+        product.setMaxStock(req.maxStock());
+        product.setCostPrice(req.costPrice());
+        product.setBrand(req.brand());
+        product.setWeightKg(req.weightKg());
+        product.setDimensions(req.dimensions());
+        product.setBarcode(req.barcode());
+        product.setActive(req.active());
 
         Category category = new Category();
-        category.setId(productUpsertRequest.categoryId());
+        category.setId(req.categoryId());
         product.setCategory(category);
 
-        if (productUpsertRequest.subcategoryId() != null) {
+        if (req.subcategoryId() != null) {
             Subcategory sub = new Subcategory();
-            sub.setId(productUpsertRequest.subcategoryId());
+            sub.setId(req.subcategoryId());
             product.setSubcategory(sub);
         }
 
-        if (productUpsertRequest.supplierId() != null) {
+        if (req.supplierId() != null) {
             Supplier supplier = new Supplier();
-            supplier.setId(productUpsertRequest.supplierId());
+            supplier.setId(req.supplierId());
             product.setSupplier(supplier);
         }
 
         Product savedProduct = tenantProductService.create(product);
         return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
+    }
+}
+package brito.com.multitenancy001.tenant.api.controller.suppliers;
+
+import brito.com.multitenancy001.tenant.application.supplier.TenantSupplierService;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/tenant/suppliers")
+@RequiredArgsConstructor
+public class TenantSupplierController {
+
+    private final TenantSupplierService tenantSupplierService;
+
+    // =========================================================
+    // READ (não-deletados)
+    // =========================================================
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<List<Supplier>> listAll() {
+        return ResponseEntity.ok(tenantSupplierService.findAll());
+    }
+
+    @GetMapping("/active")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<List<Supplier>> listActive() {
+        return ResponseEntity.ok(tenantSupplierService.findActive());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<Supplier> getById(@PathVariable UUID id) {
+        return ResponseEntity.ok(tenantSupplierService.findById(id));
+    }
+
+    @GetMapping("/document/{document}")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<Supplier> getByDocument(@PathVariable String document) {
+        return ResponseEntity.ok(tenantSupplierService.findByDocument(document));
+    }
+
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<List<Supplier>> searchByName(@RequestParam("name") String name) {
+        return ResponseEntity.ok(tenantSupplierService.searchByName(name));
+    }
+
+    @GetMapping("/email")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<List<Supplier>> getByEmail(@RequestParam("email") String email) {
+        return ResponseEntity.ok(tenantSupplierService.findByEmail(email));
+    }
+
+    // =========================================================
+    // WRITE
+    // =========================================================
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    public ResponseEntity<Supplier> create(@Valid @RequestBody Supplier supplier) {
+        Supplier saved = tenantSupplierService.create(supplier);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    public ResponseEntity<Supplier> update(@PathVariable UUID id, @RequestBody Supplier supplier) {
+        Supplier updated = tenantSupplierService.update(id, supplier);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PatchMapping("/{id}/toggle-active")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    public ResponseEntity<Supplier> toggleActive(@PathVariable UUID id) {
+        return ResponseEntity.ok(tenantSupplierService.toggleActive(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    public ResponseEntity<Void> softDelete(@PathVariable UUID id) {
+        tenantSupplierService.softDelete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    public ResponseEntity<Supplier> restore(@PathVariable UUID id) {
+        return ResponseEntity.ok(tenantSupplierService.restore(id));
     }
 }
 package brito.com.multitenancy001.tenant.api.controller.users.admin;
@@ -7388,6 +8058,11 @@ public record ProductUpsertRequest(
         if (active == null) active = true;
     }
 }
+package brito.com.multitenancy001.tenant.api.dto.products;
+
+import java.util.UUID;
+
+public record SupplierProductCountResponse(UUID supplierId, long count) {}
 package brito.com.multitenancy001.tenant.api.dto.users.admin;
 
 public record TenantUserAdminSuspendRequest(boolean suspended) {}package brito.com.multitenancy001.tenant.api.dto.users;
@@ -7675,6 +8350,319 @@ public class TenantAuthService {
         }
     }
 }
+package brito.com.multitenancy001.tenant.application.category;
+
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.persistence.category.TenantCategoryRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TenantCategoryService {
+
+    private final TenantCategoryRepository categoryRepository;
+    private final AppClock appClock;
+
+    // =========================================================
+    // READ
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public Category findById(Long id) {
+        if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+
+        Category c = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
+
+        if (c.isDeleted()) {
+            throw new ApiException("CATEGORY_DELETED", "Categoria deletada não pode ser consultada", 404);
+        }
+
+        return c;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Category> findAll() {
+        return categoryRepository.findNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Category> findActive() {
+        return categoryRepository.findActiveNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Category> searchByName(String name) {
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException("CATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
+        }
+        return categoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
+        return categoryRepository.findWithFlags(includeDeleted, includeInactive);
+    }
+
+    // =========================================================
+    // WRITE
+    // =========================================================
+
+    @Transactional
+    public Category create(Category category) {
+        if (category == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
+        if (!StringUtils.hasText(category.getName())) {
+            throw new ApiException("CATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
+        }
+
+        String name = category.getName().trim();
+
+        // uk_categories_name (global) -> valida para evitar 500
+        categoryRepository.findNotDeletedByNameIgnoreCase(name)
+                .ifPresent(existing -> {
+                    throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + name, 409);
+                });
+
+        category.setName(name);
+        category.setDeleted(false);
+        category.setActive(true);
+
+        return categoryRepository.save(category);
+    }
+
+    @Transactional
+    public Category update(Long id, Category req) {
+        if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+        if (req == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
+
+        Category existing = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
+
+        if (existing.isDeleted()) {
+            throw new ApiException("CATEGORY_DELETED", "Não é permitido alterar categoria deletada", 409);
+        }
+
+        if (StringUtils.hasText(req.getName())) {
+            String newName = req.getName().trim();
+
+            // valida unicidade
+            categoryRepository.findNotDeletedByNameIgnoreCase(newName)
+                    .ifPresent(other -> {
+                        if (!other.getId().equals(id)) {
+                            throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + newName, 409);
+                        }
+                    });
+
+            existing.setName(newName);
+        }
+
+        // active é boolean primitivo -> melhor controlar via endpoint específico (toggle)
+        return categoryRepository.save(existing);
+    }
+
+    @Transactional
+    public Category toggleActive(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
+
+        if (category.isDeleted()) {
+            throw new ApiException("CATEGORY_DELETED", "Não é permitido alterar categoria deletada", 409);
+        }
+
+        category.setActive(!category.isActive());
+        return categoryRepository.save(category);
+    }
+
+    @Transactional
+    public void softDelete(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
+
+        category.softDelete(appClock.now());
+        categoryRepository.save(category);
+    }
+
+    @Transactional
+    public Category restore(Long id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
+
+        category.restore();
+        return categoryRepository.save(category);
+    }
+}
+package brito.com.multitenancy001.tenant.application.category;
+
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.domain.category.Category;
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import brito.com.multitenancy001.tenant.persistence.category.TenantCategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.category.TenantSubcategoryRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TenantSubcategoryService {
+
+    private final TenantSubcategoryRepository subcategoryRepository;
+    private final TenantCategoryRepository categoryRepository;
+    private final AppClock appClock;
+
+    // =========================================================
+    // READ
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public Subcategory findById(Long id) {
+        if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+
+        Subcategory s = subcategoryRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
+
+        if (s.isDeleted()) {
+            throw new ApiException("SUBCATEGORY_DELETED", "Subcategoria deletada não pode ser consultada", 404);
+        }
+
+        return s;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Subcategory> findAll() {
+        return subcategoryRepository.findNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Subcategory> findActive() {
+        return subcategoryRepository.findActiveNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Subcategory> findByCategoryId(Long categoryId) {
+        if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
+        return subcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Subcategory> findByCategoryIdAdmin(Long categoryId, boolean includeDeleted, boolean includeInactive) {
+        if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
+        return subcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
+    }
+
+    // =========================================================
+    // WRITE
+    // =========================================================
+
+    @Transactional
+    public Subcategory create(Long categoryId, Subcategory req) {
+        if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
+        if (req == null) throw new ApiException("SUBCATEGORY_REQUIRED", "payload é obrigatório", 400);
+        if (!StringUtils.hasText(req.getName())) {
+            throw new ApiException("SUBCATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
+        }
+
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + categoryId, 404));
+
+        if (category.isDeleted()) {
+            throw new ApiException("CATEGORY_DELETED", "Não é permitido criar subcategoria em categoria deletada", 409);
+        }
+
+        String name = req.getName().trim();
+
+        // uk_subcategories_name_category (category_id, name)
+        subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, name)
+                .ifPresent(existing -> {
+                    throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
+                            "Subcategoria já existe na categoria " + categoryId + ": " + name, 409);
+                });
+
+        Subcategory sub = new Subcategory();
+        sub.setCategory(category);
+        sub.setName(name);
+        sub.setDeleted(false);
+        sub.setActive(true);
+
+        return subcategoryRepository.save(sub);
+    }
+
+    @Transactional
+    public Subcategory update(Long id, Subcategory req) {
+        if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+        if (req == null) throw new ApiException("SUBCATEGORY_REQUIRED", "payload é obrigatório", 400);
+
+        Subcategory existing = subcategoryRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
+
+        if (existing.isDeleted()) {
+            throw new ApiException("SUBCATEGORY_DELETED", "Não é permitido alterar subcategoria deletada", 409);
+        }
+
+        if (StringUtils.hasText(req.getName())) {
+            String newName = req.getName().trim();
+            Long categoryId = existing.getCategory().getId();
+
+            subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, newName)
+                    .ifPresent(other -> {
+                        if (!other.getId().equals(id)) {
+                            throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
+                                    "Subcategoria já existe na categoria " + categoryId + ": " + newName, 409);
+                        }
+                    });
+
+            existing.setName(newName);
+        }
+
+        return subcategoryRepository.save(existing);
+    }
+
+    @Transactional
+    public Subcategory toggleActive(Long id) {
+        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
+
+        if (sub.isDeleted()) {
+            throw new ApiException("SUBCATEGORY_DELETED", "Não é permitido alterar subcategoria deletada", 409);
+        }
+
+        sub.setActive(!sub.isActive());
+        return subcategoryRepository.save(sub);
+    }
+
+    @Transactional
+    public void softDelete(Long id) {
+        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
+
+        sub.softDelete(appClock.now());
+        subcategoryRepository.save(sub);
+    }
+
+    @Transactional
+    public Subcategory restore(Long id) {
+        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
+
+        sub.restore();
+        return subcategoryRepository.save(sub);
+    }
+}
 // ===============================
 // ProductService.java
 // (corrigido: resolveCategoryAndSubcategory sem duplicação,
@@ -7685,14 +8673,15 @@ package brito.com.multitenancy001.tenant.application.product;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.products.SupplierProductCountResponse;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.product.Product;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
-import brito.com.multitenancy001.tenant.persistence.category.CategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.category.SubcategoryRepository;
-import brito.com.multitenancy001.tenant.persistence.product.ProductRepository;
-import brito.com.multitenancy001.tenant.persistence.supplier.SupplierRepository;
+import brito.com.multitenancy001.tenant.persistence.category.TenantCategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.category.TenantSubcategoryRepository;
+import brito.com.multitenancy001.tenant.persistence.product.TenantProductRepository;
+import brito.com.multitenancy001.tenant.persistence.supplier.TenantSupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -7711,20 +8700,20 @@ import java.util.UUID;
 @Slf4j
 public class TenantProductService {
 
-    private final ProductRepository productRepository;
-    private final SupplierRepository supplierRepository;
-    private final CategoryRepository categoryRepository;
-    private final SubcategoryRepository subcategoryRepository;
+    private final TenantProductRepository tenantProductRepository;
+    private final TenantSupplierRepository supplierRepository;
+    private final TenantCategoryRepository categoryRepository;
+    private final TenantSubcategoryRepository subcategoryRepository;
     private final AppClock appClock;
 
     @Transactional(readOnly = true)
     public Page<Product> findAll(Pageable pageable) {
-        return productRepository.findAll(pageable);
+        return tenantProductRepository.findAll(pageable);
     }
 
     @Transactional(readOnly = true)
     public Product findById(UUID id) {
-        return productRepository.findById(id)
+        return tenantProductRepository.findById(id)
             .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
                 "Produto não encontrado com ID: " + id, 404));
     }
@@ -7737,7 +8726,7 @@ public class TenantProductService {
         resolveSupplier(product);
         validateSubcategoryBelongsToCategory(product);
 
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
@@ -7753,7 +8742,7 @@ public class TenantProductService {
         }
 
         if (StringUtils.hasText(productDetails.getSku())) {
-            Optional<Product> productWithSku = productRepository.findBySku(productDetails.getSku());
+            Optional<Product> productWithSku = tenantProductRepository.findBySku(productDetails.getSku());
             if (productWithSku.isPresent() && !productWithSku.get().getId().equals(id)) {
                 throw new ApiException("SKU_ALREADY_EXISTS",
                     "SKU já cadastrado: " + productDetails.getSku(), 409);
@@ -7777,17 +8766,19 @@ public class TenantProductService {
             existingProduct.setCategory(category);
         }
 
-        // ✅ subcategory (se veio ID)
-        if (productDetails.getSubcategory() != null && productDetails.getSubcategory().getId() != null) {
-            Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
-                .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
-            existingProduct.setSubcategory(sub);
+     // ✅ subcategory: só mexe se veio no payload
+        if (productDetails.getSubcategory() != null) {
+            if (productDetails.getSubcategory().getId() != null) {
+                Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
+                        .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
+                existingProduct.setSubcategory(sub);
+            } else {
+                // veio "subcategory": {} (ou sem id) => limpa
+                existingProduct.setSubcategory(null);
+            }
         }
 
-        // ✅ se veio explicitamente subcategory = null -> limpa
-        if (productDetails.getSubcategory() == null) {
-            existingProduct.setSubcategory(null);
-        }
+
 
         // ✅ supplier
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
@@ -7798,7 +8789,7 @@ public class TenantProductService {
 
         validateSubcategoryBelongsToCategory(existingProduct);
 
-        return productRepository.save(existingProduct);
+        return tenantProductRepository.save(existingProduct);
     }
 
     private void resolveSupplier(Product product) {
@@ -7857,14 +8848,15 @@ public class TenantProductService {
     // ======= outros métodos =======
 
     @Transactional(readOnly = true)
-    public List<Product> searchProducts(String name, String sku, BigDecimal minPrice,
+    public List<Product> searchProducts(String name, BigDecimal minPrice,
                                         BigDecimal maxPrice, Integer minStock, Integer maxStock) {
-        return productRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
+        return tenantProductRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
     }
+
 
     @Transactional(readOnly = true)
     public List<Product> findLowStock(Integer threshold) {
-        return productRepository.findByStockQuantityLessThan(threshold);
+        return tenantProductRepository.findByStockQuantityLessThan(threshold);
     }
 
     @Transactional
@@ -7872,7 +8864,7 @@ public class TenantProductService {
         Product product = findById(id);
         if (quantityChange > 0) product.addToStock(quantityChange);
         else if (quantityChange < 0) product.removeFromStock(Math.abs(quantityChange));
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
@@ -7880,14 +8872,14 @@ public class TenantProductService {
         validatePrice(newPrice);
         Product product = findById(id);
         product.updatePrice(newPrice);
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
         product.softDelete(appClock.now());
-        productRepository.save(product);
+        tenantProductRepository.save(product);
     }
 
     private void validateProduct(Product product) {
@@ -7915,39 +8907,173 @@ public class TenantProductService {
 
     @Transactional(readOnly = true)
     public List<Product> findByCategoryId(Long categoryId) {
-        return productRepository.findByCategory_Id(categoryId);
+        if (categoryId == null) {
+            throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByCategoryId(categoryId);
     }
+
 
     @Transactional(readOnly = true)
     public List<Product> findByBrand(String brand) {
-        return productRepository.findAll().stream()
-            .filter(p -> brand.equals(p.getBrand()))
-            .toList();
+        if (!StringUtils.hasText(brand)) {
+            throw new ApiException("INVALID_BRAND", "brand é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByBrandIgnoreCase(brand.trim());
     }
+
+
 
     @Transactional(readOnly = true)
     public List<Product> findActiveProducts() {
-        return productRepository.findAll().stream()
-            .filter(p -> Boolean.TRUE.equals(p.getActive()) && !Boolean.TRUE.equals(p.getDeleted()))
-            .toList();
+        return tenantProductRepository.findByActiveTrueAndDeletedFalse();
     }
+
 
     @Transactional
     public Product updateCostPrice(UUID id, BigDecimal costPrice) {
         Product product = findById(id);
         product.updateCostPrice(costPrice);
-        return productRepository.save(product);
+        return tenantProductRepository.save(product);
     }
 
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalInventoryValue() {
-        return productRepository.calculateTotalInventoryValue();
+        return tenantProductRepository.calculateTotalInventoryValue();
     }
 
     @Transactional(readOnly = true)
     public Long countLowStockProducts(Integer threshold) {
-        return productRepository.countLowStock(threshold);
+        return tenantProductRepository.countLowStock(threshold);
     }
+    
+ // =========================================================
+ // ✅ QUERIES PARA "DAR USO" AOS MÉTODOS DO ProductRepository
+ // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<Product> findBySubcategoryId(Long subcategoryId) {
+        if (subcategoryId == null) {
+            throw new ApiException("SUBCATEGORY_REQUIRED", "subcategoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedBySubcategoryId(subcategoryId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Product> findByCategoryAndOptionalSubcategory(Long categoryId, Long subcategoryId) {
+        if (categoryId == null) {
+            throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+        }
+        return tenantProductRepository.findActiveNotDeletedByCategoryAndOptionalSubcategory(categoryId, subcategoryId);
+    }
+
+
+ @Transactional(readOnly = true)
+ public List<Product> findByName(String name) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     return tenantProductRepository.findByNameContainingIgnoreCase(name.trim());
+ }
+
+ @Transactional(readOnly = true)
+ public Page<Product> findByNamePaged(String name, Pageable pageable) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     return tenantProductRepository.findByNameContainingIgnoreCase(name.trim(), pageable);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice) {
+     if (minPrice == null || maxPrice == null) {
+         throw new ApiException("INVALID_PRICE_RANGE", "minPrice e maxPrice são obrigatórios", 400);
+     }
+     if (maxPrice.compareTo(minPrice) < 0) {
+         throw new ApiException("INVALID_PRICE_RANGE", "maxPrice deve ser >= minPrice", 400);
+     }
+     return tenantProductRepository.findByPriceBetween(minPrice, maxPrice);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findBySupplierId(UUID supplierId) {
+     if (supplierId == null) {
+         throw new ApiException("SUPPLIER_REQUIRED", "supplierId é obrigatório", 400);
+     }
+     return tenantProductRepository.findBySupplier_Id(supplierId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findByNameAndPriceAndStock(
+         String name,
+         BigDecimal minPrice,
+         BigDecimal maxPrice,
+         Integer minStock,
+         Integer maxStock
+ ) {
+     if (!StringUtils.hasText(name)) {
+         throw new ApiException("INVALID_NAME", "name é obrigatório", 400);
+     }
+     if (minPrice == null || maxPrice == null) {
+         throw new ApiException("INVALID_PRICE_RANGE", "minPrice e maxPrice são obrigatórios", 400);
+     }
+     if (maxPrice.compareTo(minPrice) < 0) {
+         throw new ApiException("INVALID_PRICE_RANGE", "maxPrice deve ser >= minPrice", 400);
+     }
+     if (minStock == null || maxStock == null) {
+         throw new ApiException("INVALID_STOCK_RANGE", "minStock e maxStock são obrigatórios", 400);
+     }
+     if (maxStock < minStock) {
+         throw new ApiException("INVALID_STOCK_RANGE", "maxStock deve ser >= minStock", 400);
+     }
+
+     return tenantProductRepository.findByNameContainingIgnoreCaseAndPriceBetweenAndStockQuantityBetween(
+             name.trim(), minPrice, maxPrice, minStock, maxStock
+     );
+ }
+
+ /**
+  * Usa o @Query:
+  * SELECT p.supplier.id, COUNT(p) FROM Product p GROUP BY p.supplier.id
+  */
+ @Transactional(readOnly = true)
+ public List<SupplierProductCountResponse> countProductsBySupplier() {
+     List<Object[]> rows = tenantProductRepository.countProductsBySupplier();
+
+     return rows.stream()
+             .map(row -> new SupplierProductCountResponse(
+                     (UUID) row[0],
+                     ((Number) row[1]).longValue()
+             ))
+             .toList();
+ }
+
+ 
+ @Transactional
+ public Product toggleActive(UUID id) {
+     Product product = findById(id);
+
+     if (Boolean.TRUE.equals(product.getDeleted())) {
+         throw new ApiException("PRODUCT_DELETED", "Não é permitido alterar produto deletado", 409);
+     }
+
+     boolean next = !Boolean.TRUE.equals(product.getActive());
+     product.setActive(next);
+
+     return tenantProductRepository.save(product);
+ }
+ 
+ @Transactional(readOnly = true)
+ public List<Product> findByCategoryId(Long categoryId, boolean includeDeleted, boolean includeInactive) {
+     if (categoryId == null) {
+         throw new ApiException("CATEGORY_REQUIRED", "categoryId é obrigatório", 400);
+     }
+     return tenantProductRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
+ }
+
+
+ 
+    
 }
 package brito.com.multitenancy001.tenant.application.provisioning;
 
@@ -8104,6 +9230,307 @@ public class TenantSchemaProvisioningService {
                 .build();
 
         return tenantUserRepository.save(admin);
+    }
+}
+package brito.com.multitenancy001.tenant.application.supplier;
+
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
+import brito.com.multitenancy001.tenant.persistence.supplier.TenantSupplierRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TenantSupplierService {
+
+    private final TenantSupplierRepository tenantSupplierRepository;
+    private final AppClock appClock;
+
+    // =========================================================
+    // READ (por padrão: NÃO retorna deletados)
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public Supplier findById(UUID id) {
+        if (id == null) throw new ApiException("SUPPLIER_ID_REQUIRED", "id é obrigatório", 400);
+
+        Supplier s = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com ID: " + id, 404));
+
+        if (s.isDeleted()) {
+            throw new ApiException("SUPPLIER_DELETED", "Fornecedor deletado não pode ser consultado", 404);
+        }
+
+        return s;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Supplier> findAll() {
+        return tenantSupplierRepository.findNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Supplier> findActive() {
+        return tenantSupplierRepository.findActiveNotDeleted();
+    }
+
+    @Transactional(readOnly = true)
+    public Supplier findByDocument(String document) {
+        if (!StringUtils.hasText(document)) {
+            throw new ApiException("SUPPLIER_DOCUMENT_REQUIRED", "document é obrigatório", 400);
+        }
+
+        String doc = document.trim();
+
+        return tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com document: " + doc, 404));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Supplier> searchByName(String name) {
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException("SUPPLIER_NAME_REQUIRED", "name é obrigatório", 400);
+        }
+        return tenantSupplierRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Supplier> findByEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("SUPPLIER_EMAIL_REQUIRED", "email é obrigatório", 400);
+        }
+        return tenantSupplierRepository.findNotDeletedByEmail(email.trim());
+    }
+
+    // =========================================================
+    // WRITE
+    // =========================================================
+
+    @Transactional
+    public Supplier create(Supplier supplier) {
+        validateForCreate(supplier);
+
+        // Regra do seu DB: document único quando NOT NULL e deleted=false.
+        // Então: se vier document, garantimos unicidade entre não-deletados.
+        if (StringUtils.hasText(supplier.getDocument())) {
+            String doc = supplier.getDocument().trim();
+            Optional<Supplier> existing = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc);
+            if (existing.isPresent()) {
+                throw new ApiException("SUPPLIER_DOCUMENT_ALREADY_EXISTS",
+                        "Já existe fornecedor com document: " + doc, 409);
+            }
+            supplier.setDocument(doc);
+        } else {
+            supplier.setDocument(null);
+        }
+
+        // defaults
+        // (em Supplier você usa boolean primitivo, então já vem false/true; aqui só garantimos coerência)
+        supplier.setDeleted(false);
+        supplier.setActive(true);
+
+        return tenantSupplierRepository.save(supplier);
+    }
+
+    @Transactional
+    public Supplier update(UUID id, Supplier req) {
+        if (id == null) throw new ApiException("SUPPLIER_ID_REQUIRED", "id é obrigatório", 400);
+        if (req == null) throw new ApiException("SUPPLIER_REQUIRED", "payload é obrigatório", 400);
+
+        Supplier existing = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com ID: " + id, 404));
+
+        if (existing.isDeleted()) {
+            throw new ApiException("SUPPLIER_DELETED", "Não é permitido alterar fornecedor deletado", 409);
+        }
+
+        // name
+        if (StringUtils.hasText(req.getName())) {
+            existing.setName(req.getName().trim());
+        }
+
+        // contactPerson
+        if (req.getContactPerson() != null) {
+            existing.setContactPerson(StringUtils.hasText(req.getContactPerson()) ? req.getContactPerson().trim() : null);
+        }
+
+        // email
+        if (req.getEmail() != null) {
+            existing.setEmail(StringUtils.hasText(req.getEmail()) ? req.getEmail().trim() : null);
+        }
+
+        // phone
+        if (req.getPhone() != null) {
+            existing.setPhone(StringUtils.hasText(req.getPhone()) ? req.getPhone().trim() : null);
+        }
+
+        // address
+        if (req.getAddress() != null) {
+            existing.setAddress(StringUtils.hasText(req.getAddress()) ? req.getAddress().trim() : null);
+        }
+
+        // document + documentType
+        if (req.getDocument() != null) {
+            String newDoc = req.getDocument();
+            if (StringUtils.hasText(newDoc)) {
+                newDoc = newDoc.trim();
+
+                Optional<Supplier> other = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(newDoc);
+                if (other.isPresent() && !other.get().getId().equals(id)) {
+                    throw new ApiException("SUPPLIER_DOCUMENT_ALREADY_EXISTS",
+                            "Já existe fornecedor com document: " + newDoc, 409);
+                }
+
+                existing.setDocument(newDoc);
+            } else {
+                existing.setDocument(null);
+            }
+        }
+
+        if (req.getDocumentType() != null) {
+            existing.setDocumentType(StringUtils.hasText(req.getDocumentType()) ? req.getDocumentType().trim() : null);
+        }
+
+        // website
+        if (req.getWebsite() != null) {
+            existing.setWebsite(StringUtils.hasText(req.getWebsite()) ? req.getWebsite().trim() : null);
+        }
+
+        // paymentTerms
+        if (req.getPaymentTerms() != null) {
+            existing.setPaymentTerms(StringUtils.hasText(req.getPaymentTerms()) ? req.getPaymentTerms().trim() : null);
+        }
+
+        // leadTimeDays
+        if (req.getLeadTimeDays() != null) {
+            if (req.getLeadTimeDays() < 0) {
+                throw new ApiException("INVALID_LEAD_TIME", "leadTimeDays não pode ser negativo", 400);
+            }
+            existing.setLeadTimeDays(req.getLeadTimeDays());
+        }
+
+        // rating
+        if (req.getRating() != null) {
+            validateRating(req.getRating());
+            existing.setRating(req.getRating());
+        }
+
+        // notes
+        if (req.getNotes() != null) {
+            existing.setNotes(StringUtils.hasText(req.getNotes()) ? req.getNotes().trim() : null);
+        }
+
+        // active (permitimos atualizar, mas não pode ativar se estiver deletado - já barramos acima)
+        // Aqui: só atualiza se o payload tiver sido enviado em algum formato.
+        // Como é boolean primitivo, não dá pra saber se "veio" ou não. Então mantemos SEM alterar.
+        // Se você quiser controlar ativo via endpoint específico, faça um PATCH /{id}/toggle-active (igual product).
+
+        return tenantSupplierRepository.save(existing);
+    }
+
+    @Transactional
+    public Supplier toggleActive(UUID id) {
+        Supplier supplier = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com ID: " + id, 404));
+
+        if (supplier.isDeleted()) {
+            throw new ApiException("SUPPLIER_DELETED", "Não é permitido alterar fornecedor deletado", 409);
+        }
+
+        supplier.setActive(!supplier.isActive());
+        return tenantSupplierRepository.save(supplier);
+    }
+
+    @Transactional
+    public void softDelete(UUID id) {
+        Supplier supplier = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com ID: " + id, 404));
+
+        supplier.softDelete(appClock.now());
+        tenantSupplierRepository.save(supplier);
+    }
+
+    @Transactional
+    public Supplier restore(UUID id) {
+        Supplier supplier = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                        "Fornecedor não encontrado com ID: " + id, 404));
+
+        supplier.restore();
+        return tenantSupplierRepository.save(supplier);
+    }
+
+    // =========================================================
+    // Validation
+    // =========================================================
+
+    private void validateForCreate(Supplier supplier) {
+        if (supplier == null) throw new ApiException("SUPPLIER_REQUIRED", "Fornecedor é obrigatório", 400);
+
+        if (!StringUtils.hasText(supplier.getName())) {
+            throw new ApiException("SUPPLIER_NAME_REQUIRED", "name é obrigatório", 400);
+        }
+
+        supplier.setName(supplier.getName().trim());
+
+        if (supplier.getEmail() != null) {
+            supplier.setEmail(StringUtils.hasText(supplier.getEmail()) ? supplier.getEmail().trim() : null);
+        }
+        if (supplier.getContactPerson() != null) {
+            supplier.setContactPerson(StringUtils.hasText(supplier.getContactPerson()) ? supplier.getContactPerson().trim() : null);
+        }
+        if (supplier.getPhone() != null) {
+            supplier.setPhone(StringUtils.hasText(supplier.getPhone()) ? supplier.getPhone().trim() : null);
+        }
+        if (supplier.getAddress() != null) {
+            supplier.setAddress(StringUtils.hasText(supplier.getAddress()) ? supplier.getAddress().trim() : null);
+        }
+        if (supplier.getDocumentType() != null) {
+            supplier.setDocumentType(StringUtils.hasText(supplier.getDocumentType()) ? supplier.getDocumentType().trim() : null);
+        }
+        if (supplier.getWebsite() != null) {
+            supplier.setWebsite(StringUtils.hasText(supplier.getWebsite()) ? supplier.getWebsite().trim() : null);
+        }
+        if (supplier.getPaymentTerms() != null) {
+            supplier.setPaymentTerms(StringUtils.hasText(supplier.getPaymentTerms()) ? supplier.getPaymentTerms().trim() : null);
+        }
+        if (supplier.getNotes() != null) {
+            supplier.setNotes(StringUtils.hasText(supplier.getNotes()) ? supplier.getNotes().trim() : null);
+        }
+
+        if (supplier.getLeadTimeDays() != null && supplier.getLeadTimeDays() < 0) {
+            throw new ApiException("INVALID_LEAD_TIME", "leadTimeDays não pode ser negativo", 400);
+        }
+
+        if (supplier.getRating() != null) {
+            validateRating(supplier.getRating());
+        }
+    }
+
+    private void validateRating(BigDecimal rating) {
+        // rating NUMERIC(3,2) -> vai até 9.99
+        if (rating.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ApiException("INVALID_RATING", "rating não pode ser negativo", 400);
+        }
+        if (rating.compareTo(new BigDecimal("9.99")) > 0) {
+            throw new ApiException("INVALID_RATING", "rating máximo é 9.99", 400);
+        }
     }
 }
 package brito.com.multitenancy001.tenant.application.user.admin;
@@ -9018,13 +10445,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "products", indexes = {
-        @Index(name = "idx_product_name", columnList = "name"),
-        @Index(name = "idx_product_supplier", columnList = "supplier_id"),
-        @Index(name = "idx_product_created_at", columnList = "created_at"),
-        @Index(name = "idx_products_category_id", columnList = "category_id"),
-        @Index(name = "idx_products_subcategory_id", columnList = "subcategory_id")
-})
+@Table(name = "products")
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -9137,9 +10559,16 @@ public class Product {
     private void calculateProfitMargin() {
         if (this.costPrice != null && this.costPrice.compareTo(BigDecimal.ZERO) > 0 && this.price != null) {
             BigDecimal profit = this.price.subtract(this.costPrice);
-            this.profitMargin = profit
-                    .divide(this.costPrice, 4, RoundingMode.HALF_UP)
+
+            // % = (profit / cost) * 100
+            BigDecimal percent = profit
+                    .divide(this.costPrice, 6, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
+
+            // ✅ alinha com NUMERIC(5,2)
+            this.profitMargin = percent.setScale(2, RoundingMode.HALF_UP);
+        } else {
+            this.profitMargin = null;
         }
     }
 
@@ -9721,32 +11150,123 @@ public class TenantUser {
 }
 package brito.com.multitenancy001.tenant.persistence.category;
 
-
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import brito.com.multitenancy001.tenant.domain.category.Category;
-
-@Repository
-public interface CategoryRepository extends JpaRepository<Category, Long> {}package brito.com.multitenancy001.tenant.persistence.category;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.domain.category.Subcategory;
-
+import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface SubcategoryRepository extends JpaRepository<Subcategory, Long> {
+public interface TenantCategoryRepository extends JpaRepository<Category, Long> {
+
+    // =========
+    // Normal (default): NÃO retorna deletados
+    // =========
+
+    @Query("select c from Category c where c.deleted = false order by c.name asc")
+    List<Category> findNotDeleted();
+
+    @Query("select c from Category c where c.deleted = false and c.active = true order by c.name asc")
+    List<Category> findActiveNotDeleted();
+
+    @Query("select c from Category c where c.deleted = false and lower(c.name) = lower(:name)")
+    Optional<Category> findNotDeletedByNameIgnoreCase(@Param("name") String name);
+
+    @Query("select c from Category c where c.deleted = false and lower(c.name) like lower(concat('%', :name, '%')) order by c.name asc")
+    List<Category> findNotDeletedByNameContainingIgnoreCase(@Param("name") String name);
+
+    // =========
+    // Admin: flags (includeDeleted / includeInactive)
+    // =========
+
+    @Query("""
+           select c from Category c
+           where (:includeDeleted = true or c.deleted = false)
+             and (:includeInactive = true or c.active = true)
+           order by c.name asc
+           """)
+    List<Category> findWithFlags(@Param("includeDeleted") boolean includeDeleted,
+                                 @Param("includeInactive") boolean includeInactive);
+}
+package brito.com.multitenancy001.tenant.persistence.category;
+
+import brito.com.multitenancy001.tenant.domain.category.Subcategory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface TenantSubcategoryRepository extends JpaRepository<Subcategory, Long> {
 
     @Query("select s from Subcategory s join fetch s.category where s.id = :id")
     Optional<Subcategory> findByIdWithCategory(@Param("id") Long id);
+
+    // =========
+    // Default: NÃO retorna deletados
+    // =========
+
+    @Query("""
+           select s from Subcategory s
+           where s.deleted = false
+           order by s.name asc
+           """)
+    List<Subcategory> findNotDeleted();
+
+    @Query("""
+           select s from Subcategory s
+           where s.deleted = false and s.active = true
+           order by s.name asc
+           """)
+    List<Subcategory> findActiveNotDeleted();
+
+    @Query("""
+           select s from Subcategory s
+           where s.deleted = false and s.category.id = :categoryId
+           order by s.name asc
+           """)
+    List<Subcategory> findNotDeletedByCategoryId(@Param("categoryId") Long categoryId);
+
+    @Query("""
+           select s from Subcategory s
+           where s.deleted = false and s.active = true and s.category.id = :categoryId
+           order by s.name asc
+           """)
+    List<Subcategory> findActiveNotDeletedByCategoryId(@Param("categoryId") Long categoryId);
+
+    @Query("""
+           select s from Subcategory s
+           where s.deleted = false
+             and s.category.id = :categoryId
+             and lower(s.name) = lower(:name)
+           """)
+    Optional<Subcategory> findNotDeletedByCategoryIdAndNameIgnoreCase(@Param("categoryId") Long categoryId,
+                                                                      @Param("name") String name);
+
+    // =========
+    // Admin: flags (includeDeleted / includeInactive)
+    // =========
+
+    @Query("""
+           select s from Subcategory s
+           where s.category.id = :categoryId
+             and (:includeDeleted = true or s.deleted = false)
+             and (:includeInactive = true or s.active = true)
+           order by s.name asc
+           """)
+    List<Subcategory> findByCategoryWithFlags(@Param("categoryId") Long categoryId,
+                                              @Param("includeDeleted") boolean includeDeleted,
+                                              @Param("includeInactive") boolean includeInactive);
 }
 package brito.com.multitenancy001.tenant.persistence.product;
 
+import brito.com.multitenancy001.tenant.domain.product.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9754,81 +11274,178 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import brito.com.multitenancy001.tenant.domain.product.Product;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface ProductRepository extends JpaRepository<Product, UUID> {
+public interface TenantProductRepository extends JpaRepository<Product, UUID> {
 
-	List<Product> findByCategory_Id(Long categoryId);
+    // =========================================================
+    // ✅ "CATÁLOGO": SOMENTE ATIVOS E NÃO DELETADOS
+    // =========================================================
 
-	List<Product> findBySubcategory_Id(Long subcategoryId);
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.deleted = false
+          AND p.active = true
+          AND LOWER(p.brand) = LOWER(:brand)
+        """)
+    List<Product> findActiveNotDeletedByBrandIgnoreCase(@Param("brand") String brand);
 
-	@Query("""
-			SELECT p FROM Product p
-			WHERE p.category.id = :categoryId
-			  AND (:subcategoryId IS NULL OR p.subcategory.id = :subcategoryId)
-			""")
-	List<Product> findByCategoryAndOptionalSubcategory(@Param("categoryId") Long categoryId,
-			@Param("subcategoryId") Long subcategoryId);
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.deleted = false
+          AND p.active = true
+          AND p.category.id = :categoryId
+        """)
+    List<Product> findActiveNotDeletedByCategoryId(@Param("categoryId") Long categoryId);
 
-	List<Product> findByNameContainingIgnoreCase(String name);
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.deleted = false
+          AND p.active = true
+          AND p.subcategory.id = :subcategoryId
+        """)
+    List<Product> findActiveNotDeletedBySubcategoryId(@Param("subcategoryId") Long subcategoryId);
 
-	Optional<Product> findBySku(String sku);
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.deleted = false
+          AND p.active = true
+          AND p.category.id = :categoryId
+          AND (:subcategoryId IS NULL OR p.subcategory.id = :subcategoryId)
+        """)
+    List<Product> findActiveNotDeletedByCategoryAndOptionalSubcategory(@Param("categoryId") Long categoryId,
+                                                                      @Param("subcategoryId") Long subcategoryId);
 
-	List<Product> findByStockQuantityLessThan(Integer quantity);
+    // ✅ seu endpoint /active
+    List<Product> findByActiveTrueAndDeletedFalse();
 
-	List<Product> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice);
+    // =========================================================
+    // EXISTENTES (mantidos)
+    // =========================================================
 
-	List<Product> findBySupplier_Id(UUID supplierId);
+    // Se você ainda usa em algum lugar interno:
+    List<Product> findByBrandIgnoreCase(String brand);
 
-	Page<Product> findByNameContainingIgnoreCase(String name, Pageable pageable);
+    List<Product> findByCategory_Id(Long categoryId);
 
-	@Query("SELECT p FROM Product p WHERE "
-			+ "(:name IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND "
-			+ "(:minPrice IS NULL OR p.price >= :minPrice) AND " + "(:maxPrice IS NULL OR p.price <= :maxPrice) AND "
-			+ "(:minStock IS NULL OR p.stockQuantity >= :minStock) AND "
-			+ "(:maxStock IS NULL OR p.stockQuantity <= :maxStock)")
-	List<Product> searchProducts(@Param("name") String name, @Param("minPrice") BigDecimal minPrice,
-			@Param("maxPrice") BigDecimal maxPrice, @Param("minStock") Integer minStock,
-			@Param("maxStock") Integer maxStock);
+    List<Product> findBySubcategory_Id(Long subcategoryId);
 
-	List<Product> findByNameContainingIgnoreCaseAndPriceBetweenAndStockQuantityBetween(String name, BigDecimal minPrice,
-			BigDecimal maxPrice, Integer minStock, Integer maxStock);
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.category.id = :categoryId
+          AND (:subcategoryId IS NULL OR p.subcategory.id = :subcategoryId)
+        """)
+    List<Product> findByCategoryAndOptionalSubcategory(@Param("categoryId") Long categoryId,
+                                                      @Param("subcategoryId") Long subcategoryId);
 
-	@Query("SELECT COUNT(p) FROM Product p WHERE p.stockQuantity <= :threshold")
-	Long countLowStock(@Param("threshold") Integer threshold);
+    List<Product> findByNameContainingIgnoreCase(String name);
 
-	@Query("SELECT SUM(p.stockQuantity * p.price) FROM Product p")
-	BigDecimal calculateTotalInventoryValue();
+    Optional<Product> findBySku(String sku);
 
-	@Query("SELECT p.supplier.id, COUNT(p) FROM Product p GROUP BY p.supplier.id")
-	List<Object[]> countProductsBySupplier();
-}package brito.com.multitenancy001.tenant.persistence.supplier;
+    List<Product> findByStockQuantityLessThan(Integer quantity);
 
+    List<Product> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice);
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+    List<Product> findBySupplier_Id(UUID supplierId);
+
+    Page<Product> findByNameContainingIgnoreCase(String name, Pageable pageable);
+
+    @Query("""
+        SELECT p FROM Product p WHERE
+            (:name IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND
+            (:minPrice IS NULL OR p.price >= :minPrice) AND
+            (:maxPrice IS NULL OR p.price <= :maxPrice) AND
+            (:minStock IS NULL OR p.stockQuantity >= :minStock) AND
+            (:maxStock IS NULL OR p.stockQuantity <= :maxStock)
+        """)
+    List<Product> searchProducts(@Param("name") String name,
+                                 @Param("minPrice") BigDecimal minPrice,
+                                 @Param("maxPrice") BigDecimal maxPrice,
+                                 @Param("minStock") Integer minStock,
+                                 @Param("maxStock") Integer maxStock);
+
+    List<Product> findByNameContainingIgnoreCaseAndPriceBetweenAndStockQuantityBetween(
+            String name,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            Integer minStock,
+            Integer maxStock
+    );
+
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.stockQuantity <= :threshold")
+    Long countLowStock(@Param("threshold") Integer threshold);
+
+    @Query("SELECT SUM(p.stockQuantity * p.price) FROM Product p")
+    BigDecimal calculateTotalInventoryValue();
+
+    @Query("SELECT p.supplier.id, COUNT(p) FROM Product p GROUP BY p.supplier.id")
+    List<Object[]> countProductsBySupplier();
+    
+    @Query("""
+    	    SELECT p FROM Product p
+    	    WHERE (:includeDeleted = true OR p.deleted = false)
+    	      AND (:includeInactive = true OR p.active = true)
+    	      AND p.category.id = :categoryId
+    	    """)
+    	List<Product> findByCategoryWithFlags(@Param("categoryId") Long categoryId,
+    	                                     @Param("includeDeleted") boolean includeDeleted,
+    	                                     @Param("includeInactive") boolean includeInactive);
+
+}
+package brito.com.multitenancy001.tenant.persistence.supplier;
 
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
-    
+public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> {
+
+    // =========================
+    // FINDs "crus" (podem incluir deletados) - mantenho, mas no service vamos usar os "ativos/notDeleted"
+    // =========================
     Optional<Supplier> findByDocument(String document);
-    
+
     List<Supplier> findByNameContainingIgnoreCase(String name);
-    
+
     List<Supplier> findByEmail(String email);
-}package brito.com.multitenancy001.tenant.persistence.user;
+
+    // =========================
+    // RECOMENDADO: queries usadas pelos endpoints (não-deletados)
+    // =========================
+
+    @Query("SELECT s FROM Supplier s WHERE s.deleted = false ORDER BY s.name ASC")
+    List<Supplier> findNotDeleted();
+
+    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY s.name ASC")
+    List<Supplier> findNotDeletedByNameContainingIgnoreCase(@Param("name") String name);
+
+    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.email = :email ORDER BY s.name ASC")
+    List<Supplier> findNotDeletedByEmail(@Param("email") String email);
+
+    @Query("""
+           SELECT s FROM Supplier s
+           WHERE s.deleted = false
+             AND s.document IS NOT NULL
+             AND TRIM(s.document) <> ''
+             AND LOWER(s.document) = LOWER(:document)
+           """)
+    Optional<Supplier> findNotDeletedByDocumentIgnoreCase(@Param("document") String document);
+
+    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
+    List<Supplier> findActiveNotDeleted();
+}
+package brito.com.multitenancy001.tenant.persistence.user;
 
 import jakarta.transaction.Transactional;
 
@@ -10547,7 +12164,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE INDEX IF NOT EXISTS idx_categories_active  ON categories(active);
 CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted) WHERE deleted = false;
--- V4__create_subcategories.sql
+-- V4__create_table_subcategories.sql
 
 CREATE TABLE IF NOT EXISTS subcategories (
   id BIGSERIAL PRIMARY KEY,
@@ -10571,7 +12188,7 @@ CREATE TABLE IF NOT EXISTS subcategories (
 
 CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;
--- V5__create_suppliers.sql
+-- V5__create_table_suppliers.sql
 
 -- 1) Habilita função de UUID (Postgres)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -10615,10 +12232,11 @@ CREATE INDEX IF NOT EXISTS idx_supplier_name    ON suppliers(name);
 CREATE INDEX IF NOT EXISTS idx_supplier_email   ON suppliers(email);
 CREATE INDEX IF NOT EXISTS idx_supplier_active  ON suppliers(active);
 CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;
--- V6__create_products.sql
+-- V6__create_table_products.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS products (
-  id UUID PRIMARY KEY,
+CREATE TABLE products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name VARCHAR(200) NOT NULL,
   description TEXT,
@@ -10661,23 +12279,42 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
 
   CONSTRAINT fk_product_supplier
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+
+  CONSTRAINT ck_products_sku_not_blank
+    CHECK (length(trim(sku)) > 0)
 );
 
--- sku único apenas quando preenchido e produto ativo
-CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_active
-ON products(sku)
+-- ✅ SKU único para produtos não deletados (soft delete)
+CREATE UNIQUE INDEX ux_products_sku_not_deleted
+ON products (sku)
 WHERE deleted = false;
 
-CREATE INDEX IF NOT EXISTS idx_product_name       ON products(name);
-CREATE INDEX IF NOT EXISTS idx_product_supplier   ON products(supplier_id);
-CREATE INDEX IF NOT EXISTS idx_product_created_at ON products(created_at);
+-- IgnoreCase em name/brand (LOWER(..))
+CREATE INDEX idx_products_name_lower
+ON products (LOWER(name));
 
-CREATE INDEX IF NOT EXISTS idx_products_category_id    ON products(category_id);
-CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products(subcategory_id);
+CREATE INDEX idx_products_brand_lower
+ON products (LOWER(brand));
 
-CREATE INDEX IF NOT EXISTS idx_products_deleted ON products(deleted) WHERE deleted = false;
--- V7__create_sales.sql
+-- findByActiveTrueAndDeletedFalse()
+CREATE INDEX idx_products_active_deleted
+ON products (active, deleted);
+
+-- filtros comuns
+CREATE INDEX idx_products_supplier_id
+ON products (supplier_id);
+
+CREATE INDEX idx_products_category_id
+ON products (category_id);
+
+CREATE INDEX idx_products_subcategory_id
+ON products (subcategory_id);
+
+-- listagens recentes
+CREATE INDEX idx_products_created_at
+ON products (created_at);
+-- V7__create_table_sales.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -10700,7 +12337,7 @@ CREATE TABLE IF NOT EXISTS sales (
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
--- V8__create_sales_items.sql
+-- V8__create_table_sales_items.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
