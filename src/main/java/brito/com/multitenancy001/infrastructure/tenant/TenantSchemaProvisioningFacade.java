@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class TenantProvisioningBridge {
+public class TenantSchemaProvisioningFacade {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 

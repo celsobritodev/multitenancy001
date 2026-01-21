@@ -6,6 +6,8 @@ import org.flywaydb.core.Flyway;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import brito.com.multitenancy001.shared.db.Schemas;
+
 @Configuration
 public class PublicFlywayConfig {
 
@@ -13,7 +15,7 @@ public class PublicFlywayConfig {
     public Flyway flywayPublic(DataSource dataSource) {
         Flyway flyway = Flyway.configure()
                 .dataSource(dataSource)
-                .schemas("public")
+                .schemas(Schemas.CONTROL_PLANE)
                 .locations("classpath:db/migration/accounts")
                 .baselineOnMigrate(true)
                 .load();

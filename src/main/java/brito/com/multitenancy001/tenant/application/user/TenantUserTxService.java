@@ -1,12 +1,14 @@
 package brito.com.multitenancy001.tenant.application.user;
 
+import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,70 +36,77 @@ public class TenantUserTxService {
     // =========================
     // CREATE
     // =========================
-    public TenantUser createTenantUser(
-            Long accountId,
-            String name,
-            String username,
-            String email,
-            String rawPassword,
-            TenantRole roleEnum,
-            String phone,
-            String avatarUrl,
-            LinkedHashSet<String> permissions
-    ) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+   public TenantUser createTenantUser(
+        Long accountId,
+        String name,
+        String username,
+        String email,
+        String rawPassword,
+        TenantRole roleEnum,
+        String phone,
+        String avatarUrl,
+        LinkedHashSet<String> permissions,
+        TenantUserOrigin origin
+) {
+    if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
 
-        if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome obrigatório", 400);
-        if (!StringUtils.hasText(username)) throw new ApiException("INVALID_USERNAME", "Username obrigatório", 400);
-        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email obrigatório", 400);
+    if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome obrigatório", 400);
+    if (!StringUtils.hasText(username)) throw new ApiException("INVALID_USERNAME", "Username obrigatório", 400);
+    if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email obrigatório", 400);
 
-        if (!StringUtils.hasText(rawPassword) || !rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
-        }
+    // ✅ recomendado: mesmo que o DTO valide, defenda aqui também
+    if (roleEnum == null) throw new ApiException("INVALID_ROLE", "Role obrigatória", 400);
 
-        String usernameNew = username.trim().toLowerCase();
-        String emailNew = email.trim().toLowerCase();
-
-        if (tenantUserRepository.existsByUsernameAndAccountId(usernameNew, accountId)) {
-            throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe nesta conta", 409);
-        }
-        if (tenantUserRepository.existsByEmailAndAccountId(emailNew, accountId)) {
-            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
-        }
-
-        // ✅ normaliza e valida permissions AQUI (fonte de verdade)
-        final LinkedHashSet<String> normalizedPermissions;
-        try {
-            normalizedPermissions = PermissionScopeValidator.normalizeTenant(
-                    permissions == null ? new LinkedHashSet<>() : permissions
-            );
-        } catch (IllegalArgumentException e1) {
-            throw new ApiException("INVALID_PERMISSION", e1.getMessage(), 400);
-        }
-
-        TenantUser user = TenantUser.builder()
-                .accountId(accountId)
-                .name(name.trim())
-                .username(usernameNew)
-                .email(emailNew)
-                .password(passwordEncoder.encode(rawPassword))
-                .role(roleEnum)
-                .suspendedByAccount(false)
-                .suspendedByAdmin(false)
-                .phone(phone)
-                .avatarUrl(avatarUrl)
-                .timezone("America/Sao_Paulo")
-                .locale("pt_BR")
-                .build();
-
-        // ✅ Se trouxe permissions válidas e não vazias, respeita.
-        // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
-        if (!normalizedPermissions.isEmpty()) {
-            user.setPermissions(new LinkedHashSet<>(normalizedPermissions));
-        }
-
-        return tenantUserRepository.save(user);
+    if (!StringUtils.hasText(rawPassword) || !rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+        throw new ApiException("INVALID_PASSWORD", "Senha fraca / inválida", 400);
     }
+
+    String usernameNew = username.trim().toLowerCase();
+    String emailNew = email.trim().toLowerCase();
+
+    if (tenantUserRepository.existsByUsernameAndAccountId(usernameNew, accountId)) {
+        throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe nesta conta", 409);
+    }
+    if (tenantUserRepository.existsByEmailAndAccountId(emailNew, accountId)) {
+        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe nesta conta", 409);
+    }
+
+    // ✅ defesa em profundidade (mesma regra do service)
+    TenantUserOrigin originNorm = (origin != null) ? origin : TenantUserOrigin.ADMIN;
+
+    if (originNorm == TenantUserOrigin.BUILT_IN) {
+        throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+    }
+
+
+    final LinkedHashSet<TenantPermission> normalizedPermissions =
+            normalizeTenantPermissions(permissions);
+
+    TenantUser user = TenantUser.builder()
+            .accountId(accountId)
+            .origin(originNorm)
+            .name(name.trim())
+            .username(usernameNew)
+            .email(emailNew)
+            .password(passwordEncoder.encode(rawPassword))
+            .role(roleEnum)
+            .suspendedByAccount(false)
+            .suspendedByAdmin(false)
+            .phone(phone)
+            .avatarUrl(avatarUrl)
+            .timezone("America/Sao_Paulo")
+            .locale("pt_BR")
+            .build();
+
+    // ✅ Se trouxe permissions válidas e não vazias, respeita.
+    // Se veio vazio/null: deixa o @PrePersist do entity aplicar defaults por role.
+    if (!normalizedPermissions.isEmpty()) {
+        user.setPermissions(new LinkedHashSet<>(normalizedPermissions));
+    }
+
+    return tenantUserRepository.save(user);
+}
+
 
     public TenantUser setSuspendedByAdmin(Long userId, Long accountId, boolean suspended) {
         TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
@@ -399,6 +408,22 @@ public void resetPasswordWithToken(Long accountId, String username, String token
  }
 
  
+ private LinkedHashSet<TenantPermission> normalizeTenantPermissions(java.util.Collection<String> raw) {
+	    if (raw == null || raw.isEmpty()) return new LinkedHashSet<>();
+
+	    LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeTenant(raw);
+
+	    LinkedHashSet<TenantPermission> out = new LinkedHashSet<>();
+	    for (String s : normalized) {
+	        if (s == null || s.isBlank()) continue;
+	        try {
+	            out.add(TenantPermission.valueOf(s.trim().toUpperCase()));
+	        } catch (IllegalArgumentException e) {
+	            throw new ApiException("INVALID_PERMISSION", "Permissão inválida: " + s, 400);
+	        }
+	    }
+	    return out;
+	}
     
 
 }

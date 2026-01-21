@@ -47,4 +47,7 @@ public class ApiException extends RuntimeException {
     public boolean hasAllowedValues() {
         return allowedValues != null && allowedValues.length > 0;
     }
+    
+    
+    
 }

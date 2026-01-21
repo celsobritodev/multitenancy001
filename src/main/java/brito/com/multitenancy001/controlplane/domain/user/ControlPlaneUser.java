@@ -7,8 +7,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -124,23 +126,22 @@ public class ControlPlaneUser {
     
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
-        name = "controlplane_user_permissions",
-        schema = "public",
-        joinColumns = @JoinColumn(name = "user_id")
+            name = "controlplane_user_permissions",
+            schema = Schemas.CONTROL_PLANE,
+            joinColumns = @JoinColumn(name = "user_id")
     )
+    @Enumerated(EnumType.STRING)
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private Set<String> permissions = new LinkedHashSet<>();
+    private Set<ControlPlanePermission> permissions = new LinkedHashSet<>();
 
+    
     
     @PrePersist
     @PreUpdate
     private void normalizePermissions() {
-        // garante Set não nulo
         if (permissions == null) permissions = new LinkedHashSet<>();
-
-        // normaliza prefixo/trim e bloqueia TEN_ no controlplane
-        permissions = PermissionScopeValidator.normalizeControlPlane(permissions);
+        permissions = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
     }
 
   
@@ -161,21 +162,14 @@ public class ControlPlaneUser {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
- public void softDelete(LocalDateTime now) {
-    if (isBuiltInUser()) {
-        throw new IllegalStateException("SYSTEM_USER_READONLY");
+    public void softDelete(LocalDateTime now) {
+        if (isBuiltInUser()) throw new IllegalStateException("SYSTEM_USER_READONLY");
+        if (deleted) return;
+
+        deleted = true;
+        deletedAt = now;
+        // não mexe em suspendedBy*
     }
-    if (deleted) return;
-
-    deleted = true;
-    deletedAt = now;
-
-    // (opcional) se você quer garantir que não faça login após delete:
-    suspendedByAccount = true;
-    suspendedByAdmin = true;
-
-    // ✅ Estratégia A: NÃO altera username/email
-}
 
 
 

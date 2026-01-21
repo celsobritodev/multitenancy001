@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -26,63 +27,111 @@ public class AuthenticatedUserContext implements UserDetails {
     private final Long accountId;
     private final String schemaName;
 
-    // opcional: manter role para debug/claims (NÃO entra em authorities)
-    private final String roleAuthority;
+    /**
+     * ✅ Role como Enum (type-safe).
+     * Ex.: ControlPlaneRole.CONTROLPLANE_OWNER ou TenantRole.TENANT_ADMIN
+     * (não entra em authorities)
+     */
+    private final RoleAuthority role;
 
-    // ✅ permission-only
+    /**
+     * ✅ Authorities efetivas (permission-only)
+     */
     private final Collection<? extends GrantedAuthority> authorities;
-    
-    public boolean isMustChangePassword() {
-        return mustChangePassword;
+
+    private AuthenticatedUserContext(
+            Long userId,
+            String username,
+            String email,
+            String password,
+            boolean mustChangePassword,
+            boolean enabled,
+            boolean accountNonLocked,
+            Long accountId,
+            String schemaName,
+            RoleAuthority role,
+            Collection<? extends GrantedAuthority> authorities
+    ) {
+        this.userId = userId;
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.mustChangePassword = mustChangePassword;
+        this.enabled = enabled;
+        this.accountNonLocked = accountNonLocked;
+        this.accountId = accountId;
+        this.schemaName = schemaName;
+        this.role = role;
+        this.authorities = authorities;
+    }
+
+    /**
+     * Compat: onde você precisa da string "ROLE_..."
+     * (claims/debug/DTOs). Não armazena string, deriva do Enum.
+     */
+    public String getRoleAuthority() {
+        return role == null ? null : role.asAuthority();
     }
     
+    public String getRoleName() {
+        return role == null ? null : role.toString();
+    }
 
-    public AuthenticatedUserContext(
+
+    public static AuthenticatedUserContext fromControlPlaneUser(
             ControlPlaneUser user,
             String schemaName,
             LocalDateTime now,
             Collection<? extends GrantedAuthority> authorities
     ) {
-        this.userId = user.getId();
-        this.username = user.getUsername();
-        this.email = user.getEmail();
-        this.password = user.getPassword();
+        boolean enabled = user.isEnabledForLogin();
+        boolean nonLocked = user.isAccountNonLocked(now);
 
-        this.accountId = user.getAccount().getId();
-        this.schemaName = schemaName;
-
-        this.roleAuthority = user.getRole() != null ? user.getRole().asAuthority() : null;
-
-        this.authorities = authorities;
-
-        this.enabled = user.isEnabledForLogin();
-        this.accountNonLocked = user.isAccountNonLocked(now);
-        this.mustChangePassword = user.isMustChangePassword();
-
+        return new AuthenticatedUserContext(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getPassword(),
+                user.isMustChangePassword(),
+                enabled,
+                nonLocked,
+                user.getAccount().getId(),
+                schemaName,
+                user.getRole(),      // ✅ Enum (ControlPlaneRole)
+                authorities
+        );
     }
 
-    public AuthenticatedUserContext(
+    public static AuthenticatedUserContext fromTenantUser(
             TenantUser user,
             String schemaName,
             LocalDateTime now,
             Collection<? extends GrantedAuthority> authorities
     ) {
-        this.userId = user.getId();
-        this.username = user.getUsername();
-        this.email = user.getEmail();
-        this.password = user.getPassword();
+        boolean enabled = isTenantEnabledForLogin(user);
+        boolean nonLocked = isNonLocked(user.getLockedUntil(), now);
 
-        this.accountId = user.getAccountId();
-        this.schemaName = schemaName;
+        return new AuthenticatedUserContext(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getPassword(),
+                user.isMustChangePassword(),
+                enabled,
+                nonLocked,
+                user.getAccountId(),
+                schemaName,
+                user.getRole(),      // ✅ Enum (TenantRole)
+                authorities
+        );
+    }
 
-        this.roleAuthority = user.getRole() != null ? user.getRole().asAuthority() : null;
+    private static boolean isTenantEnabledForLogin(TenantUser user) {
+        return !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
+    }
 
-        this.authorities = authorities;
-
-        this.enabled = !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
-        this.accountNonLocked = user.getLockedUntil() == null || !user.getLockedUntil().isAfter(now);
-        this.mustChangePassword = user.isMustChangePassword();
-
+    private static boolean isNonLocked(LocalDateTime lockedUntil, LocalDateTime now) {
+        return lockedUntil == null || !lockedUntil.isAfter(now);
     }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }

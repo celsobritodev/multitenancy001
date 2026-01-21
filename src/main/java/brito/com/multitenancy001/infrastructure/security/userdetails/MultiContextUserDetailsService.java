@@ -3,8 +3,10 @@ package brito.com.multitenancy001.infrastructure.security.userdetails;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -32,7 +34,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         String schemaName = TenantContext.getOrNull();
 
-        if (schemaName == null || "public".equalsIgnoreCase(schemaName)) {
+        if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
             return loadControlPlaneUser(username);
         }
 
@@ -42,7 +44,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return new AuthenticatedUserContext(user, schemaName, now, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username, Long accountId) {
@@ -65,7 +67,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 ));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
-        return new AuthenticatedUserContext(user, "public", now, authorities);
+        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
     public UserDetails loadControlPlaneUser(String username) {
@@ -75,12 +77,12 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário controlplane não encontrado", 404));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
-        return new AuthenticatedUserContext(user, "public", now, authorities);
+        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
     public UserDetails loadTenantUser(String username, Long accountId) {
         String schemaName = TenantContext.getOrNull();
-        if (schemaName == null || "public".equalsIgnoreCase(schemaName)) {
+        if (schemaName == null ||  Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
             throw new ApiException(
                     "TENANT_CONTEXT_REQUIRED",
                     "TenantContext não está bindado para autenticar usuário tenant",
@@ -103,6 +105,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return new AuthenticatedUserContext(user, schemaName, now, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 }

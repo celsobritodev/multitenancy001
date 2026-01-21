@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.time.AppClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -25,10 +26,14 @@ import java.util.stream.Collectors;
 public class JwtTokenProvider {
 
     public static final String CLAIM_AUTHORITIES = "authorities";
-    public static final String CLAIM_AUTH_DOMAIN = "authDomain"; // <-- NOVO
+    public static final String CLAIM_AUTH_DOMAIN = "authDomain";
     public static final String CLAIM_CONTEXT = "context";
     public static final String CLAIM_ACCOUNT_ID = "accountId";
     public static final String CLAIM_USER_ID = "userId";
+
+    // ✅ NOVO (type-safe no servidor, string no JWT)
+    public static final String CLAIM_ROLE_NAME = "roleName";           // ex: CONTROLPLANE_OWNER
+    public static final String CLAIM_ROLE_AUTHORITY = "roleAuthority"; // ex: ROLE_CONTROLPLANE_OWNER
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -75,10 +80,13 @@ public class JwtTokenProvider {
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN, "CONTROLPLANE") // <-- NOVO
+                .claim(CLAIM_AUTH_DOMAIN, "CONTROLPLANE")
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
+                // ✅ NOVO
+                .claim(CLAIM_ROLE_NAME, user.getRoleName())
+                .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -96,10 +104,13 @@ public class JwtTokenProvider {
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN, "TENANT") // <-- NOVO
+                .claim(CLAIM_AUTH_DOMAIN, "TENANT")
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
+                // ✅ NOVO
+                .claim(CLAIM_ROLE_NAME, user.getRoleName())
+                .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
@@ -112,7 +123,7 @@ public class JwtTokenProvider {
     public String generateRefreshToken(String username, String context) {
         return Jwts.builder()
                 .subject(username)
-                .claim(CLAIM_AUTH_DOMAIN, "REFRESH") // <-- NOVO
+                .claim(CLAIM_AUTH_DOMAIN, "REFRESH")
                 .claim(CLAIM_CONTEXT, context)
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(refreshExpirationInMs))
@@ -128,7 +139,7 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(username)
-                .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET") // <-- NOVO
+                .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET")
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
@@ -152,10 +163,6 @@ public class JwtTokenProvider {
         return getAllClaimsFromToken(token).getSubject();
     }
 
-    /**
-     * Obtém o contexto do token (antigo tenantSchema)
-     * Mantém compatibilidade retornando "tenantSchema" se "context" não existir
-     */
     public String getContextFromToken(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
@@ -166,7 +173,7 @@ public class JwtTokenProvider {
 
         String authDomain = getAuthDomain(token);
 
-        if ("TENANT".equals(authDomain) && "public".equalsIgnoreCase(context)) {
+        if ("TENANT".equals(authDomain) && Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
             throw new JwtException("Invalid context for TENANT token: public");
         }
 
@@ -181,10 +188,10 @@ public class JwtTokenProvider {
         return getAllClaimsFromToken(token).get(CLAIM_ACCOUNT_ID, Long.class);
     }
 
-    /**
-     * ✅ NOVO: authDomain = TENANT/CONTROLPLANE/REFRESH/PASSWORD_RESET
-     * ✅ Compatível: se não existir, cai para claim antiga "type"
-     */
+    public Long getUserIdFromToken(String token) {
+        return getAllClaimsFromToken(token).get(CLAIM_USER_ID, Long.class);
+    }
+
     public String getAuthDomain(String token) {
         Claims claims = getAllClaimsFromToken(token);
 
@@ -196,13 +203,13 @@ public class JwtTokenProvider {
         return authDomain;
     }
 
-    // Se você tinha o método getTokenType, mantenha como alias (opcional)
-    public String getTokenType(String token) {
-        return getAuthDomain(token);
+    // ✅ NOVO: role no JWT (opcional para debug/front)
+    public String getRoleNameFromToken(String token) {
+        return getAllClaimsFromToken(token).get(CLAIM_ROLE_NAME, String.class);
     }
 
-    public Long getUserIdFromToken(String token) {
-        return getAllClaimsFromToken(token).get(CLAIM_USER_ID, Long.class);
+    public String getRoleAuthorityFromToken(String token) {
+        return getAllClaimsFromToken(token).get(CLAIM_ROLE_AUTHORITY, String.class);
     }
 
     public List<String> getAuthoritiesFromToken(String token) {
@@ -268,6 +275,6 @@ public class JwtTokenProvider {
 
     public boolean isControlPlaneContextToken(String token) {
         String context = getContextFromToken(token);
-        return "public".equals(context);
+        return Schemas.CONTROL_PLANE.equals(context);
     }
 }

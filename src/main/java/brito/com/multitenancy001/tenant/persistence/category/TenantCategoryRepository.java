@@ -20,7 +20,7 @@ public interface TenantCategoryRepository extends JpaRepository<Category, Long> 
     List<Category> findNotDeleted();
 
     @Query("select c from Category c where c.deleted = false and c.active = true order by c.name asc")
-    List<Category> findActiveNotDeleted();
+    List<Category> findNotDeletedActive();
 
     @Query("select c from Category c where c.deleted = false and lower(c.name) = lower(:name)")
     Optional<Category> findNotDeletedByNameIgnoreCase(@Param("name") String name);

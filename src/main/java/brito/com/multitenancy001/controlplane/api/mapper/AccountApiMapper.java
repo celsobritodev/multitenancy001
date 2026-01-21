@@ -1,12 +1,11 @@
 package brito.com.multitenancy001.controlplane.api.mapper;
 
-import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
@@ -20,9 +19,9 @@ public class AccountApiMapper {
                 account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
-                account.getStatus().name(),
-                account.getType().name(),
-                account.getSubscriptionPlan().name(), // NOVO
+                account.getStatus(),            // ✅ enum direto
+                account.getType(),              // ✅ enum direto
+                account.getSubscriptionPlan(),  // ✅ enum direto
                 account.getCreatedAt(),
                 account.getTrialEndDate(),
                 null
@@ -38,9 +37,9 @@ public class AccountApiMapper {
                 account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
-                account.getStatus().name(),
-                account.getType().name(),
-                account.getSubscriptionPlan().name(), // NOVO
+                account.getStatus(),            // ✅ enum direto
+                account.getType(),              // ✅ enum direto
+                account.getSubscriptionPlan(),  // ✅ enum direto
                 account.getCreatedAt(),
                 account.getTrialEndDate(),
                 adminResponse

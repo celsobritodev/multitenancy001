@@ -5,7 +5,7 @@ import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChan
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
+import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
@@ -22,7 +22,7 @@ public class AccountStatusService {
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
     private final AccountRepository accountRepository;
-    private final TenantUserAdminBridge tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserAdminBridge;
     private final AppClock appClock;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {

@@ -18,7 +18,7 @@ public class TenantContextMonitor {
 	    String methodName = joinPoint.getSignature().toShortString();
 
 	    String boundTenant = TenantContext.getOrNull();               // null ou tenant real
-	    String effectiveTenant = TenantContext.getOrDefaultPublic();  // tenant ou "public"
+	    String effectiveTenant = TenantContext.getOrDefaultPublic();  // tenant ou controlplane
 
 	    log.debug("🏁 INÍCIO {} - Tenant(bound={}, effective={})", methodName, boundTenant, effectiveTenant);
 

@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.domain.user;
 
-import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import jakarta.persistence.*;
@@ -36,6 +36,18 @@ public class TenantUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_origin", nullable = false, length = 20)
+    @Builder.Default
+    private TenantUserOrigin origin = TenantUserOrigin.ADMIN;
+
+    public boolean isBuiltInUser() {
+        return this.origin == TenantUserOrigin.BUILT_IN;
+    }
+ 
+    
+    
 
     @Column(name = "password_reset_token", length = 255)
     private String passwordResetToken;
@@ -73,13 +85,16 @@ public class TenantUser {
 
     @ElementCollection
     @CollectionTable(
-        name = "tenant_user_permissions",
-        joinColumns = @JoinColumn(name = "tenant_user_id")
+            name = "tenant_user_permissions",
+            joinColumns = @JoinColumn(name = "tenant_user_id")
     )
+    @Enumerated(EnumType.STRING)
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
-    private Set<String> permissions = new LinkedHashSet<>();
-
+    private Set<TenantPermission> permissions = new LinkedHashSet<>();
+    
+    
+    
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -135,24 +150,27 @@ public class TenantUser {
     @PrePersist
     @PreUpdate
     protected void onSave() {
+        if (origin == null) origin = TenantUserOrigin.ADMIN;
         if (role == null) throw new IllegalStateException("Role is required");
         if (permissions == null) permissions = new LinkedHashSet<>();
 
         if (username != null) username = username.toLowerCase().trim();
         if (email != null) email = email.toLowerCase().trim();
 
-        // 1) defaults por role (somente se vier vazio)
         if (permissions.isEmpty()) {
-            permissions = new LinkedHashSet<>(
-                TenantRolePermissions.permissionsFor(role).stream()
-                    .map(Enum::name)
-                    .toList()
-            );
+            permissions = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
         }
 
-        // 2) normaliza SEMPRE (trim, prefix TEN_, remove duplicadas, bloqueia CP_)
-        permissions = new LinkedHashSet<>(PermissionScopeValidator.normalizeTenant(permissions));
+        for (TenantPermission p : permissions) {
+            if (p == null) continue;
+            String name = p.name();
+            if (!name.startsWith("TEN_")) {
+                throw new IllegalStateException("Invalid tenant permission scope: " + name);
+            }
+        }
     }
+
+
 
     public boolean isAccountNonLocked(LocalDateTime now) {
         return lockedUntil == null || !lockedUntil.isAfter(now);

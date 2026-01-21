@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import brito.com.multitenancy001.controlplane.domain.billing.Payment;
-import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

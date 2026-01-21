@@ -5,7 +5,7 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 public enum ControlPlaneRole implements RoleAuthority {
 
     CONTROLPLANE_OWNER,
-    CONTROLPLANE_BILLING_MANAGER,  
+    CONTROLPLANE_BILLING_MANAGER,
     CONTROLPLANE_SUPPORT,
     CONTROLPLANE_OPERATOR;
 
@@ -14,7 +14,7 @@ public enum ControlPlaneRole implements RoleAuthority {
         return "ROLE_" + name();
     }
 
-    public boolean isControlPlaneOwner() {
+    public boolean isOwner() {
         return this == CONTROLPLANE_OWNER;
     }
 

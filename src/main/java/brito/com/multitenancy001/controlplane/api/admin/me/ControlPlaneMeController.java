@@ -16,14 +16,14 @@ public class ControlPlaneMeController {
 
     private final ControlPlaneUserService controlPlaneUserService;
 
-    // ✅ usado pelo front mesmo quando mustChangePassword=true
+    // Retorna os dados do usuário autenticado (inclui authorities), mesmo quando mustChangePassword=true.
     @GetMapping
     @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<ControlPlaneMeResponse> me() {
         return ResponseEntity.ok(controlPlaneUserService.getMe());
     }
 
-    // ✅ autenticado: qualquer user CP pode trocar a própria senha
+    // Permite que o usuário autenticado altere a própria senha.
     @PatchMapping("/password")
     @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<Void> changeMyPassword(@Valid @RequestBody ControlPlaneChangeMyPasswordRequest request) {

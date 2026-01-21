@@ -92,7 +92,7 @@ ALTER TABLE accounts
 -- =========================
 
 -- Só 1 PLATFORM no banco (seu requisito)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_single_system
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_single_platform
 ON accounts (account_type)
 WHERE account_type = 'PLATFORM';
 

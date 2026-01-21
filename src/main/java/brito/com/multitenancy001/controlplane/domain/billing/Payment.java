@@ -6,6 +6,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
+import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
+import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
+
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -51,11 +55,13 @@ public class Payment {
     @Column(name = "transaction_id", unique = true, length = 100)
     private String transactionId;
 
-    @Column(name = "payment_method", length = 50)
-    private String paymentMethod;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false, length = 50)
+    private PaymentMethod paymentMethod;
 
-    @Column(name = "payment_gateway", length = 50)
-    private String paymentGateway;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_gateway", nullable = false, length = 50)
+    private PaymentGateway paymentGateway;
 
     @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default

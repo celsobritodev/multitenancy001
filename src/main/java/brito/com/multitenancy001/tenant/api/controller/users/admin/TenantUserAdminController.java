@@ -14,6 +14,7 @@ public class TenantUserAdminController {
 
     private final TenantUserAdminService tenantUserAdminService;
 
+    // Suspende ou reativa usuário do tenant por ação administrativa.
     @PatchMapping("/{userId}/suspend")
     @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
     public ResponseEntity<Void> suspendUser(

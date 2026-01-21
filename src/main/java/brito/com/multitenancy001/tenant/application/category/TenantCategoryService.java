@@ -45,7 +45,7 @@ public class TenantCategoryService {
 
     @Transactional(readOnly = true)
     public List<Category> findActive() {
-        return categoryRepository.findActiveNotDeleted();
+        return categoryRepository.findNotDeletedActive();
     }
 
     @Transactional(readOnly = true)

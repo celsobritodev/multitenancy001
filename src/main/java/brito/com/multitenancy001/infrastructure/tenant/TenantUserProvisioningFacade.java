@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TenantUserAdminBridge {
+public class TenantUserProvisioningFacade {
 
     private static final String REQUIRED_TABLE = "tenant_users";
 

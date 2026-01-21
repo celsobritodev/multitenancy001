@@ -5,8 +5,5 @@ public record ControlPlaneAdminUserSummaryResponse(
         String username,
         String email,
         boolean suspendedByAccount,
-        boolean suspendedByAdmin,
-        boolean enabled
-) {
-   
-}
+        boolean suspendedByAdmin
+) {}

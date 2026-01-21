@@ -11,8 +11,17 @@ public record JwtResponse(
     Long userId,
     String username,
     String email,
+
+    /**
+     * ✅ Role "name" (ex: CONTROLPLANE_OWNER, TENANT_ADMIN)
+     */
     String role,
+
     Long accountId,
+
+    /**
+     * ✅ Para tenant: schema do tenant. Para controlplane: Schemas.CONTROL_PLANE.
+     */
     String tenantSchema
 ) {
     public JwtResponse {

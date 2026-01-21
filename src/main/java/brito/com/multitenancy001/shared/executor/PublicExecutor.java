@@ -1,9 +1,7 @@
 package brito.com.multitenancy001.shared.executor;
 
 import java.util.function.Supplier;
-
 import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.shared.context.TenantContext;
 
 @Component
@@ -20,4 +18,8 @@ public class PublicExecutor {
             runnable.run();
         }
     }
+
+    // aliases semânticos (opcional, mas ajuda muito leitura)
+    public <T> T inPublic(Supplier<T> supplier) { return run(supplier); }
+    public void inPublic(Runnable runnable) { run(runnable); }
 }

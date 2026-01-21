@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.controlplane.api.admin.billing;
 
-import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
-import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.controlplane.application.billing.ControlPlanePaymentService;
-import brito.com.multitenancy001.controlplane.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
+import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -27,17 +27,13 @@ public class ControlPlanePaymentController {
 
     private final ControlPlanePaymentService controlPlanePaymentService;
 
-    // =========================================================
-    // ADMIN / CROSS-TENANT
-    // =========================================================
-
+    // Cria/processa um pagamento manual para uma conta (cross-tenant) e aplica efeitos no billing da conta.
     @PostMapping("/by-account/{accountId}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_WRITE')")
     public ResponseEntity<PaymentResponse> processPaymentForAccount(
             @PathVariable Long accountId,
             @Valid @RequestBody AdminPaymentRequest body
     ) {
-        // Garante que o accountId do path manda (evita inconsistência)
         AdminPaymentRequest adminPaymentRequest = new AdminPaymentRequest(
                 accountId,
                 body.amount(),
@@ -50,35 +46,85 @@ public class ControlPlanePaymentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // Lista pagamentos de uma conta (cross-tenant).
     @GetMapping("/by-account/{accountId}")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccount(accountId));
     }
 
+    // Informa se existe um pagamento COMPLETED vigente para a conta (cross-tenant).
     @GetMapping("/by-account/{accountId}/active")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<Boolean> hasCurrentPaymentAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.hasActivePayment(accountId));
     }
 
-    @PostMapping("/{paymentId}/complete-manual")
-    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
-    public ResponseEntity<PaymentResponse> completeManually(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(controlPlanePaymentService.completePaymentManually(paymentId));
-    }
-
-    @PostMapping("/{paymentId}/refund")
-    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
-    public ResponseEntity<PaymentResponse> refund(
-            @PathVariable Long paymentId,
-            @Valid @RequestBody RefundRequest refundRequest
+    // Verifica se um paymentId pertence a um accountId (cross-tenant).
+    @GetMapping("/by-account/{accountId}/exists/{paymentId}")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<Boolean> existsByIdAndAccountId(
+            @PathVariable Long accountId,
+            @PathVariable Long paymentId
     ) {
-        PaymentResponse response =
-                controlPlanePaymentService.refundPayment(paymentId, refundRequest.amount(), refundRequest.reason());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(controlPlanePaymentService.paymentExistsForAccount(paymentId, accountId));
     }
 
+    // Lista pagamentos de uma conta filtrados por status (cross-tenant).
+    @GetMapping("/by-account/{accountId}/status/{status}")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAndStatus(
+            @PathVariable Long accountId,
+            @PathVariable PaymentStatus status
+    ) {
+        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccountAndStatus(accountId, status));
+    }
+
+    // Busca pagamento por transactionId (admin global).
+    @GetMapping("/by-transaction/{transactionId}")
+    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<PaymentResponse> getByTransactionId(@PathVariable String transactionId) {
+        return ResponseEntity.ok(controlPlanePaymentService.getPaymentByTransactionId(transactionId));
+    }
+
+    // Informa se existe pagamento com transactionId (admin global).
+    @GetMapping("/exists/by-transaction/{transactionId}")
+    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<Boolean> existsByTransactionId(@PathVariable String transactionId) {
+        return ResponseEntity.ok(controlPlanePaymentService.existsByTransactionId(transactionId));
+    }
+
+    // Lista pagamentos por status cujo validUntil é anterior a uma data (admin global).
+    @GetMapping("/valid-until-before")
+    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<List<PaymentResponse>> listByValidUntilBeforeAndStatus(
+            @RequestParam("date")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
+            @RequestParam("status") PaymentStatus status
+    ) {
+        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByValidUntilBeforeAndStatus(date, status));
+    }
+
+    // Lista pagamentos COMPLETED de uma conta, ordenados por data de pagamento (cross-tenant).
+    @GetMapping("/by-account/{accountId}/completed")
+    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<List<PaymentResponse>> getCompletedPaymentsByAccount(@PathVariable Long accountId) {
+        return ResponseEntity.ok(controlPlanePaymentService.getCompletedPaymentsByAccount(accountId));
+    }
+
+    // Lista pagamentos dentro de um período (admin global).
+    @GetMapping("/period")
+    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    public ResponseEntity<List<PaymentResponse>> listPaymentsInPeriod(
+            @RequestParam("start")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam("end")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+    ) {
+        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsInPeriod(startDate, endDate));
+    }
+
+    // Soma a receita (pagamentos COMPLETED) no período informado (admin global).
     @GetMapping("/revenue")
     @PreAuthorize("hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<BigDecimal> getRevenue(
@@ -90,75 +136,29 @@ public class ControlPlanePaymentController {
         return ResponseEntity.ok(controlPlanePaymentService.getTotalRevenue(startDate, endDate));
     }
 
+    // Marca um pagamento PENDING como COMPLETED manualmente (admin global) e aplica efeitos na conta.
+    @PostMapping("/{paymentId}/complete-manual")
+    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
+    public ResponseEntity<PaymentResponse> completeManually(@PathVariable Long paymentId) {
+        return ResponseEntity.ok(controlPlanePaymentService.completePaymentManually(paymentId));
+    }
+
+    // Reembolsa um pagamento elegível (total ou parcial) registrando o motivo (admin global).
+    @PostMapping("/{paymentId}/refund")
+    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
+    public ResponseEntity<PaymentResponse> refund(
+            @PathVariable Long paymentId,
+            @Valid @RequestBody RefundRequest refundRequest
+    ) {
+        PaymentResponse response =
+                controlPlanePaymentService.refundPayment(paymentId, refundRequest.amount(), refundRequest.reason());
+        return ResponseEntity.ok(response);
+    }
+
     public record RefundRequest(
             @DecimalMin(value = "0.01", message = "amount deve ser > 0 quando informado")
             BigDecimal amount,
-
             @NotBlank(message = "reason é obrigatório")
             String reason
     ) {}
-    
- // =========================================================
- // ✅ NOVOS ENDPOINTS (usar métodos do PaymentRepository)
- // =========================================================
-
- @GetMapping("/by-account/{accountId}/exists/{paymentId}")
- @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<Boolean> existsByIdAndAccountId(
-         @PathVariable Long accountId,
-         @PathVariable Long paymentId
- ) {
-     return ResponseEntity.ok(controlPlanePaymentService.paymentExistsForAccount(paymentId, accountId));
- }
-
- @GetMapping("/by-account/{accountId}/status/{status}")
- @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAndStatus(
-         @PathVariable Long accountId,
-         @PathVariable PaymentStatus status
- ) {
-     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccountAndStatus(accountId, status));
- }
-
- @GetMapping("/by-transaction/{transactionId}")
- @PreAuthorize("hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<PaymentResponse> getByTransactionId(@PathVariable String transactionId) {
-     return ResponseEntity.ok(controlPlanePaymentService.getPaymentByTransactionId(transactionId));
- }
-
- @GetMapping("/exists/by-transaction/{transactionId}")
- @PreAuthorize("hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<Boolean> existsByTransactionId(@PathVariable String transactionId) {
-     return ResponseEntity.ok(controlPlanePaymentService.existsByTransactionId(transactionId));
- }
-
- @GetMapping("/valid-until-before")
- @PreAuthorize("hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<List<PaymentResponse>> listByValidUntilBeforeAndStatus(
-         @RequestParam("date")
-         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
-         @RequestParam("status") PaymentStatus status
- ) {
-     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByValidUntilBeforeAndStatus(date, status));
- }
-
- @GetMapping("/by-account/{accountId}/completed")
- @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<List<PaymentResponse>> getCompletedPaymentsByAccount(@PathVariable Long accountId) {
-     return ResponseEntity.ok(controlPlanePaymentService.getCompletedPaymentsByAccount(accountId));
- }
-
- @GetMapping("/period")
- @PreAuthorize("hasAuthority('CP_BILLING_READ')")
- public ResponseEntity<List<PaymentResponse>> listPaymentsInPeriod(
-         @RequestParam("start")
-         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-         @RequestParam("end")
-         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
- ) {
-     return ResponseEntity.ok(controlPlanePaymentService.getPaymentsInPeriod(startDate, endDate));
- }
-
-    
-    
 }

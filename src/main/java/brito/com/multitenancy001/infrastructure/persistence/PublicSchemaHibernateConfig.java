@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 
+import brito.com.multitenancy001.shared.db.Schemas;
+
 import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +45,7 @@ public class PublicSchemaHibernateConfig {
         props.put("hibernate.format_sql", true);
 
         // opcional (Postgres): garantir que o default é public
-        props.put("hibernate.default_schema", "public");
+        props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
 
         emf.setJpaPropertyMap(props);
         return emf;

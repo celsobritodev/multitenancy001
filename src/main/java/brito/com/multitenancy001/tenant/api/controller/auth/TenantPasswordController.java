@@ -16,12 +16,14 @@ public class TenantPasswordController {
 
     private final TenantUserService tenantUserService;
 
+    // Gera token de reset de senha para usuário tenant (por slug + email).
     @PostMapping("/forgot")
     public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {
         tenantUserService.generatePasswordResetToken(forgotPasswordRequest.slug(), forgotPasswordRequest.email());
         return ResponseEntity.ok("Token gerado");
     }
 
+    // Redefine a senha do usuário tenant validando o token de reset.
     @PostMapping("/reset")
     public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest resetPasswordRequest) {
         tenantUserService.resetPasswordWithToken(resetPasswordRequest.token(), resetPasswordRequest.newPassword());

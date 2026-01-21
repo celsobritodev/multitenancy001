@@ -35,28 +35,36 @@ public class AccountAdminDetailsApiMapper {
         }
 
         return new AccountAdminDetailsResponse(
+                // Identificação
                 account.getId(),
                 account.getDisplayName(),
                 account.getSlug(),
                 account.getSchemaName(),
-                account.getStatus().name(),
+                account.getStatus(),
+                account.getType(),               // ✅ NOVO (AccountType)
+                account.getSubscriptionPlan(),    // ✅ NOVO (SubscriptionPlan)
 
+                // Dados legais
                 account.getTaxIdType(),
                 account.getTaxIdNumber(),
 
+                // Datas
                 account.getCreatedAt(),
                 account.getTrialEndDate(),
                 account.getPaymentDueDate(),
                 account.getDeletedAt(),
 
+                // Flags calculadas
                 inTrial,
                 trialExpired,
                 trialDaysRemaining,
 
+                // Admin
                 admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
 
+                // Indicadores
                 totalUsers,
-                account.isOperational(now) // ✅ agora clock-aware
+                account.isOperational(now) // ✅ clock-aware
         );
     }
 }

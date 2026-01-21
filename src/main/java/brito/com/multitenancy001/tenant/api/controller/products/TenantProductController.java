@@ -29,25 +29,8 @@ public class TenantProductController {
 
     private final ProductApiMapper productApiMapper;
     private final TenantProductService tenantProductService;
-    
-    
-    @GetMapping("/category/{categoryId}/admin")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')") // ou uma permissão mais forte se quiser
-    public ResponseEntity<List<ProductResponse>> getProductsByCategoryAdmin(
-            @PathVariable Long categoryId,
-            @RequestParam(defaultValue = "false") boolean includeDeleted,
-            @RequestParam(defaultValue = "false") boolean includeInactive
-    ) {
-        List<Product> products = tenantProductService.findByCategoryId(categoryId, includeDeleted, includeInactive);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
-    }
 
-
-    // =========================================================
-    // READ
-    // =========================================================
-
+    // Busca produto por id (escopo: tenant).
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<ProductResponse> getById(@PathVariable UUID id) {
@@ -55,14 +38,27 @@ public class TenantProductController {
         return ResponseEntity.ok(productApiMapper.toResponse(product));
     }
 
+    // Lista produtos por categoria (default: somente não-deletados/ativos conforme service).
     @GetMapping("/category/{categoryId}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = tenantProductService.findByCategoryId(categoryId);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Lista produtos por categoria com flags administrativas (incluir deletados/inativos).
+    @GetMapping("/category/{categoryId}/admin")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> getProductsByCategoryAdmin(
+            @PathVariable Long categoryId,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(defaultValue = "false") boolean includeInactive
+    ) {
+        List<Product> products = tenantProductService.findByCategoryId(categoryId, includeDeleted, includeInactive);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
+    }
+
+    // Lista produtos por categoria e subcategoria opcional.
     @GetMapping("/category/{categoryId}/optional")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByCategoryOptionalSubcategory(
@@ -70,42 +66,42 @@ public class TenantProductController {
             @RequestParam(value = "subcategoryId", required = false) Long subcategoryId
     ) {
         List<Product> products = tenantProductService.findByCategoryAndOptionalSubcategory(categoryId, subcategoryId);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Lista produtos por subcategoria.
     @GetMapping("/subcategory/{subcategoryId}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsBySubcategory(@PathVariable Long subcategoryId) {
         List<Product> products = tenantProductService.findBySubcategoryId(subcategoryId);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Lista produtos por marca.
     @GetMapping("/brand/{brand}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByBrand(@PathVariable String brand) {
         List<Product> products = tenantProductService.findByBrand(brand);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Lista produtos ativos.
     @GetMapping("/active")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getActiveProducts() {
         List<Product> products = tenantProductService.findActiveProducts();
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Pesquisa produtos por nome.
     @GetMapping("/name")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByName(@RequestParam("name") String name) {
         List<Product> products = tenantProductService.findByName(name);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Pesquisa produtos por nome com paginação.
     @GetMapping("/name/paged")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<Page<ProductResponse>> getProductsByNamePaged(
@@ -113,10 +109,10 @@ public class TenantProductController {
             Pageable pageable
     ) {
         Page<Product> page = tenantProductService.findByNamePaged(name, pageable);
-        Page<ProductResponse> dtoPage = page.map(productApiMapper::toResponse);
-        return ResponseEntity.ok(dtoPage);
+        return ResponseEntity.ok(page.map(productApiMapper::toResponse));
     }
 
+    // Lista produtos por faixa de preço.
     @GetMapping("/price-between")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsByPriceBetween(
@@ -124,18 +120,18 @@ public class TenantProductController {
             @RequestParam("maxPrice") BigDecimal maxPrice
     ) {
         List<Product> products = tenantProductService.findByPriceBetween(minPrice, maxPrice);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Lista produtos por fornecedor.
     @GetMapping("/supplier/{supplierId}")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> getProductsBySupplier(@PathVariable UUID supplierId) {
         List<Product> products = tenantProductService.findBySupplierId(supplierId);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Filtra produtos por múltiplos critérios (nome/preço/estoque).
     @GetMapping("/filter")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<ProductResponse>> filterProducts(
@@ -147,16 +143,17 @@ public class TenantProductController {
     ) {
         List<Product> products =
                 tenantProductService.findByNameAndPriceAndStock(name, minPrice, maxPrice, minStock, maxStock);
-        List<ProductResponse> dtos = products.stream().map(productApiMapper::toResponse).toList();
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
     }
 
+    // Retorna contagem de produtos agrupada por fornecedor.
     @GetMapping("/stats/count-by-supplier")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
     public ResponseEntity<List<SupplierProductCountResponse>> countBySupplier() {
         return ResponseEntity.ok(tenantProductService.countProductsBySupplier());
     }
 
+    // Retorna o valor total do inventário (estoque * custo) do tenant.
     @GetMapping("/inventory-value")
     @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
     public ResponseEntity<BigDecimal> getTotalInventoryValue() {
@@ -164,6 +161,7 @@ public class TenantProductController {
         return ResponseEntity.ok(value != null ? value : BigDecimal.ZERO);
     }
 
+    // Retorna a contagem de produtos com estoque baixo.
     @GetMapping("/low-stock/count")
     @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
     public ResponseEntity<Long> countLowStockProducts(@RequestParam(defaultValue = "10") Integer threshold) {
@@ -171,10 +169,7 @@ public class TenantProductController {
         return ResponseEntity.ok(count != null ? count : 0L);
     }
 
-    // =========================================================
-    // WRITE
-    // =========================================================
-
+    // Alterna status ativo/inativo do produto.
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
     public ResponseEntity<ProductResponse> toggleActive(@PathVariable UUID id) {
@@ -182,6 +177,7 @@ public class TenantProductController {
         return ResponseEntity.ok(productApiMapper.toResponse(updated));
     }
 
+    // Atualiza o custo do produto (costPrice).
     @PatchMapping("/{id}/cost-price")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
     public ResponseEntity<ProductResponse> updateCostPrice(
@@ -192,6 +188,7 @@ public class TenantProductController {
         return ResponseEntity.ok(productApiMapper.toResponse(updatedProduct));
     }
 
+    // Cria produto detalhado a partir de um request DTO (upsert).
     @PostMapping("/detailed")
     @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
     public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest req) {

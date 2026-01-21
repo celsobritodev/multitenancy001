@@ -7,7 +7,7 @@ public record AccountStatusChangeResponse(
         String status,
         String previousStatus,
         LocalDateTime effectiveAt,
-        String tenantSchema,
+        String schemaName,
         SideEffects sideEffects
 ) {
     public record SideEffects(

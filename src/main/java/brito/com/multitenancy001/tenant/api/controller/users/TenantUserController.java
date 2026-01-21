@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.api.controller.users;
 
+import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
@@ -22,6 +23,38 @@ public class TenantUserController {
 
     private final TenantUserService tenantUserService;
 
+    // Lista usuários do tenant.
+    @GetMapping
+    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    public ResponseEntity<List<TenantUserSummaryResponse>> listTenantUsers() {
+        return ResponseEntity.ok(tenantUserService.listTenantUsers());
+    }
+
+    // Lista usuários ativos do tenant.
+    @GetMapping("/active")
+    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    public ResponseEntity<List<TenantUserSummaryResponse>> listActiveTenantUsers() {
+        return ResponseEntity.ok(tenantUserService.listActiveTenantUsers());
+    }
+
+    // Busca detalhes de um usuário do tenant por id.
+    @GetMapping("/{userId}")
+    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(tenantUserService.getTenantUser(userId));
+    }
+
+    // Cria usuário no tenant.
+    @PostMapping
+    @PreAuthorize("hasAuthority('TEN_USER_CREATE')")
+    public ResponseEntity<TenantUserDetailsResponse> createTenantUser(
+            @Valid @RequestBody TenantUserCreateRequest tenantUserCreateRequest
+    ) {
+        TenantUserDetailsResponse response = tenantUserService.createTenantUser(tenantUserCreateRequest);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    // Transfere a propriedade/admin (owner) do tenant para o usuário informado.
     @PatchMapping("/{userId}/transfer-admin")
     @PreAuthorize("hasAuthority('TEN_ROLE_TRANSFER')")
     public ResponseEntity<Void> transferTenantOwner(@PathVariable Long userId) {
@@ -29,34 +62,7 @@ public class TenantUserController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping
-    @PreAuthorize("hasAuthority('TEN_USER_CREATE')")
-    public ResponseEntity<TenantUserDetailsResponse> createTenantUser(@Valid @RequestBody TenantUserCreateRequest tenantUserCreateRequest) {
-        TenantUserDetailsResponse response = tenantUserService.createTenantUser(tenantUserCreateRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @GetMapping
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listTenantUsers() {
-        List<TenantUserSummaryResponse> users = tenantUserService.listTenantUsers();
-        return ResponseEntity.ok(users);
-    }
-
-    @GetMapping("/active")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listActiveTenantUsers() {
-        List<TenantUserSummaryResponse> users = tenantUserService.listActiveTenantUsers();
-        return ResponseEntity.ok(users);
-    }
-
-    @GetMapping("/{userId}")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
-        TenantUserDetailsResponse user = tenantUserService.getTenantUser(userId);
-        return ResponseEntity.ok(user);
-    }
-
+    // Atualiza status de suspensão do usuário (suspended recomendado; active é compat legado).
     @PatchMapping("/{userId}/status")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
@@ -64,10 +70,11 @@ public class TenantUserController {
             @RequestParam(required = false) Boolean suspended,
             @RequestParam(required = false) Boolean active
     ) {
-        // compat: se cliente antigo mandar active, converte
-        boolean finalSuspended = (suspended != null)
-                ? suspended
-                : (active != null && !active);
+        if (suspended == null && active == null) {
+            throw new ApiException("INVALID_STATUS", "Informe 'suspended' (recomendado) ou 'active' (deprecated)", 400);
+        }
+
+        boolean finalSuspended = (suspended != null) ? suspended : !active;
 
         TenantUserSummaryResponse response =
                 tenantUserService.setTenantUserSuspendedByAdmin(userId, finalSuspended);
@@ -75,21 +82,7 @@ public class TenantUserController {
         return ResponseEntity.ok(response);
     }
 
-
-    @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
-    public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
-        tenantUserService.softDeleteTenantUser(userId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAuthority('TEN_USER_RESTORE')")
-    public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
-        TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
-        return ResponseEntity.ok(response);
-    }
-
+    // Reseta a senha do usuário do tenant para um novo valor.
     @PatchMapping("/{userId}/password")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
     public ResponseEntity<TenantUserSummaryResponse> resetTenantUserPassword(
@@ -105,10 +98,27 @@ public class TenantUserController {
         return ResponseEntity.ok(response);
     }
 
+    // Soft-delete de usuário do tenant.
+    @DeleteMapping("/{userId}")
+    @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
+    public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
+        tenantUserService.softDeleteTenantUser(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Hard-delete de usuário do tenant.
     @DeleteMapping("/{userId}/hard")
     @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
     public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
         tenantUserService.hardDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
+    }
+
+    // Restaura usuário previamente deletado (soft-delete).
+    @PatchMapping("/{userId}/restore")
+    @PreAuthorize("hasAuthority('TEN_USER_RESTORE')")
+    public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
+        TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
+        return ResponseEntity.ok(response);
     }
 }

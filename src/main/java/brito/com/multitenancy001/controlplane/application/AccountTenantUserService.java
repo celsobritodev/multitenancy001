@@ -8,7 +8,7 @@ import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenan
 import brito.com.multitenancy001.controlplane.api.mapper.AccountUserApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
+import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
@@ -22,7 +22,7 @@ public class AccountTenantUserService {
 
     private final PublicExecutor publicExecutor;
     private final AccountRepository accountRepository;
-    private final TenantUserAdminBridge tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserAdminBridge;
     private final AccountUserApiMapper accountUserApiMapper;
 
     public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {

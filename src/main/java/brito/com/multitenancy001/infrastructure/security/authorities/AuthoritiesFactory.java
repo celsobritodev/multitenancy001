@@ -1,15 +1,14 @@
-package brito.com.multitenancy001.infrastructure.security.userdetails;
+package brito.com.multitenancy001.infrastructure.security.authorities;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRolePermissions;
-import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -27,11 +26,11 @@ public final class AuthoritiesFactory {
             merged.add(p.name());
         }
 
-        // permissions explícitas do banco
+        // permissions explícitas do banco (enum -> string)
         if (user.getPermissions() != null) {
-            for (String raw : user.getPermissions()) {
-                if (!StringUtils.hasText(raw)) continue;
-                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            for (ControlPlanePermission p : user.getPermissions()) {
+                if (p == null) continue;
+                merged.add(p.name());
             }
         }
 
@@ -40,7 +39,8 @@ public final class AuthoritiesFactory {
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
         for (String perm : merged) {
-            authorities.add(new SimpleGrantedAuthority(perm));
+            if (perm == null || perm.isBlank()) continue;
+            authorities.add(new SimpleGrantedAuthority(perm.trim().toUpperCase(Locale.ROOT)));
         }
         return authorities;
     }
@@ -48,27 +48,28 @@ public final class AuthoritiesFactory {
     public static Set<GrantedAuthority> forTenant(TenantUser user) {
         Set<String> merged = new LinkedHashSet<>();
 
-        // ✅ defaults por role (igual sua entidade faz)
+        // defaults por role
         if (user.getRole() != null) {
             for (TenantPermission p : TenantRolePermissions.permissionsFor(user.getRole())) {
                 merged.add(p.name());
             }
         }
 
-        // permissions explícitas do banco
+        // permissions explícitas do banco (enum -> string)
         if (user.getPermissions() != null) {
-            for (String raw : user.getPermissions()) {
-                if (!StringUtils.hasText(raw)) continue;
-                merged.add(raw.trim().toUpperCase(Locale.ROOT));
+            for (TenantPermission p : user.getPermissions()) {
+                if (p == null) continue;
+                merged.add(p.name());
             }
         }
 
-        // ✅ normaliza SEMPRE e bloqueia CP_ dentro do tenant
+        // normaliza SEMPRE e bloqueia CP_ dentro do tenant
         merged = PermissionScopeValidator.normalizeTenant(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
         for (String perm : merged) {
-            authorities.add(new SimpleGrantedAuthority(perm));
+            if (perm == null || perm.isBlank()) continue;
+            authorities.add(new SimpleGrantedAuthority(perm.trim().toUpperCase(Locale.ROOT)));
         }
         return authorities;
     }

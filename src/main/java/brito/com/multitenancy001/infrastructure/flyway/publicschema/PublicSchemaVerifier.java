@@ -8,6 +8,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.shared.db.Schemas;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -21,15 +23,17 @@ public class PublicSchemaVerifier {
         
         try {
             // Apenas VERIFICA, não cria
-            Integer accountsCount = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'accounts'", 
-                Integer.class
-            );
-            
-            Integer usersCount = jdbc.queryForObject(
-            	    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'controlplane_users'",
-            	    Integer.class
-            	);
+        	Integer accountsCount = jdbc.queryForObject(
+        		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'accounts'",
+        		    Integer.class,
+        		    Schemas.CONTROL_PLANE
+        		);
+
+        		Integer usersCount = jdbc.queryForObject(
+        		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'controlplane_users'",
+        		    Integer.class,
+        		    Schemas.CONTROL_PLANE
+        		);    
 
             
             log.info("✅ Verificação OK! Tabelas encontradas: accounts={}, controlplane_users={}", accountsCount, usersCount);

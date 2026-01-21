@@ -18,35 +18,35 @@ public class TenantCategoryController {
 
     private final TenantCategoryService tenantCategoryService;
 
-    // ======================
-    // READ
-    // ======================
-
+    // Lista categorias (não-deletadas) do tenant.
     @GetMapping
     @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
     public ResponseEntity<List<Category>> listAll() {
         return ResponseEntity.ok(tenantCategoryService.findAll());
     }
 
+    // Lista categorias ativas (não-deletadas) do tenant.
     @GetMapping("/active")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
     public ResponseEntity<List<Category>> listActive() {
         return ResponseEntity.ok(tenantCategoryService.findActive());
     }
 
+    // Busca categoria por id (escopo: tenant).
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
     public ResponseEntity<Category> getById(@PathVariable Long id) {
         return ResponseEntity.ok(tenantCategoryService.findById(id));
     }
 
+    // Pesquisa categorias por nome (escopo: tenant).
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
     public ResponseEntity<List<Category>> search(@RequestParam("name") String name) {
         return ResponseEntity.ok(tenantCategoryService.searchByName(name));
     }
 
-    // Admin flags
+    // Lista categorias com flags administrativas (incluir deletadas/inativas).
     @GetMapping("/admin")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
     public ResponseEntity<List<Category>> listAdmin(
@@ -56,10 +56,7 @@ public class TenantCategoryController {
         return ResponseEntity.ok(tenantCategoryService.findWithFlags(includeDeleted, includeInactive));
     }
 
-    // ======================
-    // WRITE
-    // ======================
-
+    // Cria categoria no tenant.
     @PostMapping
     @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
     public ResponseEntity<Category> create(@Valid @RequestBody Category category) {
@@ -67,18 +64,21 @@ public class TenantCategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
+    // Atualiza categoria do tenant (substituição completa).
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
     public ResponseEntity<Category> update(@PathVariable Long id, @RequestBody Category category) {
         return ResponseEntity.ok(tenantCategoryService.update(id, category));
     }
 
+    // Alterna status ativo/inativo da categoria.
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
     public ResponseEntity<Category> toggleActive(@PathVariable Long id) {
         return ResponseEntity.ok(tenantCategoryService.toggleActive(id));
     }
 
+    // Soft-delete de categoria no tenant.
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
     public ResponseEntity<Void> softDelete(@PathVariable Long id) {
@@ -86,6 +86,7 @@ public class TenantCategoryController {
         return ResponseEntity.noContent().build();
     }
 
+    // Restaura categoria previamente deletada (soft-delete).
     @PatchMapping("/{id}/restore")
     @PreAuthorize("hasAuthority('TEN_CATEGORY_WRITE')")
     public ResponseEntity<Category> restore(@PathVariable Long id) {

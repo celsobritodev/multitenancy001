@@ -4,6 +4,7 @@ import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -41,7 +42,7 @@ public class TenantSchemaProvisioningService {
 
         String trimmed = schemaName.trim();
 
-        if ("public".equalsIgnoreCase(trimmed)) {
+        if (Schemas.CONTROL_PLANE.equalsIgnoreCase(trimmed)) {
             throw new ApiException("INVALID_SCHEMA", "SchemaName 'public' não é permitido", 400);
         }
 
@@ -61,7 +62,7 @@ public class TenantSchemaProvisioningService {
 
         String normalized = schemaName.trim();
 
-        if ("public".equalsIgnoreCase(normalized)) return false;
+        if (Schemas.CONTROL_PLANE.equalsIgnoreCase(normalized)) return false;
 
         String sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = ?)";
         Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, normalized);

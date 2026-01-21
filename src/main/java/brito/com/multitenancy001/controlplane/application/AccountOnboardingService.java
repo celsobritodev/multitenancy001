@@ -8,8 +8,8 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.infrastructure.tenant.TenantProvisioningBridge;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUserAdminBridge;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
+import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
@@ -25,8 +25,8 @@ public class AccountOnboardingService {
     private final PublicExecutor publicExecutor;
     private final TxExecutor txExecutor;
     private final PublicAccountCreationService publicAccountCreationService;
-    private final TenantProvisioningBridge tenantProvisioningBridge;
-    private final TenantUserAdminBridge tenantUserAdminBridge;
+    private final TenantSchemaProvisioningFacade tenantProvisioningBridge;
+    private final TenantUserProvisioningFacade tenantUserAdminBridge;
     private final AccountRepository accountRepository;
 
     public AccountResponse createAccount(SignupRequest signupRequest) {

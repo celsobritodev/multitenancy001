@@ -13,37 +13,40 @@ import java.util.UUID;
 @Repository
 public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> {
 
-    // =========================
-    // FINDs "crus" (podem incluir deletados) - mantenho, mas no service vamos usar os "ativos/notDeleted"
-    // =========================
-    Optional<Supplier> findByDocument(String document);
+	// =========================
+	// FINDs "crus" (podem incluir deletados) - mantenho, mas no service vamos usar
+	// os "ativos/notDeleted"
+	// =========================
+	
 
-    List<Supplier> findByNameContainingIgnoreCase(String name);
+	 @Query("SELECT s FROM Supplier s WHERE s.deleted = false ORDER BY s.name ASC")
+	    List<Supplier> findNotDeleted();
 
-    List<Supplier> findByEmail(String email);
+	    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY s.name ASC")
+	    List<Supplier> findNotDeletedByNameContainingIgnoreCase(@Param("name") String name);
 
-    // =========================
-    // RECOMENDADO: queries usadas pelos endpoints (não-deletados)
-    // =========================
+	    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.email = :email ORDER BY s.name ASC")
+	    List<Supplier> findNotDeletedByEmail(@Param("email") String email);
+	
+	List<Supplier> findByNameContainingIgnoreCase(String name);
 
-    @Query("SELECT s FROM Supplier s WHERE s.deleted = false ORDER BY s.name ASC")
-    List<Supplier> findNotDeleted();
+	List<Supplier> findByEmail(String email);
 
-    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY s.name ASC")
-    List<Supplier> findNotDeletedByNameContainingIgnoreCase(@Param("name") String name);
+	// =========================
+	// RECOMENDADO: queries usadas pelos endpoints (não-deletados)
+	// =========================
 
-    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.email = :email ORDER BY s.name ASC")
-    List<Supplier> findNotDeletedByEmail(@Param("email") String email);
+	
+	@Query("""
+			SELECT s FROM Supplier s
+			WHERE s.deleted = false
+			  AND s.document IS NOT NULL
+			  AND TRIM(s.document) <> ''
+			  AND LOWER(TRIM(s.document)) = LOWER(TRIM(:document))
+			""")
+	Optional<Supplier> findNotDeletedByDocumentIgnoreCase(@Param("document") String document);
 
-    @Query("""
-           SELECT s FROM Supplier s
-           WHERE s.deleted = false
-             AND s.document IS NOT NULL
-             AND TRIM(s.document) <> ''
-             AND LOWER(s.document) = LOWER(:document)
-           """)
-    Optional<Supplier> findNotDeletedByDocumentIgnoreCase(@Param("document") String document);
+	@Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
+	List<Supplier> findActiveNotDeleted();
 
-    @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
-    List<Supplier> findActiveNotDeleted();
 }

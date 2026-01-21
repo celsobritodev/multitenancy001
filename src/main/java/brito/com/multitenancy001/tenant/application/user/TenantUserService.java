@@ -2,25 +2,25 @@ package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.AccountEntitlementsGuard;
 import brito.com.multitenancy001.shared.account.AccountResolver;
 import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.concurrent.Callable;
 
 @Service
 @RequiredArgsConstructor
@@ -35,30 +35,7 @@ public class TenantUserService {
     private final AppClock appClock;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
-
-
-    // ===== helpers =====
-    private <T> T runInTenant(String schema, Callable<T> action) {
-        TenantContext.bind(schema);
-        try {
-            return action.call();
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            TenantContext.clear();
-        }
-    }
-
-    private void runInTenant(String schema, Runnable action) {
-        TenantContext.bind(schema);
-        try {
-            action.run();
-        } finally {
-            TenantContext.clear();
-        }
-    }
+    private final TenantExecutor tenantExecutor;
 
     // =========================================================
     // CONTROLLER METHODS
@@ -69,12 +46,12 @@ public class TenantUserService {
         String schema = securityUtils.getCurrentSchema();
         Long fromUserId = securityUtils.getCurrentUserId();
 
-        runInTenant(schema, () ->
+        tenantExecutor.run(schema, () ->
                 tenantUserTxService.transferTenantOwnerRole(accountId, fromUserId, toUserId)
         );
     }
 
-  public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
+    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
     Long accountId = securityUtils.getCurrentAccountId();
     String schema = securityUtils.getCurrentSchema();
 
@@ -87,15 +64,26 @@ public class TenantUserService {
                     ? null
                     : new LinkedHashSet<>(tenantUserCreateRequest.permissions());
 
-    // 1) conta usuários no TENANT schema
-    long currentUsers = runInTenant(schema,
-            () -> tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE));
+    TenantUserOrigin origin =
+            (tenantUserCreateRequest.origin() != null)
+                    ? tenantUserCreateRequest.origin()
+                    : TenantUserOrigin.ADMIN;
 
-    // 2) valida quota no PUBLIC (sem o Tenant precisar importar domínio do ControlPlane)
+    // não permitir BUILT_IN via endpoint normal
+    if (origin == TenantUserOrigin.BUILT_IN) {
+        throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+    }
+
+    // 1) conta usuários no TENANT schema
+    long currentUsers = tenantExecutor.run(schema, () ->
+            tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
+    );
+
+    // 2) valida quota no PUBLIC (já está usando PublicExecutor por baixo)
     accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
 
     // 3) cria no TENANT schema
-    return runInTenant(schema, () -> {
+    return tenantExecutor.run(schema, () -> {
         TenantUser created = tenantUserTxService.createTenantUser(
                 accountId,
                 name,
@@ -105,7 +93,8 @@ public class TenantUserService {
                 tenantUserCreateRequest.role(),
                 tenantUserCreateRequest.phone(),
                 tenantUserCreateRequest.avatarUrl(),
-                perms
+                perms,
+                origin // ✅ AQUI ESTÁ O FIX DO ERRO
         );
 
         return tenantUserApiMapper.toDetails(created);
@@ -117,7 +106,7 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () ->
+        return tenantExecutor.run(schema, () ->
                 tenantUserTxService.listUsers(accountId)
                         .stream()
                         .map(tenantUserApiMapper::toSummary)
@@ -129,7 +118,7 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () ->
+        return tenantExecutor.run(schema, () ->
                 tenantUserTxService.listActiveUsers(accountId)
                         .stream()
                         .map(tenantUserApiMapper::toSummary)
@@ -141,7 +130,7 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> {
+        return tenantExecutor.run(schema, () -> {
             TenantUser user = tenantUserTxService.getUser(userId, accountId);
             return tenantUserApiMapper.toDetails(user);
         });
@@ -151,25 +140,24 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> {
+        return tenantExecutor.run(schema, () -> {
             TenantUser updated = tenantUserTxService.setSuspendedByAdmin(userId, accountId, suspended);
             return tenantUserApiMapper.toSummary(updated);
         });
     }
 
-
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        runInTenant(schema, () -> tenantUserTxService.softDelete(userId, accountId));
+        tenantExecutor.run(schema, () -> tenantUserTxService.softDelete(userId, accountId));
     }
 
     public TenantUserSummaryResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> {
+        return tenantExecutor.run(schema, () -> {
             TenantUser restored = tenantUserTxService.restore(userId, accountId);
             return tenantUserApiMapper.toSummary(restored);
         });
@@ -179,7 +167,7 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return runInTenant(schema, () -> {
+        return tenantExecutor.run(schema, () -> {
             TenantUser updated = tenantUserTxService.resetPassword(userId, accountId, newPassword);
             return tenantUserApiMapper.toSummary(updated);
         });
@@ -189,7 +177,7 @@ public class TenantUserService {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        runInTenant(schema, () -> tenantUserTxService.hardDelete(userId, accountId));
+        tenantExecutor.run(schema, () -> tenantUserTxService.hardDelete(userId, accountId));
     }
 
     // =========================================================
@@ -200,9 +188,11 @@ public class TenantUserService {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
         if (!StringUtils.hasText(usernameOrEmail)) throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
 
+        // resolve conta (PUBLIC)
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        return runInTenant(account.schemaName(), () -> {
+        // executa no TENANT
+        return tenantExecutor.run(account.schemaName(), () -> {
             TenantUser user = tenantUserTxService.getUserByUsernameOrEmail(usernameOrEmail, account.id());
 
             if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
@@ -231,13 +221,13 @@ public class TenantUserService {
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
         String username = jwtTokenProvider.getUsernameFromToken(token);
 
-        runInTenant(schema, () ->
+        tenantExecutor.run(schema, () ->
                 tenantUserTxService.resetPasswordWithToken(accountId, username, token, newPassword)
         );
     }
 
     // =========================================================
-    // MY PROFILE (agora existe no TxService)
+    // MY PROFILE
     // =========================================================
 
     public TenantUserDetailsResponse updateMyProfile(String name, String phone, String locale, String timezone) {
@@ -245,7 +235,7 @@ public class TenantUserService {
         String schema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
-        return runInTenant(schema, () -> {
+        return tenantExecutor.run(schema, () -> {
             TenantUser updated = tenantUserTxService.updateProfile(
                     userId,
                     accountId,
@@ -254,14 +244,12 @@ public class TenantUserService {
                     locale,
                     timezone,
                     appClock.now()
-
             );
             return tenantUserApiMapper.toDetails(updated);
         });
     }
-    
+
     public TenantUserSummaryResponse setTenantUserActiveByAdmin(Long userId, boolean active) {
         return setTenantUserSuspendedByAdmin(userId, !active);
     }
-
 }

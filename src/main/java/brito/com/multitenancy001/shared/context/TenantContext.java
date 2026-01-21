@@ -4,16 +4,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.infrastructure.multitenancy.hibernate.CurrentTenantSchemaResolver;
+import brito.com.multitenancy001.shared.db.Schemas;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TenantContext {
 
-    public static final String PUBLIC_SCHEMA = "public";
+    public static final String PUBLIC_SCHEMA = Schemas.CONTROL_PLANE;
 
     /**
      * ✅ Retorna o tenant REALMENTE bindado (ou null).
-     * Não mascara com "public".
+     * Não mascara com Schemas.CONTROL_PLANE.
      */
     public static String getOrNull() {
         return CurrentTenantSchemaResolver.resolveBoundTenantOrNull();

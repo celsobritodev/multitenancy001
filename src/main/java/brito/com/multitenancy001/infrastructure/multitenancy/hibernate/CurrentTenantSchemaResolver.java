@@ -5,12 +5,14 @@ import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.shared.db.Schemas;
+
 @Slf4j
 @Component
 public class CurrentTenantSchemaResolver
         implements CurrentTenantIdentifierResolver<String> {
 
-    private static final String DEFAULT_SCHEMA = "public";
+	private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
     private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
 
     /**

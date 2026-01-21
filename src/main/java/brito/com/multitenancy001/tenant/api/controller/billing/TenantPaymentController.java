@@ -1,11 +1,9 @@
 package brito.com.multitenancy001.tenant.api.controller.billing;
 
-import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
-import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.controlplane.application.billing.ControlPlanePaymentService;
-import jakarta.validation.Valid;
+
+import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.tenant.application.billing.TenantBillingService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -17,34 +15,23 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantPaymentController {
 
-    private final ControlPlanePaymentService paymentService;
+    private final TenantBillingService tenantBillingService;
 
-    // =========================
-    // MY TENANT (SAFE DEFAULT)
-    // =========================
-
-    @PostMapping
-    @PreAuthorize("hasAuthority('TEN_BILLING_WRITE')")
-    public ResponseEntity<PaymentResponse> processPayment(@Valid @RequestBody PaymentRequest paymentRequest) {
-        PaymentResponse response = paymentService.processPaymentForMyAccount(paymentRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    @GetMapping("/account/{accountId}")
+    @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
+    public ResponseEntity<List<PaymentResponse>> listPayments(@PathVariable Long accountId) {
+        return ResponseEntity.ok(tenantBillingService.listPaymentsForAccount(accountId));
     }
 
-    @GetMapping("/{paymentId}")
+    @GetMapping("/account/{accountId}/{paymentId}")
     @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
-    public ResponseEntity<PaymentResponse> getById(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(paymentService.getPaymentByIdForMyAccount(paymentId));
+    public ResponseEntity<PaymentResponse> getPayment(@PathVariable Long accountId, @PathVariable Long paymentId) {
+        return ResponseEntity.ok(tenantBillingService.getPaymentForAccount(accountId, paymentId));
     }
 
-    @GetMapping
+    @GetMapping("/account/{accountId}/has-active")
     @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
-    public ResponseEntity<List<PaymentResponse>> getMyPayments() {
-        return ResponseEntity.ok(paymentService.getPaymentsByMyAccount());
-    }
-
-    @GetMapping("/active")
-    @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
-    public ResponseEntity<Boolean> hasActivePaymentMyAccount() {
-        return ResponseEntity.ok(paymentService.hasActivePaymentMyAccount());
+    public ResponseEntity<Boolean> hasActive(@PathVariable Long accountId) {
+        return ResponseEntity.ok(tenantBillingService.hasActivePayment(accountId));
     }
 }

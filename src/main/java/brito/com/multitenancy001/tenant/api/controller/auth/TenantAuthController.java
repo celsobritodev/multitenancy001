@@ -16,6 +16,7 @@ public class TenantAuthController {
 
     private final TenantAuthService tenantAuthService;
 
+    // Autentica usuário tenant e retorna JWT (access/refresh) para o contexto do tenant.
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> loginTenant(@Valid @RequestBody TenantLoginRequest tenantLoginRequest) {
         JwtResponse jwtResponse = tenantAuthService.loginTenant(tenantLoginRequest);

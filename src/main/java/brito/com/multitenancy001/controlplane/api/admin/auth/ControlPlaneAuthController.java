@@ -15,10 +15,9 @@ public class ControlPlaneAuthController {
 
     private final ControlPlaneAuthService controlPlaneAuthService;
 
+    // Autentica um usuário do Control Plane e retorna um JWT para chamadas administrativas.
     @PostMapping("/login")
-    public ResponseEntity<JwtResponse> loginControlPlaneUser(
-            @Valid @RequestBody ControlPlaneAdminLoginRequest request
-    ) {
+    public ResponseEntity<JwtResponse> loginControlPlaneUser(@Valid @RequestBody ControlPlaneAdminLoginRequest request) {
         JwtResponse response = controlPlaneAuthService.loginControlPlaneUser(request);
         return ResponseEntity.ok(response);
     }

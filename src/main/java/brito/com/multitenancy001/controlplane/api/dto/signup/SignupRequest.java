@@ -1,45 +1,42 @@
-
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 public record SignupRequest(
+        @NotBlank(message = "Nome da empresa é obrigatório")
+        @Size(min = 2, max = 100, message = "Nome deve ter entre 2 e 100 caracteres")
+        String displayName,
 
-    @NotBlank(message = "Nome da empresa é obrigatório")
-    @Size(min = 2, max = 100, message = "Nome deve ter entre 2 e 100 caracteres")
-    String displayName,
+        @NotBlank(message = "Email da empresa é obrigatório")
+        @Email(message = "Email inválido")
+        String loginEmail,
 
-    @NotBlank(message = "Email da empresa é obrigatório")
-    @Email(message = "Email inválido")
-    String loginEmail,
+        @NotNull(message = "Tipo de documento é obrigatório (CPF ou CNPJ)")
+        TaxIdType taxIdType,
 
-    @NotNull(message = "Tipo de documento é obrigatório (CPF ou CNPJ)")
-    TaxIdType taxIdType,
+        @NotBlank(message = "Número do documento é obrigatório")
+        String taxIdNumber,
 
-    @NotBlank(message = "Número do documento é obrigatório")
-    String taxIdNumber,
+        @NotBlank(message = "Senha é obrigatória")
+        @Pattern(
+                regexp = ValidationPatterns.PASSWORD_PATTERN,
+                message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas e números"
+        )
+        String password,
 
-    @NotBlank(message = "Senha é obrigatória")
-    @Pattern(
-        regexp = ValidationPatterns.PASSWORD_PATTERN,
-        message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas e números"
-    )
-    String password,
-
-    @NotBlank(message = "Confirmação de senha é obrigatória")
-    String confirmPassword
-) 
-	{
-		   @AssertTrue(message = "As senhas não coincidem")
-		   public boolean isPasswordMatching() {
-		      if (password == null || confirmPassword == null) return true; // deixa @NotBlank fazer o trabalho
-		      return password.equals(confirmPassword);
-		   }
+        @NotBlank(message = "Confirmação de senha é obrigatória")
+        String confirmPassword
+) {
+    @AssertTrue(message = "As senhas não coincidem")
+    public boolean isPasswordMatching() {
+        if (password == null || confirmPassword == null) return true;
+        return password.equals(confirmPassword);
+    }
 }

@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS payments (
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
 
     transaction_id VARCHAR(100) UNIQUE,
-    payment_method VARCHAR(50),
-    payment_gateway VARCHAR(50),
+    payment_method VARCHAR(50) NOT NULL,
+    payment_gateway VARCHAR(50) NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
 
     description VARCHAR(500),

@@ -21,6 +21,7 @@ public class ControlPlaneUserController {
 
     private final ControlPlaneUserService controlPlaneUserService;
 
+    // Cria um usuário do Control Plane (plataforma) respeitando as regras de role/permissions do criador.
     @PostMapping
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> createControlPlaneUser(
@@ -30,26 +31,21 @@ public class ControlPlaneUserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // Lista usuários ativos do Control Plane.
     @GetMapping
     @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listControlPlaneUsers() {
         return ResponseEntity.ok(controlPlaneUserService.listControlPlaneUsers());
     }
 
+    // Busca um usuário ativo do Control Plane por ID.
     @GetMapping("/{userId}")
     @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> getControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.getControlPlaneUser(userId));
     }
 
-    /**
-     * ✅ Update geral:
-     * - name/email/role/username/permissions (se você decidir aceitar tudo aqui)
-     * - Service faz as barreiras:
-     *   - bloqueia update se builtInUser =true
-     *   - bloqueia rename para username reservado
-     *   - bloqueia alterar permissions se não for OWNER (e bloqueia se builtInUser =true)
-     */
+    // Atualiza dados do usuário (nome/email/username/role/permissions) conforme regras e barreiras do serviço.
     @PatchMapping("/{userId}")
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUser(
@@ -59,15 +55,7 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUser(userId, request));
     }
 
-   
-
-
-    /**
-     * ✅ Endpoint dedicado para permissions:
-     * - Service faz as barreiras:
-     *   - bloqueia se builtInUser =true
-     *   - só OWNER pode
-     */
+    // Atualiza o conjunto de permissions do usuário conforme regras e barreiras do serviço.
     @PatchMapping("/{userId}/permissions")
     @PreAuthorize("hasAuthority('CP_USER_WRITE')")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserPermissions(
@@ -77,20 +65,7 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUserPermissions(userId, request));
     }
 
-    @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority('CP_USER_DELETE')")
-    public ResponseEntity<Void> deleteControlPlaneUser(@PathVariable Long userId) {
-        controlPlaneUserService.softDeleteControlPlaneUser(userId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
-    public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
-    }
-    
-    
+    // Reseta a senha do usuário alvo (ação administrativa), aplicando regras de segurança do serviço.
     @PatchMapping("/{userId}/reset-password")
     @PreAuthorize("hasAuthority('CP_USER_PASSWORD_RESET')")
     public ResponseEntity<Void> resetPassword(
@@ -101,5 +76,18 @@ public class ControlPlaneUserController {
         return ResponseEntity.noContent().build();
     }
 
+    // Executa soft delete do usuário (ação administrativa) conforme regras do serviço.
+    @DeleteMapping("/{userId}")
+    @PreAuthorize("hasAuthority('CP_USER_DELETE')")
+    public ResponseEntity<Void> deleteControlPlaneUser(@PathVariable Long userId) {
+        controlPlaneUserService.softDeleteControlPlaneUser(userId);
+        return ResponseEntity.noContent().build();
+    }
 
+    // Restaura um usuário previamente deletado (ação administrativa) conforme regras do serviço.
+    @PatchMapping("/{userId}/restore")
+    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
+    }
 }
