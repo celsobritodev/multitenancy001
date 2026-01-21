@@ -22,6 +22,10 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 	boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
 	        String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
 	);
+	
+	@Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
+	long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
+
 
 
     boolean existsByTypeAndDeletedFalse(AccountType type);
@@ -55,13 +59,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // ADMIN (mantendo os nomes que seu service chama)
     // =========================================================
 
-    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
-    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
+   
+    
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
+    long countByStatusesAndDeletedFalse(@Param("statuses") List<AccountStatus> statuses);
 
-    // ✅ para manter compatível com AccountLifecycleService.countActiveAccounts()
-    default long countActiveAccounts() {
-        return countByStatusAndDeletedFalse(AccountStatus.ACTIVE);
+    default long countOperationalAccounts() {
+        return countByStatusesAndDeletedFalse(List.of(AccountStatus.ACTIVE, AccountStatus.FREE_TRIAL));
     }
+
+    
 
     Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
 

@@ -47,11 +47,7 @@ public class ControlPlaneAccountController {
         return PageRequest.of(page, size, pageable.getSort());
     }
 
-    @GetMapping("/count/active")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Long> countActiveAccounts() {
-        return ResponseEntity.ok(accountLifecycleService.countActiveAccounts());
-    }
+    
     
     
 
@@ -132,11 +128,7 @@ public class ControlPlaneAccountController {
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
     }
 
-    @GetMapping("/{id}/users/active")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listActiveUsersByAccount(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
-    }
+   
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_ACTIVATE')")
@@ -194,10 +186,7 @@ public class ControlPlaneAccountController {
      return ResponseEntity.ok(accountLifecycleService.listExpiredTrials(date, status));
  }
 
- /**
-  * Ex.: /api/admin/accounts/overdue
-  * Ex.: /api/admin/accounts/overdue?today=2026-01-18T10:00:00&status=ACTIVE
-  */
+ 
  @GetMapping("/overdue")
  @PreAuthorize("hasAuthority('CP_TENANT_READ')")
  public ResponseEntity<List<AccountResponse>> listOverdue(
@@ -215,13 +204,6 @@ public class ControlPlaneAccountController {
      return ResponseEntity.ok(accountLifecycleService.countOperationalAccounts());
  }
 
- /** @deprecated use /count/operational */
- @Deprecated
- @GetMapping("/count/active")
- @PreAuthorize("hasAuthority('CP_TENANT_READ')")
- public ResponseEntity<Long> countActiveAccounts() {
-     return ResponseEntity.ok(accountLifecycleService.countOperationalAccounts());
- }
 
  @GetMapping("/{id}/users/operational")
  @PreAuthorize("hasAuthority('CP_TENANT_READ')")

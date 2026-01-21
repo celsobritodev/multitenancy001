@@ -98,8 +98,8 @@ public class AccountLifecycleService {
         accountStatusService.restoreAccount(accountId);
     }
 
-    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyActive) {
-        return accountTenantUserService.listTenantUsers(accountId, onlyActive);
+    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
+        return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
@@ -146,10 +146,7 @@ public class AccountLifecycleService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public long countActiveAccounts() {
-        return publicExecutor.run(accountRepository::countActiveAccounts);
-    }
+   
 
     @Transactional(readOnly = true)
     public Page<AccountResponse> listAccountsLatest(Pageable pageable) {
@@ -268,15 +265,11 @@ public class AccountLifecycleService {
  
  @Transactional(readOnly = true)
  public long countOperationalAccounts() {
-     return publicExecutor.run(accountRepository::countActiveAccounts);
+     // Fonte da verdade: operational
+     // (por enquanto chama a query antiga do repository)
+     return publicExecutor.run(accountRepository::countOperationalAccounts);
  }
 
- /** @deprecated use countOperationalAccounts */
- @Deprecated
- @Transactional(readOnly = true)
- public long countActiveAccounts() {
-     return countOperationalAccounts();
- }
 
  
 

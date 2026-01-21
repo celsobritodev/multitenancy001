@@ -34,9 +34,5 @@ public enum AccountStatus {
         return this == CANCELLED || this == EXPIRED;
     }
 
-    /** @deprecated Evite "active" no domínio; use isOperational(). */
-    @Deprecated
-    public boolean isActive() {
-        return this == ACTIVE;
-    }
+ 
 }

@@ -59,14 +59,8 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUser(userId, request));
     }
 
-    @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
-    public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserStatus(
-            @PathVariable Long userId,
-            @RequestParam boolean active
-    ) {
-        return ResponseEntity.ok(controlPlaneUserService.updateControlPlaneUserStatus(userId, active));
-    }
+   
+
 
     /**
      * ✅ Endpoint dedicado para permissions:

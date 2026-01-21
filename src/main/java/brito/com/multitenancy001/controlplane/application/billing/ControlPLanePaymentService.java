@@ -1,8 +1,10 @@
 package brito.com.multitenancy001.controlplane.application.billing;
 
+import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.controlplane.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.controlplane.application.AccountStatusService;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.billing.Payment;
@@ -33,6 +35,8 @@ public class ControlPlanePaymentService {
     private final ControlPlanePaymentRepository paymentRepository;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
+    private final AccountStatusService accountStatusService;
+
     
     
 @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
@@ -67,11 +71,16 @@ public void checkPayments() {
     
     
 
-    private void suspendAccount(Account account, String reason) {
-        account.setStatus(AccountStatus.SUSPENDED);
-        accountRepository.save(account);
-        sendSuspensionEmail(account, reason);
-    }
+private void suspendAccount(Account account, String reason) {
+    // garante side effects (suspender tenant users)
+    accountStatusService.changeAccountStatus(
+            account.getId(),
+            new AccountStatusChangeRequest(AccountStatus.SUSPENDED, reason)
+    );
+
+    sendSuspensionEmail(account, reason);
+}
+
 
     private void checkExpiredPendingPayments(LocalDateTime now) {
         LocalDateTime thirtyMinutesAgo = now.minusMinutes(30);

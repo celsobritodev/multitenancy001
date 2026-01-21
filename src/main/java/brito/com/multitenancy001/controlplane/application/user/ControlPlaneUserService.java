@@ -328,20 +328,7 @@ public class ControlPlaneUserService {
 	// STATUS / DELETE / RESTORE
 	// =========================
 
-	public ControlPlaneUserDetailsResponse updateControlPlaneUserStatus(Long userId, boolean active) {
-		TenantContext.clear();
-		Account controlPlaneAccount = getControlPlaneAccount();
-
-		ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
-
-		assertNotBuiltInUserReadonly(user, "UPDATE_STATUS");
-		assertOwnerOnly("UPDATE_STATUS");
-
-		assertNotSelfTarget(userId, "UPDATE_STATUS");
-
-		user.setSuspendedByAdmin(!active);
-		return mapToResponse(controlPlaneUserRepository.save(user));
-	}
+	
 
 	public void softDeleteControlPlaneUser(Long userId) {
 		TenantContext.clear();
@@ -530,6 +517,21 @@ public class ControlPlaneUserService {
 		return controlPlaneUserRepository.findByIdAndAccountId(userId, accountId)
 				.orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 	}
+	
+	public ControlPlaneUserDetailsResponse updateControlPlaneUserSuspended(Long userId, boolean suspended) {
+	    TenantContext.clear();
+	    Account controlPlaneAccount = getControlPlaneAccount();
+
+	    ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+
+	    assertNotBuiltInUserReadonly(user, "UPDATE_STATUS");
+	    assertOwnerOnly("UPDATE_STATUS");
+	    assertNotSelfTarget(userId, "UPDATE_STATUS");
+
+	    user.setSuspendedByAdmin(suspended);
+	    return mapToResponse(controlPlaneUserRepository.save(user));
+	}
+
 
 	private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
 		return new ControlPlaneUserDetailsResponse(user.getId(), user.getUsername(), user.getName(), user.getEmail(),

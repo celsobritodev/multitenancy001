@@ -58,7 +58,7 @@ public class ControlPlanePaymentController {
 
     @GetMapping("/by-account/{accountId}/active")
     @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
-    public ResponseEntity<Boolean> hasActivePaymentAdmin(@PathVariable Long accountId) {
+    public ResponseEntity<Boolean> hasCurrentPaymentAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.hasActivePayment(accountId));
     }
 

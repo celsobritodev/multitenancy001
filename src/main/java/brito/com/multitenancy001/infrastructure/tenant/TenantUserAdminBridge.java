@@ -34,13 +34,13 @@ public class TenantUserAdminBridge {
 
     private final AppClock appClock;
 
-    public List<UserSummaryData> listUserSummaries(String schemaName, Long accountId, boolean onlyActive) {
+    public List<UserSummaryData> listUserSummaries(String schemaName, Long accountId, boolean onlyOperational) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantReadOnlyTx(() -> {
 
-                	var users = onlyActive
+                	var users = onlyOperational
                 	        ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
                 	        : tenantUserRepository.findByAccountId(accountId);
 
@@ -100,11 +100,11 @@ public class TenantUserAdminBridge {
         );
     }
 
-    public List<TenantUser> listUsers(String schemaName, Long accountId, boolean onlyActive) {
+    public List<TenantUser> listUsers(String schemaName, Long accountId, boolean onlyOperational) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-        txExecutor.tenantReadOnlyTx(() -> onlyActive
+        txExecutor.tenantReadOnlyTx(() -> onlyOperational
                 ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
                 : tenantUserRepository.findByAccountId(accountId)
         )
