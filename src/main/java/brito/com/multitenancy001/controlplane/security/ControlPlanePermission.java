@@ -6,7 +6,7 @@ public enum ControlPlanePermission implements PermissionAuthority {
 
     CP_TENANT_READ,
     CP_TENANT_SUSPEND,
-    CP_TENANT_ACTIVATE,
+    CP_TENANT_RESUME,
     CP_TENANT_DELETE,
 
     CP_BILLING_READ,
@@ -16,7 +16,7 @@ public enum ControlPlanePermission implements PermissionAuthority {
     CP_USER_WRITE,
     CP_USER_DELETE,
 
-    // ✅ NOVA (somente superadmin deve ter)
+
     CP_USER_PASSWORD_RESET;
 
     @Override

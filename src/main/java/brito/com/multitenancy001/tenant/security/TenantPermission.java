@@ -25,6 +25,7 @@ public enum TenantPermission implements PermissionAuthority {
     TEN_SALE_READ,
     TEN_SALE_WRITE,
     TEN_SALE_ISSUES_READ,
+    TEN_SALE_ISSUES_WRITE,
 
     TEN_REPORT_SALES_READ,
 

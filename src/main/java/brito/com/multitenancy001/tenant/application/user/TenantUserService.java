@@ -51,56 +51,52 @@ public class TenantUserService {
         );
     }
 
-    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest tenantUserCreateRequest) {
-    Long accountId = securityUtils.getCurrentAccountId();
-    String schema = securityUtils.getCurrentSchema();
+    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
 
-    String name = tenantUserCreateRequest.name().trim();
-    String username = tenantUserCreateRequest.username().trim().toLowerCase();
-    String email = tenantUserCreateRequest.email().trim().toLowerCase();
+        String name = req.name().trim();
+        String username = req.username().trim().toLowerCase();
+        String email = req.email().trim().toLowerCase();
 
-    final LinkedHashSet<String> perms =
-            (tenantUserCreateRequest.permissions() == null || tenantUserCreateRequest.permissions().isEmpty())
-                    ? null
-                    : new LinkedHashSet<>(tenantUserCreateRequest.permissions());
+        final LinkedHashSet<String> perms =
+                (req.permissions() == null || req.permissions().isEmpty())
+                        ? null
+                        : new LinkedHashSet<>(req.permissions());
 
-    TenantUserOrigin origin =
-            (tenantUserCreateRequest.origin() != null)
-                    ? tenantUserCreateRequest.origin()
-                    : TenantUserOrigin.ADMIN;
+        TenantUserOrigin origin = (req.origin() != null) ? req.origin() : TenantUserOrigin.ADMIN;
 
-    // não permitir BUILT_IN via endpoint normal
-    if (origin == TenantUserOrigin.BUILT_IN) {
-        throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
-    }
+        // não permitir BUILT_IN via endpoint normal
+        if (origin == TenantUserOrigin.BUILT_IN) {
+            throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+        }
 
-    // 1) conta usuários no TENANT schema
-    long currentUsers = tenantExecutor.run(schema, () ->
-            tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
-    );
-
-    // 2) valida quota no PUBLIC (já está usando PublicExecutor por baixo)
-    accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
-
-    // 3) cria no TENANT schema
-    return tenantExecutor.run(schema, () -> {
-        TenantUser created = tenantUserTxService.createTenantUser(
-                accountId,
-                name,
-                username,
-                email,
-                tenantUserCreateRequest.password(),
-                tenantUserCreateRequest.role(),
-                tenantUserCreateRequest.phone(),
-                tenantUserCreateRequest.avatarUrl(),
-                perms,
-                origin // ✅ AQUI ESTÁ O FIX DO ERRO
+        // 1) conta usuários no TENANT schema
+        long currentUsers = tenantExecutor.run(schema, () ->
+                tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
         );
 
-        return tenantUserApiMapper.toDetails(created);
-    });
-}
+        // 2) valida quota no PUBLIC
+        accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
 
+        // 3) cria no TENANT schema
+        return tenantExecutor.run(schema, () -> {
+            TenantUser created = tenantUserTxService.createTenantUser(
+                    accountId,
+                    name,
+                    username,
+                    email,
+                    req.password(),
+                    req.role(),
+                    req.phone(),
+                    req.avatarUrl(),
+                    perms,
+                    origin
+            );
+
+            return tenantUserApiMapper.toDetails(created);
+        });
+    }
 
     public List<TenantUserSummaryResponse> listTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -114,12 +110,16 @@ public class TenantUserService {
         );
     }
 
-    public List<TenantUserSummaryResponse> listActiveTenantUsers() {
+    /**
+     * "Enabled" = não deletado e não suspenso (por account/admin).
+     * Renomeado para evitar "Active" (ambíguo).
+     */
+    public List<TenantUserSummaryResponse> listEnabledTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
         return tenantExecutor.run(schema, () ->
-                tenantUserTxService.listActiveUsers(accountId)
+                tenantUserTxService.listEnabledUsers(accountId)
                         .stream()
                         .map(tenantUserApiMapper::toSummary)
                         .toList()
@@ -136,12 +136,19 @@ public class TenantUserService {
         });
     }
 
+    /**
+     * Update via UPDATE direto no repo (void), depois re-carrega para devolver Summary.
+     */
     public TenantUserSummaryResponse setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
         return tenantExecutor.run(schema, () -> {
-            TenantUser updated = tenantUserTxService.setSuspendedByAdmin(userId, accountId, suspended);
+            // 1) atualiza (update direto)
+            tenantUserTxService.setSuspendedByAdmin(accountId, userId, suspended);
+
+            // 2) recarrega para retornar dto
+            TenantUser updated = tenantUserTxService.getUser(userId, accountId);
             return tenantUserApiMapper.toSummary(updated);
         });
     }
@@ -249,7 +256,5 @@ public class TenantUserService {
         });
     }
 
-    public TenantUserSummaryResponse setTenantUserActiveByAdmin(Long userId, boolean active) {
-        return setTenantUserSuspendedByAdmin(userId, !active);
-    }
+
 }

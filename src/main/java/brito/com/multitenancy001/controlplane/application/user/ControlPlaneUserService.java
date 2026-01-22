@@ -1,8 +1,10 @@
 package brito.com.multitenancy001.controlplane.application.user;
 
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneMeResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPermissionsUpdateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserUpdateRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -95,7 +97,7 @@ public class ControlPlaneUserService {
     }
 
     // =========================
-    // ✅ GUARDS
+    // GUARDS
     // =========================
 
     private String normalizeUsername(String username) {
@@ -131,8 +133,11 @@ public class ControlPlaneUserService {
         }
     }
 
-    private ControlPlaneUser loadActiveUserOr404(Long userId, Long accountId) {
-        return controlPlaneUserRepository.findActiveByIdAndAccountId(userId, accountId)
+    /**
+     * NOT_DELETED = deleted=false (não necessariamente "enabled")
+     */
+    private ControlPlaneUser loadNotDeletedUserOr404(Long userId, Long accountId) {
+        return controlPlaneUserRepository.findNotDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
     }
 
@@ -177,17 +182,16 @@ public class ControlPlaneUserService {
                 throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
             }
 
-            if (controlPlaneUserRepository.existsActiveByUsernameIgnoreCase(controlPlaneAccount.getId(), username)) {
+            if (controlPlaneUserRepository.existsNotDeletedByUsernameIgnoreCase(controlPlaneAccount.getId(), username)) {
                 throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
             }
 
-            if (controlPlaneUserRepository.existsActiveByEmailIgnoreCase(controlPlaneAccount.getId(), email)) {
+            if (controlPlaneUserRepository.existsNotDeletedByEmailIgnoreCase(controlPlaneAccount.getId(), email)) {
                 throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
             }
 
             LinkedHashSet<ControlPlanePermission> normalizedPermissions =
-                    normalizeControlPlanePermissions(req.permissions());
-
+                    normalizeControlPlanePermissionsStrict(req.permissions());
 
             ControlPlaneUser user = ControlPlaneUser.builder()
                     .name(req.name())
@@ -216,7 +220,7 @@ public class ControlPlaneUserService {
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
         return publicExecutor.run(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
-            return controlPlaneUserRepository.findActiveByAccountId(controlPlaneAccount.getId())
+            return controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId())
                     .stream()
                     .map(this::mapToResponse)
                     .toList();
@@ -227,7 +231,7 @@ public class ControlPlaneUserService {
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
         return publicExecutor.run(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
-            ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             return mapToResponse(user);
         });
     }
@@ -240,7 +244,7 @@ public class ControlPlaneUserService {
         return publicExecutor.run(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
-            ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             assertNotBuiltInUserReadonly(user, "UPDATE_USER");
 
             if (req.name() != null && !req.name().isBlank()) {
@@ -256,7 +260,7 @@ public class ControlPlaneUserService {
 
                 if (user.getEmail() == null || !newEmail.equalsIgnoreCase(user.getEmail())) {
                     boolean existsOther = controlPlaneUserRepository
-                            .existsOtherActiveByEmailIgnoreCase(controlPlaneAccount.getId(), newEmail, user.getId());
+                            .existsOtherNotDeletedByEmailIgnoreCase(controlPlaneAccount.getId(), newEmail, user.getId());
                     if (existsOther) {
                         throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
                     }
@@ -275,7 +279,7 @@ public class ControlPlaneUserService {
 
                 if (!newUsername.equalsIgnoreCase(user.getUsername())) {
                     boolean existsOther = controlPlaneUserRepository
-                            .existsOtherActiveByUsernameIgnoreCase(controlPlaneAccount.getId(), newUsername, user.getId());
+                            .existsOtherNotDeletedByUsernameIgnoreCase(controlPlaneAccount.getId(), newUsername, user.getId());
                     if (existsOther) {
                         throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
                     }
@@ -290,9 +294,8 @@ public class ControlPlaneUserService {
 
             if (req.permissions() != null) {
                 assertOwnerOnly("UPDATE_PERMISSIONS");
-
                 LinkedHashSet<ControlPlanePermission> normalized =
-                        normalizeControlPlanePermissions(req.permissions());
+                        normalizeControlPlanePermissionsStrict(req.permissions());
                 user.setPermissions(normalized);
             }
 
@@ -300,26 +303,26 @@ public class ControlPlaneUserService {
         });
     }
 
-   public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
-        Long userId,
-        ControlPlaneUserPermissionsUpdateRequest req
-) {
-    return publicExecutor.run(() -> {
-        Account controlPlaneAccount = getControlPlaneAccount();
+    public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
+            Long userId,
+            ControlPlaneUserPermissionsUpdateRequest req
+    ) {
+        return publicExecutor.run(() -> {
+            Account controlPlaneAccount = getControlPlaneAccount();
 
-        ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
 
-        assertNotBuiltInUserReadonly(user, "UPDATE_PERMISSIONS");
-        assertOwnerOnly("UPDATE_PERMISSIONS");
+            assertNotBuiltInUserReadonly(user, "UPDATE_PERMISSIONS");
+            assertOwnerOnly("UPDATE_PERMISSIONS");
 
-        LinkedHashSet<ControlPlanePermission> normalized =
-                normalizeControlPlanePermissions(req.permissions());
+            LinkedHashSet<ControlPlanePermission> normalized =
+                    normalizeControlPlanePermissionsStrict(req.permissions());
 
-        user.setPermissions(normalized);
+            user.setPermissions(normalized);
 
-        return mapToResponse(controlPlaneUserRepository.save(user));
-    });
-}
+            return mapToResponse(controlPlaneUserRepository.save(user));
+        });
+    }
 
     // =========================
     // STATUS / DELETE / RESTORE
@@ -329,7 +332,7 @@ public class ControlPlaneUserService {
         publicExecutor.run(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
-            ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
 
             assertNotBuiltInUserReadonly(user, "DELETE");
             assertOwnerOnly("DELETE");
@@ -357,7 +360,7 @@ public class ControlPlaneUserService {
                 throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
             }
 
-            assertRestoreNoActiveCollision(controlPlaneAccount, user);
+            assertRestoreNoNotDeletedCollision(controlPlaneAccount, user);
 
             user.restore();
             user.setSuspendedByAdmin(false);
@@ -369,108 +372,11 @@ public class ControlPlaneUserService {
         });
     }
 
-    public void resetControlPlaneUserPassword(
-            Long targetUserId,
-            brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest req
-    ) {
-        publicExecutor.run(() -> {
-            Account controlPlaneAccount = getControlPlaneAccount();
-
-            if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
-            if (req.newPassword() == null || req.newPassword().isBlank()) {
-                throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
-            }
-            if (!req.newPassword().equals(req.confirmPassword())) {
-                throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
-            }
-
-            assertOwnerOnly("RESET_PASSWORD");
-            assertNotSelfTarget(targetUserId, "RESET_PASSWORD");
-
-            ControlPlaneUser superAdmin = controlPlaneUserRepository.findActiveSuperAdmin(controlPlaneAccount.getId())
-                    .orElseThrow(() -> new ApiException(
-                            "SUPERADMIN_NOT_FOUND",
-                            "Superadmin não encontrado. Rode a seed V5__insert_controlplane_users.sql",
-                            500
-                    ));
-
-            if (superAdmin.getId().equals(targetUserId)) {
-                throw new ApiException("SUPERADMIN_CANNOT_RESET_SELF", "Superadmin não pode resetar a própria senha", 409);
-            }
-
-            ControlPlaneUser target = controlPlaneUserRepository
-                    .findActiveByIdAndAccountId(targetUserId, controlPlaneAccount.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-
-            if (target.getRole() == ControlPlaneRole.CONTROLPLANE_OWNER) {
-                throw new ApiException("OWNER_PASSWORD_RESET_BLOCKED",
-                        "Não é permitido resetar senha de CONTROLPLANE_OWNER", 409);
-            }
-
-            target.setPassword(passwordEncoder.encode(req.newPassword()));
-            target.setMustChangePassword(true);
-            target.setPasswordChangedAt(appClock.now());
-
-            target.setFailedLoginAttempts(0);
-            target.setLockedUntil(null);
-            target.setPasswordResetToken(null);
-            target.setPasswordResetExpires(null);
-
-            controlPlaneUserRepository.save(target);
-        });
-    }
-
-    public void changeMyPassword(
-            brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest req
-    ) {
-        publicExecutor.run(() -> {
-            Account controlPlaneAccount = getControlPlaneAccount();
-
-            if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
-            if (req.newPassword() == null || req.newPassword().isBlank()) {
-                throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
-            }
-            if (!req.newPassword().equals(req.confirmPassword())) {
-                throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
-            }
-
-            Long meId = securityUtils.getCurrentUserId();
-            if (meId == null) throw new ApiException("UNAUTHORIZED", "Usuário não autenticado", 401);
-
-            ControlPlaneUser me = controlPlaneUserRepository.findActiveByIdAndAccountId(meId, controlPlaneAccount.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-
-            if (me.isDeleted()) throw new ApiException("USER_DELETED", "Usuário removido", 409);
-            if (me.isSuspendedByAccount() || me.isSuspendedByAdmin()) {
-                throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
-            }
-
-            if (!passwordEncoder.matches(req.currentPassword(), me.getPassword())) {
-                throw new ApiException("INVALID_CURRENT_PASSWORD", "Senha atual inválida", 400);
-            }
-
-            if (passwordEncoder.matches(req.newPassword(), me.getPassword())) {
-                throw new ApiException("PASSWORD_REUSE", "Nova senha não pode ser igual à senha atual", 400);
-            }
-
-            me.setPassword(passwordEncoder.encode(req.newPassword()));
-            me.setMustChangePassword(false);
-            me.setPasswordChangedAt(appClock.now());
-
-            me.setFailedLoginAttempts(0);
-            me.setLockedUntil(null);
-            me.setPasswordResetToken(null);
-            me.setPasswordResetExpires(null);
-
-            controlPlaneUserRepository.save(me);
-        });
-    }
-
     public ControlPlaneUserDetailsResponse updateControlPlaneUserSuspended(Long userId, boolean suspended) {
         return publicExecutor.run(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
-            ControlPlaneUser user = loadActiveUserOr404(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
 
             assertNotBuiltInUserReadonly(user, "UPDATE_STATUS");
             assertOwnerOnly("UPDATE_STATUS");
@@ -480,6 +386,10 @@ public class ControlPlaneUserService {
             return mapToResponse(controlPlaneUserRepository.save(user));
         });
     }
+
+    // =========================
+    // ME
+    // =========================
 
     @Transactional(readOnly = true)
     public ControlPlaneMeResponse getMe() {
@@ -509,9 +419,109 @@ public class ControlPlaneUserService {
         });
     }
 
-    private void assertRestoreNoActiveCollision(Account account, ControlPlaneUser deletedUser) {
+    public void changeMyPassword(ControlPlaneChangeMyPasswordRequest req) {
+        publicExecutor.run(() -> {
+            Account controlPlaneAccount = getControlPlaneAccount();
+
+            if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+            if (req.newPassword() == null || req.newPassword().isBlank()) {
+                throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+            }
+            if (!req.newPassword().equals(req.confirmPassword())) {
+                throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
+            }
+
+            Long meId = securityUtils.getCurrentUserId();
+            if (meId == null) throw new ApiException("UNAUTHORIZED", "Usuário não autenticado", 401);
+
+            // ✅ sem active: NOT_DELETED (e depois valida enabled via flags)
+            ControlPlaneUser me = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(meId, controlPlaneAccount.getId())
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            if (me.isDeleted()) throw new ApiException("USER_DELETED", "Usuário removido", 409);
+            if (me.isSuspendedByAccount() || me.isSuspendedByAdmin()) {
+                throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+            }
+
+            if (!passwordEncoder.matches(req.currentPassword(), me.getPassword())) {
+                throw new ApiException("INVALID_CURRENT_PASSWORD", "Senha atual inválida", 400);
+            }
+
+            if (passwordEncoder.matches(req.newPassword(), me.getPassword())) {
+                throw new ApiException("PASSWORD_REUSE", "Nova senha não pode ser igual à senha atual", 400);
+            }
+
+            me.setPassword(passwordEncoder.encode(req.newPassword()));
+            me.setMustChangePassword(false);
+            me.setPasswordChangedAt(appClock.now());
+
+            me.setFailedLoginAttempts(0);
+            me.setLockedUntil(null);
+            me.setPasswordResetToken(null);
+            me.setPasswordResetExpires(null);
+
+            controlPlaneUserRepository.save(me);
+        });
+    }
+
+    public void resetControlPlaneUserPassword(Long targetUserId, ControlPlaneUserPasswordResetRequest req) {
+        publicExecutor.run(() -> {
+            Account controlPlaneAccount = getControlPlaneAccount();
+
+            if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+            if (req.newPassword() == null || req.newPassword().isBlank()) {
+                throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+            }
+            if (!req.newPassword().equals(req.confirmPassword())) {
+                throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
+            }
+
+            assertOwnerOnly("RESET_PASSWORD");
+            assertNotSelfTarget(targetUserId, "RESET_PASSWORD");
+
+            // ✅ sem active
+            ControlPlaneUser superAdmin = controlPlaneUserRepository.findNotDeletedSuperAdmin(controlPlaneAccount.getId())
+                    .orElseThrow(() -> new ApiException(
+                            "SUPERADMIN_NOT_FOUND",
+                            "Superadmin não encontrado. Rode a seed V5__insert_controlplane_users.sql",
+                            500
+                    ));
+
+            if (superAdmin.getId().equals(targetUserId)) {
+                throw new ApiException("SUPERADMIN_CANNOT_RESET_SELF", "Superadmin não pode resetar a própria senha", 409);
+            }
+
+            // ✅ BUG FIX: era findNotDeletedByAccountId(userId, accountId) -> método errado
+            ControlPlaneUser target = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(targetUserId, controlPlaneAccount.getId())
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            if (target.getRole() == ControlPlaneRole.CONTROLPLANE_OWNER) {
+                throw new ApiException("OWNER_PASSWORD_RESET_BLOCKED",
+                        "Não é permitido resetar senha de CONTROLPLANE_OWNER", 409);
+            }
+
+            target.setPassword(passwordEncoder.encode(req.newPassword()));
+            target.setMustChangePassword(true);
+            target.setPasswordChangedAt(appClock.now());
+
+            target.setFailedLoginAttempts(0);
+            target.setLockedUntil(null);
+            target.setPasswordResetToken(null);
+            target.setPasswordResetExpires(null);
+
+            controlPlaneUserRepository.save(target);
+        });
+    }
+
+    // =========================
+    // HELPERS
+    // =========================
+
+    private void assertRestoreNoNotDeletedCollision(Account account, ControlPlaneUser deletedUser) {
         if (deletedUser.getUsername() != null && !deletedUser.getUsername().isBlank()) {
-            boolean existsOther = controlPlaneUserRepository.existsOtherActiveByUsernameIgnoreCase(
+            boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByUsernameIgnoreCase(
                     account.getId(),
                     deletedUser.getUsername(),
                     deletedUser.getId()
@@ -523,7 +533,7 @@ public class ControlPlaneUserService {
         }
 
         if (deletedUser.getEmail() != null && !deletedUser.getEmail().isBlank()) {
-            boolean existsOther = controlPlaneUserRepository.existsOtherActiveByEmailIgnoreCase(
+            boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByEmailIgnoreCase(
                     account.getId(),
                     deletedUser.getEmail(),
                     deletedUser.getId()
@@ -535,10 +545,11 @@ public class ControlPlaneUserService {
         }
     }
 
-    private LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissions(Collection<String> raw) {
+    private LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissionsStrict(Collection<String> raw) {
         if (raw == null || raw.isEmpty()) return new LinkedHashSet<>();
 
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlane(raw);
+        // ✅ STRICT: exige CP_
+        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlaneStrict(raw);
 
         LinkedHashSet<ControlPlanePermission> out = new LinkedHashSet<>();
         for (String s : normalized) {
@@ -551,8 +562,7 @@ public class ControlPlaneUserService {
         }
         return out;
     }
-    
-    
+
     private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
         return new ControlPlaneUserDetailsResponse(
                 user.getId(),
@@ -570,7 +580,4 @@ public class ControlPlaneUserService {
                         : user.getPermissions().stream().map(Enum::name).sorted().toList()
         );
     }
-
-
-
 }

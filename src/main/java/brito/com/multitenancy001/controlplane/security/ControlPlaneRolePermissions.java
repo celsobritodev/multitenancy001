@@ -25,7 +25,7 @@ public final class ControlPlaneRolePermissions {
         MAP.put(ControlPlaneRole.CONTROLPLANE_SUPPORT, EnumSet.of(
             ControlPlanePermission.CP_TENANT_READ,
             ControlPlanePermission.CP_TENANT_SUSPEND,
-            ControlPlanePermission.CP_TENANT_ACTIVATE,
+            ControlPlanePermission.CP_TENANT_RESUME,
             ControlPlanePermission.CP_TENANT_DELETE,
             ControlPlanePermission.CP_USER_READ,
             ControlPlanePermission.CP_USER_WRITE,

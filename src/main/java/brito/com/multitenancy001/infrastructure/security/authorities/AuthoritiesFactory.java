@@ -35,7 +35,7 @@ public final class AuthoritiesFactory {
         }
 
         // normaliza e bloqueia escopo errado (TEN_ dentro do CP, etc.)
-        merged = PermissionScopeValidator.normalizeControlPlane(merged);
+        merged = PermissionScopeValidator.normalizeControlPlaneStrict(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
         for (String perm : merged) {
@@ -64,7 +64,7 @@ public final class AuthoritiesFactory {
         }
 
         // normaliza SEMPRE e bloqueia CP_ dentro do tenant
-        merged = PermissionScopeValidator.normalizeTenant(merged);
+        merged = PermissionScopeValidator.normalizeTenantStrict(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
         for (String perm : merged) {

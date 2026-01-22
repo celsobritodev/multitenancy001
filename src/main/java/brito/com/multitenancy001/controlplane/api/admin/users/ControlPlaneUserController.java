@@ -31,7 +31,7 @@ public class ControlPlaneUserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // Lista usuários ativos do Control Plane.
+    // Lista usuários habilitados do Control Plane.
     @GetMapping
     @PreAuthorize("hasAuthority('CP_USER_READ')")
     public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listControlPlaneUsers() {

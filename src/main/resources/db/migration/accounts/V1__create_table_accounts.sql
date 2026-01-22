@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     -- Preferências
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
-    currency VARCHAR(10) NOT NULL DEFAULT 'BRL',
+    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,

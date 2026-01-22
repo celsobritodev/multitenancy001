@@ -185,7 +185,7 @@ public class Account {
     @Builder.Default
     private String locale = "pt_BR";
 
-    @Column(name = "currency", length = 10, nullable = false)
+    @Column(name = "currency", length = 3, nullable = false)
     @Builder.Default
     private String currency = "BRL";
 

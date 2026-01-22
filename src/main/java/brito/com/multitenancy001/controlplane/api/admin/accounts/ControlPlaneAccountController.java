@@ -86,7 +86,7 @@ public class ControlPlaneAccountController {
         return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
     }
 
-    // Lista usuários TENANT operacionais vinculados à conta (ex.: não suspensos/ativos conforme regra do serviço).
+    // Lista usuários TENANT operacionais vinculados à conta (ex.: não suspensos/operacionais conforme regra do serviço).
     @GetMapping("/{id}/users/operational")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<List<AccountTenantUserSummaryResponse>> listOperationalUsersByAccount(@PathVariable Long id) {
@@ -186,7 +186,7 @@ public class ControlPlaneAccountController {
 
     // Altera o status de uma conta e executa efeitos colaterais (ex.: suspender/reativar usuários TENANT).
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_ACTIVATE')")
+    @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_RESUME')")
     public ResponseEntity<AccountStatusChangeResponse> changeAccountStatus(
             @PathVariable Long id,
             @Valid @RequestBody AccountStatusChangeRequest accountStatusChangeRequest
@@ -204,7 +204,7 @@ public class ControlPlaneAccountController {
 
     // Restaura uma conta previamente deletada (e efeitos colaterais associados).
     @PostMapping("/{id}/restore")
-    @PreAuthorize("hasAuthority('CP_TENANT_ACTIVATE')")
+    @PreAuthorize("hasAuthority('CP_TENANT_RESUME')")
     public ResponseEntity<Void> restoreAccount(@PathVariable Long id) {
         accountLifecycleService.restoreAccount(id);
         return ResponseEntity.noContent().build();

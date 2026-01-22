@@ -158,7 +158,7 @@ public class ControlPlanePaymentService {
 	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
 		Long accountId = securityUtils.getCurrentAccountId();
 
-		Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+		Payment payment = paymentRepository.findAnyByIdAndAccountId(paymentId, accountId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);

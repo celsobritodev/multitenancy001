@@ -1,20 +1,14 @@
 package brito.com.multitenancy001.tenant.application.provisioning;
 
-import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
-import brito.com.multitenancy001.tenant.security.TenantRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.regex.Pattern;
 
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -25,10 +19,6 @@ public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
     private final TenantSchemaFlywayMigrationService tenantSchemaMigrationService;
-    private final TenantUserRepository tenantUserRepository;
-    private final PasswordEncoder passwordEncoder;
-    
-    
     private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
     
    
@@ -43,8 +33,11 @@ public class TenantSchemaProvisioningService {
         String trimmed = schemaName.trim();
 
         if (Schemas.CONTROL_PLANE.equalsIgnoreCase(trimmed)) {
-            throw new ApiException("INVALID_SCHEMA", "SchemaName 'public' não é permitido", 400);
+            throw new ApiException("INVALID_SCHEMA",
+                    "SchemaName '" + Schemas.CONTROL_PLANE + "' não é permitido",
+                    400);
         }
+
 
         if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
             throw new ApiException(
@@ -101,41 +94,5 @@ public class TenantSchemaProvisioningService {
     /**
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
-    public TenantUser tenantOwnerBootstrapService(Account account, String username, String email, String rawPassword) {
-        String bound = TenantContext.getOrNull();
-        if (bound == null || !bound.equals(account.getSchemaName())) {
-            throw new ApiException("TENANT_NOT_BOUND", "Tenant não está bindado no schema esperado", 500);
-        }
-
-        String normUsername = username == null ? null : username.trim().toLowerCase();
-        String normEmail = email == null ? null : email.trim().toLowerCase();
-
-        if (!StringUtils.hasText(normUsername)) {
-            throw new ApiException("INVALID_USERNAME", "Username é obrigatório", 400);
-        }
-        if (!StringUtils.hasText(normEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-        }
-
-        boolean existsUser = tenantUserRepository.existsByUsernameAndAccountId(normUsername, account.getId());
-        boolean existsEmail = tenantUserRepository.existsByEmailAndAccountId(normEmail, account.getId());
-
-        if (existsUser) throw new ApiException("ADMIN_EXISTS", "Já existe usuário com este username", 409);
-        if (existsEmail) throw new ApiException("ADMIN_EXISTS", "Já existe usuário com este email", 409);
-
-        TenantUser admin = TenantUser.builder()
-                .accountId(account.getId())
-                .name("Administrador")
-                .username(normUsername)
-                .email(normEmail)
-                .password(passwordEncoder.encode(rawPassword))
-                .role(TenantRole.TENANT_OWNER)
-                .suspendedByAccount(false)
-                .suspendedByAdmin(false)
-                .timezone(account.getTimezone() != null ? account.getTimezone() : "America/Sao_Paulo")
-                .locale(account.getLocale() != null ? account.getLocale() : "pt_BR")
-                .build();
-
-        return tenantUserRepository.save(admin);
-    }
+  
 }

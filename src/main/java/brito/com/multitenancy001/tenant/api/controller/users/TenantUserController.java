@@ -31,10 +31,10 @@ public class TenantUserController {
     }
 
     // Lista usuários ativos do tenant.
-    @GetMapping("/active")
+    @GetMapping("/enable")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listActiveTenantUsers() {
-        return ResponseEntity.ok(tenantUserService.listActiveTenantUsers());
+    public ResponseEntity<List<TenantUserSummaryResponse>> listEnableTenantUsers() {
+        return ResponseEntity.ok(tenantUserService.listEnabledTenantUsers());
     }
 
     // Busca detalhes de um usuário do tenant por id.

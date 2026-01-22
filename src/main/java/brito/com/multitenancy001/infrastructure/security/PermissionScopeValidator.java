@@ -11,7 +11,63 @@ public final class PermissionScopeValidator {
 
     private PermissionScopeValidator() {}
 
-    public static LinkedHashSet<String> normalizeTenant(Collection<String> perms) {
+    // =========================================================
+    // STRICT (recomendado): exige prefixo correto SEMPRE
+    // =========================================================
+
+    public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Control Plane não é permitida no Tenant: " + x,
+                        400);
+            }
+            if (!x.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_FORMAT",
+                        "Permission inválida (esperado prefixo TEN_): " + x,
+                        400);
+            }
+            out.add(x);
+        }
+        return out;
+    }
+
+    public static LinkedHashSet<String> normalizeControlPlaneStrict(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Tenant não é permitida no Control Plane: " + x,
+                        400);
+            }
+            if (!x.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_FORMAT",
+                        "Permission inválida (esperado prefixo CP_): " + x,
+                        400);
+            }
+            out.add(x);
+        }
+        return out;
+    }
+
+    // =========================================================
+    // LENIENT (legado): auto-prefixa se faltar prefixo
+    // =========================================================
+
+    public static LinkedHashSet<String> normalizeTenantLenient(Collection<String> perms) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
         if (perms == null) return out;
 
@@ -29,11 +85,10 @@ public final class PermissionScopeValidator {
             if (!x.startsWith("TEN_")) x = "TEN_" + x;
             out.add(x);
         }
-
         return out;
     }
 
-    public static LinkedHashSet<String> normalizeControlPlane(Collection<String> perms) {
+    public static LinkedHashSet<String> normalizeControlPlaneLenient(Collection<String> perms) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
         if (perms == null) return out;
 
@@ -51,11 +106,13 @@ public final class PermissionScopeValidator {
             if (!x.startsWith("CP_")) x = "CP_" + x;
             out.add(x);
         }
-
         return out;
     }
-    
-    
+
+    // =========================================================
+    // Enum variants (já são estritos por natureza)
+    // =========================================================
+
     public static LinkedHashSet<TenantPermission> normalizeTenantPermissions(Collection<TenantPermission> perms) {
         LinkedHashSet<TenantPermission> out = new LinkedHashSet<>();
         if (perms == null) return out;
@@ -70,7 +127,6 @@ public final class PermissionScopeValidator {
                         400);
             }
             if (!name.startsWith("TEN_")) {
-                // como é enum, isso só aconteceria se algum dia você criar enum fora do padrão
                 throw new ApiException("INVALID_PERMISSION_SCOPE",
                         "Permission inválida (esperado TEN_): " + name,
                         400);
@@ -102,6 +158,4 @@ public final class PermissionScopeValidator {
         }
         return out;
     }
-    
-    
 }
