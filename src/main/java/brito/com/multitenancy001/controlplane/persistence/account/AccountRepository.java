@@ -18,15 +18,14 @@ import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
-	
-	boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-	        String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
-	);
-	
-	@Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
-	long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
 
+    // =========================================================
+    // EXISTS / UNIQUE (padrão: NOT DELETED)
+    // =========================================================
 
+    boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+            String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
+    );
 
     boolean existsByTypeAndDeletedFalse(AccountType type);
 
@@ -34,41 +33,67 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
 
+    // =========================================================
+    // DEFAULT DE DOMÍNIO: NOT DELETED (deleted=false)
+    // =========================================================
+
+    /** Lista todas as contas não deletadas. */
     List<Account> findAllByDeletedFalse();
 
+    /** Busca por slug (não deletado). */
     Optional<Account> findBySlugAndDeletedFalse(String slug);
 
+    /** Busca por slug ignoreCase (não deletado). */
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
 
+    /** Busca por id (não deletado). Default para leitura normal. */
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
-    List<Account> findByStatus(AccountStatus status);
-
-    List<Account> findByPaymentDueDateBefore(LocalDateTime date);
-
-    @Query("SELECT a FROM Account a WHERE a.trialEndDate <= :date AND a.status = :status")
-    List<Account> findExpiredTrials(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
-
-    @Query("SELECT a FROM Account a WHERE a.status = :status AND a.paymentDueDate < :today")
-    List<Account> findOverdueAccounts(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
-
+    /** Contas por lista de status (não deletado). */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
     // =========================================================
-    // ADMIN (mantendo os nomes que seu service chama)
+    // DEFAULT DE SEGURANÇA: ENABLED (operacional)
+    // enabled = NOT DELETED + status operacional
     // =========================================================
 
-   
-    
+    /**
+     * Conta "enabled/operacional": não deletada e status operacional.
+     * Use em fluxos que precisam garantir conta em operação (ex.: login, ações sensíveis).
+     */
+    @Query("""
+            SELECT a
+              FROM Account a
+             WHERE a.id = :id
+               AND a.deleted = false
+               AND a.status IN ('ACTIVE', 'FREE_TRIAL')
+           """)
+    Optional<Account> findEnabledById(@Param("id") Long id);
+
+    // =========================================================
+    // BYPASS CONSCIENTE: ANY (inclui deleted)
+    // =========================================================
+
+    /**
+     * ⚠️ BYPASS: pode incluir soft-deleted.
+     * Use apenas para auditoria/suporte/restore.
+     */
+    Optional<Account> findAnyById(Long id);
+
+    // =========================================================
+    // QUERIES OPERACIONAIS (NOT DELETED)
+    // =========================================================
+
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
+    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
+
     @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     long countByStatusesAndDeletedFalse(@Param("statuses") List<AccountStatus> statuses);
 
     default long countOperationalAccounts() {
         return countByStatusesAndDeletedFalse(List.of(AccountStatus.ACTIVE, AccountStatus.FREE_TRIAL));
     }
-
-    
 
     Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
 
@@ -79,8 +104,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // ✅ para manter compatível com AccountLifecycleService.searchAccountsByName()
-    // agora busca em displayName e também em legalName
+    // busca em displayName e legalName
     @Query("""
         SELECT a FROM Account a
         WHERE a.deleted = false
@@ -90,4 +114,27 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
           )
     """)
     Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
+
+    // =========================================================
+    // QUERIES "ANTIGAS" (potencialmente unsafe) -> manter por compatibilidade
+    // =========================================================
+
+    /** Contas por status, NOT DELETED. Preferir esta. */
+    List<Account> findByStatusAndDeletedFalse(AccountStatus status);
+
+    /** Contas com vencimento antes de X, NOT DELETED. Preferir esta. */
+    List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDateTime date);
+
+    /** Trials expirados, NOT DELETED. Preferir esta. */
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.trialEndDate <= :date AND a.status = :status")
+    List<Account> findExpiredTrialsNotDeleted(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
+
+    /** Contas em atraso, NOT DELETED. Preferir esta. */
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status = :status AND a.paymentDueDate < :today")
+    List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
+
+    
+
+  
+
 }

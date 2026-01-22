@@ -1,3 +1,26 @@
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/Multitenancy001Application.java
+============================================================
+package brito.com.multitenancy001;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+//@EnableCaching
+@EnableScheduling
+public class Multitenancy001Application {
+
+	public static void main(String[] args) {
+		SpringApplication.run(Multitenancy001Application.class, args);
+	}
+
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/admin/accounts/ControlPlaneAccountController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.admin.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
@@ -210,6 +233,10 @@ public class ControlPlaneAccountController {
         return ResponseEntity.noContent().build();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/admin/auth/ControlPlaneAuthController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.admin.auth;
 
 import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
@@ -234,6 +261,10 @@ public class ControlPlaneAuthController {
         return ResponseEntity.ok(response);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/admin/billing/ControlPlanePaymentController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.admin.billing;
 
 import brito.com.multitenancy001.controlplane.application.billing.ControlPlanePaymentService;
@@ -398,6 +429,10 @@ public class ControlPlanePaymentController {
             String reason
     ) {}
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/admin/me/ControlPlaneMeController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.admin.me;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest;
@@ -431,6 +466,10 @@ public class ControlPlaneMeController {
         return ResponseEntity.noContent().build();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/admin/users/ControlPlaneUserController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.admin.users;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
@@ -524,6 +563,10 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/accounts/AccountAdminDetailsResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
@@ -567,6 +610,10 @@ public record AccountAdminDetailsResponse(
         long totalControlPlaneUsers,
         boolean operational
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/accounts/AccountResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
@@ -588,6 +635,10 @@ public record AccountResponse(
         LocalDateTime trialEndDate,
         ControlPlaneAdminUserSummaryResponse admin
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/accounts/AccountStatusChangeRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
@@ -601,6 +652,10 @@ public record AccountStatusChangeRequest(
         @Size(max = 255, message = "reason deve ter no máximo 255 caracteres")
         String reason
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/accounts/AccountStatusChangeResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
 import java.time.LocalDateTime;
@@ -619,6 +674,10 @@ public record AccountStatusChangeResponse(
             int tenantUsersCount
     ) {}
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/auth/ControlPlaneAdminLoginRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
@@ -627,6 +686,10 @@ public record ControlPlaneAdminLoginRequest(
         @NotBlank String username,
         @NotBlank String password
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/signup/SignupRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
@@ -669,6 +732,10 @@ public record SignupRequest(
         return password.equals(confirmPassword);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneAdminUserSummaryResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 public record ControlPlaneAdminUserSummaryResponse(
@@ -678,6 +745,10 @@ public record ControlPlaneAdminUserSummaryResponse(
         boolean suspendedByAccount,
         boolean suspendedByAdmin
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneChangeMyPasswordRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import jakarta.validation.constraints.NotBlank;
@@ -696,6 +767,10 @@ public record ControlPlaneChangeMyPasswordRequest(
         @Size(min = 8, max = 72, message = "Confirmar senha deve ter entre 8 e 72 caracteres")
         String confirmPassword
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneMeResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import java.util.List;
@@ -709,6 +784,10 @@ public record ControlPlaneMeResponse(
         boolean mustChangePassword,
         List<String> authorities
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneUserCreateRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
@@ -763,6 +842,10 @@ public record ControlPlaneUserCreateRequest(
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneUserDetailsResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import java.time.LocalDateTime;
@@ -785,6 +868,10 @@ public record ControlPlaneUserDetailsResponse(
         if (permissions == null) permissions = List.of();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneUserPasswordResetRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import jakarta.validation.constraints.NotBlank;
@@ -799,6 +886,10 @@ public record ControlPlaneUserPasswordResetRequest(
         @Size(min = 8, max = 72, message = "Confirmar senha deve ter entre 8 e 72 caracteres")
         String confirmPassword
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneUserPermissionsUpdateRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import jakarta.validation.constraints.NotEmpty;
@@ -816,6 +907,10 @@ public record ControlPlaneUserPermissionsUpdateRequest(
                         String
                 > permissions
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/ControlPlaneUserUpdateRequest.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users;
 
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
@@ -848,6 +943,10 @@ public record ControlPlaneUserUpdateRequest(
                         String
                 > permissions
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/dto/users/summary/AccountTenantUserSummaryResponse.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.dto.users.summary;
 
 public record AccountTenantUserSummaryResponse(
@@ -861,6 +960,10 @@ public record AccountTenantUserSummaryResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/mapper/AccountAdminDetailsApiMapper.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.mapper;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
@@ -931,6 +1034,10 @@ public class AccountAdminDetailsApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/mapper/AccountApiMapper.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.mapper;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
@@ -979,6 +1086,10 @@ public class AccountApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/mapper/AccountUserApiMapper.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.mapper;
 
 import org.springframework.stereotype.Component;
@@ -1009,6 +1120,10 @@ public class AccountUserApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/mapper/ControlPlaneUserApiMapper.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.mapper;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
@@ -1028,6 +1143,10 @@ public class ControlPlaneUserApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/api/publicsignup/AccountSignupController.java
+============================================================
 package brito.com.multitenancy001.controlplane.api.publicsignup;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
@@ -1052,6 +1171,10 @@ public class AccountSignupController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountEntitlementsProvisioningService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -1093,6 +1216,10 @@ public class AccountEntitlementsProvisioningService {
         entitlementsRepository.save(ent);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountLifecycleService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application;
 
 import java.time.Duration;
@@ -1339,7 +1466,7 @@ public class AccountLifecycleService {
      AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
 
      return publicExecutor.run(() ->
-             accountRepository.findExpiredTrials(d, st).stream()
+             accountRepository.findExpiredTrialsNotDeleted(d, st).stream()
                      .map(accountApiMapper::toResponse)
                      .toList()
      );
@@ -1352,7 +1479,7 @@ public class AccountLifecycleService {
      AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
      return publicExecutor.run(() ->
-             accountRepository.findOverdueAccounts(st, t).stream()
+             accountRepository.findOverdueAccountsNotDeleted(st, t).stream()
                      .map(accountApiMapper::toResponse)
                      .toList()
      );
@@ -1369,6 +1496,10 @@ public class AccountLifecycleService {
  
 
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountOnboardingService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application;
 
 import org.springframework.stereotype.Service;
@@ -1472,6 +1603,10 @@ public class AccountOnboardingService {
         }
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountStatusService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
@@ -1627,6 +1762,10 @@ public class AccountStatusService {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountTenantUserService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application;
 
 import java.util.List;
@@ -1679,6 +1818,202 @@ public class AccountTenantUserService {
         tenantUserAdminBridge.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/ControlPlaneAuthService.java
+============================================================
+package brito.com.multitenancy001.controlplane.application;
+
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
+import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class ControlPlaneAuthService {
+
+    private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
+
+    private final AuthenticationManager authenticationManager;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final ControlPlaneUserRepository controlPlaneUserRepository;
+    private final PublicExecutor publicExecutor;
+
+    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
+
+        return publicExecutor.run(() -> {
+
+            // 1) busca user (public)
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findByUsernameAndDeletedFalse(req.username())
+                    .orElseThrow(() -> new ApiException(
+                            "USER_NOT_FOUND",
+                            "Usuário de plataforma não encontrado",
+                            404
+                    ));
+
+            // 2) regra: suspenso por conta -> bloqueia
+            if (user.isSuspendedByAccount()) {
+                throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+            }
+
+            // 3) autentica de fato (senha)
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(req.username(), req.password())
+            );
+
+            // ✅ IMPORTANTE:
+            // Não bloquear must_change_password no login.
+            // O bloqueio de rotas deve acontecer no MustChangePasswordFilter,
+            // permitindo apenas /api/admin/me/password.
+
+            // 4) tokens
+            String accessToken = jwtTokenProvider.generateControlPlaneToken(
+                    authentication,
+                    user.getAccount().getId(),
+                    DEFAULT_SCHEMA
+            );
+
+            String refreshToken = jwtTokenProvider.generateRefreshToken(
+                    user.getUsername(),
+                    DEFAULT_SCHEMA
+            );
+
+            return new JwtResponse(
+                    accessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getRole().name(),
+                    user.getAccount().getId(),
+                    DEFAULT_SCHEMA
+            );
+        });
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/PublicAccountCreationService.java
+============================================================
+package brito.com.multitenancy001.controlplane.application;
+
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountOrigin;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+import brito.com.multitenancy001.controlplane.domain.account.AccountType;
+import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.shared.domain.DomainException;
+import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.time.AppClock;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(transactionManager = "publicTransactionManager")
+public class PublicAccountCreationService {
+
+    private final AccountRepository accountRepository;
+    private final AccountEntitlementsProvisioningService entitlementsProvisioningService;
+    private final AppClock appClock;
+    private final PublicExecutor publicExecutor;
+
+    public Account createAccountFromSignup(SignupRequest signupRequest) {
+        return publicExecutor.run(() -> {
+
+            int maxAttempts = 5;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                String slug = generateSlug(signupRequest.displayName());
+                String schemaName = generateSchemaName(signupRequest.displayName());
+
+                try {
+                    LocalDateTime now = appClock.now();
+
+                    Account account = new Account();
+                    account.setType(AccountType.TENANT);
+                    account.setOrigin(AccountOrigin.ADMIN);
+                    account.setDisplayName(signupRequest.displayName());
+                    account.setSlug(slug);
+                    account.setSchemaName(schemaName);
+
+                    account.setLoginEmail(signupRequest.loginEmail());
+                    account.setTaxIdType(signupRequest.taxIdType());
+                    account.setTaxIdNumber(signupRequest.taxIdNumber());
+
+                    account.setTrialEndDate(now.plusDays(30));
+                    account.setStatus(AccountStatus.FREE_TRIAL);
+                    account.setSubscriptionPlan(SubscriptionPlan.FREE);
+
+                    account.setCountry("Brasil");
+                    account.setTimezone("America/Sao_Paulo");
+                    account.setLocale("pt_BR");
+                    account.setCurrency("BRL");
+
+                    if (account.getType() == AccountType.PLATFORM
+                            && accountRepository.existsByTypeAndDeletedFalse(AccountType.PLATFORM)) {
+                        throw new DomainException("Only one PLATFORM account is allowed");
+                    }
+
+                    Account saved = accountRepository.save(account);
+
+                    // ✅ centraliza a criação default aqui
+                    entitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
+
+                    return saved;
+
+                } catch (DataIntegrityViolationException e) {
+                    // colisão de slug/schemaName -> tenta de novo
+                    log.warn("Tentativa {} falhou por conflito (slug/schema). Tentando novamente...", attempt);
+                } catch (RuntimeException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            throw new RuntimeException("Falha ao criar conta após " + maxAttempts + " tentativas");
+        });
+    }
+
+    private String generateSlug(String displayName) {
+        String base = displayName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-");
+        base = base.replaceAll("(^-+|-+$)", "");
+        if (base.length() < 3) base = "tenant";
+        return base + "-" + UUID.randomUUID().toString().substring(0, 6);
+    }
+
+    private String generateSchemaName(String displayName) {
+        String base = displayName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+        base = base.replaceAll("(^_+|_+$)", "");
+        if (base.length() < 3) base = "tenant";
+        return "t_" + base + "_" + UUID.randomUUID().toString().substring(0, 6);
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/billing/ControlPlaneAccountPaymentsReader.java
+============================================================
 package brito.com.multitenancy001.controlplane.application.billing;
 
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
@@ -1719,6 +2054,10 @@ public class ControlPlaneAccountPaymentsReader implements AccountPaymentsReader 
         return controlPlanePaymentService.hasActivePayment(accountId);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/billing/ControlPlanePaymentService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application.billing;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
@@ -1764,7 +2103,7 @@ public class ControlPlanePaymentService {
 		LocalDateTime now = appClock.now();
 
 		// Trials expirados
-		List<Account> expiredTrials = accountRepository.findExpiredTrials(now, AccountStatus.FREE_TRIAL);
+		List<Account> expiredTrials = accountRepository.findExpiredTrialsNotDeleted(now, AccountStatus.FREE_TRIAL);
 
 		for (Account account : expiredTrials) {
 			if (account.getStatus() != AccountStatus.SUSPENDED) {
@@ -1773,7 +2112,7 @@ public class ControlPlanePaymentService {
 		}
 
 		// Pagamentos vencidos
-		List<Account> overdueAccounts = accountRepository.findOverdueAccounts(AccountStatus.ACTIVE, now);
+		List<Account> overdueAccounts = accountRepository.findOverdueAccountsNotDeleted(AccountStatus.ACTIVE, now);
 
 		for (Account account : overdueAccounts) {
 			if (account.getStatus() != AccountStatus.SUSPENDED) {
@@ -1879,7 +2218,7 @@ public class ControlPlanePaymentService {
 	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
 		Long accountId = securityUtils.getCurrentAccountId();
 
-		Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+		Payment payment = paymentRepository.findAnyByIdAndAccountId(paymentId, accountId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -2132,190 +2471,10 @@ public class ControlPlanePaymentService {
 	}
 
 }
-package brito.com.multitenancy001.controlplane.application;
 
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Service;
-
-import brito.com.multitenancy001.controlplane.api.dto.auth.ControlPlaneAdminLoginRequest;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.db.Schemas;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import lombok.RequiredArgsConstructor;
-
-@Service
-@RequiredArgsConstructor
-public class ControlPlaneAuthService {
-
-    private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
-
-    private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider jwtTokenProvider;
-    private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final PublicExecutor publicExecutor;
-
-    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
-
-        return publicExecutor.run(() -> {
-
-            // 1) busca user (public)
-            ControlPlaneUser user = controlPlaneUserRepository
-                    .findByUsernameAndDeletedFalse(req.username())
-                    .orElseThrow(() -> new ApiException(
-                            "USER_NOT_FOUND",
-                            "Usuário de plataforma não encontrado",
-                            404
-                    ));
-
-            // 2) regra: suspenso por conta -> bloqueia
-            if (user.isSuspendedByAccount()) {
-                throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
-            }
-
-            // 3) autentica de fato (senha)
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.username(), req.password())
-            );
-
-            // ✅ IMPORTANTE:
-            // Não bloquear must_change_password no login.
-            // O bloqueio de rotas deve acontecer no MustChangePasswordFilter,
-            // permitindo apenas /api/admin/me/password.
-
-            // 4) tokens
-            String accessToken = jwtTokenProvider.generateControlPlaneToken(
-                    authentication,
-                    user.getAccount().getId(),
-                    DEFAULT_SCHEMA
-            );
-
-            String refreshToken = jwtTokenProvider.generateRefreshToken(
-                    user.getUsername(),
-                    DEFAULT_SCHEMA
-            );
-
-            return new JwtResponse(
-                    accessToken,
-                    refreshToken,
-                    user.getId(),
-                    user.getUsername(),
-                    user.getEmail(),
-                    user.getRole().name(),
-                    user.getAccount().getId(),
-                    DEFAULT_SCHEMA
-            );
-        });
-    }
-}
-package brito.com.multitenancy001.controlplane.application;
-
-import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.account.AccountOrigin;
-import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
-import brito.com.multitenancy001.controlplane.domain.account.AccountType;
-import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.shared.domain.DomainException;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import brito.com.multitenancy001.shared.time.AppClock;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-@Slf4j
-@Service
-@RequiredArgsConstructor
-@Transactional(transactionManager = "publicTransactionManager")
-public class PublicAccountCreationService {
-
-    private final AccountRepository accountRepository;
-    private final AccountEntitlementsProvisioningService entitlementsProvisioningService;
-    private final AppClock appClock;
-    private final PublicExecutor publicExecutor;
-
-    public Account createAccountFromSignup(SignupRequest signupRequest) {
-        return publicExecutor.run(() -> {
-
-            int maxAttempts = 5;
-            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                String slug = generateSlug(signupRequest.displayName());
-                String schemaName = generateSchemaName(signupRequest.displayName());
-
-                try {
-                    LocalDateTime now = appClock.now();
-
-                    Account account = new Account();
-                    account.setType(AccountType.TENANT);
-                    account.setOrigin(AccountOrigin.ADMIN);
-                    account.setDisplayName(signupRequest.displayName());
-                    account.setSlug(slug);
-                    account.setSchemaName(schemaName);
-
-                    account.setLoginEmail(signupRequest.loginEmail());
-                    account.setTaxIdType(signupRequest.taxIdType());
-                    account.setTaxIdNumber(signupRequest.taxIdNumber());
-
-                    account.setTrialEndDate(now.plusDays(30));
-                    account.setStatus(AccountStatus.FREE_TRIAL);
-                    account.setSubscriptionPlan(SubscriptionPlan.FREE);
-
-                    account.setCountry("Brasil");
-                    account.setTimezone("America/Sao_Paulo");
-                    account.setLocale("pt_BR");
-                    account.setCurrency("BRL");
-
-                    if (account.getType() == AccountType.PLATFORM
-                            && accountRepository.existsByTypeAndDeletedFalse(AccountType.PLATFORM)) {
-                        throw new DomainException("Only one PLATFORM account is allowed");
-                    }
-
-                    Account saved = accountRepository.save(account);
-
-                    // ✅ centraliza a criação default aqui
-                    entitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
-
-                    return saved;
-
-                } catch (DataIntegrityViolationException e) {
-                    // colisão de slug/schemaName -> tenta de novo
-                    log.warn("Tentativa {} falhou por conflito (slug/schema). Tentando novamente...", attempt);
-                } catch (RuntimeException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            throw new RuntimeException("Falha ao criar conta após " + maxAttempts + " tentativas");
-        });
-    }
-
-    private String generateSlug(String displayName) {
-        String base = displayName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-");
-        base = base.replaceAll("(^-+|-+$)", "");
-        if (base.length() < 3) base = "tenant";
-        return base + "-" + UUID.randomUUID().toString().substring(0, 6);
-    }
-
-    private String generateSchemaName(String displayName) {
-        String base = displayName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
-        base = base.replaceAll("(^_+|_+$)", "");
-        if (base.length() < 3) base = "tenant";
-        return "t_" + base + "_" + UUID.randomUUID().toString().substring(0, 6);
-    }
-}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/application/user/ControlPlaneUserService.java
+============================================================
 package brito.com.multitenancy001.controlplane.application.user;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneChangeMyPasswordRequest;
@@ -2460,7 +2619,7 @@ public class ControlPlaneUserService {
     }
 
     private ControlPlaneUser loadUserAnyStatusOr404(Long userId, Long accountId) {
-        return controlPlaneUserRepository.findByIdAndAccountId(userId, accountId)
+        return controlPlaneUserRepository.findAnyByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
     }
 
@@ -2899,6 +3058,10 @@ public class ControlPlaneUserService {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/Account.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 import java.time.LocalDateTime;
@@ -3309,6 +3472,10 @@ public class Account {
         deletedAt = null;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountEntitlements.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 import jakarta.persistence.*;
@@ -3341,6 +3508,10 @@ public class AccountEntitlements {
     @Column(name = "max_storage_mb", nullable = false)
     private Integer maxStorageMb;
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountOrigin.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum AccountOrigin {
@@ -3348,6 +3519,10 @@ public enum AccountOrigin {
     ADMIN,      // criado via painel por superadmin
     API         // futuro (integração, signup automático, etc)
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountStatus.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum AccountStatus {
@@ -3386,18 +3561,30 @@ public enum AccountStatus {
 
  
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountType.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum AccountType {
     TENANT,
     PLATFORM
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/LegalEntityType.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum LegalEntityType {
     INDIVIDUAL,   // pessoa física
     COMPANY       // pessoa jurídica
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/SubscriptionPlan.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 public enum SubscriptionPlan {
@@ -3411,6 +3598,10 @@ public enum SubscriptionPlan {
      */
     BUILT_IN_PLAN
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/TaxIdType.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
 
 import lombok.Getter;
@@ -3422,6 +3613,10 @@ public enum TaxIdType {
 
    
     }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/billing/Payment.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.billing;
 
 import jakarta.persistence.*;
@@ -3626,6 +3821,10 @@ public class Payment {
         return this.paymentDate.isAfter(now.minusDays(90));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/user/ControlPlaneUser.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.user;
 
 import jakarta.persistence.*;
@@ -3808,6 +4007,10 @@ public class ControlPlaneUser {
         this.suspendedByAdmin = false;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/user/ControlPlaneUserOrigin.java
+============================================================
 package brito.com.multitenancy001.controlplane.domain.user;
 
 public enum ControlPlaneUserOrigin {
@@ -3815,6 +4018,10 @@ public enum ControlPlaneUserOrigin {
     ADMIN,
     API
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/account/AccountEntitlementsRepository.java
+============================================================
 package brito.com.multitenancy001.controlplane.persistence.account;
 
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
@@ -3822,6 +4029,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AccountEntitlementsRepository extends JpaRepository<AccountEntitlements, Long> {
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/account/AccountRepository.java
+============================================================
 package brito.com.multitenancy001.controlplane.persistence.account;
 
 import java.time.LocalDateTime;
@@ -3842,15 +4053,14 @@ import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
-	
-	boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-	        String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
-	);
-	
-	@Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
-	long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
 
+    // =========================================================
+    // EXISTS / UNIQUE (padrão: NOT DELETED)
+    // =========================================================
 
+    boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+            String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
+    );
 
     boolean existsByTypeAndDeletedFalse(AccountType type);
 
@@ -3858,41 +4068,67 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
 
+    // =========================================================
+    // DEFAULT DE DOMÍNIO: NOT DELETED (deleted=false)
+    // =========================================================
+
+    /** Lista todas as contas não deletadas. */
     List<Account> findAllByDeletedFalse();
 
+    /** Busca por slug (não deletado). */
     Optional<Account> findBySlugAndDeletedFalse(String slug);
 
+    /** Busca por slug ignoreCase (não deletado). */
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
 
+    /** Busca por id (não deletado). Default para leitura normal. */
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
-    List<Account> findByStatus(AccountStatus status);
-
-    List<Account> findByPaymentDueDateBefore(LocalDateTime date);
-
-    @Query("SELECT a FROM Account a WHERE a.trialEndDate <= :date AND a.status = :status")
-    List<Account> findExpiredTrials(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
-
-    @Query("SELECT a FROM Account a WHERE a.status = :status AND a.paymentDueDate < :today")
-    List<Account> findOverdueAccounts(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
-
+    /** Contas por lista de status (não deletado). */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
     // =========================================================
-    // ADMIN (mantendo os nomes que seu service chama)
+    // DEFAULT DE SEGURANÇA: ENABLED (operacional)
+    // enabled = NOT DELETED + status operacional
     // =========================================================
 
-   
-    
+    /**
+     * Conta "enabled/operacional": não deletada e status operacional.
+     * Use em fluxos que precisam garantir conta em operação (ex.: login, ações sensíveis).
+     */
+    @Query("""
+            SELECT a
+              FROM Account a
+             WHERE a.id = :id
+               AND a.deleted = false
+               AND a.status IN ('ACTIVE', 'FREE_TRIAL')
+           """)
+    Optional<Account> findEnabledById(@Param("id") Long id);
+
+    // =========================================================
+    // BYPASS CONSCIENTE: ANY (inclui deleted)
+    // =========================================================
+
+    /**
+     * ⚠️ BYPASS: pode incluir soft-deleted.
+     * Use apenas para auditoria/suporte/restore.
+     */
+    Optional<Account> findAnyById(Long id);
+
+    // =========================================================
+    // QUERIES OPERACIONAIS (NOT DELETED)
+    // =========================================================
+
+    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
+    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
+
     @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     long countByStatusesAndDeletedFalse(@Param("statuses") List<AccountStatus> statuses);
 
     default long countOperationalAccounts() {
         return countByStatusesAndDeletedFalse(List.of(AccountStatus.ACTIVE, AccountStatus.FREE_TRIAL));
     }
-
-    
 
     Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
 
@@ -3903,8 +4139,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // ✅ para manter compatível com AccountLifecycleService.searchAccountsByName()
-    // agora busca em displayName e também em legalName
+    // busca em displayName e legalName
     @Query("""
         SELECT a FROM Account a
         WHERE a.deleted = false
@@ -3914,10 +4149,35 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
           )
     """)
     Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
+
+    // =========================================================
+    // QUERIES "ANTIGAS" (potencialmente unsafe) -> manter por compatibilidade
+    // =========================================================
+
+    /** Contas por status, NOT DELETED. Preferir esta. */
+    List<Account> findByStatusAndDeletedFalse(AccountStatus status);
+
+    /** Contas com vencimento antes de X, NOT DELETED. Preferir esta. */
+    List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDateTime date);
+
+    /** Trials expirados, NOT DELETED. Preferir esta. */
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.trialEndDate <= :date AND a.status = :status")
+    List<Account> findExpiredTrialsNotDeleted(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
+
+    /** Contas em atraso, NOT DELETED. Preferir esta. */
+    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status = :status AND a.paymentDueDate < :today")
+    List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
+
+    
+
+  
+
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/billing/ControlPlanePaymentRepository.java
+============================================================
 package brito.com.multitenancy001.controlplane.persistence.billing;
-
-
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -3936,50 +4196,70 @@ import java.util.Optional;
 
 @Repository
 public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
-	
-	Optional<Payment> findByIdAndAccountId(Long id, Long accountId);
-	
-	boolean existsByIdAndAccountId(Long id, Long accountId);
+
+    // =========================================================
+    // ANY (bypass consciente / scoped)
+    // Payment normalmente não tem soft-delete; "Any" aqui significa
+    // "scoped por account e sem filtros adicionais".
+    // =========================================================
+
+    /**
+     * Busca payment por id + account (scoped).
+     * "Any" aqui não é sobre deleted; é sobre não aplicar filtros extras (status/data).
+     */
+    Optional<Payment> findAnyByIdAndAccountId(Long id, Long accountId);
 
     
+
+    boolean existsByIdAndAccountId(Long id, Long accountId);
+
+    // =========================================================
+    // Queries normais
+    // =========================================================
+
     List<Payment> findByAccountId(Long accountId);
-    
+
     List<Payment> findByAccountIdAndStatus(Long accountId, PaymentStatus status);
-    
+
     Page<Payment> findByAccountId(Long accountId, Pageable pageable);
-    
+
     Optional<Payment> findByTransactionId(String transactionId);
-    
+
     List<Payment> findByStatus(PaymentStatus status);
-    
+
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, LocalDateTime date);
-    
+
     List<Payment> findByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' ORDER BY p.paymentDate DESC")
     List<Payment> findCompletedPaymentsByAccount(@Param("accountId") Long accountId);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.validUntil > :now AND p.status = 'COMPLETED'")
     Optional<Payment> findActivePayment(@Param("accountId") Long accountId, @Param("now") LocalDateTime now);
-    
+
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate")
-    BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId, 
-                                   @Param("startDate") LocalDateTime startDate, 
+    BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId,
+                                   @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
-    
+
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED'")
     Long countCompletedPayments(@Param("accountId") Long accountId);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
-    List<Payment> findPaymentsInPeriod(@Param("startDate") LocalDateTime startDate, 
-                                      @Param("endDate") LocalDateTime endDate);
-    
+    List<Payment> findPaymentsInPeriod(@Param("startDate") LocalDateTime startDate,
+                                       @Param("endDate") LocalDateTime endDate);
+
     @Query("SELECT p.account.id, SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate GROUP BY p.account.id")
-    List<Object[]> getRevenueByAccount(@Param("startDate") LocalDateTime startDate, 
-                                      @Param("endDate") LocalDateTime endDate);
-    
+    List<Object[]> getRevenueByAccount(@Param("startDate") LocalDateTime startDate,
+                                       @Param("endDate") LocalDateTime endDate);
+
     boolean existsByTransactionId(String transactionId);
-}package brito.com.multitenancy001.controlplane.persistence.user;
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/user/ControlPlaneUserRepository.java
+============================================================
+package brito.com.multitenancy001.controlplane.persistence.user;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -3994,16 +4274,19 @@ import java.util.Optional;
 public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
 
     // =========================================================
-    // NOT DELETED (deleted=false)  ✅ padrão para "exists/unique/list"
+    // NOT DELETED (deleted=false) ✅ default do domínio
     // =========================================================
 
+    /** Lista usuários da conta, excluindo soft-deleted. */
     @Query("SELECT u FROM ControlPlaneUser u WHERE u.account.id = :accountId AND u.deleted = false")
     List<ControlPlaneUser> findNotDeletedByAccountId(@Param("accountId") Long accountId);
 
+    /** Busca usuário por id + accountId, excluindo soft-deleted. */
     @Query("SELECT u FROM ControlPlaneUser u WHERE u.id = :id AND u.account.id = :accountId AND u.deleted = false")
     Optional<ControlPlaneUser> findNotDeletedByIdAndAccountId(@Param("id") Long id,
                                                               @Param("accountId") Long accountId);
 
+    /** Busca o superadmin (não deletado) por conta. */
     @Query("""
             SELECT u
               FROM ControlPlaneUser u
@@ -4013,14 +4296,53 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
            """)
     Optional<ControlPlaneUser> findNotDeletedSuperAdmin(@Param("accountId") Long accountId);
 
+    /** Busca por username + account (não deletado). */
     Optional<ControlPlaneUser> findByUsernameAndAccount_IdAndDeletedFalse(String username, Long accountId);
 
+    /** Conta usuários (não deletados) por conta. */
     long countByAccountIdAndDeletedFalse(Long accountId);
 
-    Optional<ControlPlaneUser> findByIdAndAccountId(Long id, Long accountId);
-
+    /** Busca por username (não deletado). */
     Optional<ControlPlaneUser> findByUsernameAndDeletedFalse(String username);
 
+    // =========================================================
+    // ENABLED = NOT DELETED + NOT suspended ✅ default segurança
+    // =========================================================
+
+    /** Lista usuários "habilitados": não deletado e não suspenso (admin nem account). */
+    @Query("""
+            SELECT u
+              FROM ControlPlaneUser u
+             WHERE u.account.id = :accountId
+               AND u.deleted = false
+               AND u.suspendedByAccount = false
+               AND u.suspendedByAdmin = false
+           """)
+    List<ControlPlaneUser> findEnabledByAccountId(@Param("accountId") Long accountId);
+
+    /** Busca usuário "habilitado": não deletado e não suspenso (admin nem account). */
+    @Query("""
+            SELECT u
+              FROM ControlPlaneUser u
+             WHERE u.id = :id
+               AND u.account.id = :accountId
+               AND u.deleted = false
+               AND u.suspendedByAccount = false
+               AND u.suspendedByAdmin = false
+           """)
+    Optional<ControlPlaneUser> findEnabledByIdAndAccountId(@Param("id") Long id,
+                                                           @Param("accountId") Long accountId);
+
+    // =========================================================
+    // ANY = BYPASS consciente (inclui deleted) ⚠️
+    // =========================================================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore/histórico. */
+    @Query("SELECT u FROM ControlPlaneUser u WHERE u.id = :id AND u.account.id = :accountId")
+    Optional<ControlPlaneUser> findAnyByIdAndAccountId(@Param("id") Long id,
+                                                       @Param("accountId") Long accountId);
+
+ 
     // =========================================================
     // UNICIDADE NOT DELETED (deleted=false) e case-insensitive
     // =========================================================
@@ -4068,34 +4390,11 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
     boolean existsOtherNotDeletedByEmailIgnoreCase(@Param("accountId") Long accountId,
                                                    @Param("email") String email,
                                                    @Param("userId") Long userId);
-
-    // =========================================================
-    // ENABLED (deleted=false AND NOT suspended)  ✅ opcional/recomendado
-    // =========================================================
-
-    @Query("""
-            SELECT u
-              FROM ControlPlaneUser u
-             WHERE u.account.id = :accountId
-               AND u.deleted = false
-               AND u.suspendedByAccount = false
-               AND u.suspendedByAdmin = false
-           """)
-    List<ControlPlaneUser> findEnabledByAccountId(@Param("accountId") Long accountId);
-
-    @Query("""
-            SELECT u
-              FROM ControlPlaneUser u
-             WHERE u.id = :id
-               AND u.account.id = :accountId
-               AND u.deleted = false
-               AND u.suspendedByAccount = false
-               AND u.suspendedByAdmin = false
-           """)
-    Optional<ControlPlaneUser> findEnabledByIdAndAccountId(@Param("id") Long id,
-                                                           @Param("accountId") Long accountId);
-
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/security/ControlPlanePermission.java
+============================================================
 package brito.com.multitenancy001.controlplane.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
@@ -4122,6 +4421,10 @@ public enum ControlPlanePermission implements PermissionAuthority {
         return name();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/security/ControlPlaneRole.java
+============================================================
 package brito.com.multitenancy001.controlplane.security;
 
 import brito.com.multitenancy001.shared.security.RoleAuthority;
@@ -4146,6 +4449,10 @@ public enum ControlPlaneRole implements RoleAuthority {
         return this == CONTROLPLANE_BILLING_MANAGER;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/controlplane/security/ControlPlaneRolePermissions.java
+============================================================
 package brito.com.multitenancy001.controlplane.security;
 
 import java.util.Collections;
@@ -4193,6 +4500,10 @@ public final class ControlPlaneRolePermissions {
         return Collections.unmodifiableSet(MAP.getOrDefault(role, Set.of()));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/config/time/TimeConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.config.time;
 
 import java.time.Clock;
@@ -4208,6 +4519,10 @@ public class TimeConfig {
         return Clock.systemDefaultZone();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/flyway/publicschema/PublicFlywayConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import javax.sql.DataSource;
@@ -4234,6 +4549,10 @@ public class PublicFlywayConfig {
         return flyway;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/flyway/publicschema/PublicFlywayRunner.java
+============================================================
 package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import org.flywaydb.core.Flyway;
@@ -4258,6 +4577,10 @@ public class PublicFlywayRunner implements ApplicationRunner {
 		flywayPublic.migrate();
 	}
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/flyway/publicschema/PublicSchemaVerifier.java
+============================================================
 package brito.com.multitenancy001.infrastructure.flyway.publicschema;
 
 import lombok.RequiredArgsConstructor;
@@ -4302,7 +4625,11 @@ public class PublicSchemaVerifier {
             log.error("⚠️ Aviso na verificação: {}", e.getMessage());
         }
     }
-}package brito.com.multitenancy001.infrastructure.flyway.tenantschema;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/flyway/tenantschema/TenantSchemaFlywayMigrationService.java
+============================================================
+package brito.com.multitenancy001.infrastructure.flyway.tenantschema;
 
 import lombok.RequiredArgsConstructor;
 import org.flywaydb.core.Flyway;
@@ -4329,6 +4656,10 @@ public class TenantSchemaFlywayMigrationService {
         flyway.migrate();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/multitenancy/hibernate/CurrentTenantSchemaResolver.java
+============================================================
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
 
 import lombok.extern.slf4j.Slf4j;
@@ -4428,6 +4759,10 @@ public class CurrentTenantSchemaResolver
         return DEFAULT_SCHEMA.equals(tenantIdentifier);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/multitenancy/hibernate/TenantSchemaConnectionProvider.java
+============================================================
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
 
 import lombok.RequiredArgsConstructor;
@@ -4556,6 +4891,10 @@ public class TenantSchemaConnectionProvider
         return "\"" + identifier + "\"";
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/multitenancy/hibernate/TenantSchemaHibernateConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
 
 import lombok.RequiredArgsConstructor;
@@ -4611,6 +4950,10 @@ public class TenantSchemaHibernateConfig {
         return new JpaTransactionManager(emf);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/multitenancy/hibernate/TransactionManagementConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
 
 import org.springframework.context.annotation.Configuration;
@@ -4620,6 +4963,10 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 public class TransactionManagementConfig {
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/multitenancy/observability/TenantContextMonitor.java
+============================================================
 package brito.com.multitenancy001.infrastructure.multitenancy.observability;
 
 import lombok.extern.slf4j.Slf4j;
@@ -4660,7 +5007,11 @@ public class TenantContextMonitor {
 	    }
 	}
 
-}package brito.com.multitenancy001.infrastructure.persistence;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/persistence/PublicPersistenceConfig.java
+============================================================
+package brito.com.multitenancy001.infrastructure.persistence;
 
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -4700,6 +5051,10 @@ public class PublicPersistenceConfig {
         return new JpaTransactionManager(emf);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/persistence/PublicSchemaHibernateConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.persistence;
 
 import lombok.RequiredArgsConstructor;
@@ -4753,6 +5108,10 @@ public class PublicSchemaHibernateConfig {
         return emf;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/persistence/TenantPersistenceConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.persistence;
 
 import org.springframework.context.annotation.Configuration;
@@ -4766,6 +5125,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 )
 public class TenantPersistenceConfig {
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
@@ -4911,6 +5274,256 @@ public class AuthenticatedUserContext implements UserDetails {
     @Override public boolean isCredentialsNonExpired() { return true; }
     @Override public boolean isEnabled() { return enabled; }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/PermissionScopeValidator.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security;
+
+import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
+
+import java.util.Collection;
+import java.util.LinkedHashSet;
+
+public final class PermissionScopeValidator {
+
+    private PermissionScopeValidator() {}
+
+    // =========================================================
+    // STRICT (recomendado): exige prefixo correto SEMPRE
+    // =========================================================
+
+    public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Control Plane não é permitida no Tenant: " + x,
+                        400);
+            }
+            if (!x.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_FORMAT",
+                        "Permission inválida (esperado prefixo TEN_): " + x,
+                        400);
+            }
+            out.add(x);
+        }
+        return out;
+    }
+
+    public static LinkedHashSet<String> normalizeControlPlaneStrict(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Tenant não é permitida no Control Plane: " + x,
+                        400);
+            }
+            if (!x.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_FORMAT",
+                        "Permission inválida (esperado prefixo CP_): " + x,
+                        400);
+            }
+            out.add(x);
+        }
+        return out;
+    }
+
+    // =========================================================
+    // LENIENT (legado): auto-prefixa se faltar prefixo
+    // =========================================================
+
+    public static LinkedHashSet<String> normalizeTenantLenient(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Control Plane não é permitida no Tenant: " + x,
+                        400);
+            }
+
+            if (!x.startsWith("TEN_")) x = "TEN_" + x;
+            out.add(x);
+        }
+        return out;
+    }
+
+    public static LinkedHashSet<String> normalizeControlPlaneLenient(Collection<String> perms) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Tenant não é permitida no Control Plane: " + x,
+                        400);
+            }
+
+            if (!x.startsWith("CP_")) x = "CP_" + x;
+            out.add(x);
+        }
+        return out;
+    }
+
+    // =========================================================
+    // Enum variants (já são estritos por natureza)
+    // =========================================================
+
+    public static LinkedHashSet<TenantPermission> normalizeTenantPermissions(Collection<TenantPermission> perms) {
+        LinkedHashSet<TenantPermission> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (TenantPermission p : perms) {
+            if (p == null) continue;
+            String name = p.name();
+
+            if (name.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Control Plane não é permitida no Tenant: " + name,
+                        400);
+            }
+            if (!name.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission inválida (esperado TEN_): " + name,
+                        400);
+            }
+            out.add(p);
+        }
+        return out;
+    }
+
+    public static LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissions(Collection<ControlPlanePermission> perms) {
+        LinkedHashSet<ControlPlanePermission> out = new LinkedHashSet<>();
+        if (perms == null) return out;
+
+        for (ControlPlanePermission p : perms) {
+            if (p == null) continue;
+            String name = p.name();
+
+            if (name.startsWith("TEN_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission de Tenant não é permitida no Control Plane: " + name,
+                        400);
+            }
+            if (!name.startsWith("CP_")) {
+                throw new ApiException("INVALID_PERMISSION_SCOPE",
+                        "Permission inválida (esperado CP_): " + name,
+                        400);
+            }
+            out.add(p);
+        }
+        return out;
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/SecurityUtils.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+
+@Component
+@RequiredArgsConstructor
+public class SecurityUtils {
+    
+    public Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getUserId();
+        }
+        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+    }
+    
+    public Long getCurrentAccountId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getAccountId();
+        }
+        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+    }
+    
+    public String getCurrentSchema() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getSchemaName();
+        }
+        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+    }
+    
+    public String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getUsername();
+        }
+        return authentication != null ? authentication.getName() : null;
+    }
+    
+    public String getCurrentRoleAuthority() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getRoleAuthority(); // ex: "ROLE_CONTROLPLANE_OWNER"
+        }
+        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+    }
+
+    /**
+     * Lê a role do CONTROLPLANE a partir do roleAuthority armazenado no principal.
+     * Ex.: "ROLE_CONTROLPLANE_OWNER" -> ControlPlaneRole.CONTROLPLANE_OWNER
+     */
+    public ControlPlaneRole getCurrentControlPlaneRole() {
+        String roleAuthority = getCurrentRoleAuthority();
+        if (roleAuthority == null || !roleAuthority.startsWith("ROLE_")) {
+            throw new ApiException("FORBIDDEN", "Role inválida no contexto de autenticação", 403);
+        }
+        String roleName = roleAuthority.substring("ROLE_".length());
+        try {
+            return ControlPlaneRole.valueOf(roleName);
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("FORBIDDEN", "Role não reconhecida: " + roleName, 403);
+        }
+    }
+    
+    
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/authorities/AuthoritiesFactory.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security.authorities;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
@@ -4987,6 +5600,10 @@ public final class AuthoritiesFactory {
         return authorities;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/config/SecurityConfig.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
@@ -5096,6 +5713,10 @@ public class SecurityConfig {
         return http.build();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/filter/JwtAuthenticationFilter.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security.filter;
 
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
@@ -5260,6 +5881,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return path.startsWith("/api/tenant/");
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/filter/MustChangePasswordFilter.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security.filter;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
@@ -5350,6 +5975,10 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/jwt/JwtTokenProvider.java
+============================================================
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
@@ -5630,245 +6259,11 @@ public class JwtTokenProvider {
         return Schemas.CONTROL_PLANE.equals(context);
     }
 }
-package brito.com.multitenancy001.infrastructure.security;
 
-import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.tenant.security.TenantPermission;
-
-import java.util.Collection;
-import java.util.LinkedHashSet;
-
-public final class PermissionScopeValidator {
-
-    private PermissionScopeValidator() {}
-
-    // =========================================================
-    // STRICT (recomendado): exige prefixo correto SEMPRE
-    // =========================================================
-
-    public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + x,
-                        400);
-            }
-            if (!x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_FORMAT",
-                        "Permission inválida (esperado prefixo TEN_): " + x,
-                        400);
-            }
-            out.add(x);
-        }
-        return out;
-    }
-
-    public static LinkedHashSet<String> normalizeControlPlaneStrict(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + x,
-                        400);
-            }
-            if (!x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_FORMAT",
-                        "Permission inválida (esperado prefixo CP_): " + x,
-                        400);
-            }
-            out.add(x);
-        }
-        return out;
-    }
-
-    // =========================================================
-    // LENIENT (legado): auto-prefixa se faltar prefixo
-    // =========================================================
-
-    public static LinkedHashSet<String> normalizeTenantLenient(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + x,
-                        400);
-            }
-
-            if (!x.startsWith("TEN_")) x = "TEN_" + x;
-            out.add(x);
-        }
-        return out;
-    }
-
-    public static LinkedHashSet<String> normalizeControlPlaneLenient(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + x,
-                        400);
-            }
-
-            if (!x.startsWith("CP_")) x = "CP_" + x;
-            out.add(x);
-        }
-        return out;
-    }
-
-    // =========================================================
-    // Enum variants (já são estritos por natureza)
-    // =========================================================
-
-    public static LinkedHashSet<TenantPermission> normalizeTenantPermissions(Collection<TenantPermission> perms) {
-        LinkedHashSet<TenantPermission> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (TenantPermission p : perms) {
-            if (p == null) continue;
-            String name = p.name();
-
-            if (name.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + name,
-                        400);
-            }
-            if (!name.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission inválida (esperado TEN_): " + name,
-                        400);
-            }
-            out.add(p);
-        }
-        return out;
-    }
-
-    public static LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissions(Collection<ControlPlanePermission> perms) {
-        LinkedHashSet<ControlPlanePermission> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (ControlPlanePermission p : perms) {
-            if (p == null) continue;
-            String name = p.name();
-
-            if (name.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + name,
-                        400);
-            }
-            if (!name.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission inválida (esperado CP_): " + name,
-                        400);
-            }
-            out.add(p);
-        }
-        return out;
-    }
-}
-package brito.com.multitenancy001.infrastructure.security;
-
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-
-import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-
-@Component
-@RequiredArgsConstructor
-public class SecurityUtils {
-    
-    public Long getCurrentUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getUserId();
-        }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
-    }
-    
-    public Long getCurrentAccountId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getAccountId();
-        }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
-    }
-    
-    public String getCurrentSchema() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getSchemaName();
-        }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
-    }
-    
-    public String getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getUsername();
-        }
-        return authentication != null ? authentication.getName() : null;
-    }
-    
-    public String getCurrentRoleAuthority() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getRoleAuthority(); // ex: "ROLE_CONTROLPLANE_OWNER"
-        }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
-    }
-
-    /**
-     * Lê a role do CONTROLPLANE a partir do roleAuthority armazenado no principal.
-     * Ex.: "ROLE_CONTROLPLANE_OWNER" -> ControlPlaneRole.CONTROLPLANE_OWNER
-     */
-    public ControlPlaneRole getCurrentControlPlaneRole() {
-        String roleAuthority = getCurrentRoleAuthority();
-        if (roleAuthority == null || !roleAuthority.startsWith("ROLE_")) {
-            throw new ApiException("FORBIDDEN", "Role inválida no contexto de autenticação", 403);
-        }
-        String roleName = roleAuthority.substring("ROLE_".length());
-        try {
-            return ControlPlaneRole.valueOf(roleName);
-        } catch (IllegalArgumentException e) {
-            throw new ApiException("FORBIDDEN", "Role não reconhecida: " + roleName, 403);
-        }
-    }
-    
-    
-}package brito.com.multitenancy001.infrastructure.security.userdetails;
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/userdetails/MultiContextUserDetailsService.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security.userdetails;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
@@ -5978,6 +6373,10 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/tenant/TenantExecutor.java
+============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
 import java.util.function.Supplier;
@@ -6052,6 +6451,10 @@ public class TenantExecutor {
         return runOrThrow(schemaName, null, fn);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/tenant/TenantRequiredTables.java
+============================================================
 // arquivo: .../infrastructure/tenant/TenantRequiredTables.java
 package brito.com.multitenancy001.infrastructure.tenant;
 
@@ -6061,6 +6464,10 @@ public final class TenantRequiredTables {
     public static final String PRODUCTS = "products";
     // ...
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/tenant/TenantSchemaProvisioningFacade.java
+============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
 import org.springframework.stereotype.Service;
@@ -6078,6 +6485,10 @@ public class TenantSchemaProvisioningFacade {
         tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/infrastructure/tenant/TenantUserProvisioningFacade.java
+============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
 import java.time.LocalDateTime;
@@ -6270,22 +6681,10 @@ public class TenantUserProvisioningFacade {
         );
     }
 }
-package brito.com.multitenancy001;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-@SpringBootApplication
-//@EnableCaching
-@EnableScheduling
-public class Multitenancy001Application {
-
-	public static void main(String[] args) {
-		SpringApplication.run(Multitenancy001Application.class, args);
-	}
-
-}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsGuard.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -6318,6 +6717,10 @@ public class AccountEntitlementsGuard {
         });
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsService.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
@@ -6437,6 +6840,10 @@ public class AccountEntitlementsService {
         return value;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsSnapshot.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 public record AccountEntitlementsSnapshot(
@@ -6459,6 +6866,10 @@ public record AccountEntitlementsSnapshot(
         return new AccountEntitlementsSnapshot(maxUsers, maxProducts, maxStorageMb, false);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountResolver.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 import java.time.LocalDateTime;
@@ -6499,6 +6910,10 @@ public class AccountResolver {
         });
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountSnapshot.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 public record AccountSnapshot(
@@ -6506,12 +6921,20 @@ public record AccountSnapshot(
         String schemaName,
         String status
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/account/UserLimitPolicy.java
+============================================================
 package brito.com.multitenancy001.shared.account;
 
 public enum UserLimitPolicy {
     SEATS_IN_USE,        // deleted=false
     ACTIVE_USERS_ONLY    // deleted=false AND suspendedByAccount=false AND suspendedByAdmin=false
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/dto/auth/JwtResponse.java
+============================================================
 package brito.com.multitenancy001.shared.api.dto.auth;
 
 public record JwtResponse(
@@ -6553,6 +6976,10 @@ public record JwtResponse(
              userId, username, email, role, accountId, tenantSchema);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/dto/billing/AdminPaymentRequest.java
+============================================================
 package brito.com.multitenancy001.shared.api.dto.billing;
 
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
@@ -6574,6 +7001,10 @@ public record AdminPaymentRequest(
 
         String description
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/dto/billing/PaymentRequest.java
+============================================================
 package brito.com.multitenancy001.shared.api.dto.billing;
 
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
@@ -6593,6 +7024,10 @@ public record PaymentRequest(
 
         String description
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/dto/billing/PaymentResponse.java
+============================================================
 package brito.com.multitenancy001.shared.api.dto.billing;
 
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
@@ -6616,6 +7051,10 @@ public record PaymentResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/error/ApiEnumErrorResponse.java
+============================================================
 package brito.com.multitenancy001.shared.api.error;
 
 
@@ -6637,7 +7076,11 @@ public class ApiEnumErrorResponse {
     private String field;
     private String invalidValue;
     private List<String> allowedValues;
-}package brito.com.multitenancy001.shared.api.error;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/error/ApiErrorResponse.java
+============================================================
+package brito.com.multitenancy001.shared.api.error;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -6656,6 +7099,10 @@ public class ApiErrorResponse {
     // 🔥 novo campo (opcional)
     private List<String> details;
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/error/ApiException.java
+============================================================
 package brito.com.multitenancy001.shared.api.error;
 
 import lombok.Getter;
@@ -6708,7 +7155,11 @@ public class ApiException extends RuntimeException {
     
     
     
-}package brito.com.multitenancy001.shared.api.error;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/api/error/GlobalExceptionHandler.java
+============================================================
+package brito.com.multitenancy001.shared.api.error;
 
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
@@ -6907,6 +7358,10 @@ public class GlobalExceptionHandler {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/context/TenantContext.java
+============================================================
 package brito.com.multitenancy001.shared.context;
 
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -6992,6 +7447,10 @@ public class TenantContext {
         }
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/contracts/AccountRef.java
+============================================================
 package brito.com.multitenancy001.shared.contracts;
 
 public record AccountRef(
@@ -7000,9 +7459,34 @@ public record AccountRef(
         String timezone,
         String locale
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/contracts/AccountSnapshot.java
+============================================================
 package brito.com.multitenancy001.shared.contracts;
 
 public record AccountSnapshot(Long id, String schemaName, String slug) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/contracts/UserSummaryData.java
+============================================================
+package brito.com.multitenancy001.shared.contracts;
+
+public record UserSummaryData(
+        Long id,
+        Long accountId,
+        String name,
+        String username,
+        String email,
+        String role,
+        boolean suspendedByAccount,
+        boolean suspendedByAdmin,
+        boolean deleted
+) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/contracts/billing/AccountPaymentsReader.java
+============================================================
 package brito.com.multitenancy001.shared.contracts.billing;
 
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
@@ -7017,19 +7501,10 @@ public interface AccountPaymentsReader {
 
     boolean hasActivePayment(Long accountId);
 }
-package brito.com.multitenancy001.shared.contracts;
 
-public record UserSummaryData(
-        Long id,
-        Long accountId,
-        String name,
-        String username,
-        String email,
-        String role,
-        boolean suspendedByAccount,
-        boolean suspendedByAdmin,
-        boolean deleted
-) {}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/db/Schemas.java
+============================================================
 package brito.com.multitenancy001.shared.db;
 
 public final class Schemas {
@@ -7042,16 +7517,44 @@ public final class Schemas {
 
     private Schemas() {}
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/domain/DomainException.java
+============================================================
+package brito.com.multitenancy001.shared.domain;
+
+public class DomainException extends RuntimeException {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public DomainException(String message) {
+        super(message);
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/domain/billing/PaymentGateway.java
+============================================================
 package brito.com.multitenancy001.shared.domain.billing;
 
 public enum PaymentGateway {
     MERCADOPAGO, STRIPE, PAGSEGURO, MANUAL
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/domain/billing/PaymentMethod.java
+============================================================
 package brito.com.multitenancy001.shared.domain.billing;
 
 public enum PaymentMethod {
     PIX, BOLETO, CREDIT_CARD, DEBIT_CARD, TRANSFER, CASH
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/domain/billing/PaymentStatus.java
+============================================================
 package brito.com.multitenancy001.shared.domain.billing;
 
 public enum PaymentStatus {
@@ -7089,18 +7592,10 @@ public enum PaymentStatus {
         }
     }
 }
-package brito.com.multitenancy001.shared.domain;
 
-public class DomainException extends RuntimeException {
-    /**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
-
-	public DomainException(String message) {
-        super(message);
-    }
-}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/domain/username/UsernamePolicy.java
+============================================================
 package brito.com.multitenancy001.shared.domain.username;
 
 import java.text.Normalizer;
@@ -7167,6 +7662,10 @@ public class UsernamePolicy {
         return normalizeBase(username.substring(0, idx));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/executor/PublicExecutor.java
+============================================================
 package brito.com.multitenancy001.shared.executor;
 
 import java.util.function.Supplier;
@@ -7192,6 +7691,10 @@ public class PublicExecutor {
     public <T> T inPublic(Supplier<T> supplier) { return run(supplier); }
     public void inPublic(Runnable runnable) { run(runnable); }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/executor/TxExecutor.java
+============================================================
 package brito.com.multitenancy001.shared.executor;
 
 import java.util.function.Supplier;
@@ -7316,11 +7819,19 @@ public class TxExecutor {
         tenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/security/PermissionAuthority.java
+============================================================
 package brito.com.multitenancy001.shared.security;
 
 public interface PermissionAuthority {
     String asAuthority(); // ex: "CP_USER_READ" ou "TEN_USER_READ"
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/security/RoleAuthority.java
+============================================================
 package brito.com.multitenancy001.shared.security;
 
 import java.io.Serializable;
@@ -7328,6 +7839,10 @@ import java.io.Serializable;
 public interface RoleAuthority extends Serializable {
     String asAuthority();
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/time/AppClock.java
+============================================================
 package brito.com.multitenancy001.shared.time;
 
 import java.time.Clock;
@@ -7355,6 +7870,10 @@ public interface AppClock {
         return instant().toEpochMilli();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/time/SystemAppClock.java
+============================================================
 package brito.com.multitenancy001.shared.time;
 
 import java.time.Clock;
@@ -7374,6 +7893,10 @@ public class SystemAppClock implements AppClock {
         return clock;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/shared/validation/ValidationPatterns.java
+============================================================
 package brito.com.multitenancy001.shared.validation; // ou .validation
 
 import brito.com.multitenancy001.shared.domain.username.UsernamePolicy;
@@ -7483,7 +8006,11 @@ public final class ValidationPatterns {
             );
         }
     }
-}package brito.com.multitenancy001.tenant.api.controller.auth;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/auth/TenantAuthController.java
+============================================================
+package brito.com.multitenancy001.tenant.api.controller.auth;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
@@ -7508,6 +8035,10 @@ public class TenantAuthController {
         return ResponseEntity.ok(jwtResponse);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/auth/TenantPasswordController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.auth;
 
 import brito.com.multitenancy001.tenant.api.dto.auth.ForgotPasswordRequest;
@@ -7540,6 +8071,10 @@ public class TenantPasswordController {
         return ResponseEntity.ok("Senha redefinida com sucesso");
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/billing/TenantPaymentController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.billing;
 
 
@@ -7577,6 +8112,10 @@ public class TenantPaymentController {
         return ResponseEntity.ok(tenantBillingService.hasActivePayment(accountId));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/categories/TenantCategoryController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.categories;
 
 import brito.com.multitenancy001.tenant.application.category.TenantCategoryService;
@@ -7672,6 +8211,10 @@ public class TenantCategoryController {
         return ResponseEntity.ok(tenantCategoryService.restore(id));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/categories/TenantSubcategoryController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.categories;
 
 import brito.com.multitenancy001.tenant.application.category.TenantSubcategoryService;
@@ -7773,6 +8316,10 @@ public class TenantSubcategoryController {
         return ResponseEntity.ok(tenantSubcategoryService.restore(id));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/products/TenantProductController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.products;
 
 import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
@@ -8003,6 +8550,10 @@ public class TenantProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/suppliers/TenantSupplierController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.suppliers;
 
 import brito.com.multitenancy001.tenant.application.supplier.TenantSupplierService;
@@ -8104,33 +8655,10 @@ public class TenantSupplierController {
         return ResponseEntity.ok(tenantSupplierService.restore(id));
     }
 }
-package brito.com.multitenancy001.tenant.api.controller.users.admin;
 
-import brito.com.multitenancy001.tenant.api.dto.users.admin.TenantUserAdminSuspendRequest;
-import brito.com.multitenancy001.tenant.application.user.admin.TenantUserAdminService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/api/tenant/admin/users")
-@RequiredArgsConstructor
-public class TenantUserAdminController {
-
-    private final TenantUserAdminService tenantUserAdminService;
-
-    // Suspende ou reativa usuário do tenant por ação administrativa.
-    @PatchMapping("/{userId}/suspend")
-    @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
-    public ResponseEntity<Void> suspendUser(
-            @PathVariable Long userId,
-            @RequestBody TenantUserAdminSuspendRequest tenantUserAdminSuspendRequest
-    ) {
-        tenantUserAdminService.setUserSuspendedByAdmin(userId, tenantUserAdminSuspendRequest.suspended());
-        return ResponseEntity.noContent().build();
-    }
-}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/users/TenantUserController.java
+============================================================
 package brito.com.multitenancy001.tenant.api.controller.users;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -8204,7 +8732,7 @@ public class TenantUserController {
             @RequestParam(required = false) Boolean active
     ) {
         if (suspended == null && active == null) {
-            throw new ApiException("INVALID_STATUS", "Informe 'suspended' (recomendado) ou 'active' (deprecated)", 400);
+            throw new ApiException("INVALID_STATUS", "Informe 'suspended' ou 'enable' ", 400);
         }
 
         boolean finalSuspended = (suspended != null) ? suspended : !active;
@@ -8255,6 +8783,41 @@ public class TenantUserController {
         return ResponseEntity.ok(response);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/controller/users/admin/TenantUserAdminController.java
+============================================================
+package brito.com.multitenancy001.tenant.api.controller.users.admin;
+
+import brito.com.multitenancy001.tenant.api.dto.users.admin.TenantUserAdminSuspendRequest;
+import brito.com.multitenancy001.tenant.application.user.admin.TenantUserAdminService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/tenant/admin/users")
+@RequiredArgsConstructor
+public class TenantUserAdminController {
+
+    private final TenantUserAdminService tenantUserAdminService;
+
+    // Suspende ou reativa usuário do tenant por ação administrativa.
+    @PatchMapping("/{userId}/suspend")
+    @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
+    public ResponseEntity<Void> suspendUser(
+            @PathVariable Long userId,
+            @RequestBody TenantUserAdminSuspendRequest tenantUserAdminSuspendRequest
+    ) {
+        tenantUserAdminService.setUserSuspendedByAdmin(userId, tenantUserAdminSuspendRequest.suspended());
+        return ResponseEntity.noContent().build();
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/ForgotPasswordRequest.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.auth;
 
 import jakarta.validation.constraints.Email;
@@ -8264,6 +8827,10 @@ public record ForgotPasswordRequest(
         @NotBlank String slug,
         @NotBlank @Email String email
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/ResetPasswordRequest.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
@@ -8279,6 +8846,10 @@ public record ResetPasswordRequest(
         )
         String newPassword
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginRequest.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
@@ -8288,6 +8859,10 @@ public record TenantLoginRequest(
 	    @NotBlank String password,
 	    @NotBlank String slug
 	) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/products/ProductResponse.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.products;
 
 import jakarta.validation.constraints.NotBlank;
@@ -8334,6 +8909,10 @@ public record ProductResponse(
 
   
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/products/ProductUpsertRequest.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.products;
 
 import java.math.BigDecimal;
@@ -8369,14 +8948,20 @@ public record ProductUpsertRequest(
         if (active == null) active = true;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/products/SupplierProductCountResponse.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.products;
 
 import java.util.UUID;
 
 public record SupplierProductCountResponse(UUID supplierId, long count) {}
-package brito.com.multitenancy001.tenant.api.dto.users.admin;
 
-public record TenantUserAdminSuspendRequest(boolean suspended) {}package brito.com.multitenancy001.tenant.api.dto.users;
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/users/TenantUserCreateRequest.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.users;
 
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
@@ -8450,6 +9035,10 @@ public record TenantUserCreateRequest(
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/users/TenantUserDetailsResponse.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.users;
 
 public record TenantUserDetailsResponse(
@@ -8468,6 +9057,10 @@ public record TenantUserDetailsResponse(
         boolean deleted,
         boolean enabled
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/users/TenantUserSummaryResponse.java
+============================================================
 package brito.com.multitenancy001.tenant.api.dto.users;
 
 public record TenantUserSummaryResponse(
@@ -8478,6 +9071,16 @@ public record TenantUserSummaryResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/users/admin/TenantUserAdminSuspendRequest.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.users.admin;
+
+public record TenantUserAdminSuspendRequest(boolean suspended) {}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/mapper/ProductApiMapper.java
+============================================================
 package brito.com.multitenancy001.tenant.api.mapper;
 
 import org.springframework.stereotype.Component;
@@ -8520,6 +9123,10 @@ public class ProductApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/api/mapper/TenantUserApiMapper.java
+============================================================
 package brito.com.multitenancy001.tenant.api.mapper;
 
 import org.springframework.stereotype.Component;
@@ -8571,6 +9178,10 @@ public class TenantUserApiMapper {
         );
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/auth/TenantAuthService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.auth;
 
 import org.springframework.security.authentication.AuthenticationManager;
@@ -8652,6 +9263,10 @@ public class TenantAuthService {
         });
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/billing/TenantBillingService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.billing;
 
 
@@ -8684,6 +9299,10 @@ public class TenantBillingService {
         return accountPaymentsReader.hasActivePayment(accountId);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/category/TenantCategoryService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.category;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -8834,6 +9453,10 @@ public class TenantCategoryService {
         return categoryRepository.save(category);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/category/TenantSubcategoryService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.category;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -8997,6 +9620,10 @@ public class TenantSubcategoryService {
         return subcategoryRepository.save(sub);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/product/TenantProductService.java
+============================================================
 // ===============================
 // ProductService.java
 // (corrigido: resolveCategoryAndSubcategory sem duplicação,
@@ -9409,6 +10036,10 @@ public class TenantProductService {
  
     
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/provisioning/TenantSchemaProvisioningService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.provisioning;
 
 import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
@@ -9444,8 +10075,11 @@ public class TenantSchemaProvisioningService {
         String trimmed = schemaName.trim();
 
         if (Schemas.CONTROL_PLANE.equalsIgnoreCase(trimmed)) {
-            throw new ApiException("INVALID_SCHEMA", "SchemaName 'public' não é permitido", 400);
+            throw new ApiException("INVALID_SCHEMA",
+                    "SchemaName '" + Schemas.CONTROL_PLANE + "' não é permitido",
+                    400);
         }
+
 
         if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
             throw new ApiException(
@@ -9503,7 +10137,11 @@ public class TenantSchemaProvisioningService {
      * Deve ser chamado com TenantContext já bindado no schema do tenant
      */
   
-}package brito.com.multitenancy001.tenant.application.supplier;
+}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/supplier/TenantSupplierService.java
+============================================================
+package brito.com.multitenancy001.tenant.application.supplier;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -9804,32 +10442,10 @@ public class TenantSupplierService {
         }
     }
 }
-package brito.com.multitenancy001.tenant.application.user.admin;
 
-import org.springframework.stereotype.Service;
-
-import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.tenant.application.user.TenantUserTxService;
-import lombok.RequiredArgsConstructor;
-
-@Service
-@RequiredArgsConstructor
-public class TenantUserAdminService {
-
-    private final TenantUserTxService tenantUserTxService;
-    private final SecurityUtils securityUtils;
-    private final TenantExecutor tenantExecutor;
-
-    public void setUserSuspendedByAdmin(Long userId, boolean suspended) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
-
-        tenantExecutor.run(schema, () ->
-                tenantUserTxService.setSuspendedByAdmin(userId, accountId, suspended)
-        );
-    }
-}
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/TenantUserService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -10090,6 +10706,10 @@ public class TenantUserService {
 
 
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/TenantUserTxService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
@@ -10224,7 +10844,7 @@ public class TenantUserTxService {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
 
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
@@ -10367,7 +10987,7 @@ public class TenantUserTxService {
     // =========================================================
 
     public void softDelete(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
@@ -10380,7 +11000,7 @@ public class TenantUserTxService {
     }
 
     public TenantUser restore(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (!user.isDeleted()) throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
@@ -10394,7 +11014,7 @@ public class TenantUserTxService {
     }
 
     public void hardDelete(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
         tenantUserRepository.delete(user);
     }
@@ -10541,6 +11161,40 @@ public class TenantUserTxService {
         return out;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/admin/TenantUserAdminService.java
+============================================================
+package brito.com.multitenancy001.tenant.application.user.admin;
+
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.tenant.application.user.TenantUserTxService;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class TenantUserAdminService {
+
+    private final TenantUserTxService tenantUserTxService;
+    private final SecurityUtils securityUtils;
+    private final TenantExecutor tenantExecutor;
+
+    public void setUserSuspendedByAdmin(Long userId, boolean suspended) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+
+        tenantExecutor.run(schema, () ->
+                tenantUserTxService.setSuspendedByAdmin(userId, accountId, suspended)
+        );
+    }
+}
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/application/username/generator/UsernameGeneratorService.java
+============================================================
 package brito.com.multitenancy001.tenant.application.username.generator;
 
 import java.util.UUID;
@@ -10627,6 +11281,10 @@ public String ensureUnique(String initialUsername, Long accountId) {
 		return UUID.randomUUID().toString().replace("-", "").substring(0, len);
 	}
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/category/Category.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.category;
 
 import jakarta.persistence.*;
@@ -10690,6 +11348,10 @@ public class Category {
         this.active = true;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/category/Subcategory.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.category;
 
 import jakarta.persistence.*;
@@ -10761,6 +11423,10 @@ public class Subcategory {
         this.active = true;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/product/Product.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.product;
 
 import brito.com.multitenancy001.tenant.domain.category.Category;
@@ -10958,6 +11624,10 @@ public class Product {
         this.stockQuantity -= quantity;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/sale/Sale.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.sale;
 
 import jakarta.persistence.*;
@@ -11056,6 +11726,10 @@ public class Sale {
         this.status = SaleStatus.CANCELLED;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/sale/SaleItem.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.sale;
 
 import jakarta.persistence.*;
@@ -11115,6 +11789,10 @@ public class SaleItem {
         this.totalPrice = unitPrice.multiply(quantity);
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/sale/SaleStatus.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.sale;
 
 
@@ -11124,6 +11802,10 @@ public enum SaleStatus {
     PAID,
     CANCELLED
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/supplier/Supplier.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.supplier;
 
 import brito.com.multitenancy001.tenant.domain.product.Product;
@@ -11241,6 +11923,10 @@ public class Supplier {
         this.active = true;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/user/TenantUser.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.user;
 
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
@@ -11498,6 +12184,10 @@ public class TenantUser {
         // não altera suspendedByAccount aqui
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/domain/user/TenantUserOrigin.java
+============================================================
 package brito.com.multitenancy001.tenant.domain.user;
 
 public enum TenantUserOrigin {
@@ -11505,6 +12195,10 @@ public enum TenantUserOrigin {
     ADMIN,
     API
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/category/TenantCategoryRepository.java
+============================================================
 package brito.com.multitenancy001.tenant.persistence.category;
 
 import brito.com.multitenancy001.tenant.domain.category.Category;
@@ -11548,6 +12242,10 @@ public interface TenantCategoryRepository extends JpaRepository<Category, Long> 
     List<Category> findWithFlags(@Param("includeDeleted") boolean includeDeleted,
                                  @Param("includeInactive") boolean includeInactive);
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/category/TenantSubcategoryRepository.java
+============================================================
 package brito.com.multitenancy001.tenant.persistence.category;
 
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
@@ -11621,6 +12319,10 @@ public interface TenantSubcategoryRepository extends JpaRepository<Subcategory, 
                                               @Param("includeDeleted") boolean includeDeleted,
                                               @Param("includeInactive") boolean includeInactive);
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/product/TenantProductRepository.java
+============================================================
 package brito.com.multitenancy001.tenant.persistence.product;
 
 import brito.com.multitenancy001.tenant.domain.product.Product;
@@ -11684,9 +12386,7 @@ public interface TenantProductRepository extends JpaRepository<Product, UUID> {
     // EXISTENTES (mantidos)
     // =========================================================
 
-    // Se você ainda usa em algum lugar interno:
-    List<Product> findByBrandIgnoreCase(String brand);
-
+   
     List<Product> findByCategory_Id(Long categoryId);
 
     List<Product> findBySubcategory_Id(Long subcategoryId);
@@ -11751,8 +12451,28 @@ public interface TenantProductRepository extends JpaRepository<Product, UUID> {
     	List<Product> findByCategoryWithFlags(@Param("categoryId") Long categoryId,
     	                                     @Param("includeDeleted") boolean includeDeleted,
     	                                     @Param("includeInactive") boolean includeInactive);
+   
+    
+    // =========================================================
+    // ANY (admin/relatórios internos) ⚠️ pode incluir deleted/inactive
+    // =========================================================
+
+    /**
+     * ⚠️ Pode incluir deleted/inactive.
+     * Use apenas para telas/admin/relatórios internos.
+     * Para catálogo público use findActiveNotDeleted*.
+     */
+    List<Product> findAnyByBrandIgnoreCase(String brand);
+
+
+    
+    
 
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/supplier/TenantSupplierRepository.java
+============================================================
 package brito.com.multitenancy001.tenant.persistence.supplier;
 
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
@@ -11785,8 +12505,6 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 	
 	List<Supplier> findByNameContainingIgnoreCase(String name);
 
-	List<Supplier> findByEmail(String email);
-
 	// =========================
 	// RECOMENDADO: queries usadas pelos endpoints (não-deletados)
 	// =========================
@@ -11803,8 +12521,28 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 
 	@Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
 	List<Supplier> findActiveNotDeleted();
+	
+ 
+    
+    // =========================================================
+    // ANY (admin/relatórios internos) ⚠️ pode incluir deleted/inactive
+    // =========================================================
+
+    /**
+     * ⚠️ Pode incluir deleted/inactive.
+     * Prefira findNotDeletedByEmail / findActiveNotDeleted quando for regra normal.
+     */
+    List<Supplier> findAnyByEmail(String email);
+
+   
+
+
 
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/user/TenantUserRepository.java
+============================================================
 package brito.com.multitenancy001.tenant.persistence.user;
 
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -11924,10 +12662,62 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     // Scoped ID
     // ==========================
 
-    Optional<TenantUser> findByIdAndAccountId(Long id, Long accountId);
+   
 
+    
+    
+    // ==========================
+    // ⚠️ Bypass consciente: INCLUDING DELETED
+    // Só use para auditoria/suporte/restore.
+    // ==========================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
+    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
+    Optional<TenantUser> findIncludingDeletedByIdAndAccountId(@Param("id") Long id,
+                                                              @Param("accountId") Long accountId);
+    
+    
+    // ==========================
+    // Scoped ID
+    // ==========================
+
+    /**
+     * DEFAULT (NotDeleted): leitura normal do domínio.
+     */
     Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
+
+    /**
+     * DEFAULT (Enabled): login/uso ativo.
+     * enabled = NOT DELETED + NOT suspended (account/admin)
+     */
+    @Query("""
+        select u from TenantUser u
+        where u.id = :id
+          and u.accountId = :accountId
+          and u.deleted = false
+          and u.suspendedByAccount = false
+          and u.suspendedByAdmin = false
+    """)
+    Optional<TenantUser> findEnabledByIdAndAccountId(@Param("id") Long id,
+                                                     @Param("accountId") Long accountId);
+
+    // ==========================
+    // ⚠️ ANY (bypass consciente): INCLUDING DELETED
+    // ==========================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
+    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
+    Optional<TenantUser> findAnyByIdAndAccountId(@Param("id") Long id,
+                                                 @Param("accountId") Long accountId);
+
+   
+
+   
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/security/TenantPermission.java
+============================================================
 package brito.com.multitenancy001.tenant.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
@@ -11955,6 +12745,7 @@ public enum TenantPermission implements PermissionAuthority {
     TEN_SALE_READ,
     TEN_SALE_WRITE,
     TEN_SALE_ISSUES_READ,
+    TEN_SALE_ISSUES_WRITE,
 
     TEN_REPORT_SALES_READ,
 
@@ -11972,6 +12763,10 @@ public enum TenantPermission implements PermissionAuthority {
         return name();
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/security/TenantRole.java
+============================================================
 package brito.com.multitenancy001.tenant.security;
 
 import brito.com.multitenancy001.shared.security.RoleAuthority;
@@ -11995,6 +12790,10 @@ public enum TenantRole implements RoleAuthority {
         return this == TENANT_OWNER;
     }
 }
+
+============================================================
+FILE: ./main/java/brito/com/multitenancy001/tenant/security/TenantRolePermissions.java
+============================================================
 package brito.com.multitenancy001.tenant.security;
 
 import java.util.EnumSet;
@@ -12083,6 +12882,10 @@ public final class TenantRolePermissions {
         };
     }
 }
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V1__create_table_accounts.sql
+============================================================
 -- V1__create_table_accounts.sql
 SET search_path TO public;
 
@@ -12207,6 +13010,10 @@ ON accounts (display_name);
 
 
 
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V2__create_table_account_entitlements.sql
+============================================================
 -- V2__create_table_account_entitlements.sql
 SET search_path TO public;
 
@@ -12221,6 +13028,10 @@ CREATE TABLE IF NOT EXISTS account_entitlements (
 ALTER TABLE account_entitlements
     ADD CONSTRAINT chk_entitlements_positive
     CHECK (max_users > 0 AND max_products > 0 AND max_storage_mb > 0);
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V3__create_table_controlplane_users.sql
+============================================================
 -- V3__create_table_controlplane_users.sql
 SET search_path TO public;
 
@@ -12285,6 +13096,10 @@ WHERE deleted = false;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
 ON controlplane_users (account_id, email)
 WHERE deleted = false;
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V4__insert_controlplane_account.sql
+============================================================
 -- V4__insert_controlplane_account.sql
 SET search_path TO public;
 
@@ -12332,6 +13147,10 @@ SELECT
 WHERE NOT EXISTS (
     SELECT 1 FROM accounts WHERE slug = 'controlplane'
 );
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V5__insert_controlplane_users.sql
+============================================================
 -- V5__insert_controlplane_users.sql
 SET search_path TO public;
 
@@ -12399,6 +13218,10 @@ WHERE NOT EXISTS (
       AND existing.deleted = false
       AND (existing.username = u.username OR existing.email = u.email)
 );
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V6__create_table_controlplane_user_permissions.sql
+============================================================
 -- V6__create_table_controlplane_user_permissions.sql
 SET search_path TO public;
 
@@ -12413,6 +13236,10 @@ CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
         REFERENCES controlplane_users(id)
         ON DELETE CASCADE
 );
+
+============================================================
+FILE: ./main/resources/db/migration/accounts/V7__create_table_payments.sql
+============================================================
 -- V7__create_table_payments.sql
 SET search_path TO public;
 
@@ -12453,6 +13280,10 @@ CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
 CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
 
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V1__create_table_tenant_users.sql
+============================================================
 -- V1__create_table_tenant_users.sql
 
 CREATE TABLE IF NOT EXISTS tenant_users (
@@ -12504,6 +13335,10 @@ CREATE INDEX IF NOT EXISTS idx_tenant_users_account_id ON tenant_users(account_i
 
 CREATE INDEX IF NOT EXISTS idx_tenant_users_deleted ON tenant_users(deleted) WHERE deleted = false;
 
+============================================================
+FILE: ./main/resources/db/migration/tenants/V2__create_table_tenant_users_permissions.sql
+============================================================
+
 -- V2__create_table_tenant_users_permissions.sql
 CREATE TABLE IF NOT EXISTS tenant_user_permissions (
     tenant_user_id BIGINT NOT NULL,
@@ -12515,7 +13350,11 @@ CREATE TABLE IF NOT EXISTS tenant_user_permissions (
         FOREIGN KEY (tenant_user_id)
         REFERENCES tenant_users(id)
         ON DELETE CASCADE
-);-- V3__create_table_categories.sql
+);
+============================================================
+FILE: ./main/resources/db/migration/tenants/V3__create_table_categories.sql
+============================================================
+-- V3__create_table_categories.sql
 
 CREATE TABLE IF NOT EXISTS categories (
   id BIGSERIAL PRIMARY KEY,
@@ -12534,6 +13373,10 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE INDEX IF NOT EXISTS idx_categories_active  ON categories(active);
 CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted) WHERE deleted = false;
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V4__create_table_subcategories.sql
+============================================================
 -- V4__create_table_subcategories.sql
 
 CREATE TABLE IF NOT EXISTS subcategories (
@@ -12558,6 +13401,10 @@ CREATE TABLE IF NOT EXISTS subcategories (
 
 CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V5__create_table_suppliers.sql
+============================================================
 -- V5__create_table_suppliers.sql
 
 -- 1) Habilita função de UUID (Postgres)
@@ -12602,6 +13449,10 @@ CREATE INDEX IF NOT EXISTS idx_supplier_name    ON suppliers(name);
 CREATE INDEX IF NOT EXISTS idx_supplier_email   ON suppliers(email);
 CREATE INDEX IF NOT EXISTS idx_supplier_active  ON suppliers(active);
 CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V6__create_table_products.sql
+============================================================
 -- V6__create_table_products.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -12684,6 +13535,10 @@ ON products (subcategory_id);
 -- listagens recentes
 CREATE INDEX idx_products_created_at
 ON products (created_at);
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V7__create_table_sales.sql
+============================================================
 -- V7__create_table_sales.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -12707,6 +13562,10 @@ CREATE TABLE IF NOT EXISTS sales (
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
+
+============================================================
+FILE: ./main/resources/db/migration/tenants/V8__create_table_sales_items.sql
+============================================================
 -- V8__create_table_sales_items.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -12728,6 +13587,10 @@ CREATE TABLE IF NOT EXISTS sale_items (
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id);
+
+============================================================
+FILE: ./test/java/brito/com/multitenancy001/Multitenancy001ApplicationTests.java
+============================================================
 package brito.com.multitenancy001;
 
 import org.junit.jupiter.api.Test;
@@ -12741,3 +13604,4 @@ class Multitenancy001ApplicationTests {
 	}
 
 }
+

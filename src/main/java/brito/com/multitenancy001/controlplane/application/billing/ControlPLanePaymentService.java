@@ -43,7 +43,7 @@ public class ControlPlanePaymentService {
 		LocalDateTime now = appClock.now();
 
 		// Trials expirados
-		List<Account> expiredTrials = accountRepository.findExpiredTrials(now, AccountStatus.FREE_TRIAL);
+		List<Account> expiredTrials = accountRepository.findExpiredTrialsNotDeleted(now, AccountStatus.FREE_TRIAL);
 
 		for (Account account : expiredTrials) {
 			if (account.getStatus() != AccountStatus.SUSPENDED) {
@@ -52,7 +52,7 @@ public class ControlPlanePaymentService {
 		}
 
 		// Pagamentos vencidos
-		List<Account> overdueAccounts = accountRepository.findOverdueAccounts(AccountStatus.ACTIVE, now);
+		List<Account> overdueAccounts = accountRepository.findOverdueAccountsNotDeleted(AccountStatus.ACTIVE, now);
 
 		for (Account account : overdueAccounts) {
 			if (account.getStatus() != AccountStatus.SUSPENDED) {

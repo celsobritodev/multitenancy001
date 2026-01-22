@@ -142,7 +142,7 @@ public class ControlPlaneUserService {
     }
 
     private ControlPlaneUser loadUserAnyStatusOr404(Long userId, Long accountId) {
-        return controlPlaneUserRepository.findByIdAndAccountId(userId, accountId)
+        return controlPlaneUserRepository.findAnyByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
     }
 

@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.controlplane.persistence.billing;
 
-
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,47 +17,62 @@ import java.util.Optional;
 
 @Repository
 public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
-	
-	Optional<Payment> findAnyByIdAndAccountId(Long id, Long accountId);
-	
-	boolean existsByIdAndAccountId(Long id, Long accountId);
+
+    // =========================================================
+    // ANY (bypass consciente / scoped)
+    // Payment normalmente não tem soft-delete; "Any" aqui significa
+    // "scoped por account e sem filtros adicionais".
+    // =========================================================
+
+    /**
+     * Busca payment por id + account (scoped).
+     * "Any" aqui não é sobre deleted; é sobre não aplicar filtros extras (status/data).
+     */
+    Optional<Payment> findAnyByIdAndAccountId(Long id, Long accountId);
 
     
+
+    boolean existsByIdAndAccountId(Long id, Long accountId);
+
+    // =========================================================
+    // Queries normais
+    // =========================================================
+
     List<Payment> findByAccountId(Long accountId);
-    
+
     List<Payment> findByAccountIdAndStatus(Long accountId, PaymentStatus status);
-    
+
     Page<Payment> findByAccountId(Long accountId, Pageable pageable);
-    
+
     Optional<Payment> findByTransactionId(String transactionId);
-    
+
     List<Payment> findByStatus(PaymentStatus status);
-    
+
     List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, LocalDateTime date);
-    
+
     List<Payment> findByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' ORDER BY p.paymentDate DESC")
     List<Payment> findCompletedPaymentsByAccount(@Param("accountId") Long accountId);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.validUntil > :now AND p.status = 'COMPLETED'")
     Optional<Payment> findActivePayment(@Param("accountId") Long accountId, @Param("now") LocalDateTime now);
-    
+
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate")
-    BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId, 
-                                   @Param("startDate") LocalDateTime startDate, 
+    BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId,
+                                   @Param("startDate") LocalDateTime startDate,
                                    @Param("endDate") LocalDateTime endDate);
-    
+
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED'")
     Long countCompletedPayments(@Param("accountId") Long accountId);
-    
+
     @Query("SELECT p FROM Payment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
-    List<Payment> findPaymentsInPeriod(@Param("startDate") LocalDateTime startDate, 
-                                      @Param("endDate") LocalDateTime endDate);
-    
+    List<Payment> findPaymentsInPeriod(@Param("startDate") LocalDateTime startDate,
+                                       @Param("endDate") LocalDateTime endDate);
+
     @Query("SELECT p.account.id, SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate GROUP BY p.account.id")
-    List<Object[]> getRevenueByAccount(@Param("startDate") LocalDateTime startDate, 
-                                      @Param("endDate") LocalDateTime endDate);
-    
+    List<Object[]> getRevenueByAccount(@Param("startDate") LocalDateTime startDate,
+                                       @Param("endDate") LocalDateTime endDate);
+
     boolean existsByTransactionId(String transactionId);
 }

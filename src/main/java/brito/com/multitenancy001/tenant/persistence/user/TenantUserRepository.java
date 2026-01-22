@@ -117,7 +117,55 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     // Scoped ID
     // ==========================
 
-    Optional<TenantUser> findByIdAndAccountId(Long id, Long accountId);
+   
 
+    
+    
+    // ==========================
+    // ⚠️ Bypass consciente: INCLUDING DELETED
+    // Só use para auditoria/suporte/restore.
+    // ==========================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
+    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
+    Optional<TenantUser> findIncludingDeletedByIdAndAccountId(@Param("id") Long id,
+                                                              @Param("accountId") Long accountId);
+    
+    
+    // ==========================
+    // Scoped ID
+    // ==========================
+
+    /**
+     * DEFAULT (NotDeleted): leitura normal do domínio.
+     */
     Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
+
+    /**
+     * DEFAULT (Enabled): login/uso ativo.
+     * enabled = NOT DELETED + NOT suspended (account/admin)
+     */
+    @Query("""
+        select u from TenantUser u
+        where u.id = :id
+          and u.accountId = :accountId
+          and u.deleted = false
+          and u.suspendedByAccount = false
+          and u.suspendedByAdmin = false
+    """)
+    Optional<TenantUser> findEnabledByIdAndAccountId(@Param("id") Long id,
+                                                     @Param("accountId") Long accountId);
+
+    // ==========================
+    // ⚠️ ANY (bypass consciente): INCLUDING DELETED
+    // ==========================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
+    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
+    Optional<TenantUser> findAnyByIdAndAccountId(@Param("id") Long id,
+                                                 @Param("accountId") Long accountId);
+
+   
+
+   
 }

@@ -61,9 +61,7 @@ public interface TenantProductRepository extends JpaRepository<Product, UUID> {
     // EXISTENTES (mantidos)
     // =========================================================
 
-    // Se você ainda usa em algum lugar interno:
-    List<Product> findByBrandIgnoreCase(String brand);
-
+   
     List<Product> findByCategory_Id(Long categoryId);
 
     List<Product> findBySubcategory_Id(Long subcategoryId);
@@ -128,5 +126,21 @@ public interface TenantProductRepository extends JpaRepository<Product, UUID> {
     	List<Product> findByCategoryWithFlags(@Param("categoryId") Long categoryId,
     	                                     @Param("includeDeleted") boolean includeDeleted,
     	                                     @Param("includeInactive") boolean includeInactive);
+   
+    
+    // =========================================================
+    // ANY (admin/relatórios internos) ⚠️ pode incluir deleted/inactive
+    // =========================================================
+
+    /**
+     * ⚠️ Pode incluir deleted/inactive.
+     * Use apenas para telas/admin/relatórios internos.
+     * Para catálogo público use findActiveNotDeleted*.
+     */
+    List<Product> findAnyByBrandIgnoreCase(String brand);
+
+
+    
+    
 
 }

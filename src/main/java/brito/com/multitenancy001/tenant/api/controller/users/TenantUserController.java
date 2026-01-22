@@ -71,7 +71,7 @@ public class TenantUserController {
             @RequestParam(required = false) Boolean active
     ) {
         if (suspended == null && active == null) {
-            throw new ApiException("INVALID_STATUS", "Informe 'suspended' (recomendado) ou 'active' (deprecated)", 400);
+            throw new ApiException("INVALID_STATUS", "Informe 'suspended' ou 'enable' ", 400);
         }
 
         boolean finalSuspended = (suspended != null) ? suspended : !active;

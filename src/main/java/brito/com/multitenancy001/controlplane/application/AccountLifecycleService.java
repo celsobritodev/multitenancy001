@@ -244,7 +244,7 @@ public class AccountLifecycleService {
      AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
 
      return publicExecutor.run(() ->
-             accountRepository.findExpiredTrials(d, st).stream()
+             accountRepository.findExpiredTrialsNotDeleted(d, st).stream()
                      .map(accountApiMapper::toResponse)
                      .toList()
      );
@@ -257,7 +257,7 @@ public class AccountLifecycleService {
      AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
      return publicExecutor.run(() ->
-             accountRepository.findOverdueAccounts(st, t).stream()
+             accountRepository.findOverdueAccountsNotDeleted(st, t).stream()
                      .map(accountApiMapper::toResponse)
                      .toList()
      );

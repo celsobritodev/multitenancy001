@@ -132,7 +132,7 @@ public class TenantUserTxService {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
 
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_DELETED", "Usuário está deletado", 409);
@@ -275,7 +275,7 @@ public class TenantUserTxService {
     // =========================================================
 
     public void softDelete(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (user.isDeleted()) throw new ApiException("USER_ALREADY_DELETED", "Usuário já removido", 409);
@@ -288,7 +288,7 @@ public class TenantUserTxService {
     }
 
     public TenantUser restore(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
         if (!user.isDeleted()) throw new ApiException("USER_NOT_DELETED", "Usuário não está removido", 409);
@@ -302,7 +302,7 @@ public class TenantUserTxService {
     }
 
     public void hardDelete(Long userId, Long accountId) {
-        TenantUser user = tenantUserRepository.findByIdAndAccountId(userId, accountId)
+        TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
         tenantUserRepository.delete(user);
     }

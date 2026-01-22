@@ -13,16 +13,19 @@ import java.util.Optional;
 public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
 
     // =========================================================
-    // NOT DELETED (deleted=false)  ✅ padrão para "exists/unique/list"
+    // NOT DELETED (deleted=false) ✅ default do domínio
     // =========================================================
 
+    /** Lista usuários da conta, excluindo soft-deleted. */
     @Query("SELECT u FROM ControlPlaneUser u WHERE u.account.id = :accountId AND u.deleted = false")
     List<ControlPlaneUser> findNotDeletedByAccountId(@Param("accountId") Long accountId);
 
+    /** Busca usuário por id + accountId, excluindo soft-deleted. */
     @Query("SELECT u FROM ControlPlaneUser u WHERE u.id = :id AND u.account.id = :accountId AND u.deleted = false")
     Optional<ControlPlaneUser> findNotDeletedByIdAndAccountId(@Param("id") Long id,
                                                               @Param("accountId") Long accountId);
 
+    /** Busca o superadmin (não deletado) por conta. */
     @Query("""
             SELECT u
               FROM ControlPlaneUser u
@@ -32,14 +35,53 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
            """)
     Optional<ControlPlaneUser> findNotDeletedSuperAdmin(@Param("accountId") Long accountId);
 
+    /** Busca por username + account (não deletado). */
     Optional<ControlPlaneUser> findByUsernameAndAccount_IdAndDeletedFalse(String username, Long accountId);
 
+    /** Conta usuários (não deletados) por conta. */
     long countByAccountIdAndDeletedFalse(Long accountId);
 
-    Optional<ControlPlaneUser> findByIdAndAccountId(Long id, Long accountId);
-
+    /** Busca por username (não deletado). */
     Optional<ControlPlaneUser> findByUsernameAndDeletedFalse(String username);
 
+    // =========================================================
+    // ENABLED = NOT DELETED + NOT suspended ✅ default segurança
+    // =========================================================
+
+    /** Lista usuários "habilitados": não deletado e não suspenso (admin nem account). */
+    @Query("""
+            SELECT u
+              FROM ControlPlaneUser u
+             WHERE u.account.id = :accountId
+               AND u.deleted = false
+               AND u.suspendedByAccount = false
+               AND u.suspendedByAdmin = false
+           """)
+    List<ControlPlaneUser> findEnabledByAccountId(@Param("accountId") Long accountId);
+
+    /** Busca usuário "habilitado": não deletado e não suspenso (admin nem account). */
+    @Query("""
+            SELECT u
+              FROM ControlPlaneUser u
+             WHERE u.id = :id
+               AND u.account.id = :accountId
+               AND u.deleted = false
+               AND u.suspendedByAccount = false
+               AND u.suspendedByAdmin = false
+           """)
+    Optional<ControlPlaneUser> findEnabledByIdAndAccountId(@Param("id") Long id,
+                                                           @Param("accountId") Long accountId);
+
+    // =========================================================
+    // ANY = BYPASS consciente (inclui deleted) ⚠️
+    // =========================================================
+
+    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore/histórico. */
+    @Query("SELECT u FROM ControlPlaneUser u WHERE u.id = :id AND u.account.id = :accountId")
+    Optional<ControlPlaneUser> findAnyByIdAndAccountId(@Param("id") Long id,
+                                                       @Param("accountId") Long accountId);
+
+ 
     // =========================================================
     // UNICIDADE NOT DELETED (deleted=false) e case-insensitive
     // =========================================================
@@ -87,31 +129,4 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
     boolean existsOtherNotDeletedByEmailIgnoreCase(@Param("accountId") Long accountId,
                                                    @Param("email") String email,
                                                    @Param("userId") Long userId);
-
-    // =========================================================
-    // ENABLED (deleted=false AND NOT suspended)  ✅ opcional/recomendado
-    // =========================================================
-
-    @Query("""
-            SELECT u
-              FROM ControlPlaneUser u
-             WHERE u.account.id = :accountId
-               AND u.deleted = false
-               AND u.suspendedByAccount = false
-               AND u.suspendedByAdmin = false
-           """)
-    List<ControlPlaneUser> findEnabledByAccountId(@Param("accountId") Long accountId);
-
-    @Query("""
-            SELECT u
-              FROM ControlPlaneUser u
-             WHERE u.id = :id
-               AND u.account.id = :accountId
-               AND u.deleted = false
-               AND u.suspendedByAccount = false
-               AND u.suspendedByAdmin = false
-           """)
-    Optional<ControlPlaneUser> findEnabledByIdAndAccountId(@Param("id") Long id,
-                                                           @Param("accountId") Long accountId);
-
 }

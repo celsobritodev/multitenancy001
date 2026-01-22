@@ -30,8 +30,6 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 	
 	List<Supplier> findByNameContainingIgnoreCase(String name);
 
-	List<Supplier> findByEmail(String email);
-
 	// =========================
 	// RECOMENDADO: queries usadas pelos endpoints (não-deletados)
 	// =========================
@@ -48,5 +46,21 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 
 	@Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
 	List<Supplier> findActiveNotDeleted();
+	
+ 
+    
+    // =========================================================
+    // ANY (admin/relatórios internos) ⚠️ pode incluir deleted/inactive
+    // =========================================================
+
+    /**
+     * ⚠️ Pode incluir deleted/inactive.
+     * Prefira findNotDeletedByEmail / findActiveNotDeleted quando for regra normal.
+     */
+    List<Supplier> findAnyByEmail(String email);
+
+   
+
+
 
 }
