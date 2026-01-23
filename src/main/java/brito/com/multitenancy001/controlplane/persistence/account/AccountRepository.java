@@ -45,6 +45,15 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     /** Busca por slug ignoreCase (não deletado). */
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
+    
+    // =========================================================
+    // PROJECTIONS (para evitar expor entidade fora do CP)
+    // =========================================================
+
+    Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalse(String slug);
+
+    Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
+
 
     /** Busca por id (não deletado). Default para leitura normal. */
     Optional<Account> findByIdAndDeletedFalse(Long id);

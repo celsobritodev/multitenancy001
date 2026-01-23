@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.billing;
+package brito.com.multitenancy001.tenant.api.billing;
 
 
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;

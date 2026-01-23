@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
+    
+        -- AUDITORIA
+ 
+    deleted_by BIGINT,
+
+    created_by_username VARCHAR(120),
+    updated_by_username VARCHAR(120),
+    deleted_by_username VARCHAR(120),
+
 
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,

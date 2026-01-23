@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.products;
+package brito.com.multitenancy001.tenant.api.products;
 
 import brito.com.multitenancy001.tenant.api.dto.products.ProductResponse;
 import brito.com.multitenancy001.tenant.api.dto.products.ProductUpsertRequest;
@@ -227,4 +227,39 @@ public class TenantProductController {
         Product savedProduct = tenantProductService.create(product);
         return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
     }
+    
+    // "Any" (pode incluir deleted/inactive) - útil para telas/admin/relatórios internos
+    @GetMapping("/category/{categoryId}/any")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> listAnyByCategory(@PathVariable Long categoryId) {
+        return ResponseEntity.ok(
+                tenantProductService.findAnyByCategoryId(categoryId)
+                        .stream()
+                        .map(productApiMapper::toResponse)
+                        .toList()
+        );
+    }
+
+    @GetMapping("/subcategory/{subcategoryId}/any")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> listAnyBySubcategory(@PathVariable Long subcategoryId) {
+        return ResponseEntity.ok(
+                tenantProductService.findAnyBySubcategoryId(subcategoryId)
+                        .stream()
+                        .map(productApiMapper::toResponse)
+                        .toList()
+        );
+    }
+
+    @GetMapping("/brand/{brand}/any")
+    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    public ResponseEntity<List<ProductResponse>> listAnyByBrand(@PathVariable String brand) {
+        return ResponseEntity.ok(
+                tenantProductService.findAnyByBrandIgnoreCase(brand)
+                        .stream()
+                        .map(productApiMapper::toResponse)
+                        .toList()
+        );
+    }
+
 }

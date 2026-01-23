@@ -1,6 +1,6 @@
 -- V8__create_table_sales_items.sql
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 
 CREATE TABLE IF NOT EXISTS sale_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -12,6 +12,15 @@ CREATE TABLE IF NOT EXISTS sale_items (
   quantity NUMERIC(12,3) NOT NULL,
   unit_price NUMERIC(12,2) NOT NULL,
   total_price NUMERIC(12,2) NOT NULL,
+
+  -- AUDITORIA (compatível com AuditInfo)
+  created_by BIGINT,
+  updated_by BIGINT,
+  deleted_by BIGINT,
+
+  created_by_username VARCHAR(120),
+  updated_by_username VARCHAR(120),
+  deleted_by_username VARCHAR(120),
 
   CONSTRAINT fk_sale_items_sale
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE

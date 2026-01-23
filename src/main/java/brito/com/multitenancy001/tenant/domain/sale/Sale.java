@@ -5,6 +5,10 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -16,13 +20,15 @@ import java.util.UUID;
         @Index(name = "idx_sales_sale_date", columnList = "sale_date"),
         @Index(name = "idx_sales_status", columnList = "status")
 })
+@EntityListeners(AuditEntityListener.class)
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "items")
-public class Sale {
+public class Sale implements Auditable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -67,6 +73,18 @@ public class Sale {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
+ 
+
 
     public void addItem(SaleItem item) {
         if (item == null) return;

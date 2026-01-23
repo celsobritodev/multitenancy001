@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.suppliers;
+package brito.com.multitenancy001.tenant.api.suppliers;
 
 import brito.com.multitenancy001.tenant.application.supplier.TenantSupplierService;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
@@ -98,4 +98,12 @@ public class TenantSupplierController {
     public ResponseEntity<Supplier> restore(@PathVariable UUID id) {
         return ResponseEntity.ok(tenantSupplierService.restore(id));
     }
+    
+    // "Any" (pode incluir deleted/inactive) - útil para admin/auditoria
+    @GetMapping("/email/any")
+    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    public ResponseEntity<List<Supplier>> findAnyByEmail(@RequestParam String email) {
+        return ResponseEntity.ok(tenantSupplierService.findAnyByEmail(email));
+    }
+
 }

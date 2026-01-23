@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.users;
+package brito.com.multitenancy001.tenant.api.users;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
@@ -31,9 +31,9 @@ public class TenantUserController {
     }
 
     // Lista usuários ativos do tenant.
-    @GetMapping("/enable")
+    @GetMapping("/enabled")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listEnableTenantUsers() {
+    public ResponseEntity<List<TenantUserSummaryResponse>> listEnabledTenantUsers() {
         return ResponseEntity.ok(tenantUserService.listEnabledTenantUsers());
     }
 
@@ -62,19 +62,19 @@ public class TenantUserController {
         return ResponseEntity.noContent().build();
     }
 
-    // Atualiza status de suspensão do usuário (suspended recomendado; active é compat legado).
+    // Atualiza status de suspensão do usuário 
     @PatchMapping("/{userId}/status")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
             @PathVariable Long userId,
-            @RequestParam(required = false) Boolean suspended,
-            @RequestParam(required = false) Boolean active
+            @RequestParam(required = false) Boolean suspendedByAccount,
+            @RequestParam(required = false) Boolean suspendedByAdmin
     ) {
-        if (suspended == null && active == null) {
-            throw new ApiException("INVALID_STATUS", "Informe 'suspended' ou 'enable' ", 400);
+        if (suspendedByAccount == null && suspendedByAdmin == null) {
+            throw new ApiException("INVALID_STATUS", "Informe 'suspended' ou 'enabled' ", 400);
         }
 
-        boolean finalSuspended = (suspended != null) ? suspended : !active;
+        boolean finalSuspended = (suspendedByAccount != null) ? suspendedByAccount : !suspendedByAdmin;
 
         TenantUserSummaryResponse response =
                 tenantUserService.setTenantUserSuspendedByAdmin(userId, finalSuspended);
@@ -121,4 +121,20 @@ public class TenantUserController {
         TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
     }
+    
+    // Busca detalhes de um usuário habilitado (enabled).
+    @GetMapping("/enabled/{userId}")
+    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(tenantUserService.getEnabledTenantUser(userId));
+    }
+
+    // Conta usuários habilitados (enabled) do tenant.
+    @GetMapping("/enabled/count")
+    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    public ResponseEntity<Long> countEnabledTenantUsers() {
+        return ResponseEntity.ok(tenantUserService.countEnabledTenantUsers());
+    }
+ 
+    
 }

@@ -255,6 +255,24 @@ public class TenantUserService {
             return tenantUserApiMapper.toDetails(updated);
         });
     }
+    
+    public TenantUserDetailsResponse getEnabledTenantUser(Long userId) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+
+        return tenantExecutor.run(schema, () -> {
+            TenantUser user = tenantUserTxService.getEnabledUser(userId, accountId);
+            return tenantUserApiMapper.toDetails(user);
+        });
+    }
+
+    public long countEnabledTenantUsers() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+
+        return tenantExecutor.run(schema, () -> tenantUserTxService.countEnabledUsersByAccount(accountId));
+    }
+
 
 
 }

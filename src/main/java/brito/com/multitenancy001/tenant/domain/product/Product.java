@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.tenant.domain.product;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;
@@ -15,6 +19,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products")
+@EntityListeners(AuditEntityListener.class)
 
 @Getter
 @Setter
@@ -22,7 +27,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"supplier", "category", "subcategory"})
-public class Product {
+public class Product implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -124,6 +129,21 @@ public class Product {
     protected void onUpdate() {
         calculateProfitMargin();
     }
+    
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
+    @Override
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(deleted);
+    }
+
 
     private void calculateProfitMargin() {
         if (this.costPrice != null && this.costPrice.compareTo(BigDecimal.ZERO) > 0 && this.price != null) {

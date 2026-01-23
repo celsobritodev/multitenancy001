@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.tenant.domain.user;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -22,13 +26,16 @@ import java.util.Set;
         @UniqueConstraint(name = "uk_tenant_users_email_account", columnNames = {"email", "account_id"})
     }
 )
+@EntityListeners(AuditEntityListener.class)
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "password")
-public class TenantUser {
+public class TenantUser implements Auditable, SoftDeletable
+{
 
     private static final int USERNAME_MAX_LEN = 100;
     private static final int EMAIL_MAX_LEN = 150;
@@ -141,12 +148,6 @@ public class TenantUser {
     @Builder.Default
     private boolean deleted = false;
 
-    @Column(name = "created_by")
-    private Long createdBy;
-
-    @Column(name = "updated_by")
-    private Long updatedBy;
-
     @PrePersist
     @PreUpdate
     protected void onSave() {
@@ -169,6 +170,21 @@ public class TenantUser {
             }
         }
     }
+    
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
+    @Override
+    public boolean isDeleted() {
+        return deleted;
+    }
+
 
 
 

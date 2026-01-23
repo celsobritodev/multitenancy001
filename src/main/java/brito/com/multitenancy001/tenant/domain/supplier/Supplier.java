@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.tenant.domain.supplier;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.tenant.domain.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,13 +22,14 @@ import java.util.UUID;
         @Index(name = "idx_supplier_email", columnList = "email")
         // NÃO declare unique index de document aqui (é parcial no DB)
 })
+@EntityListeners(AuditEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"products"})
-public class Supplier {
+public class Supplier implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -93,6 +98,21 @@ public class Supplier {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
+    @Override
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(deleted);
+    }
+
 
     // =====================
     // Regras de domínio

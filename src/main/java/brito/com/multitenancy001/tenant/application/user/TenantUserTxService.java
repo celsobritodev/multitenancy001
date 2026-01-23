@@ -240,7 +240,7 @@ public class TenantUserTxService {
      */
     @Transactional(readOnly = true)
     public List<TenantUser> listEnabledUsers(Long accountId) {
-        return tenantUserRepository.findActiveUsersByAccount(accountId);
+        return tenantUserRepository.findEnabledUsersByAccount(accountId);
     }
 
     @Transactional(readOnly = true)
@@ -448,4 +448,22 @@ public class TenantUserTxService {
         }
         return out;
     }
+    
+    @Transactional(readOnly = true)
+    public TenantUser getEnabledUser(Long userId, Long accountId) {
+        if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+
+        return tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
+    }
+
+    @Transactional(readOnly = true)
+    public long countEnabledUsersByAccount(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        // “Active” aqui = enabled (não deletado e não suspenso)
+        return tenantUserRepository.countEnabledUsersByAccount(accountId);
+    }
+
+    
 }

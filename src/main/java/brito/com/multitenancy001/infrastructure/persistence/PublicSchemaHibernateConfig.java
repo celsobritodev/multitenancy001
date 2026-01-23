@@ -1,13 +1,15 @@
 package brito.com.multitenancy001.infrastructure.persistence;
 
+import brito.com.multitenancy001.shared.db.Schemas;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.cfg.AvailableSettings;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.orm.hibernate5.SpringBeanContainer;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-
-import brito.com.multitenancy001.shared.db.Schemas;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -18,14 +20,8 @@ import java.util.Map;
 public class PublicSchemaHibernateConfig {
 
     private final DataSource dataSource;
+    private final ConfigurableListableBeanFactory beanFactory;
 
-    /**
-     * ✅ EMF "default" que o Spring Boot normalmente criaria.
-     * Como você criou um EMF manual (tenantEntityManagerFactory),
-     * o Boot recuou e NÃO criou mais o entityManagerFactory.
-     *
-     * Então criamos explicitamente aqui.
-     */
     @Bean(name = "entityManagerFactory")
     @Primary
     public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
@@ -44,8 +40,11 @@ public class PublicSchemaHibernateConfig {
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
 
-        // opcional (Postgres): garantir que o default é public
+        // Default schema do PUBLIC (control plane)
         props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
+
+        // ✅ Hibernate resolve beans gerenciados pelo Spring (EntityListeners @Component etc.)
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;

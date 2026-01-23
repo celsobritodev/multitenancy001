@@ -11,41 +11,26 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.shared.domain.DomainException;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+import jakarta.persistence.*;
+import lombok.*;
 
 @Entity
 @Table(name = "accounts")
+@EntityListeners(AuditEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Account {
+public class Account implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    // =========
-    // TYPE / ORIGIN
-    // =========
 
     @Enumerated(EnumType.STRING)
     @Column(name = "account_type", nullable = false, length = 20)
@@ -57,20 +42,9 @@ public class Account {
     @Builder.Default
     private AccountOrigin origin = AccountOrigin.ADMIN;
 
-    // =========
-    // CORE IDENTITY
-    // =========
-
-    /**
-     * Nome de exibição (UI): "Foton Devices", "Sandra Severo", etc.
-     */
     @Column(name = "display_name", nullable = false, length = 150)
     private String displayName;
 
-    /**
-     * Nome legal (opcional): Razão Social ou Nome completo.
-     * Pode ser preenchido depois.
-     */
     @Column(name = "legal_name", length = 200)
     private String legalName;
 
@@ -90,10 +64,7 @@ public class Account {
     @Builder.Default
     private AccountStatus status = AccountStatus.FREE_TRIAL;
 
-    // =========
-    // AUDIT (técnico)
-    // =========
-
+    // ===== AUDIT (tempo)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -102,10 +73,17 @@ public class Account {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // =========
-    // BUSINESS DATES
-    // =========
+    // ===== AUDIT (ator)
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
 
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
+    // ===== BUSINESS DATES
     @Column(name = "trial_end_date")
     private LocalDateTime trialEndDate;
 
@@ -120,42 +98,22 @@ public class Account {
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
-    // =========
-    // EMAILS (neutro)
-    // =========
-
-    /**
-     * Email principal (login / owner contact) do onboarding.
-     * (Você pode manter como "loginEmail" mesmo se no futuro login for por CP User.)
-     */
     @Column(name = "login_email", nullable = false, length = 150)
     private String loginEmail;
 
-    /**
-     * Email para cobrança (opcional).
-     * Padrão SaaS moderno: permite financeiro diferente do owner.
-     */
     @Column(name = "billing_email", length = 150)
     private String billingEmail;
 
-    // =========
-    // TAX ID / DOCUMENT (neutro PF/PJ)
-    // =========
-
     @Enumerated(EnumType.STRING)
     @Column(name = "tax_id_type", length = 20)
-    private TaxIdType taxIdType; // opcional: pode ser null
+    private TaxIdType taxIdType;
 
     @Column(name = "tax_id_number", length = 40)
-    private String taxIdNumber; // opcional: pode ser null
+    private String taxIdNumber;
 
     @Column(name = "tax_country_code", length = 2, nullable = false)
     @Builder.Default
     private String taxCountryCode = "BR";
-
-    // =========
-    // CONTACT DATA
-    // =========
 
     @Column(name = "phone", length = 20)
     private String phone;
@@ -173,10 +131,6 @@ public class Account {
     @Builder.Default
     private String country = "Brasil";
 
-    // =========
-    // LOCALE SETTINGS
-    // =========
-
     @Column(name = "timezone", length = 60, nullable = false)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
@@ -189,18 +143,10 @@ public class Account {
     @Builder.Default
     private String currency = "BRL";
 
-    // =========
-    // RELATIONSHIPS
-    // =========
-
     @OneToMany(mappedBy = "account", fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     @ToString.Exclude
     private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-
-    // =========
-    // JSON FIELDS
-    // =========
 
     @Column(name = "settings_json", columnDefinition = "TEXT")
     private String settingsJson;
@@ -208,16 +154,18 @@ public class Account {
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
 
-    // =========
-    // SOFT DELETE
-    // =========
-
+    // ===== SOFT DELETE
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Override
+    public boolean isDeleted() {
+        return deleted || deletedAt != null;
+    }
 
     @PrePersist
     protected void onCreate() {
@@ -230,36 +178,30 @@ public class Account {
         if (currency == null || currency.isBlank()) currency = "BRL";
         if (taxCountryCode == null || taxCountryCode.isBlank()) taxCountryCode = "BR";
 
-        // displayName defensivo (se ainda existir "name" em algum builder antigo)
         if (displayName == null || displayName.isBlank()) {
             throw new DomainException("displayName is required");
         }
 
-        // slug
         if (slug == null || slug.isBlank()) {
             slug = displayName.toLowerCase()
                     .replaceAll("[^a-z0-9]+", "-")
                     .replaceAll("(^-|-$)", "");
         }
 
-        // schemaName
         if (schemaName == null || schemaName.isBlank()) {
             schemaName = "tenant_" + slug.replace("-", "_") + "_"
                     + UUID.randomUUID().toString().substring(0, 8);
         }
 
-        // Normalização leve de email
         if (loginEmail != null) loginEmail = loginEmail.trim().toLowerCase();
         if (billingEmail != null && !billingEmail.isBlank()) billingEmail = billingEmail.trim().toLowerCase();
         if (billingEmail != null && billingEmail.isBlank()) billingEmail = null;
 
-        // Normalização doc (recomendação: guardar só dígitos)
         if (taxIdNumber != null) {
             taxIdNumber = taxIdNumber.replaceAll("\\D+", "");
             if (taxIdNumber.isBlank()) taxIdNumber = null;
         }
 
-        // coerência: se um vem, o outro deve vir
         if ((taxIdType == null) != (taxIdNumber == null)) {
             throw new DomainException("taxIdType and taxIdNumber must be provided together");
         }
@@ -269,25 +211,9 @@ public class Account {
         }
     }
 
-    // =========================
-    // Semântica / helpers
-    // =========================
-
-    public boolean isTenantAccount() {
-        return type == AccountType.TENANT;
-    }
-
-    public boolean isPlatformAccount() {
-        return type == AccountType.PLATFORM;
-    }
-
-    public boolean isBuiltInAccount() {
-        return origin == AccountOrigin.BUILT_IN;
-    }
-
-    public boolean isDeleted() {
-        return deleted || deletedAt != null;
-    }
+    public boolean isTenantAccount() { return type == AccountType.TENANT; }
+    public boolean isPlatformAccount() { return type == AccountType.PLATFORM; }
+    public boolean isBuiltInAccount() { return origin == AccountOrigin.BUILT_IN; }
 
     public boolean isTrialActive(LocalDateTime now) {
         return status == AccountStatus.FREE_TRIAL
@@ -295,20 +221,13 @@ public class Account {
                 && now != null
                 && trialEndDate.isAfter(now);
     }
-    
-    /**
-     * Conta operacional = pode usar o sistema (não deletada, e status permite uso).
-     * Não confundir com "usuário suspenso".
-     */
+
     public boolean isOperational(LocalDateTime now) {
         if (isDeleted()) return false;
         if (isBuiltInAccount()) return true;
         return status == AccountStatus.ACTIVE
                 || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
     }
-    
-
-  
 
     public boolean isPaymentOverdue(LocalDateTime now) {
         return paymentDueDate != null && now != null && paymentDueDate.isBefore(now);
@@ -344,10 +263,6 @@ public class Account {
             applyBuiltInDefaults();
         }
     }
-
-    // =========================
-    // Regras de domínio: BUILT_IN governa restrições
-    // =========================
 
     public void setSubscriptionPlan(SubscriptionPlan plan) {
         if (plan == null) throw new DomainException("subscriptionPlan is required");

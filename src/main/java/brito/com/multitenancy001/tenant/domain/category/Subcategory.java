@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.tenant.domain.category;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,9 +20,10 @@ import java.time.LocalDateTime;
                 columnNames = {"category_id", "name"}
         )
 )
+@EntityListeners(AuditEntityListener.class)
 @Getter
 @Setter
-public class Subcategory {
+public class Subcategory implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,6 +56,15 @@ public class Subcategory {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Embedded
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() { return audit; }
+
+    @Override
+    public boolean isDeleted() { return deleted; }
 
     public void softDelete(LocalDateTime now) {
         if (this.deleted) return;

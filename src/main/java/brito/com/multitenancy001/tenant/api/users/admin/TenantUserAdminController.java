@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.users.admin;
+package brito.com.multitenancy001.tenant.api.users.admin;
 
 import brito.com.multitenancy001.tenant.api.dto.users.admin.TenantUserAdminSuspendRequest;
 import brito.com.multitenancy001.tenant.application.user.admin.TenantUserAdminService;

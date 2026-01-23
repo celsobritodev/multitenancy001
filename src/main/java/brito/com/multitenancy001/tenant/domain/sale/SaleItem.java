@@ -1,5 +1,8 @@
 package brito.com.multitenancy001.tenant.domain.sale;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -11,13 +14,14 @@ import java.util.UUID;
         @Index(name = "idx_sale_items_sale_id", columnList = "sale_id"),
         @Index(name = "idx_sale_items_product_id", columnList = "product_id")
 })
+@EntityListeners(AuditEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "sale")
-public class SaleItem {
+public class SaleItem implements Auditable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -48,6 +52,15 @@ public class SaleItem {
 
     @Column(name = "total_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalPrice;
+
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
 
     public void recalcTotal() {
         if (quantity == null || unitPrice == null) {

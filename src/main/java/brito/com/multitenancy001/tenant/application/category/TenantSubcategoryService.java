@@ -160,4 +160,11 @@ public class TenantSubcategoryService {
         sub.restore();
         return subcategoryRepository.save(sub);
     }
+    
+    @Transactional(readOnly = true)
+    public List<Subcategory> findByCategoryIdNotDeleted(Long categoryId) {
+        if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
+        return subcategoryRepository.findNotDeletedByCategoryId(categoryId);
+    }
+
 }

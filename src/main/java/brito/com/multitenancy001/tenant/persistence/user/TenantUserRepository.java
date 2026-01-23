@@ -94,7 +94,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     List<TenantUser> findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
 
     // ✅ Alias legível (evita nome gigante espalhado no projeto)
-    default List<TenantUser> findActiveUsersByAccount(Long accountId) {
+    default List<TenantUser> findEnabledUsersByAccount(Long accountId) {
         return findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
     }
 
@@ -109,7 +109,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
 
     // ✅ Alias legível (opcional)
-    default long countActiveUsersByAccount(Long accountId) {
+    default long countEnabledUsersByAccount(Long accountId) {
         return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
     }
 

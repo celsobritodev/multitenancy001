@@ -11,6 +11,10 @@ import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -19,25 +23,21 @@ import java.util.Set;
 
 @Entity
 @Table(name = "controlplane_users")
-
+@EntityListeners(AuditEntityListener.class)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = { "account", "password" })
-public class ControlPlaneUser {
+public class ControlPlaneUser implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "user_origin", nullable = false, length = 20)
     @Builder.Default
     private ControlPlaneUserOrigin origin = ControlPlaneUserOrigin.ADMIN;
 
-    public boolean isBuiltInUser() {
-        return this.origin == ControlPlaneUserOrigin.BUILT_IN;
-    }
-
-    
+    public boolean isBuiltInUser() { return this.origin == ControlPlaneUserOrigin.BUILT_IN; }
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -59,8 +59,7 @@ public class ControlPlaneUser {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
-    
-  
+
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
     private boolean suspendedByAccount = false;
@@ -69,7 +68,6 @@ public class ControlPlaneUser {
     @Builder.Default
     private boolean suspendedByAdmin = false;
 
-    // 🔐 SEGURANÇA
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -87,7 +85,6 @@ public class ControlPlaneUser {
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
-    // ✅ ESTES CAMPOS EXISTEM NA MIGRATION
     @Column(name = "timezone", nullable=false,length = 60)
     @Builder.Default
     private String timezone = "America/Sao_Paulo";
@@ -108,7 +105,6 @@ public class ControlPlaneUser {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    // 🧾 AUDITORIA
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -123,7 +119,18 @@ public class ControlPlaneUser {
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
-    
+
+    // ===== AUDIT (ator)
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() { return audit; }
+
+    @Override
+    public boolean isDeleted() { return deleted; }
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "controlplane_user_permissions",
@@ -135,8 +142,6 @@ public class ControlPlaneUser {
     @Builder.Default
     private Set<ControlPlanePermission> permissions = new LinkedHashSet<>();
 
-    
-    
     @PrePersist
     @PreUpdate
     private void normalizePermissions() {
@@ -144,20 +149,14 @@ public class ControlPlaneUser {
         permissions = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
     }
 
-  
-    
-
-    // ✅ se lockedUntil estiver no futuro: lock
     public boolean isAccountNonLocked(LocalDateTime now) {
         return lockedUntil == null || !lockedUntil.isAfter(now);
     }
 
-    // ✅ enabled “puro” (não deletado / não suspenso)
     public boolean isEnabledForLogin() {
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
-    // ✅ decisão final de login (enabled + lock)
     public boolean isEnabledForLogin(LocalDateTime now) {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
@@ -168,10 +167,7 @@ public class ControlPlaneUser {
 
         deleted = true;
         deletedAt = now;
-        // não mexe em suspendedBy*
     }
-
-
 
     public void restore() {
         this.deleted = false;

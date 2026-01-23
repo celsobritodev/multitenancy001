@@ -21,7 +21,7 @@ public final class ControlPlaneRolePermissions {
         ));
 
 
-     // em ControlPlaneRolePermissions static { ... }
+
         MAP.put(ControlPlaneRole.CONTROLPLANE_SUPPORT, EnumSet.of(
             ControlPlanePermission.CP_TENANT_READ,
             ControlPlanePermission.CP_TENANT_SUSPEND,

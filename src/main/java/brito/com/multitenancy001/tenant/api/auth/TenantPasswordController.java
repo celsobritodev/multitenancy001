@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.auth;
+package brito.com.multitenancy001.tenant.api.auth;
 
 import brito.com.multitenancy001.tenant.api.dto.auth.ForgotPasswordRequest;
 import brito.com.multitenancy001.tenant.api.dto.auth.ResetPasswordRequest;

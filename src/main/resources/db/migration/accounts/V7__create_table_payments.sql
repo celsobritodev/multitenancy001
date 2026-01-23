@@ -25,6 +25,14 @@ CREATE TABLE IF NOT EXISTS payments (
 
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP,
+    
+        -- AUDITORIA
+    created_by BIGINT,
+    updated_by BIGINT,
+
+    created_by_username VARCHAR(120),
+    updated_by_username VARCHAR(120),
+
 
     refunded_at TIMESTAMP,
     refund_amount NUMERIC(10,2),

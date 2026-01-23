@@ -90,4 +90,19 @@ public class ControlPlaneUserController {
     public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }
+    
+    // Lista usuários habilitados (enabled = not deleted + not suspended).
+    @GetMapping("/enabled")
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listEnabled() {
+        return ResponseEntity.ok(controlPlaneUserService.listEnabledControlPlaneUsers());
+    }
+
+    // Busca usuário habilitado por id.
+    @GetMapping("/{userId}/enabled")
+    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    public ResponseEntity<ControlPlaneUserDetailsResponse> getEnabled(@PathVariable Long userId) {
+        return ResponseEntity.ok(controlPlaneUserService.getEnabledControlPlaneUser(userId));
+    }
+
 }

@@ -6,10 +6,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
+import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
 import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
-
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -17,16 +19,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "payments", indexes = {
-    @Index(name = "idx_payment_account", columnList = "account_id"),
-    @Index(name = "idx_payment_status", columnList = "status"),
-    @Index(name = "idx_payment_date", columnList = "payment_date")
+        @Index(name = "idx_payment_account", columnList = "account_id"),
+        @Index(name = "idx_payment_status", columnList = "status"),
+        @Index(name = "idx_payment_date", columnList = "payment_date")
 })
+@EntityListeners(AuditEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Payment {
+public class Payment implements Auditable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,11 +42,9 @@ public class Payment {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    // ✅ NEGÓCIO
     @Column(name = "payment_date", nullable = false)
     private LocalDateTime paymentDate;
 
-    // ✅ NEGÓCIO
     @Column(name = "valid_until")
     private LocalDateTime validUntil;
 
@@ -79,7 +80,6 @@ public class Payment {
     @Column(name = "receipt_url", columnDefinition = "TEXT")
     private String receiptUrl;
 
-    // ✅ AUDITORIA (técnico)
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -88,7 +88,16 @@ public class Payment {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ✅ NEGÓCIO
+    // ===== AUDIT (ator)
+    @Embedded
+    @Builder.Default
+    private AuditInfo audit = new AuditInfo();
+
+    @Override
+    public AuditInfo getAudit() {
+        return audit;
+    }
+
     @Column(name = "refunded_at")
     private LocalDateTime refundedAt;
 
@@ -107,12 +116,10 @@ public class Payment {
                     .toUpperCase();
         }
 
-        // ⚠️ NÃO setar tempo aqui. paymentDate deve vir do service com Clock.
         if (this.paymentDate == null) {
             throw new IllegalStateException("paymentDate deve ser definido pela aplicação (Clock/AppClock).");
         }
 
-        // Se já está completed e não veio validUntil, calcula baseado no paymentDate (determinístico)
         if (this.status == PaymentStatus.COMPLETED && this.validUntil == null) {
             this.validUntil = calculateDefaultValidUntil(this.paymentDate);
         }
@@ -122,33 +129,10 @@ public class Payment {
         return baseDate.plusDays(30);
     }
 
-    // ---------------------------
-    // Transições de estado (domínio)
-    // ---------------------------
-
-    /** Use quando o pagamento é marcado como concluído no "agora" do app. */
     public void markAsCompleted(LocalDateTime now) {
         this.status = PaymentStatus.COMPLETED;
-
-        // Se paymentDate ainda não foi setado, seta com o "agora" vindo de fora (Clock/AppClock)
-        if (this.paymentDate == null) {
-            this.paymentDate = now;
-        }
-
-        if (this.validUntil == null) {
-            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
-        }
-    }
-
-    /** Mantido por compatibilidade: exige que paymentDate já tenha sido definido externamente. */
-    public void markAsCompleted() {
-        this.status = PaymentStatus.COMPLETED;
-        if (this.paymentDate == null) {
-            throw new IllegalStateException("paymentDate deve ser definido antes de marcar como COMPLETED.");
-        }
-        if (this.validUntil == null) {
-            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
-        }
+        if (this.paymentDate == null) this.paymentDate = now;
+        if (this.validUntil == null) this.validUntil = calculateDefaultValidUntil(this.paymentDate);
     }
 
     public void markAsFailed(String reason) {
@@ -157,7 +141,17 @@ public class Payment {
             this.metadataJson = "{\"failure_reason\":\"" + reason + "\"}";
         }
     }
+    
+    public boolean canBeRefunded(LocalDateTime now) {
+        if (this.status != PaymentStatus.COMPLETED) return false;
+        if (this.refundedAt != null) return false;
+        if (this.paymentDate == null) return false;
 
+        // Exemplo original: até 90 dias após paymentDate (regra determinística)
+        // (equivalente a: paymentDate.isAfter(now.minusDays(90)))
+        return this.paymentDate.isAfter(now.minusDays(90));
+    }
+    
     public void refundPartially(LocalDateTime now, BigDecimal amount, String reason) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
             throw new IllegalArgumentException("Valor de reembolso inválido");
@@ -181,24 +175,5 @@ public class Payment {
         this.refundReason = reason;
         this.refundedAt = now;
         this.status = PaymentStatus.REFUNDED;
-    }
-
-    // ---------------------------
-    // Regras (parametrizadas por "agora")
-    // ---------------------------
-
-    public boolean isActive(LocalDateTime now) {
-        return this.status == PaymentStatus.COMPLETED
-                && (this.validUntil == null || this.validUntil.isAfter(now));
-    }
-
-    public boolean canBeRefunded(LocalDateTime now) {
-        if (this.status != PaymentStatus.COMPLETED) return false;
-        if (this.refundedAt != null) return false;
-        if (this.paymentDate == null) return false;
-
-        // Exemplo original: até 90 dias após paymentDate (regra determinística)
-        // (equivalente a: paymentDate.isAfter(now.minusDays(90)))
-        return this.paymentDate.isAfter(now.minusDays(90));
     }
 }

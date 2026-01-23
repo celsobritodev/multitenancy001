@@ -1,9 +1,13 @@
 package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
 
 import lombok.RequiredArgsConstructor;
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.cfg.MultiTenancySettings;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.orm.hibernate5.SpringBeanContainer;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -21,6 +25,8 @@ public class TenantSchemaHibernateConfig {
     private final TenantSchemaConnectionProvider multiTenantConnectionProvider;
     private final CurrentTenantSchemaResolver tenantResolver;
 
+    private final ConfigurableListableBeanFactory beanFactory;
+
     @Bean(name = "tenantEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
         var emf = new LocalContainerEntityManagerFactoryBean();
@@ -37,10 +43,16 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
 
-        // Multi-tenancy por schema
+        // ✅ Multi-tenancy por schema (strategy)
+        // (Não use AvailableSettings.MULTI_TENANT — não existe no Hibernate 6)
         props.put("hibernate.multiTenancy", "SCHEMA");
-        props.put("hibernate.multi_tenant_connection_provider", multiTenantConnectionProvider);
-        props.put("hibernate.tenant_identifier_resolver", tenantResolver);
+
+        // ✅ Provider/Resolver (use constantes do Hibernate)
+        props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, multiTenantConnectionProvider);
+        props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, tenantResolver);
+
+        // ✅ Hibernate resolve beans do Spring (EntityListeners @Component etc.)
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;

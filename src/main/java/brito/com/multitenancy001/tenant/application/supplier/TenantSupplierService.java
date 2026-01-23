@@ -298,4 +298,14 @@ public class TenantSupplierService {
             throw new ApiException("INVALID_RATING", "rating máximo é 9.99", 400);
         }
     }
+    
+    @Transactional(readOnly = true)
+    public List<Supplier> findAnyByEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("SUPPLIER_EMAIL_REQUIRED", "email é obrigatório", 400);
+        }
+        return tenantSupplierRepository.findAnyByEmail(email);
+    }
+
+    
 }

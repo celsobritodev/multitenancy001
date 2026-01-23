@@ -41,6 +41,18 @@ CREATE TABLE IF NOT EXISTS accounts (
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
+    
+        -- AUDITORIA (quem criou/alterou/deletou)
+    created_by BIGINT,
+    updated_by BIGINT,
+    deleted_by BIGINT,
+
+    created_by_username VARCHAR(120),
+    updated_by_username VARCHAR(120),
+    deleted_by_username VARCHAR(120),
+
+    
+    
 
     trial_end_date   TIMESTAMP,
     payment_due_date TIMESTAMP,

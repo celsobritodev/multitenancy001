@@ -17,6 +17,8 @@
 	
 	<properties>
 		<java.version>21</java.version>
+		<!-- força a versão do Flyway usada pelo Spring Boot BOM -->
+        <flyway.version>11.20.2</flyway.version>
 		<maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
 	</properties>
 	

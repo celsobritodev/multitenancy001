@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.auth;
+package brito.com.multitenancy001.tenant.api.auth;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;

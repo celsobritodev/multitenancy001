@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.categories;
+package brito.com.multitenancy001.tenant.api.categories;
 
 import brito.com.multitenancy001.tenant.application.category.TenantCategoryService;
 import brito.com.multitenancy001.tenant.domain.category.Category;

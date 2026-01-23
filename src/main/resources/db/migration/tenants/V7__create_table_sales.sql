@@ -1,6 +1,6 @@
 -- V7__create_table_sales.sql
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 
 CREATE TABLE IF NOT EXISTS sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -16,7 +16,16 @@ CREATE TABLE IF NOT EXISTS sales (
   status VARCHAR(20) NOT NULL,
 
   created_at TIMESTAMP NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP
+  updated_at TIMESTAMP,
+
+  -- AUDITORIA (compatível com AuditInfo)
+  created_by BIGINT,
+  updated_by BIGINT,
+  deleted_by BIGINT,
+
+  created_by_username VARCHAR(120),
+  updated_by_username VARCHAR(120),
+  deleted_by_username VARCHAR(120)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);

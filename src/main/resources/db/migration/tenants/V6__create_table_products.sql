@@ -1,5 +1,5 @@
 -- V6__create_table_products.sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -37,6 +37,16 @@ CREATE TABLE products (
 
   deleted BOOLEAN NOT NULL DEFAULT false,
   deleted_at TIMESTAMP,
+  
+    -- AUDITORIA
+  created_by BIGINT,
+  updated_by BIGINT,
+  deleted_by BIGINT,
+
+  created_by_username VARCHAR(120),
+  updated_by_username VARCHAR(120),
+  deleted_by_username VARCHAR(120),
+
 
   CONSTRAINT fk_products_category
     FOREIGN KEY (category_id) REFERENCES categories(id),

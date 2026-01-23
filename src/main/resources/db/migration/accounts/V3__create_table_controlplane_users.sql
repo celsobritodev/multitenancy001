@@ -32,6 +32,16 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
     deleted_at TIMESTAMP,
+    
+        -- AUDITORIA (quem criou/alterou/deletou)
+    created_by BIGINT,
+    updated_by BIGINT,
+    deleted_by BIGINT,
+
+    created_by_username VARCHAR(120),
+    updated_by_username VARCHAR(120),
+    deleted_by_username VARCHAR(120),
+    
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     password_reset_token VARCHAR(255),

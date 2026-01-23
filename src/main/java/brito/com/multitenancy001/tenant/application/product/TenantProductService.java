@@ -406,6 +406,23 @@ public class TenantProductService {
      return tenantProductRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
  }
 
+ @Transactional(readOnly = true)
+ public List<Product> findAnyByCategoryId(Long categoryId) {
+     if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
+     return tenantProductRepository.findByCategory_Id(categoryId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findAnyBySubcategoryId(Long subcategoryId) {
+     if (subcategoryId == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "subcategoryId é obrigatório", 400);
+     return tenantProductRepository.findBySubcategory_Id(subcategoryId);
+ }
+
+ @Transactional(readOnly = true)
+ public List<Product> findAnyByBrandIgnoreCase(String brand) {
+     if (!StringUtils.hasText(brand)) throw new ApiException("BRAND_REQUIRED", "brand é obrigatório", 400);
+     return tenantProductRepository.findAnyByBrandIgnoreCase(brand);
+ }
 
  
     

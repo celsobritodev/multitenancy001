@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.api.controller.categories;
+package brito.com.multitenancy001.tenant.api.categories;
 
 import brito.com.multitenancy001.tenant.application.category.TenantSubcategoryService;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
@@ -98,4 +98,12 @@ public class TenantSubcategoryController {
     public ResponseEntity<Subcategory> restore(@PathVariable Long id) {
         return ResponseEntity.ok(tenantSubcategoryService.restore(id));
     }
+    
+    // Lista subcategorias por categoria (NOT DELETED, inclui inativas).
+    @GetMapping("/category/{categoryId}/not-deleted")
+    @PreAuthorize("hasAuthority('TEN_CATEGORY_READ')")
+    public ResponseEntity<List<Subcategory>> listByCategoryNotDeleted(@PathVariable Long categoryId) {
+        return ResponseEntity.ok(tenantSubcategoryService.findByCategoryIdNotDeleted(categoryId));
+    }
+
 }

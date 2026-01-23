@@ -226,6 +226,30 @@ public class ControlPlaneUserService {
                     .toList();
         });
     }
+    
+    @Transactional(readOnly = true)
+    public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
+        return publicExecutor.run(() -> {
+            Account controlPlaneAccount = getControlPlaneAccount();
+            return controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId())
+                    .stream()
+                    .map(this::mapToResponse)
+                    .toList();
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
+        if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+
+        return publicExecutor.run(() -> {
+            Account controlPlaneAccount = getControlPlaneAccount();
+            ControlPlaneUser u = controlPlaneUserRepository.findEnabledByIdAndAccountId(userId, controlPlaneAccount.getId())
+                    .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
+            return mapToResponse(u);
+        });
+    }
+
 
     @Transactional(readOnly = true)
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
