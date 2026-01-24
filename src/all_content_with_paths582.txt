@@ -257,20 +257,20 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryController {
 
-    private final ControlPlaneAccountQueryService service;
+    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
 
     // AccountRepository.findEnabledById
     @GetMapping("/{id}/enabled")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getEnabledById(id));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.getEnabledById(id));
     }
 
     // AccountRepository.findAnyById (inclui deleted)
     @GetMapping("/{id}/any")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getAnyById(id));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.getAnyById(id));
     }
 
     // AccountRepository.countByStatusesAndDeletedFalse
@@ -278,7 +278,7 @@ public class ControlPlaneAccountQueryController {
     @GetMapping("/count")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<Long> countByStatuses(@RequestParam List<AccountStatus> statuses) {
-        return ResponseEntity.ok(service.countByStatusesNotDeleted(statuses));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.countByStatusesNotDeleted(statuses));
     }
 
     // AccountRepository.findByPaymentDueDateBeforeAndDeletedFalse
@@ -288,7 +288,7 @@ public class ControlPlaneAccountQueryController {
     public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date
     ) {
-        return ResponseEntity.ok(service.findPaymentDueBeforeNotDeleted(date));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.findPaymentDueBeforeNotDeleted(date));
     }
 }
 
@@ -512,13 +512,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlanePaymentQueryController {
 
-    private final ControlPlanePaymentQueryService service;
+    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
 
     // ControlPlanePaymentRepository.findByStatus
     @GetMapping("/status/{status}")
     @PreAuthorize("hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<List<PaymentResponse>> findByStatus(@PathVariable PaymentStatus status) {
-        return ResponseEntity.ok(service.findByStatus(status));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.findByStatus(status));
     }
 
     // ControlPlanePaymentRepository.getTotalPaidInPeriod
@@ -529,14 +529,14 @@ public class ControlPlanePaymentQueryController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
-        return ResponseEntity.ok(service.getTotalPaidInPeriod(accountId, startDate, endDate));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.getTotalPaidInPeriod(accountId, startDate, endDate));
     }
 
     // ControlPlanePaymentRepository.countCompletedPayments
     @GetMapping("/accounts/{accountId}/count-completed")
     @PreAuthorize("hasAuthority('CP_BILLING_READ') and hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<Long> countCompleted(@PathVariable Long accountId) {
-        return ResponseEntity.ok(service.countCompletedPayments(accountId));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }
 }
 
@@ -1315,7 +1315,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountEntitlementsProvisioningService {
 
-    private final AccountEntitlementsRepository entitlementsRepository;
+    private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     @Transactional(transactionManager = "publicTransactionManager")
     public void ensureDefaultEntitlementsForTenant(Account account) {
@@ -1328,7 +1328,7 @@ public class AccountEntitlementsProvisioningService {
             return;
         }
 
-        if (entitlementsRepository.existsById(account.getId())) {
+        if (accountEntitlementsRepository.existsById(account.getId())) {
             return;
         }
 
@@ -1339,7 +1339,7 @@ public class AccountEntitlementsProvisioningService {
                 .maxStorageMb(100)
                 .build();
 
-        entitlementsRepository.save(ent);
+        accountEntitlementsRepository.save(ent);
     }
 }
 
@@ -1386,7 +1386,7 @@ public class AccountLifecycleService {
     private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
     private final AccountTenantUserService accountTenantUserService;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AppClock appClock;
 
     // =========================================================
@@ -1403,7 +1403,7 @@ public class AccountLifecycleService {
     // =========================================================
 
     public List<AccountResponse> listAccounts() {
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findAllByDeletedFalse()
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -1412,7 +1412,7 @@ public class AccountLifecycleService {
     }
 
     public AccountResponse getAccount(Long accountId) {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -1420,7 +1420,7 @@ public class AccountLifecycleService {
     }
 
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -1497,7 +1497,7 @@ public class AccountLifecycleService {
     public Page<AccountResponse> listAccountsLatest(Pageable pageable) {
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByDeletedFalseOrderByCreatedAtDesc(p)
                         .map(accountApiMapper::toResponse)
         );
@@ -1508,7 +1508,7 @@ public class AccountLifecycleService {
             throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
         }
 
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -1522,7 +1522,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByStatusAndDeletedFalse(status, p)
                         .map(accountApiMapper::toResponse)
         );
@@ -1533,7 +1533,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findAccountsCreatedBetween(start, end, p)
                         .map(accountApiMapper::toResponse)
         );
@@ -1546,7 +1546,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.searchByDisplayName(term.trim(), p)
                         .map(accountApiMapper::toResponse)
         );
@@ -1560,7 +1560,7 @@ public class AccountLifecycleService {
         if (status == null) {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         }
-        return publicUow.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
+        return publicUnitOfWork.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
     }
 
     public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
@@ -1568,7 +1568,7 @@ public class AccountLifecycleService {
             throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
         }
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByStatuses(statuses)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -1580,7 +1580,7 @@ public class AccountLifecycleService {
         LocalDateTime d = (date != null ? date : appClock.now());
         AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findExpiredTrialsNotDeleted(d, st)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -1593,7 +1593,7 @@ public class AccountLifecycleService {
         LocalDateTime t = (today != null ? today : appClock.now());
         AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findOverdueAccountsNotDeleted(st, t)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -1603,7 +1603,7 @@ public class AccountLifecycleService {
 
 
     public long countOperationalAccounts() {
-        return publicUow.readOnly(accountRepository::countOperationalAccounts);
+        return publicUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
     }
 }
 
@@ -1638,24 +1638,24 @@ public class AccountOnboardingService {
     private final AccountApiMapper accountApiMapper;
     private final PublicAccountCreationService publicAccountCreationService;
 
-    private final TenantSchemaProvisioningFacade tenantProvisioningBridge;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
 
     private final AccountRepository accountRepository;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
         validateSignupRequest(signupRequest);
 
         log.info("Tentando criar conta");
 
-        Account account = publicUow.tx(() ->
+        Account account = publicUnitOfWork.tx(() ->
                 publicAccountCreationService.createAccountFromSignup(signupRequest)
         );
 
-        tenantProvisioningBridge.ensureSchemaExistsAndMigrate(account.getSchemaName());
+        tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
-        TenantUser tenantOwner = tenantUserAdminBridge.createTenantOwner(
+        TenantUser tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
                 account.getSchemaName(),
                 account.getId(),
                 account.getDisplayName(),      // ✅ ownerDisplayName
@@ -1750,13 +1750,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusService {
 
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
     private final AppClock appClock;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
             AccountStatus previous = account.getStatus();
@@ -1772,11 +1772,11 @@ public class AccountStatusService {
             String action = "NONE";
 
             if (req.status() == AccountStatus.SUSPENDED) {
-                affected = tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
                 action = "SUSPEND_BY_ACCOUNT";
             } else if (req.status() == AccountStatus.ACTIVE) {
-                affected = tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
                 action = "UNSUSPEND_BY_ACCOUNT";
             } else if (req.status() == AccountStatus.CANCELLED) {
@@ -1790,7 +1790,7 @@ public class AccountStatusService {
     }
 
     public void softDeleteAccount(Long accountId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -1802,12 +1802,12 @@ public class AccountStatusService {
             account.softDelete(appClock.now());
             accountRepository.save(account);
 
-            tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+            tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
         });
     }
 
     public void restoreAccount(Long accountId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -1819,19 +1819,19 @@ public class AccountStatusService {
             account.restore();
             accountRepository.save(account);
 
-            tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+            tenantUserProvisioningFacade.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
         });
     }
 
     private int cancelAccount(Account account) {
         // Se você quer garantir "marca deleted_at" em TX separada, mantém requiresNew.
-        // Se não precisa, pode trocar por publicUow.tx(...) direto.
-        publicUow.requiresNew(() -> {
+        // Se não precisa, pode trocar por publicUnitOfWork.tx(...) direto.
+        publicUnitOfWork.requiresNew(() -> {
             account.setDeletedAt(appClock.now());
             accountRepository.save(account);
         });
 
-        return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+        return tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
     }
 
     private Account getAccountByIdRaw(Long accountId) {
@@ -1882,19 +1882,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountTenantUserService {
 
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
     private final AccountUserApiMapper accountUserApiMapper;
 
     public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
 
-        Account account = publicUow.readOnly(() ->
+        Account account = publicUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        List<UserSummaryData> data = tenantUserAdminBridge
+        List<UserSummaryData> data = tenantUserProvisioningFacade
                 .listUserSummaries(account.getSchemaName(), account.getId(), onlyOperational);
 
         return data.stream()
@@ -1904,12 +1904,12 @@ public class AccountTenantUserService {
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
-        Account account = publicUow.readOnly(() ->
+        Account account = publicUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        tenantUserAdminBridge.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
+        tenantUserProvisioningFacade.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
     }
 }
 
@@ -2028,7 +2028,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicAccountCreationService {
 
     private final AccountRepository accountRepository;
-    private final AccountEntitlementsProvisioningService entitlementsProvisioningService;
+    private final AccountEntitlementsProvisioningService accountEntitlementsProvisioningService;
     private final AppClock appClock;
 
     public Account createAccountFromSignup(SignupRequest signupRequest) {
@@ -2067,7 +2067,7 @@ public class PublicAccountCreationService {
 
                 Account saved = accountRepository.save(account);
 
-                entitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
+                accountEntitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
 
                 return saved;
 
@@ -2117,7 +2117,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlanePaymentQueryService {
 
-    private final ControlPlanePaymentRepository paymentRepository;
+    private final ControlPlanePaymentRepository controlPlanePaymentRepository;
     private final brito.com.multitenancy001.shared.time.AppClock appClock;
 
     
@@ -2126,7 +2126,7 @@ public class ControlPlanePaymentQueryService {
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
         if (status == null) throw new ApiException("PAYMENT_STATUS_REQUIRED", "status é obrigatório", 400);
 
-        return paymentRepository.findByStatus(status)
+        return controlPlanePaymentRepository.findByStatus(status)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -2137,7 +2137,7 @@ public class ControlPlanePaymentQueryService {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (startDate == null || endDate == null) throw new ApiException("DATE_RANGE_REQUIRED", "startDate/endDate são obrigatórios", 400);
 
-        BigDecimal total = paymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
+        BigDecimal total = controlPlanePaymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
         return total != null ? total : BigDecimal.ZERO;
     }
 
@@ -2145,7 +2145,7 @@ public class ControlPlanePaymentQueryService {
     public long countCompletedPayments(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        Long count = paymentRepository.countCompletedPayments(accountId);
+        Long count = controlPlanePaymentRepository.countCompletedPayments(accountId);
         return count != null ? count : 0L;
     }
     
@@ -2154,7 +2154,7 @@ public class ControlPlanePaymentQueryService {
     public List<PaymentResponse> listByAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return paymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
+        return controlPlanePaymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -2165,7 +2165,7 @@ public class ControlPlanePaymentQueryService {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
 
-        Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+        Payment payment = controlPlanePaymentRepository.findByIdAndAccountId(paymentId, accountId)
                 .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
         return mapToResponse(payment);
@@ -2180,7 +2180,7 @@ public class ControlPlanePaymentQueryService {
     public boolean hasActivePayment(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return paymentRepository.existsActivePayment(accountId, appClock.now());
+        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
 
     }
 
@@ -2239,7 +2239,7 @@ import java.util.stream.Collectors;
 public class ControlPlanePaymentService {
 
 	private final AccountRepository accountRepository;
-	private final ControlPlanePaymentRepository paymentRepository;
+	private final ControlPlanePaymentRepository controlPlanePaymentRepository;
 	private final SecurityUtils securityUtils;
 	private final AppClock appClock;
 	private final AccountStatusService accountStatusService;
@@ -2281,12 +2281,12 @@ public class ControlPlanePaymentService {
 	private void checkExpiredPendingPayments(LocalDateTime now) {
 		LocalDateTime thirtyMinutesAgo = now.minusMinutes(30);
 
-		List<Payment> expiredPayments = paymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING,
+		List<Payment> expiredPayments = controlPlanePaymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING,
 				thirtyMinutesAgo);
 
 		for (Payment payment : expiredPayments) {
 			payment.setStatus(PaymentStatus.EXPIRED);
-			paymentRepository.save(payment);
+			controlPlanePaymentRepository.save(payment);
 		}
 	}
 
@@ -2314,7 +2314,7 @@ public class ControlPlanePaymentService {
 		        .build();
 
 
-		payment = paymentRepository.save(payment);
+		payment = controlPlanePaymentRepository.save(payment);
 
 		boolean ok = processWithPaymentGateway(payment,
 				new PaymentRequest(adminPaymentRequest.amount(), adminPaymentRequest.paymentMethod(),
@@ -2348,7 +2348,7 @@ public class ControlPlanePaymentService {
 		        .build();
 
 
-		payment = paymentRepository.save(payment);
+		payment = controlPlanePaymentRepository.save(payment);
 
 		boolean ok = processWithPaymentGateway(payment, paymentRequest);
 
@@ -2365,7 +2365,7 @@ public class ControlPlanePaymentService {
 	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
 		Long accountId = securityUtils.getCurrentAccountId();
 
-		Payment payment = paymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
+		Payment payment = controlPlanePaymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -2385,19 +2385,19 @@ public class ControlPlanePaymentService {
 
 	@Transactional(readOnly = true)
 	public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-		return paymentRepository.findByAccountId(accountId).stream().map(this::mapToResponse)
+		return controlPlanePaymentRepository.findByAccountId(accountId).stream().map(this::mapToResponse)
 				.collect(Collectors.toList());
 	}
 
 	@Transactional(readOnly = true)
 	public boolean hasActivePayment(Long accountId) {
-	    return paymentRepository.existsActivePayment(accountId, appClock.now());
+	    return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
 	}
 
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentById(Long paymentId) {
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 		return mapToResponse(payment);
 	}
@@ -2405,7 +2405,7 @@ public class ControlPlanePaymentService {
 	@Transactional
 	public PaymentResponse completePaymentManually(Long paymentId) {
 
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		if (payment.getStatus() != PaymentStatus.PENDING) {
@@ -2420,7 +2420,7 @@ public class ControlPlanePaymentService {
 	@Transactional
 	public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
 
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		LocalDateTime now = appClock.now();
@@ -2435,13 +2435,13 @@ public class ControlPlanePaymentService {
 			payment.refundPartially(now, amount, reason);
 		}
 
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 		return mapToResponse(payment);
 	}
 
 	@Transactional(readOnly = true)
 	public BigDecimal getTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
-		List<Object[]> revenueByAccount = paymentRepository.getRevenueByAccount(startDate, endDate);
+		List<Object[]> revenueByAccount = controlPlanePaymentRepository.getRevenueByAccount(startDate, endDate);
 
 		return revenueByAccount.stream().map(obj -> (BigDecimal) obj[1]).reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
@@ -2458,7 +2458,7 @@ public class ControlPlanePaymentService {
 
 	private void completePayment(Payment payment, Account account, LocalDateTime now) {
 		payment.markAsCompleted(now);
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 
 		account.setStatus(AccountStatus.ACTIVE);
 		account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
@@ -2469,7 +2469,7 @@ public class ControlPlanePaymentService {
 
 	private void failPayment(Payment payment, String reason) {
 		payment.markAsFailed(reason);
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 	}
 
 	private void validatePayment(Account account, BigDecimal amount, LocalDateTime now) {
@@ -2486,7 +2486,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("BUILTIN ACCOUNT_NO_BILLING", "Conta BUILTIN não possui billing", 409);
 		}
 
-		boolean hasActive = paymentRepository.existsActivePayment(account.getId(), now);
+		boolean hasActive = controlPlanePaymentRepository.existsActivePayment(account.getId(), now);
 
 		if (hasActive) {
 		    throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
@@ -2509,7 +2509,7 @@ public class ControlPlanePaymentService {
 		if (accountId == null) {
 			throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 		}
-		return paymentRepository.existsByIdAndAccountId(paymentId, accountId);
+		return controlPlanePaymentRepository.existsByIdAndAccountId(paymentId, accountId);
 	}
 
 	@Transactional(readOnly = true)
@@ -2521,7 +2521,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
 		}
 
-		return paymentRepository.findByAccountIdAndStatus(accountId, status).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findByAccountIdAndStatus(accountId, status).stream().map(this::mapToResponse).toList();
 	}
 
 	@Transactional(readOnly = true)
@@ -2530,7 +2530,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
 		}
 
-		Payment payment = paymentRepository.findByTransactionId(transactionId.trim())
+		Payment payment = controlPlanePaymentRepository.findByTransactionId(transactionId.trim())
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -2541,7 +2541,7 @@ public class ControlPlanePaymentService {
 		if (transactionId == null || transactionId.isBlank()) {
 			throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
 		}
-		return paymentRepository.existsByTransactionId(transactionId.trim());
+		return controlPlanePaymentRepository.existsByTransactionId(transactionId.trim());
 	}
 
 	@Transactional(readOnly = true)
@@ -2553,7 +2553,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
 		}
 
-		return paymentRepository.findByValidUntilBeforeAndStatus(date, status).stream().map(this::mapToResponse)
+		return controlPlanePaymentRepository.findByValidUntilBeforeAndStatus(date, status).stream().map(this::mapToResponse)
 				.toList();
 	}
 
@@ -2563,7 +2563,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 		}
 
-		return paymentRepository.findCompletedPaymentsByAccount(accountId).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findCompletedPaymentsByAccount(accountId).stream().map(this::mapToResponse).toList();
 	}
 
 	@Transactional(readOnly = true)
@@ -2575,7 +2575,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
 		}
 
-		return paymentRepository.findPaymentsInPeriod(startDate, endDate).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findPaymentsInPeriod(startDate, endDate).stream().map(this::mapToResponse).toList();
 	}
 
 	private void sendSuspensionEmail(Account account, String reason) {
@@ -2737,7 +2737,7 @@ public class ControlPlaneUserService {
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
     private final SecurityUtils securityUtils;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     private static final Set<String> RESERVED_USERNAMES = Set.of("superadmin", "billing", "support", "operator");
 
@@ -2840,7 +2840,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req.username() == null || req.username().isBlank()) {
@@ -2904,7 +2904,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             List<ControlPlaneUser> users = controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId());
@@ -2914,7 +2914,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             return mapToResponse(user);
@@ -2926,7 +2926,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("UPDATE");
@@ -2977,7 +2977,7 @@ public class ControlPlaneUserService {
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
             Long userId, ControlPlaneUserPermissionsUpdateRequest req
     ) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("UPDATE_PERMISSIONS");
@@ -3004,7 +3004,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public void softDeleteControlPlaneUser(Long userId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("SOFT_DELETE");
@@ -3019,7 +3019,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("RESTORE");
@@ -3043,7 +3043,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserSuspended(Long userId, boolean suspended) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
@@ -3062,7 +3062,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneMeResponse getMe() {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated()) {
                 throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -3089,7 +3089,7 @@ public class ControlPlaneUserService {
     }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest req) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -3134,7 +3134,7 @@ public class ControlPlaneUserService {
     }
 
     public void resetControlPlaneUserPassword(Long targetUserId, ControlPlaneUserPasswordResetRequest req) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -3235,7 +3235,7 @@ public class ControlPlaneUserService {
  // =========================
 
  public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
-     return publicUow.tx(() -> {
+     return publicUnitOfWork.tx(() -> {
          Account controlPlaneAccount = getControlPlaneAccount();
 
          List<ControlPlaneUser> users =
@@ -3246,7 +3246,7 @@ public class ControlPlaneUserService {
  }
 
  public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
-     return publicUow.tx(() -> {
+     return publicUnitOfWork.tx(() -> {
          Account controlPlaneAccount = getControlPlaneAccount();
 
          ControlPlaneUser user = controlPlaneUserRepository
@@ -4816,7 +4816,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
 @RequiredArgsConstructor
 public class PublicSchemaVerifier {
     
-    private final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbcTemplate;
     
     @EventListener(ApplicationReadyEvent.class)
     public void verifyTables() {
@@ -4824,13 +4824,13 @@ public class PublicSchemaVerifier {
         
         try {
             // Apenas VERIFICA, não cria
-        	Integer accountsCount = jdbc.queryForObject(
+        	Integer accountsCount = jdbcTemplate.queryForObject(
         		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'accounts'",
         		    Integer.class,
         		    Schemas.CONTROL_PLANE
         		);
 
-        		Integer usersCount = jdbc.queryForObject(
+        		Integer usersCount = jdbcTemplate.queryForObject(
         		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'controlplane_users'",
         		    Integer.class,
         		    Schemas.CONTROL_PLANE
@@ -5137,10 +5137,10 @@ import java.util.Map;
 public class TenantSchemaHibernateConfig {
 
     private final DataSource dataSource;
-    private final TenantSchemaConnectionProvider multiTenantConnectionProvider;
-    private final CurrentTenantSchemaResolver tenantResolver;
+    private final TenantSchemaConnectionProvider tenantSchemaConnectionProvider;
+    private final CurrentTenantSchemaResolver currentTenantSchemaResolver;
 
-    private final ConfigurableListableBeanFactory beanFactory;
+    private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "tenantEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
@@ -5165,11 +5165,11 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.multiTenancy", "SCHEMA");
 
         // ✅ Provider/Resolver (use constantes do Hibernate)
-        props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, multiTenantConnectionProvider);
-        props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, tenantResolver);
+        props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, tenantSchemaConnectionProvider);
+        props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, currentTenantSchemaResolver);
 
         // ✅ Hibernate resolve beans do Spring (EntityListeners @Component etc.)
-        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;
@@ -5309,7 +5309,7 @@ import java.util.Map;
 public class PublicSchemaHibernateConfig {
 
     private final DataSource dataSource;
-    private final ConfigurableListableBeanFactory beanFactory;
+    private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "entityManagerFactory")
     @Primary
@@ -5333,7 +5333,7 @@ public class PublicSchemaHibernateConfig {
         props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
 
         // ✅ Hibernate resolve beans gerenciados pelo Spring (EntityListeners @Component etc.)
-        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;
@@ -5394,7 +5394,7 @@ public class AuthenticatedUserContext implements UserDetails {
      * Ex.: ControlPlaneRole.CONTROLPLANE_OWNER ou TenantRole.TENANT_ADMIN
      * (não entra em authorities)
      */
-    private final RoleAuthority role;
+    private final RoleAuthority roleAuthority;
 
     /**
      * ✅ Authorities efetivas (permission-only)
@@ -5423,7 +5423,7 @@ public class AuthenticatedUserContext implements UserDetails {
         this.accountNonLocked = accountNonLocked;
         this.accountId = accountId;
         this.schemaName = schemaName;
-        this.role = role;
+        this.roleAuthority = role;
         this.authorities = authorities;
     }
 
@@ -5432,11 +5432,11 @@ public class AuthenticatedUserContext implements UserDetails {
      * (claims/debug/DTOs). Não armazena string, deriva do Enum.
      */
     public String getRoleAuthority() {
-        return role == null ? null : role.asAuthority();
+        return roleAuthority == null ? null : roleAuthority.asAuthority();
     }
     
     public String getRoleName() {
-        return role == null ? null : role.toString();
+        return roleAuthority == null ? null : roleAuthority.toString();
     }
 
 
@@ -6506,10 +6506,10 @@ import brito.com.multitenancy001.shared.db.Schemas;
 @Component
 public class TenantExecutor {
 
-    private final TenantSchemaProvisioningService tenantSchemaService;
+    private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 
-    public TenantExecutor(TenantSchemaProvisioningService tenantSchemaService) {
-        this.tenantSchemaService = tenantSchemaService;
+    public TenantExecutor(TenantSchemaProvisioningService tenantSchemaProvisioningService) {
+        this.tenantSchemaProvisioningService = tenantSchemaProvisioningService;
     }
 
     public <T> T run(String schemaName, Supplier<T> fn) {
@@ -6536,8 +6536,8 @@ public class TenantExecutor {
     public <T> T runIfReady(String schemaName, String requiredTable, Supplier<T> fn, T defaultValue) {
         String s = (schemaName == null ? null : schemaName.trim());
         if (s == null || s.isBlank() ||Schemas.CONTROL_PLANE.equalsIgnoreCase(s)) return defaultValue;
-        if (!tenantSchemaService.schemaExists(s)) return defaultValue;
-        if (requiredTable != null && !tenantSchemaService.tableExists(s, requiredTable)) return defaultValue;
+        if (!tenantSchemaProvisioningService.schemaExists(s)) return defaultValue;
+        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(s, requiredTable)) return defaultValue;
         return run(s, fn);
     }
 
@@ -6548,10 +6548,10 @@ public class TenantExecutor {
         if (s == null || s.isBlank() ||Schemas.CONTROL_PLANE.equalsIgnoreCase(s)) {
             throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
         }
-        if (!tenantSchemaService.schemaExists(s)) {
+        if (!tenantSchemaProvisioningService.schemaExists(s)) {
             throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "SchemaName do tenant não existe", 404);
         }
-        if (requiredTable != null && !tenantSchemaService.tableExists(s, requiredTable)) {
+        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(s, requiredTable)) {
             throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela " + requiredTable + " não existe no tenant", 404);
         }
     }
@@ -6623,7 +6623,7 @@ import org.springframework.util.StringUtils;
 public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantSchemaFlywayMigrationService tenantSchemaMigrationService;
+    private final TenantSchemaFlywayMigrationService tenantSchemaFlywayMigrationService;
     private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
     
    
@@ -6693,7 +6693,7 @@ public class TenantSchemaProvisioningService {
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
-        tenantSchemaMigrationService.migrateTenantSchema(normalized);
+        tenantSchemaFlywayMigrationService.migrateTenantSchema(normalized);
     }
 
     /**
@@ -6776,7 +6776,7 @@ public class TenantUserProvisioningFacade {
     private final TxExecutor txExecutor;
 
     private final TenantUserRepository tenantUserRepository;
-    private final UsernameGeneratorService usernameGenerator;
+    private final UsernameGeneratorService usernameGeneratorService;
     private final PasswordEncoder passwordEncoder;
 
     private final AppClock appClock;
@@ -6858,7 +6858,7 @@ public class TenantUserProvisioningFacade {
                     u.setLocale("pt_BR");
 
                     for (int attempt = 0; attempt < 5; attempt++) {
-                        u.setUsername(usernameGenerator.generateFromEmail(emailNorm, accountId));
+                        u.setUsername(usernameGeneratorService.generateFromEmail(emailNorm, accountId));
                         try {
                             return tenantUserRepository.save(u);
                         } catch (DataIntegrityViolationException e) {
@@ -6978,14 +6978,14 @@ public class AccountEntitlementsGuard {
 
     private final AccountRepository accountRepository;
     private final AccountEntitlementsService accountEntitlementsService;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     public void assertCanCreateUser(Long accountId, long currentUsers) {
         if (accountId == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
         }
 
-        publicUow.readOnly(() -> {
+        publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -7011,7 +7011,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountEntitlementsService {
 
-    private final AccountEntitlementsRepository entitlementsRepository;
+    private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     /**
      * Resolve entitlements efetivos da conta:
@@ -7028,7 +7028,7 @@ public class AccountEntitlementsService {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 
-        AccountEntitlements ent = entitlementsRepository.findById(account.getId())
+        AccountEntitlements ent = accountEntitlementsRepository.findById(account.getId())
                 .orElseThrow(() -> new ApiException(
                         "ENTITLEMENTS_NOT_FOUND",
                         "Entitlements não encontrados para a conta " + account.getId(),
@@ -8162,115 +8162,115 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class TxExecutor {
 
-    private final TransactionTemplate publicTx;
-    private final TransactionTemplate publicRequiresNew;
+    private final TransactionTemplate transactionTemplatePublicTx;
+    private final TransactionTemplate transactionTemplatePublicRequiresNew;
 
-    private final TransactionTemplate publicReadOnlyTx;
-    private final TransactionTemplate publicRequiresNewReadOnly;
+    private final TransactionTemplate transactionTemplatePublicReadOnlyTx;
+    private final TransactionTemplate transactionTemplatePublicRequiresNewReadOnly;
 
-    private final TransactionTemplate tenantTx;
-    private final TransactionTemplate tenantRequiresNew;
+    private final TransactionTemplate transactionTemplateTenantTx;
+    private final TransactionTemplate transactionTemplateTenantRequiresNew;
 
-    private final TransactionTemplate tenantReadOnlyTx;
-    private final TransactionTemplate tenantRequiresNewReadOnly;
+    private final TransactionTemplate transactionTemplateTenantReadOnlyTx;
+    private final TransactionTemplate transactionTemplateTenantRequiresNewReadOnly;
 
     public TxExecutor(
             @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
             @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
     ) {
         // PUBLIC - REQUIRED
-        this.publicTx = new TransactionTemplate(publicTm);
-        this.publicTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.transactionTemplatePublicTx = new TransactionTemplate(publicTm);
+        this.transactionTemplatePublicTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
 
         // PUBLIC - REQUIRES_NEW
-        this.publicRequiresNew = new TransactionTemplate(publicTm);
-        this.publicRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactionTemplatePublicRequiresNew = new TransactionTemplate(publicTm);
+        this.transactionTemplatePublicRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         // PUBLIC - REQUIRED READONLY
-        this.publicReadOnlyTx = new TransactionTemplate(publicTm);
-        this.publicReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-        this.publicReadOnlyTx.setReadOnly(true);
+        this.transactionTemplatePublicReadOnlyTx = new TransactionTemplate(publicTm);
+        this.transactionTemplatePublicReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.transactionTemplatePublicReadOnlyTx.setReadOnly(true);
 
         // PUBLIC - REQUIRES_NEW READONLY
-        this.publicRequiresNewReadOnly = new TransactionTemplate(publicTm);
-        this.publicRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.publicRequiresNewReadOnly.setReadOnly(true);
+        this.transactionTemplatePublicRequiresNewReadOnly = new TransactionTemplate(publicTm);
+        this.transactionTemplatePublicRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactionTemplatePublicRequiresNewReadOnly.setReadOnly(true);
 
         // TENANT - REQUIRED
-        this.tenantTx = new TransactionTemplate(tenantTm);
-        this.tenantTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.transactionTemplateTenantTx = new TransactionTemplate(tenantTm);
+        this.transactionTemplateTenantTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
 
         // TENANT - REQUIRES_NEW
-        this.tenantRequiresNew = new TransactionTemplate(tenantTm);
-        this.tenantRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactionTemplateTenantRequiresNew = new TransactionTemplate(tenantTm);
+        this.transactionTemplateTenantRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         // TENANT - REQUIRED READONLY
-        this.tenantReadOnlyTx = new TransactionTemplate(tenantTm);
-        this.tenantReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-        this.tenantReadOnlyTx.setReadOnly(true);
+        this.transactionTemplateTenantReadOnlyTx = new TransactionTemplate(tenantTm);
+        this.transactionTemplateTenantReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        this.transactionTemplateTenantReadOnlyTx.setReadOnly(true);
 
         // TENANT - REQUIRES_NEW READONLY
-        this.tenantRequiresNewReadOnly = new TransactionTemplate(tenantTm);
-        this.tenantRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.tenantRequiresNewReadOnly.setReadOnly(true);
+        this.transactionTemplateTenantRequiresNewReadOnly = new TransactionTemplate(tenantTm);
+        this.transactionTemplateTenantRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactionTemplateTenantRequiresNewReadOnly.setReadOnly(true);
     }
 
     // ---------- PUBLIC ----------
     public <T> T publicTx(Supplier<T> fn) {
-        return publicTx.execute(status -> fn.get());
+        return transactionTemplatePublicTx.execute(status -> fn.get());
     }
     public void publicTx(Runnable fn) {
-        publicTx.executeWithoutResult(status -> fn.run());
+        transactionTemplatePublicTx.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T publicRequiresNew(Supplier<T> fn) {
-        return publicRequiresNew.execute(status -> fn.get());
+        return transactionTemplatePublicRequiresNew.execute(status -> fn.get());
     }
     public void publicRequiresNew(Runnable fn) {
-        publicRequiresNew.executeWithoutResult(status -> fn.run());
+        transactionTemplatePublicRequiresNew.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T publicReadOnlyTx(Supplier<T> fn) {
-        return publicReadOnlyTx.execute(status -> fn.get());
+        return transactionTemplatePublicReadOnlyTx.execute(status -> fn.get());
     }
     public void publicReadOnlyTx(Runnable fn) {
-        publicReadOnlyTx.executeWithoutResult(status -> fn.run());
+        transactionTemplatePublicReadOnlyTx.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T publicRequiresNewReadOnly(Supplier<T> fn) {
-        return publicRequiresNewReadOnly.execute(status -> fn.get());
+        return transactionTemplatePublicRequiresNewReadOnly.execute(status -> fn.get());
     }
     public void publicRequiresNewReadOnly(Runnable fn) {
-        publicRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
+        transactionTemplatePublicRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 
     // ---------- TENANT ----------
     public <T> T tenantTx(Supplier<T> fn) {
-        return tenantTx.execute(status -> fn.get());
+        return transactionTemplateTenantTx.execute(status -> fn.get());
     }
     public void tenantTx(Runnable fn) {
-        tenantTx.executeWithoutResult(status -> fn.run());
+        transactionTemplateTenantTx.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T tenantRequiresNew(Supplier<T> fn) {
-        return tenantRequiresNew.execute(status -> fn.get());
+        return transactionTemplateTenantRequiresNew.execute(status -> fn.get());
     }
     public void tenantRequiresNew(Runnable fn) {
-        tenantRequiresNew.executeWithoutResult(status -> fn.run());
+        transactionTemplateTenantRequiresNew.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T tenantReadOnlyTx(Supplier<T> fn) {
-        return tenantReadOnlyTx.execute(status -> fn.get());
+        return transactionTemplateTenantReadOnlyTx.execute(status -> fn.get());
     }
     public void tenantReadOnlyTx(Runnable fn) {
-        tenantReadOnlyTx.executeWithoutResult(status -> fn.run());
+        transactionTemplateTenantReadOnlyTx.executeWithoutResult(status -> fn.run());
     }
 
     public <T> T tenantRequiresNewReadOnly(Supplier<T> fn) {
-        return tenantRequiresNewReadOnly.execute(status -> fn.get());
+        return transactionTemplateTenantRequiresNewReadOnly.execute(status -> fn.get());
     }
     public void tenantRequiresNewReadOnly(Runnable fn) {
-        tenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
+        transactionTemplateTenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 }
 
@@ -8315,43 +8315,43 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuditEntityListener {
 
-    private AuditActorProvider provider;
+    private AuditActorProvider auditActorProvider;
 
     // ✅ robusto: Hibernate pode instanciar por reflexão
     public AuditEntityListener() {
     }
 
     @Autowired
-    public void setProvider(AuditActorProvider provider) {
-        this.provider = provider;
+    public void setProvider(AuditActorProvider auditActorProvider) {
+        this.auditActorProvider = auditActorProvider;
     }
 
     @PrePersist
     public void prePersist(Object entity) {
-        if (!(entity instanceof Auditable a)) return;
-        a.getAudit().onCreate(currentActorOrThrow());
+        if (!(entity instanceof Auditable auditable)) return;
+        auditable.getAudit().onCreate(currentActorOrThrow());
     }
 
     @PreUpdate
     public void preUpdate(Object entity) {
-        if (!(entity instanceof Auditable a)) return;
+        if (!(entity instanceof Auditable auditable)) return;
 
         var actor = currentActorOrThrow();
-        a.getAudit().onUpdate(actor);
+        auditable.getAudit().onUpdate(actor);
 
-        if (entity instanceof SoftDeletable sd && sd.isDeleted() && a.getAudit().getDeletedBy() == null) {
-            a.getAudit().onDelete(actor);
+        if (entity instanceof SoftDeletable softDeletable && softDeletable.isDeleted() && auditable.getAudit().getDeletedBy() == null) {
+            auditable.getAudit().onDelete(actor);
         }
     }
 
     private AuditActor currentActorOrThrow() {
-        if (provider == null) {
+        if (auditActorProvider == null) {
             throw new IllegalStateException(
                     "AuditActorProvider não foi injetado no AuditEntityListener. " +
                     "Verifique BEAN_CONTAINER no EMF (PUBLIC e TENANT) e se AuditActorProvider é bean Spring."
             );
         }
-        return provider.current();
+        return auditActorProvider.current();
     }
 }
 
@@ -9100,6 +9100,28 @@ public record TenantLoginRequest(
 	) {}
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/me/TenantMeResponse.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.me;
+
+public record TenantMeResponse(
+        Long id,
+        Long accountId,
+        String name,
+        String username,
+        String email,
+        String role,
+        String phone,
+        String avatarUrl,
+        String timezone,
+        String locale,
+        boolean suspendedByAccount,
+        boolean suspendedByAdmin,
+        boolean deleted,
+        boolean enabled
+) {}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/me/TenantMeUpdateRequest.java
 ============================================================
 package brito.com.multitenancy001.tenant.api.dto.me;
@@ -9415,6 +9437,7 @@ package brito.com.multitenancy001.tenant.api.mapper;
 
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -9461,6 +9484,28 @@ public class TenantUserApiMapper {
                 enabled
         );
     }
+    
+    
+    public TenantMeResponse toMe(TenantUser tenantUser) {
+        // Você já tem isEnabled() no entity, então usa ele
+        return new TenantMeResponse(
+                tenantUser.getId(),
+                tenantUser.getAccountId(),
+                tenantUser.getName(),
+                tenantUser.getUsername(),
+                tenantUser.getEmail(),
+                tenantUser.getRole() != null ? tenantUser.getRole().name() : null,
+                tenantUser.getPhone(),
+                tenantUser.getAvatarUrl(),
+                tenantUser.getTimezone(),
+                tenantUser.getLocale(),
+                tenantUser.isSuspendedByAccount(),
+                tenantUser.isSuspendedByAdmin(),
+                tenantUser.isDeleted(),
+                tenantUser.isEnabled()
+        );
+    }
+
 }
 
 ============================================================
@@ -9468,8 +9513,8 @@ public class TenantUserApiMapper {
 ============================================================
 package brito.com.multitenancy001.tenant.api.me;
 
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
 import brito.com.multitenancy001.tenant.api.dto.me.UpdateMyProfileRequest;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.application.user.TenantUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -9485,20 +9530,14 @@ public class TenantMeController {
 
     // ✅ Perfil do usuário logado
     @GetMapping
-    public ResponseEntity<TenantUserDetailsResponse> me() {
+    public ResponseEntity<TenantMeResponse> me() {
         return ResponseEntity.ok(tenantUserService.getMyProfile());
     }
 
-    // ✅ Atualiza perfil do usuário logado (principalmente "name")
+    // ✅ Atualiza perfil do usuário logado (SAFE whitelist)
     @PutMapping
-    public ResponseEntity<TenantUserDetailsResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
-        TenantUserDetailsResponse updated = tenantUserService.updateMyProfile(
-                req.name(),
-                req.phone(),
-                req.locale(),
-                req.timezone()
-        );
-        return ResponseEntity.ok(updated);
+    public ResponseEntity<TenantMeResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
+        return ResponseEntity.ok(tenantUserService.updateMyProfile(req));
     }
 }
 
@@ -10086,7 +10125,7 @@ import lombok.RequiredArgsConstructor;
 public class TenantAuthService {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
     private final AccountResolver accountResolver;
     private final TenantUserRepository tenantUserRepository;
 
@@ -10119,13 +10158,13 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            String accessToken = tokenProvider.generateTenantToken(
+            String accessToken = jwtTokenProvider.generateTenantToken(
                     authentication,
                     account.id(),
                     account.schemaName()
             );
 
-            String refreshToken = tokenProvider.generateRefreshToken(
+            String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getUsername(),
                     account.schemaName()
             );
@@ -10161,21 +10200,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantBillingService {
 
-    private final ControlPlanePaymentQueryService paymentQueryService;
+    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
-        return paymentQueryService.listByAccount(accountId);
+        return controlPlanePaymentQueryService.listByAccount(accountId);
     }
 
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
-        return paymentQueryService.getByAccount(accountId, paymentId);
+        return controlPlanePaymentQueryService.getByAccount(accountId, paymentId);
     }
 
     @Transactional(readOnly = true)
     public boolean hasActivePayment(Long accountId) {
-        return paymentQueryService.hasActivePayment(accountId);
+        return controlPlanePaymentQueryService.hasActivePayment(accountId);
     }
 }
 
@@ -10201,7 +10240,7 @@ import java.util.List;
 @Slf4j
 public class TenantCategoryService {
 
-    private final TenantCategoryRepository categoryRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
     private final AppClock appClock;
 
     // =========================================================
@@ -10212,7 +10251,7 @@ public class TenantCategoryService {
     public Category findById(Long id) {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
 
-        Category c = categoryRepository.findById(id)
+        Category c = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (c.isDeleted()) {
@@ -10224,12 +10263,12 @@ public class TenantCategoryService {
 
     @Transactional(readOnly = true)
     public List<Category> findAll() {
-        return categoryRepository.findNotDeleted();
+        return tenantCategoryRepository.findNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Category> findActive() {
-        return categoryRepository.findNotDeletedActive();
+        return tenantCategoryRepository.findNotDeletedActive();
     }
 
     @Transactional(readOnly = true)
@@ -10237,12 +10276,12 @@ public class TenantCategoryService {
         if (!StringUtils.hasText(name)) {
             throw new ApiException("CATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
         }
-        return categoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
+        return tenantCategoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
     }
 
     @Transactional(readOnly = true)
     public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
-        return categoryRepository.findWithFlags(includeDeleted, includeInactive);
+        return tenantCategoryRepository.findWithFlags(includeDeleted, includeInactive);
     }
 
     // =========================================================
@@ -10259,7 +10298,7 @@ public class TenantCategoryService {
         String name = category.getName().trim();
 
         // uk_categories_name (global) -> valida para evitar 500
-        categoryRepository.findNotDeletedByNameIgnoreCase(name)
+        tenantCategoryRepository.findNotDeletedByNameIgnoreCase(name)
                 .ifPresent(existing -> {
                     throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + name, 409);
                 });
@@ -10268,7 +10307,7 @@ public class TenantCategoryService {
         category.setDeleted(false);
         category.setActive(true);
 
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 
     @Transactional
@@ -10276,7 +10315,7 @@ public class TenantCategoryService {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
         if (req == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
 
-        Category existing = categoryRepository.findById(id)
+        Category existing = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (existing.isDeleted()) {
@@ -10287,7 +10326,7 @@ public class TenantCategoryService {
             String newName = req.getName().trim();
 
             // valida unicidade
-            categoryRepository.findNotDeletedByNameIgnoreCase(newName)
+            tenantCategoryRepository.findNotDeletedByNameIgnoreCase(newName)
                     .ifPresent(other -> {
                         if (!other.getId().equals(id)) {
                             throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + newName, 409);
@@ -10298,12 +10337,12 @@ public class TenantCategoryService {
         }
 
         // active é boolean primitivo -> melhor controlar via endpoint específico (toggle)
-        return categoryRepository.save(existing);
+        return tenantCategoryRepository.save(existing);
     }
 
     @Transactional
     public Category toggleActive(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (category.isDeleted()) {
@@ -10311,25 +10350,25 @@ public class TenantCategoryService {
         }
 
         category.setActive(!category.isActive());
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 
     @Transactional
     public void softDelete(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         category.softDelete(appClock.now());
-        categoryRepository.save(category);
+        tenantCategoryRepository.save(category);
     }
 
     @Transactional
     public Category restore(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         category.restore();
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 }
 
@@ -10357,8 +10396,8 @@ import java.util.List;
 @Slf4j
 public class TenantSubcategoryService {
 
-    private final TenantSubcategoryRepository subcategoryRepository;
-    private final TenantCategoryRepository categoryRepository;
+    private final TenantSubcategoryRepository tenantSubcategoryRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
     private final AppClock appClock;
 
     // =========================================================
@@ -10369,7 +10408,7 @@ public class TenantSubcategoryService {
     public Subcategory findById(Long id) {
         if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
 
-        Subcategory s = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory s = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (s.isDeleted()) {
@@ -10381,24 +10420,24 @@ public class TenantSubcategoryService {
 
     @Transactional(readOnly = true)
     public List<Subcategory> findAll() {
-        return subcategoryRepository.findNotDeleted();
+        return tenantSubcategoryRepository.findNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findActive() {
-        return subcategoryRepository.findActiveNotDeleted();
+        return tenantSubcategoryRepository.findActiveNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryId(Long categoryId) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
+        return tenantSubcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryIdAdmin(Long categoryId, boolean includeDeleted, boolean includeInactive) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
+        return tenantSubcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
     }
 
     // =========================================================
@@ -10413,7 +10452,7 @@ public class TenantSubcategoryService {
             throw new ApiException("SUBCATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
         }
 
-        Category category = categoryRepository.findById(categoryId)
+        Category category = tenantCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + categoryId, 404));
 
         if (category.isDeleted()) {
@@ -10423,7 +10462,7 @@ public class TenantSubcategoryService {
         String name = req.getName().trim();
 
         // uk_subcategories_name_category (category_id, name)
-        subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, name)
+        tenantSubcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, name)
                 .ifPresent(existing -> {
                     throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
                             "Subcategoria já existe na categoria " + categoryId + ": " + name, 409);
@@ -10435,7 +10474,7 @@ public class TenantSubcategoryService {
         sub.setDeleted(false);
         sub.setActive(true);
 
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
@@ -10443,7 +10482,7 @@ public class TenantSubcategoryService {
         if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
         if (req == null) throw new ApiException("SUBCATEGORY_REQUIRED", "payload é obrigatório", 400);
 
-        Subcategory existing = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory existing = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (existing.isDeleted()) {
@@ -10454,7 +10493,7 @@ public class TenantSubcategoryService {
             String newName = req.getName().trim();
             Long categoryId = existing.getCategory().getId();
 
-            subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, newName)
+            tenantSubcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, newName)
                     .ifPresent(other -> {
                         if (!other.getId().equals(id)) {
                             throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
@@ -10465,12 +10504,12 @@ public class TenantSubcategoryService {
             existing.setName(newName);
         }
 
-        return subcategoryRepository.save(existing);
+        return tenantSubcategoryRepository.save(existing);
     }
 
     @Transactional
     public Subcategory toggleActive(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (sub.isDeleted()) {
@@ -10478,31 +10517,31 @@ public class TenantSubcategoryService {
         }
 
         sub.setActive(!sub.isActive());
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
     public void softDelete(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         sub.softDelete(appClock.now());
-        subcategoryRepository.save(sub);
+        tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
     public Subcategory restore(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         sub.restore();
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
     
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryIdNotDeleted(Long categoryId) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findNotDeletedByCategoryId(categoryId);
+        return tenantSubcategoryRepository.findNotDeletedByCategoryId(categoryId);
     }
 
 }
@@ -10548,9 +10587,9 @@ import java.util.UUID;
 public class TenantProductService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantSupplierRepository supplierRepository;
-    private final TenantCategoryRepository categoryRepository;
-    private final TenantSubcategoryRepository subcategoryRepository;
+    private final TenantSupplierRepository tenantSupplierRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
+    private final TenantSubcategoryRepository tenantSubcategoryRepository;
     private final AppClock appClock;
 
     @Transactional(readOnly = true)
@@ -10608,7 +10647,7 @@ public class TenantProductService {
 
         // ✅ category
         if (productDetails.getCategory() != null && productDetails.getCategory().getId() != null) {
-            Category category = categoryRepository.findById(productDetails.getCategory().getId())
+            Category category = tenantCategoryRepository.findById(productDetails.getCategory().getId())
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
             existingProduct.setCategory(category);
         }
@@ -10616,7 +10655,7 @@ public class TenantProductService {
      // ✅ subcategory: só mexe se veio no payload
         if (productDetails.getSubcategory() != null) {
             if (productDetails.getSubcategory().getId() != null) {
-                Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
+                Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
                         .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
                 existingProduct.setSubcategory(sub);
             } else {
@@ -10629,7 +10668,7 @@ public class TenantProductService {
 
         // ✅ supplier
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
-            Supplier supplier = supplierRepository.findById(productDetails.getSupplier().getId())
+            Supplier supplier = tenantSupplierRepository.findById(productDetails.getSupplier().getId())
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND", "Fornecedor não encontrado", 404));
             existingProduct.setSupplier(supplier);
         }
@@ -10642,7 +10681,7 @@ public class TenantProductService {
     private void resolveSupplier(Product product) {
         if (product.getSupplier() != null && product.getSupplier().getId() != null) {
             UUID supplierId = product.getSupplier().getId();
-            Supplier supplier = supplierRepository.findById(product.getSupplier().getId())
+            Supplier supplier = tenantSupplierRepository.findById(product.getSupplier().getId())
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
                     "Fornecedor não encontrado com ID: " + supplierId, 404));
             product.setSupplier(supplier);
@@ -10656,13 +10695,13 @@ public class TenantProductService {
             throw new ApiException("CATEGORY_REQUIRED", "Categoria é obrigatória", 400);
         }
 
-        Category category = categoryRepository.findById(product.getCategory().getId())
+        Category category = tenantCategoryRepository.findById(product.getCategory().getId())
             .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
         product.setCategory(category);
 
         // ✅ subcategory opcional
         if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
-            Subcategory sub = subcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
+            Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
             product.setSubcategory(sub);
         } else {
@@ -11269,6 +11308,8 @@ import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
+import brito.com.multitenancy001.tenant.api.dto.me.UpdateMyProfileRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
@@ -11311,14 +11352,14 @@ public class TenantUserService {
         );
     }
     
-    public TenantUserDetailsResponse getMyProfile() {
+    public TenantMeResponse getMyProfile() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.run(schema, () -> {
             TenantUser user = tenantUserTxService.getUser(userId, accountId);
-            return tenantUserApiMapper.toDetails(user);
+            return tenantUserApiMapper.toMe(user);
         });
     }
 
@@ -11512,7 +11553,7 @@ public class TenantUserService {
     // MY PROFILE
     // =========================================================
 
-    public TenantUserDetailsResponse updateMyProfile(String name, String phone, String locale, String timezone) {
+    public TenantMeResponse updateMyProfile(UpdateMyProfileRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
@@ -11521,15 +11562,16 @@ public class TenantUserService {
             TenantUser updated = tenantUserTxService.updateProfile(
                     userId,
                     accountId,
-                    name,
-                    phone,
-                    locale,
-                    timezone,
+                    req.name(),
+                    req.phone(),
+                    req.locale(),
+                    req.timezone(),
                     appClock.now()
             );
-            return tenantUserApiMapper.toDetails(updated);
+            return tenantUserApiMapper.toMe(updated);
         });
     }
+
     
     public TenantUserDetailsResponse getEnabledTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -11757,6 +11799,9 @@ public class TenantUserTxService {
     // =========================================================
     // UPDATE PROFILE
     // =========================================================
+       // =========================================================
+    // UPDATE PROFILE (SAFE WHITELIST)
+    // =========================================================
     public TenantUser updateProfile(
             Long userId,
             Long accountId,
@@ -11764,7 +11809,7 @@ public class TenantUserTxService {
             String phone,
             String locale,
             String timezone,
-            LocalDateTime nowParam
+            LocalDateTime nowParam // mantive a assinatura para não quebrar chamadas
     ) {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
@@ -11772,16 +11817,35 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-        if (StringUtils.hasText(name)) user.setName(name.trim());
-        if (phone != null) user.setPhone(phone);
-        if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
-        if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
+        // ✅ whitelist: só altera o que é permitido + só se vier valor
+        if (StringUtils.hasText(name)) {
+            user.setName(name.trim());
+        }
 
-        LocalDateTime now = (nowParam != null ? nowParam : now());
-        user.setUpdatedAt(now);
+     // phone: SaaS-friendly
+     // - null: não altera
+     // - blank: limpa (vira null)
+     // - texto: atualiza
+     if (phone != null) {
+         String p = phone.trim();
+         user.setPhone(p.isBlank() ? null : p);
+     }
+
+
+        if (StringUtils.hasText(locale)) {
+            user.setLocale(locale.trim());
+        }
+
+        if (StringUtils.hasText(timezone)) {
+            user.setTimezone(timezone.trim());
+        }
+
+        // ✅ NÃO setar updatedAt manual: você já tem @UpdateTimestamp
+        // ✅ com @DynamicUpdate, o update vira pequeno (só colunas alteradas)
 
         return tenantUserRepository.save(user);
     }
+
 
     // =========================================================
     // LIST / GET
@@ -12074,7 +12138,7 @@ public class UsernameGeneratorService {
 
     private static final int SUFFIX_LEN = 8;
 
-    private final UsernamePolicy policy;
+    private final UsernamePolicy usernamePolicy;
     private final TenantUserRepository tenantUserRepository;
 
     /**
@@ -12090,7 +12154,7 @@ public class UsernameGeneratorService {
         if (email == null || !email.contains("@")) throw new IllegalArgumentException("Invalid email");
 
         String local = email.split("@", 2)[0].toLowerCase();
-        String base = policy.asCandidate(local);
+        String base = usernamePolicy.asCandidate(local);
 
         // 1) tenta "vendas"
         if (!tenantUserRepository.existsByUsernameAndAccountId(base, accountId)) {
@@ -12099,7 +12163,7 @@ public class UsernameGeneratorService {
 
         // 2) tenta "vendas_2", "vendas_3", ...
         for (int counter = 2; counter < 200; counter++) {
-            String candidate = policy.build(base, String.valueOf(counter));
+            String candidate = usernamePolicy.build(base, String.valueOf(counter));
             if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
                 return candidate;
             }
@@ -12107,7 +12171,7 @@ public class UsernameGeneratorService {
 
         // 3) fallback aleatório (muito raro precisar)
         for (int attempt = 0; attempt < 20; attempt++) {
-            String candidate = policy.build(base, randomSuffix(SUFFIX_LEN));
+            String candidate = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
             if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
                 return candidate;
             }
@@ -12123,23 +12187,23 @@ public class UsernameGeneratorService {
     public String ensureUnique(String initialUsername, Long accountId) {
         if (accountId == null) throw new IllegalArgumentException("accountId is required");
 
-        String candidate = policy.asCandidate(initialUsername);
+        String candidate = usernamePolicy.asCandidate(initialUsername);
 
-        if (policy.isValid(candidate) && !tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
+        if (usernamePolicy.isValid(candidate) && !tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
             return candidate;
         }
 
-        String base = policy.extractBase(candidate);
+        String base = usernamePolicy.extractBase(candidate);
 
         for (int counter = 2; counter < 200; counter++) {
-            String c = policy.build(base, String.valueOf(counter));
+            String c = usernamePolicy.build(base, String.valueOf(counter));
             if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
                 return c;
             }
         }
 
         for (int attempt = 0; attempt < 20; attempt++) {
-            String c = policy.build(base, randomSuffix(SUFFIX_LEN));
+            String c = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
             if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
                 return c;
             }
@@ -12916,12 +12980,14 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+@DynamicUpdate
 @Entity
 @Table(
     name = "tenant_users",
@@ -12931,7 +12997,6 @@ import java.util.Set;
     }
 )
 @EntityListeners(AuditEntityListener.class)
-
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13944,14 +14009,14 @@ public final class TenantRolePermissions {
 }
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V0__create_extension.sql
+// FILE: ./main/resources/db/migration/accounts/V1__create_extension.sql
 ============================================================
--- V0__create_extension.sql
+-- V1__create_extension.sql
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V1__create_table_accounts.sql
+// FILE: ./main/resources/db/migration/accounts/V2__create_table_accounts.sql
 ============================================================
--- V1__create_table_accounts.sql
+-- V3__create_table_accounts.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS accounts (
@@ -14089,7 +14154,7 @@ ON accounts (display_name);
 
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V2__create_table_account_entitlements.sql
+// FILE: ./main/resources/db/migration/accounts/V3__create_table_account_entitlements.sql
 ============================================================
 -- V2__create_table_account_entitlements.sql
 SET search_path TO public;
@@ -14107,9 +14172,9 @@ ALTER TABLE account_entitlements
     CHECK (max_users > 0 AND max_products > 0 AND max_storage_mb > 0);
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V3__create_table_controlplane_users.sql
+// FILE: ./main/resources/db/migration/accounts/V4__create_table_controlplane_users.sql
 ============================================================
--- V3__create_table_controlplane_users.sql
+-- V4__create_table_controlplane_users.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_users (
@@ -14185,9 +14250,9 @@ ON controlplane_users (account_id, email)
 WHERE deleted = false;
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V4__insert_controlplane_account.sql
+// FILE: ./main/resources/db/migration/accounts/V5__insert_controlplane_account.sql
 ============================================================
--- V4__insert_controlplane_account.sql
+-- V5__insert_controlplane_account.sql
 SET search_path TO public;
 
 INSERT INTO accounts (
@@ -14236,9 +14301,9 @@ WHERE NOT EXISTS (
 );
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V5__insert_controlplane_users.sql
+// FILE: ./main/resources/db/migration/accounts/V6__insert_controlplane_users.sql
 ============================================================
--- V5__insert_controlplane_users.sql
+-- V6__insert_controlplane_users.sql
 SET search_path TO public;
 
 -- Cria 4 usuários padrão do Control Plane no account PLATFORM (slug controlplane)
@@ -14307,9 +14372,9 @@ WHERE NOT EXISTS (
 );
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V6__create_table_controlplane_user_permissions.sql
+// FILE: ./main/resources/db/migration/accounts/V7__create_table_controlplane_user_permissions.sql
 ============================================================
--- V6__create_table_controlplane_user_permissions.sql
+-- V7__create_table_controlplane_user_permissions.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
@@ -14325,9 +14390,9 @@ CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
 );
 
 ============================================================
-// FILE: ./main/resources/db/migration/accounts/V7__create_table_payments.sql
+// FILE: ./main/resources/db/migration/accounts/V8__create_table_payments.sql
 ============================================================
--- V7__create_table_payments.sql
+-- V8__create_table_payments.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS payments (

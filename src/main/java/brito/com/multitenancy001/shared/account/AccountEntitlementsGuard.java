@@ -13,14 +13,14 @@ public class AccountEntitlementsGuard {
 
     private final AccountRepository accountRepository;
     private final AccountEntitlementsService accountEntitlementsService;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     public void assertCanCreateUser(Long accountId, long currentUsers) {
         if (accountId == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
         }
 
-        publicUow.readOnly(() -> {
+        publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 

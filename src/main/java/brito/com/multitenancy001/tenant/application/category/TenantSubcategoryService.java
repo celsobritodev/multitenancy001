@@ -19,8 +19,8 @@ import java.util.List;
 @Slf4j
 public class TenantSubcategoryService {
 
-    private final TenantSubcategoryRepository subcategoryRepository;
-    private final TenantCategoryRepository categoryRepository;
+    private final TenantSubcategoryRepository tenantSubcategoryRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
     private final AppClock appClock;
 
     // =========================================================
@@ -31,7 +31,7 @@ public class TenantSubcategoryService {
     public Subcategory findById(Long id) {
         if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
 
-        Subcategory s = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory s = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (s.isDeleted()) {
@@ -43,24 +43,24 @@ public class TenantSubcategoryService {
 
     @Transactional(readOnly = true)
     public List<Subcategory> findAll() {
-        return subcategoryRepository.findNotDeleted();
+        return tenantSubcategoryRepository.findNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findActive() {
-        return subcategoryRepository.findActiveNotDeleted();
+        return tenantSubcategoryRepository.findActiveNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryId(Long categoryId) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
+        return tenantSubcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
     }
 
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryIdAdmin(Long categoryId, boolean includeDeleted, boolean includeInactive) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
+        return tenantSubcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
     }
 
     // =========================================================
@@ -75,7 +75,7 @@ public class TenantSubcategoryService {
             throw new ApiException("SUBCATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
         }
 
-        Category category = categoryRepository.findById(categoryId)
+        Category category = tenantCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + categoryId, 404));
 
         if (category.isDeleted()) {
@@ -85,7 +85,7 @@ public class TenantSubcategoryService {
         String name = req.getName().trim();
 
         // uk_subcategories_name_category (category_id, name)
-        subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, name)
+        tenantSubcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, name)
                 .ifPresent(existing -> {
                     throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
                             "Subcategoria já existe na categoria " + categoryId + ": " + name, 409);
@@ -97,7 +97,7 @@ public class TenantSubcategoryService {
         sub.setDeleted(false);
         sub.setActive(true);
 
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
@@ -105,7 +105,7 @@ public class TenantSubcategoryService {
         if (id == null) throw new ApiException("SUBCATEGORY_ID_REQUIRED", "id é obrigatório", 400);
         if (req == null) throw new ApiException("SUBCATEGORY_REQUIRED", "payload é obrigatório", 400);
 
-        Subcategory existing = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory existing = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (existing.isDeleted()) {
@@ -116,7 +116,7 @@ public class TenantSubcategoryService {
             String newName = req.getName().trim();
             Long categoryId = existing.getCategory().getId();
 
-            subcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, newName)
+            tenantSubcategoryRepository.findNotDeletedByCategoryIdAndNameIgnoreCase(categoryId, newName)
                     .ifPresent(other -> {
                         if (!other.getId().equals(id)) {
                             throw new ApiException("SUBCATEGORY_ALREADY_EXISTS",
@@ -127,12 +127,12 @@ public class TenantSubcategoryService {
             existing.setName(newName);
         }
 
-        return subcategoryRepository.save(existing);
+        return tenantSubcategoryRepository.save(existing);
     }
 
     @Transactional
     public Subcategory toggleActive(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         if (sub.isDeleted()) {
@@ -140,31 +140,31 @@ public class TenantSubcategoryService {
         }
 
         sub.setActive(!sub.isActive());
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
     public void softDelete(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         sub.softDelete(appClock.now());
-        subcategoryRepository.save(sub);
+        tenantSubcategoryRepository.save(sub);
     }
 
     @Transactional
     public Subcategory restore(Long id) {
-        Subcategory sub = subcategoryRepository.findByIdWithCategory(id)
+        Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
         sub.restore();
-        return subcategoryRepository.save(sub);
+        return tenantSubcategoryRepository.save(sub);
     }
     
     @Transactional(readOnly = true)
     public List<Subcategory> findByCategoryIdNotDeleted(Long categoryId) {
         if (categoryId == null) throw new ApiException("CATEGORY_ID_REQUIRED", "categoryId é obrigatório", 400);
-        return subcategoryRepository.findNotDeletedByCategoryId(categoryId);
+        return tenantSubcategoryRepository.findNotDeletedByCategoryId(categoryId);
     }
 
 }

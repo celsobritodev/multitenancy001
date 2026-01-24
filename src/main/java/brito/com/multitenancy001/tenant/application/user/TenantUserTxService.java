@@ -200,6 +200,9 @@ public class TenantUserTxService {
     // =========================================================
     // UPDATE PROFILE
     // =========================================================
+       // =========================================================
+    // UPDATE PROFILE (SAFE WHITELIST)
+    // =========================================================
     public TenantUser updateProfile(
             Long userId,
             Long accountId,
@@ -207,7 +210,7 @@ public class TenantUserTxService {
             String phone,
             String locale,
             String timezone,
-            LocalDateTime nowParam
+            LocalDateTime nowParam // mantive a assinatura para não quebrar chamadas
     ) {
         if (userId == null) throw new ApiException("USER_REQUIRED", "UserId obrigatório", 400);
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
@@ -215,16 +218,35 @@ public class TenantUserTxService {
         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                 .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-        if (StringUtils.hasText(name)) user.setName(name.trim());
-        if (phone != null) user.setPhone(phone);
-        if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
-        if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
+        // ✅ whitelist: só altera o que é permitido + só se vier valor
+        if (StringUtils.hasText(name)) {
+            user.setName(name.trim());
+        }
 
-        LocalDateTime now = (nowParam != null ? nowParam : now());
-        user.setUpdatedAt(now);
+     // phone: SaaS-friendly
+     // - null: não altera
+     // - blank: limpa (vira null)
+     // - texto: atualiza
+     if (phone != null) {
+         String p = phone.trim();
+         user.setPhone(p.isBlank() ? null : p);
+     }
+
+
+        if (StringUtils.hasText(locale)) {
+            user.setLocale(locale.trim());
+        }
+
+        if (StringUtils.hasText(timezone)) {
+            user.setTimezone(timezone.trim());
+        }
+
+        // ✅ NÃO setar updatedAt manual: você já tem @UpdateTimestamp
+        // ✅ com @DynamicUpdate, o update vira pequeno (só colunas alteradas)
 
         return tenantUserRepository.save(user);
     }
+
 
     // =========================================================
     // LIST / GET

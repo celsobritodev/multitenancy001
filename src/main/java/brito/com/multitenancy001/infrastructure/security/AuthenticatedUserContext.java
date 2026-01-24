@@ -32,7 +32,7 @@ public class AuthenticatedUserContext implements UserDetails {
      * Ex.: ControlPlaneRole.CONTROLPLANE_OWNER ou TenantRole.TENANT_ADMIN
      * (não entra em authorities)
      */
-    private final RoleAuthority role;
+    private final RoleAuthority roleAuthority;
 
     /**
      * ✅ Authorities efetivas (permission-only)
@@ -61,7 +61,7 @@ public class AuthenticatedUserContext implements UserDetails {
         this.accountNonLocked = accountNonLocked;
         this.accountId = accountId;
         this.schemaName = schemaName;
-        this.role = role;
+        this.roleAuthority = role;
         this.authorities = authorities;
     }
 
@@ -70,11 +70,11 @@ public class AuthenticatedUserContext implements UserDetails {
      * (claims/debug/DTOs). Não armazena string, deriva do Enum.
      */
     public String getRoleAuthority() {
-        return role == null ? null : role.asAuthority();
+        return roleAuthority == null ? null : roleAuthority.asAuthority();
     }
     
     public String getRoleName() {
-        return role == null ? null : role.toString();
+        return roleAuthority == null ? null : roleAuthority.toString();
     }
 
 

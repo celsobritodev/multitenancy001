@@ -12,20 +12,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantBillingService {
 
-    private final ControlPlanePaymentQueryService paymentQueryService;
+    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
-        return paymentQueryService.listByAccount(accountId);
+        return controlPlanePaymentQueryService.listByAccount(accountId);
     }
 
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
-        return paymentQueryService.getByAccount(accountId, paymentId);
+        return controlPlanePaymentQueryService.getByAccount(accountId, paymentId);
     }
 
     @Transactional(readOnly = true)
     public boolean hasActivePayment(Long accountId) {
-        return paymentQueryService.hasActivePayment(accountId);
+        return controlPlanePaymentQueryService.hasActivePayment(accountId);
     }
 }

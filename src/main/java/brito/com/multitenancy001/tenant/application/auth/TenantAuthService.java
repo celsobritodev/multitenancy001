@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class TenantAuthService {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
     private final AccountResolver accountResolver;
     private final TenantUserRepository tenantUserRepository;
 
@@ -55,13 +55,13 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            String accessToken = tokenProvider.generateTenantToken(
+            String accessToken = jwtTokenProvider.generateTenantToken(
                     authentication,
                     account.id(),
                     account.schemaName()
             );
 
-            String refreshToken = tokenProvider.generateRefreshToken(
+            String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getUsername(),
                     account.schemaName()
             );

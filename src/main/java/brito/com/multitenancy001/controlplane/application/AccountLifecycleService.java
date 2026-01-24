@@ -38,7 +38,7 @@ public class AccountLifecycleService {
     private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
     private final AccountTenantUserService accountTenantUserService;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AppClock appClock;
 
     // =========================================================
@@ -55,7 +55,7 @@ public class AccountLifecycleService {
     // =========================================================
 
     public List<AccountResponse> listAccounts() {
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findAllByDeletedFalse()
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -64,7 +64,7 @@ public class AccountLifecycleService {
     }
 
     public AccountResponse getAccount(Long accountId) {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -72,7 +72,7 @@ public class AccountLifecycleService {
     }
 
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -149,7 +149,7 @@ public class AccountLifecycleService {
     public Page<AccountResponse> listAccountsLatest(Pageable pageable) {
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByDeletedFalseOrderByCreatedAtDesc(p)
                         .map(accountApiMapper::toResponse)
         );
@@ -160,7 +160,7 @@ public class AccountLifecycleService {
             throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
         }
 
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
@@ -174,7 +174,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByStatusAndDeletedFalse(status, p)
                         .map(accountApiMapper::toResponse)
         );
@@ -185,7 +185,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findAccountsCreatedBetween(start, end, p)
                         .map(accountApiMapper::toResponse)
         );
@@ -198,7 +198,7 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.searchByDisplayName(term.trim(), p)
                         .map(accountApiMapper::toResponse)
         );
@@ -212,7 +212,7 @@ public class AccountLifecycleService {
         if (status == null) {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         }
-        return publicUow.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
+        return publicUnitOfWork.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
     }
 
     public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
@@ -220,7 +220,7 @@ public class AccountLifecycleService {
             throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
         }
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findByStatuses(statuses)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -232,7 +232,7 @@ public class AccountLifecycleService {
         LocalDateTime d = (date != null ? date : appClock.now());
         AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findExpiredTrialsNotDeleted(d, st)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -245,7 +245,7 @@ public class AccountLifecycleService {
         LocalDateTime t = (today != null ? today : appClock.now());
         AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
-        return publicUow.readOnly(() ->
+        return publicUnitOfWork.readOnly(() ->
                 accountRepository.findOverdueAccountsNotDeleted(st, t)
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -255,6 +255,6 @@ public class AccountLifecycleService {
 
 
     public long countOperationalAccounts() {
-        return publicUow.readOnly(accountRepository::countOperationalAccounts);
+        return publicUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
     }
 }

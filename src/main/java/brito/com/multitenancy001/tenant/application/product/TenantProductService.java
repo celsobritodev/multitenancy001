@@ -36,9 +36,9 @@ import java.util.UUID;
 public class TenantProductService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantSupplierRepository supplierRepository;
-    private final TenantCategoryRepository categoryRepository;
-    private final TenantSubcategoryRepository subcategoryRepository;
+    private final TenantSupplierRepository tenantSupplierRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
+    private final TenantSubcategoryRepository tenantSubcategoryRepository;
     private final AppClock appClock;
 
     @Transactional(readOnly = true)
@@ -96,7 +96,7 @@ public class TenantProductService {
 
         // ✅ category
         if (productDetails.getCategory() != null && productDetails.getCategory().getId() != null) {
-            Category category = categoryRepository.findById(productDetails.getCategory().getId())
+            Category category = tenantCategoryRepository.findById(productDetails.getCategory().getId())
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
             existingProduct.setCategory(category);
         }
@@ -104,7 +104,7 @@ public class TenantProductService {
      // ✅ subcategory: só mexe se veio no payload
         if (productDetails.getSubcategory() != null) {
             if (productDetails.getSubcategory().getId() != null) {
-                Subcategory sub = subcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
+                Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(productDetails.getSubcategory().getId())
                         .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
                 existingProduct.setSubcategory(sub);
             } else {
@@ -117,7 +117,7 @@ public class TenantProductService {
 
         // ✅ supplier
         if (productDetails.getSupplier() != null && productDetails.getSupplier().getId() != null) {
-            Supplier supplier = supplierRepository.findById(productDetails.getSupplier().getId())
+            Supplier supplier = tenantSupplierRepository.findById(productDetails.getSupplier().getId())
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND", "Fornecedor não encontrado", 404));
             existingProduct.setSupplier(supplier);
         }
@@ -130,7 +130,7 @@ public class TenantProductService {
     private void resolveSupplier(Product product) {
         if (product.getSupplier() != null && product.getSupplier().getId() != null) {
             UUID supplierId = product.getSupplier().getId();
-            Supplier supplier = supplierRepository.findById(product.getSupplier().getId())
+            Supplier supplier = tenantSupplierRepository.findById(product.getSupplier().getId())
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
                     "Fornecedor não encontrado com ID: " + supplierId, 404));
             product.setSupplier(supplier);
@@ -144,13 +144,13 @@ public class TenantProductService {
             throw new ApiException("CATEGORY_REQUIRED", "Categoria é obrigatória", 400);
         }
 
-        Category category = categoryRepository.findById(product.getCategory().getId())
+        Category category = tenantCategoryRepository.findById(product.getCategory().getId())
             .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada", 404));
         product.setCategory(category);
 
         // ✅ subcategory opcional
         if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
-            Subcategory sub = subcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
+            Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada", 404));
             product.setSubcategory(sub);
         } else {

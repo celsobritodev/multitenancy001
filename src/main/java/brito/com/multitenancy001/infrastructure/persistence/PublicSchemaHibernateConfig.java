@@ -20,7 +20,7 @@ import java.util.Map;
 public class PublicSchemaHibernateConfig {
 
     private final DataSource dataSource;
-    private final ConfigurableListableBeanFactory beanFactory;
+    private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "entityManagerFactory")
     @Primary
@@ -44,7 +44,7 @@ public class PublicSchemaHibernateConfig {
         props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
 
         // ✅ Hibernate resolve beans gerenciados pelo Spring (EntityListeners @Component etc.)
-        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;

@@ -11,42 +11,42 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuditEntityListener {
 
-    private AuditActorProvider provider;
+    private AuditActorProvider auditActorProvider;
 
     // ✅ robusto: Hibernate pode instanciar por reflexão
     public AuditEntityListener() {
     }
 
     @Autowired
-    public void setProvider(AuditActorProvider provider) {
-        this.provider = provider;
+    public void setProvider(AuditActorProvider auditActorProvider) {
+        this.auditActorProvider = auditActorProvider;
     }
 
     @PrePersist
     public void prePersist(Object entity) {
-        if (!(entity instanceof Auditable a)) return;
-        a.getAudit().onCreate(currentActorOrThrow());
+        if (!(entity instanceof Auditable auditable)) return;
+        auditable.getAudit().onCreate(currentActorOrThrow());
     }
 
     @PreUpdate
     public void preUpdate(Object entity) {
-        if (!(entity instanceof Auditable a)) return;
+        if (!(entity instanceof Auditable auditable)) return;
 
         var actor = currentActorOrThrow();
-        a.getAudit().onUpdate(actor);
+        auditable.getAudit().onUpdate(actor);
 
-        if (entity instanceof SoftDeletable sd && sd.isDeleted() && a.getAudit().getDeletedBy() == null) {
-            a.getAudit().onDelete(actor);
+        if (entity instanceof SoftDeletable softDeletable && softDeletable.isDeleted() && auditable.getAudit().getDeletedBy() == null) {
+            auditable.getAudit().onDelete(actor);
         }
     }
 
     private AuditActor currentActorOrThrow() {
-        if (provider == null) {
+        if (auditActorProvider == null) {
             throw new IllegalStateException(
                     "AuditActorProvider não foi injetado no AuditEntityListener. " +
                     "Verifique BEAN_CONTAINER no EMF (PUBLIC e TENANT) e se AuditActorProvider é bean Spring."
             );
         }
-        return provider.current();
+        return auditActorProvider.current();
     }
 }

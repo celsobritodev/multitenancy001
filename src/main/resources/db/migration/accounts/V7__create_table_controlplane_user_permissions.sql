@@ -1,4 +1,4 @@
--- V6__create_table_controlplane_user_permissions.sql
+-- V7__create_table_controlplane_user_permissions.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS controlplane_user_permissions (

@@ -18,7 +18,7 @@ import org.springframework.util.StringUtils;
 public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
-    private final TenantSchemaFlywayMigrationService tenantSchemaMigrationService;
+    private final TenantSchemaFlywayMigrationService tenantSchemaFlywayMigrationService;
     private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
     
    
@@ -88,7 +88,7 @@ public class TenantSchemaProvisioningService {
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
-        tenantSchemaMigrationService.migrateTenantSchema(normalized);
+        tenantSchemaFlywayMigrationService.migrateTenantSchema(normalized);
     }
 
     /**

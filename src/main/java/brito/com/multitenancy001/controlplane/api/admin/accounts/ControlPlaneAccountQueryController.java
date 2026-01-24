@@ -18,20 +18,20 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryController {
 
-    private final ControlPlaneAccountQueryService service;
+    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
 
     // AccountRepository.findEnabledById
     @GetMapping("/{id}/enabled")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getEnabledById(id));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.getEnabledById(id));
     }
 
     // AccountRepository.findAnyById (inclui deleted)
     @GetMapping("/{id}/any")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getAnyById(id));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.getAnyById(id));
     }
 
     // AccountRepository.countByStatusesAndDeletedFalse
@@ -39,7 +39,7 @@ public class ControlPlaneAccountQueryController {
     @GetMapping("/count")
     @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<Long> countByStatuses(@RequestParam List<AccountStatus> statuses) {
-        return ResponseEntity.ok(service.countByStatusesNotDeleted(statuses));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.countByStatusesNotDeleted(statuses));
     }
 
     // AccountRepository.findByPaymentDueDateBeforeAndDeletedFalse
@@ -49,6 +49,6 @@ public class ControlPlaneAccountQueryController {
     public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date
     ) {
-        return ResponseEntity.ok(service.findPaymentDueBeforeNotDeleted(date));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.findPaymentDueBeforeNotDeleted(date));
     }
 }

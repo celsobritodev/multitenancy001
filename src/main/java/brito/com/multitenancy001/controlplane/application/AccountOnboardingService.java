@@ -26,24 +26,24 @@ public class AccountOnboardingService {
     private final AccountApiMapper accountApiMapper;
     private final PublicAccountCreationService publicAccountCreationService;
 
-    private final TenantSchemaProvisioningFacade tenantProvisioningBridge;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
 
     private final AccountRepository accountRepository;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
         validateSignupRequest(signupRequest);
 
         log.info("Tentando criar conta");
 
-        Account account = publicUow.tx(() ->
+        Account account = publicUnitOfWork.tx(() ->
                 publicAccountCreationService.createAccountFromSignup(signupRequest)
         );
 
-        tenantProvisioningBridge.ensureSchemaExistsAndMigrate(account.getSchemaName());
+        tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
-        TenantUser tenantOwner = tenantUserAdminBridge.createTenantOwner(
+        TenantUser tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
                 account.getSchemaName(),
                 account.getId(),
                 account.getDisplayName(),      // ✅ ownerDisplayName

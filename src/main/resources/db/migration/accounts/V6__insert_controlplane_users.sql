@@ -1,4 +1,4 @@
--- V5__insert_controlplane_users.sql
+-- V6__insert_controlplane_users.sql
 SET search_path TO public;
 
 -- Cria 4 usuários padrão do Control Plane no account PLATFORM (slug controlplane)

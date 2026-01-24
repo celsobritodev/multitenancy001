@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.api.mapper;
 
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
@@ -48,4 +49,26 @@ public class TenantUserApiMapper {
                 enabled
         );
     }
+    
+    
+    public TenantMeResponse toMe(TenantUser tenantUser) {
+        // Você já tem isEnabled() no entity, então usa ele
+        return new TenantMeResponse(
+                tenantUser.getId(),
+                tenantUser.getAccountId(),
+                tenantUser.getName(),
+                tenantUser.getUsername(),
+                tenantUser.getEmail(),
+                tenantUser.getRole() != null ? tenantUser.getRole().name() : null,
+                tenantUser.getPhone(),
+                tenantUser.getAvatarUrl(),
+                tenantUser.getTimezone(),
+                tenantUser.getLocale(),
+                tenantUser.isSuspendedByAccount(),
+                tenantUser.isSuspendedByAdmin(),
+                tenantUser.isDeleted(),
+                tenantUser.isEnabled()
+        );
+    }
+
 }

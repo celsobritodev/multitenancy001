@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.api.me;
 
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
 import brito.com.multitenancy001.tenant.api.dto.me.UpdateMyProfileRequest;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.application.user.TenantUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,19 +17,13 @@ public class TenantMeController {
 
     // ✅ Perfil do usuário logado
     @GetMapping
-    public ResponseEntity<TenantUserDetailsResponse> me() {
+    public ResponseEntity<TenantMeResponse> me() {
         return ResponseEntity.ok(tenantUserService.getMyProfile());
     }
 
-    // ✅ Atualiza perfil do usuário logado (principalmente "name")
+    // ✅ Atualiza perfil do usuário logado (SAFE whitelist)
     @PutMapping
-    public ResponseEntity<TenantUserDetailsResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
-        TenantUserDetailsResponse updated = tenantUserService.updateMyProfile(
-                req.name(),
-                req.phone(),
-                req.locale(),
-                req.timezone()
-        );
-        return ResponseEntity.ok(updated);
+    public ResponseEntity<TenantMeResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
+        return ResponseEntity.ok(tenantUserService.updateMyProfile(req));
     }
 }

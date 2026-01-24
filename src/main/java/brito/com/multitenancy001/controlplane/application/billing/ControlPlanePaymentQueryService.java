@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlanePaymentQueryService {
 
-    private final ControlPlanePaymentRepository paymentRepository;
+    private final ControlPlanePaymentRepository controlPlanePaymentRepository;
     private final brito.com.multitenancy001.shared.time.AppClock appClock;
 
     
@@ -27,7 +27,7 @@ public class ControlPlanePaymentQueryService {
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
         if (status == null) throw new ApiException("PAYMENT_STATUS_REQUIRED", "status é obrigatório", 400);
 
-        return paymentRepository.findByStatus(status)
+        return controlPlanePaymentRepository.findByStatus(status)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -38,7 +38,7 @@ public class ControlPlanePaymentQueryService {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (startDate == null || endDate == null) throw new ApiException("DATE_RANGE_REQUIRED", "startDate/endDate são obrigatórios", 400);
 
-        BigDecimal total = paymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
+        BigDecimal total = controlPlanePaymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
         return total != null ? total : BigDecimal.ZERO;
     }
 
@@ -46,7 +46,7 @@ public class ControlPlanePaymentQueryService {
     public long countCompletedPayments(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        Long count = paymentRepository.countCompletedPayments(accountId);
+        Long count = controlPlanePaymentRepository.countCompletedPayments(accountId);
         return count != null ? count : 0L;
     }
     
@@ -55,7 +55,7 @@ public class ControlPlanePaymentQueryService {
     public List<PaymentResponse> listByAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return paymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
+        return controlPlanePaymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -66,7 +66,7 @@ public class ControlPlanePaymentQueryService {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
 
-        Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+        Payment payment = controlPlanePaymentRepository.findByIdAndAccountId(paymentId, accountId)
                 .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
         return mapToResponse(payment);
@@ -81,7 +81,7 @@ public class ControlPlanePaymentQueryService {
     public boolean hasActivePayment(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return paymentRepository.existsActivePayment(accountId, appClock.now());
+        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
 
     }
 

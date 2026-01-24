@@ -14,7 +14,7 @@ public class UsernameGeneratorService {
 
     private static final int SUFFIX_LEN = 8;
 
-    private final UsernamePolicy policy;
+    private final UsernamePolicy usernamePolicy;
     private final TenantUserRepository tenantUserRepository;
 
     /**
@@ -30,7 +30,7 @@ public class UsernameGeneratorService {
         if (email == null || !email.contains("@")) throw new IllegalArgumentException("Invalid email");
 
         String local = email.split("@", 2)[0].toLowerCase();
-        String base = policy.asCandidate(local);
+        String base = usernamePolicy.asCandidate(local);
 
         // 1) tenta "vendas"
         if (!tenantUserRepository.existsByUsernameAndAccountId(base, accountId)) {
@@ -39,7 +39,7 @@ public class UsernameGeneratorService {
 
         // 2) tenta "vendas_2", "vendas_3", ...
         for (int counter = 2; counter < 200; counter++) {
-            String candidate = policy.build(base, String.valueOf(counter));
+            String candidate = usernamePolicy.build(base, String.valueOf(counter));
             if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
                 return candidate;
             }
@@ -47,7 +47,7 @@ public class UsernameGeneratorService {
 
         // 3) fallback aleatório (muito raro precisar)
         for (int attempt = 0; attempt < 20; attempt++) {
-            String candidate = policy.build(base, randomSuffix(SUFFIX_LEN));
+            String candidate = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
             if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
                 return candidate;
             }
@@ -63,23 +63,23 @@ public class UsernameGeneratorService {
     public String ensureUnique(String initialUsername, Long accountId) {
         if (accountId == null) throw new IllegalArgumentException("accountId is required");
 
-        String candidate = policy.asCandidate(initialUsername);
+        String candidate = usernamePolicy.asCandidate(initialUsername);
 
-        if (policy.isValid(candidate) && !tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
+        if (usernamePolicy.isValid(candidate) && !tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
             return candidate;
         }
 
-        String base = policy.extractBase(candidate);
+        String base = usernamePolicy.extractBase(candidate);
 
         for (int counter = 2; counter < 200; counter++) {
-            String c = policy.build(base, String.valueOf(counter));
+            String c = usernamePolicy.build(base, String.valueOf(counter));
             if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
                 return c;
             }
         }
 
         for (int attempt = 0; attempt < 20; attempt++) {
-            String c = policy.build(base, randomSuffix(SUFFIX_LEN));
+            String c = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
             if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
                 return c;
             }

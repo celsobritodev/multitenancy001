@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicAccountCreationService {
 
     private final AccountRepository accountRepository;
-    private final AccountEntitlementsProvisioningService entitlementsProvisioningService;
+    private final AccountEntitlementsProvisioningService accountEntitlementsProvisioningService;
     private final AppClock appClock;
 
     public Account createAccountFromSignup(SignupRequest signupRequest) {
@@ -64,7 +64,7 @@ public class PublicAccountCreationService {
 
                 Account saved = accountRepository.save(account);
 
-                entitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
+                accountEntitlementsProvisioningService.ensureDefaultEntitlementsForTenant(saved);
 
                 return saved;
 

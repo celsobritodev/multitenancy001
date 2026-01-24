@@ -20,19 +20,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountTenantUserService {
 
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
     private final AccountUserApiMapper accountUserApiMapper;
 
     public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
 
-        Account account = publicUow.readOnly(() ->
+        Account account = publicUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        List<UserSummaryData> data = tenantUserAdminBridge
+        List<UserSummaryData> data = tenantUserProvisioningFacade
                 .listUserSummaries(account.getSchemaName(), account.getId(), onlyOperational);
 
         return data.stream()
@@ -42,11 +42,11 @@ public class AccountTenantUserService {
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
-        Account account = publicUow.readOnly(() ->
+        Account account = publicUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        tenantUserAdminBridge.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
+        tenantUserProvisioningFacade.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
     }
 }

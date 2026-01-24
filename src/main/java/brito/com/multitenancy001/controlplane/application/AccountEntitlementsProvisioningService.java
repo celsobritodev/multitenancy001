@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountEntitlementsProvisioningService {
 
-    private final AccountEntitlementsRepository entitlementsRepository;
+    private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     @Transactional(transactionManager = "publicTransactionManager")
     public void ensureDefaultEntitlementsForTenant(Account account) {
@@ -25,7 +25,7 @@ public class AccountEntitlementsProvisioningService {
             return;
         }
 
-        if (entitlementsRepository.existsById(account.getId())) {
+        if (accountEntitlementsRepository.existsById(account.getId())) {
             return;
         }
 
@@ -36,6 +36,6 @@ public class AccountEntitlementsProvisioningService {
                 .maxStorageMb(100)
                 .build();
 
-        entitlementsRepository.save(ent);
+        accountEntitlementsRepository.save(ent);
     }
 }

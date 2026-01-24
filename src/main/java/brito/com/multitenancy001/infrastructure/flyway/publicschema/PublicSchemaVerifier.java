@@ -15,7 +15,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
 @RequiredArgsConstructor
 public class PublicSchemaVerifier {
     
-    private final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbcTemplate;
     
     @EventListener(ApplicationReadyEvent.class)
     public void verifyTables() {
@@ -23,13 +23,13 @@ public class PublicSchemaVerifier {
         
         try {
             // Apenas VERIFICA, não cria
-        	Integer accountsCount = jdbc.queryForObject(
+        	Integer accountsCount = jdbcTemplate.queryForObject(
         		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'accounts'",
         		    Integer.class,
         		    Schemas.CONTROL_PLANE
         		);
 
-        		Integer usersCount = jdbc.queryForObject(
+        		Integer usersCount = jdbcTemplate.queryForObject(
         		    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'controlplane_users'",
         		    Integer.class,
         		    Schemas.CONTROL_PLANE

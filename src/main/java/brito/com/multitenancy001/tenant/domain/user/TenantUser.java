@@ -13,12 +13,14 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
+@DynamicUpdate
 @Entity
 @Table(
     name = "tenant_users",
@@ -28,7 +30,6 @@ import java.util.Set;
     }
 )
 @EntityListeners(AuditEntityListener.class)
-
 @Getter
 @Setter
 @NoArgsConstructor

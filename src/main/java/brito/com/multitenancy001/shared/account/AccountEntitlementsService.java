@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AccountEntitlementsService {
 
-    private final AccountEntitlementsRepository entitlementsRepository;
+    private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     /**
      * Resolve entitlements efetivos da conta:
@@ -29,7 +29,7 @@ public class AccountEntitlementsService {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 
-        AccountEntitlements ent = entitlementsRepository.findById(account.getId())
+        AccountEntitlements ent = accountEntitlementsRepository.findById(account.getId())
                 .orElseThrow(() -> new ApiException(
                         "ENTITLEMENTS_NOT_FOUND",
                         "Entitlements não encontrados para a conta " + account.getId(),

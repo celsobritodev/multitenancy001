@@ -43,7 +43,7 @@ public class ControlPlaneUserService {
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
     private final SecurityUtils securityUtils;
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     private static final Set<String> RESERVED_USERNAMES = Set.of("superadmin", "billing", "support", "operator");
 
@@ -146,7 +146,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req.username() == null || req.username().isBlank()) {
@@ -210,7 +210,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             List<ControlPlaneUser> users = controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId());
@@ -220,7 +220,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             return mapToResponse(user);
@@ -232,7 +232,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("UPDATE");
@@ -283,7 +283,7 @@ public class ControlPlaneUserService {
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
             Long userId, ControlPlaneUserPermissionsUpdateRequest req
     ) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("UPDATE_PERMISSIONS");
@@ -310,7 +310,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public void softDeleteControlPlaneUser(Long userId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("SOFT_DELETE");
@@ -325,7 +325,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("RESTORE");
@@ -349,7 +349,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserSuspended(Long userId, boolean suspended) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
@@ -368,7 +368,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneMeResponse getMe() {
-        return publicUow.readOnly(() -> {
+        return publicUnitOfWork.readOnly(() -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated()) {
                 throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -395,7 +395,7 @@ public class ControlPlaneUserService {
     }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest req) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -440,7 +440,7 @@ public class ControlPlaneUserService {
     }
 
     public void resetControlPlaneUserPassword(Long targetUserId, ControlPlaneUserPasswordResetRequest req) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -541,7 +541,7 @@ public class ControlPlaneUserService {
  // =========================
 
  public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
-     return publicUow.tx(() -> {
+     return publicUnitOfWork.tx(() -> {
          Account controlPlaneAccount = getControlPlaneAccount();
 
          List<ControlPlaneUser> users =
@@ -552,7 +552,7 @@ public class ControlPlaneUserService {
  }
 
  public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
-     return publicUow.tx(() -> {
+     return publicUnitOfWork.tx(() -> {
          Account controlPlaneAccount = getControlPlaneAccount();
 
          ControlPlaneUser user = controlPlaneUserRepository

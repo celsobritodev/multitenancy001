@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 public class TenantCategoryService {
 
-    private final TenantCategoryRepository categoryRepository;
+    private final TenantCategoryRepository tenantCategoryRepository;
     private final AppClock appClock;
 
     // =========================================================
@@ -28,7 +28,7 @@ public class TenantCategoryService {
     public Category findById(Long id) {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
 
-        Category c = categoryRepository.findById(id)
+        Category c = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (c.isDeleted()) {
@@ -40,12 +40,12 @@ public class TenantCategoryService {
 
     @Transactional(readOnly = true)
     public List<Category> findAll() {
-        return categoryRepository.findNotDeleted();
+        return tenantCategoryRepository.findNotDeleted();
     }
 
     @Transactional(readOnly = true)
     public List<Category> findActive() {
-        return categoryRepository.findNotDeletedActive();
+        return tenantCategoryRepository.findNotDeletedActive();
     }
 
     @Transactional(readOnly = true)
@@ -53,12 +53,12 @@ public class TenantCategoryService {
         if (!StringUtils.hasText(name)) {
             throw new ApiException("CATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
         }
-        return categoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
+        return tenantCategoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
     }
 
     @Transactional(readOnly = true)
     public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
-        return categoryRepository.findWithFlags(includeDeleted, includeInactive);
+        return tenantCategoryRepository.findWithFlags(includeDeleted, includeInactive);
     }
 
     // =========================================================
@@ -75,7 +75,7 @@ public class TenantCategoryService {
         String name = category.getName().trim();
 
         // uk_categories_name (global) -> valida para evitar 500
-        categoryRepository.findNotDeletedByNameIgnoreCase(name)
+        tenantCategoryRepository.findNotDeletedByNameIgnoreCase(name)
                 .ifPresent(existing -> {
                     throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + name, 409);
                 });
@@ -84,7 +84,7 @@ public class TenantCategoryService {
         category.setDeleted(false);
         category.setActive(true);
 
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 
     @Transactional
@@ -92,7 +92,7 @@ public class TenantCategoryService {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
         if (req == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
 
-        Category existing = categoryRepository.findById(id)
+        Category existing = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (existing.isDeleted()) {
@@ -103,7 +103,7 @@ public class TenantCategoryService {
             String newName = req.getName().trim();
 
             // valida unicidade
-            categoryRepository.findNotDeletedByNameIgnoreCase(newName)
+            tenantCategoryRepository.findNotDeletedByNameIgnoreCase(newName)
                     .ifPresent(other -> {
                         if (!other.getId().equals(id)) {
                             throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + newName, 409);
@@ -114,12 +114,12 @@ public class TenantCategoryService {
         }
 
         // active é boolean primitivo -> melhor controlar via endpoint específico (toggle)
-        return categoryRepository.save(existing);
+        return tenantCategoryRepository.save(existing);
     }
 
     @Transactional
     public Category toggleActive(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         if (category.isDeleted()) {
@@ -127,24 +127,24 @@ public class TenantCategoryService {
         }
 
         category.setActive(!category.isActive());
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 
     @Transactional
     public void softDelete(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         category.softDelete(appClock.now());
-        categoryRepository.save(category);
+        tenantCategoryRepository.save(category);
     }
 
     @Transactional
     public Category restore(Long id) {
-        Category category = categoryRepository.findById(id)
+        Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
         category.restore();
-        return categoryRepository.save(category);
+        return tenantCategoryRepository.save(category);
     }
 }

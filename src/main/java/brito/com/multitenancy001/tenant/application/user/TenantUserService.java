@@ -9,6 +9,8 @@ import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
+import brito.com.multitenancy001.tenant.api.dto.me.UpdateMyProfileRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
@@ -51,14 +53,14 @@ public class TenantUserService {
         );
     }
     
-    public TenantUserDetailsResponse getMyProfile() {
+    public TenantMeResponse getMyProfile() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.run(schema, () -> {
             TenantUser user = tenantUserTxService.getUser(userId, accountId);
-            return tenantUserApiMapper.toDetails(user);
+            return tenantUserApiMapper.toMe(user);
         });
     }
 
@@ -252,7 +254,7 @@ public class TenantUserService {
     // MY PROFILE
     // =========================================================
 
-    public TenantUserDetailsResponse updateMyProfile(String name, String phone, String locale, String timezone) {
+    public TenantMeResponse updateMyProfile(UpdateMyProfileRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
@@ -261,15 +263,16 @@ public class TenantUserService {
             TenantUser updated = tenantUserTxService.updateProfile(
                     userId,
                     accountId,
-                    name,
-                    phone,
-                    locale,
-                    timezone,
+                    req.name(),
+                    req.phone(),
+                    req.locale(),
+                    req.timezone(),
                     appClock.now()
             );
-            return tenantUserApiMapper.toDetails(updated);
+            return tenantUserApiMapper.toMe(updated);
         });
     }
+
     
     public TenantUserDetailsResponse getEnabledTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();

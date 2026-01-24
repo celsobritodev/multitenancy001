@@ -31,7 +31,7 @@ public class TenantUserProvisioningFacade {
     private final TxExecutor txExecutor;
 
     private final TenantUserRepository tenantUserRepository;
-    private final UsernameGeneratorService usernameGenerator;
+    private final UsernameGeneratorService usernameGeneratorService;
     private final PasswordEncoder passwordEncoder;
 
     private final AppClock appClock;
@@ -113,7 +113,7 @@ public class TenantUserProvisioningFacade {
                     u.setLocale("pt_BR");
 
                     for (int attempt = 0; attempt < 5; attempt++) {
-                        u.setUsername(usernameGenerator.generateFromEmail(emailNorm, accountId));
+                        u.setUsername(usernameGeneratorService.generateFromEmail(emailNorm, accountId));
                         try {
                             return tenantUserRepository.save(u);
                         } catch (DataIntegrityViolationException e) {

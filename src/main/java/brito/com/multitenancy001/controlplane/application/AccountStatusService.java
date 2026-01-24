@@ -19,13 +19,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusService {
 
-    private final PublicUnitOfWork publicUow;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningFacade tenantUserAdminBridge;
+    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
     private final AppClock appClock;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return publicUow.tx(() -> {
+        return publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
             AccountStatus previous = account.getStatus();
@@ -41,11 +41,11 @@ public class AccountStatusService {
             String action = "NONE";
 
             if (req.status() == AccountStatus.SUSPENDED) {
-                affected = tenantUserAdminBridge.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
                 action = "SUSPEND_BY_ACCOUNT";
             } else if (req.status() == AccountStatus.ACTIVE) {
-                affected = tenantUserAdminBridge.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
                 action = "UNSUSPEND_BY_ACCOUNT";
             } else if (req.status() == AccountStatus.CANCELLED) {
@@ -59,7 +59,7 @@ public class AccountStatusService {
     }
 
     public void softDeleteAccount(Long accountId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -71,12 +71,12 @@ public class AccountStatusService {
             account.softDelete(appClock.now());
             accountRepository.save(account);
 
-            tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+            tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
         });
     }
 
     public void restoreAccount(Long accountId) {
-        publicUow.tx(() -> {
+        publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -88,19 +88,19 @@ public class AccountStatusService {
             account.restore();
             accountRepository.save(account);
 
-            tenantUserAdminBridge.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+            tenantUserProvisioningFacade.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
         });
     }
 
     private int cancelAccount(Account account) {
         // Se você quer garantir "marca deleted_at" em TX separada, mantém requiresNew.
-        // Se não precisa, pode trocar por publicUow.tx(...) direto.
-        publicUow.requiresNew(() -> {
+        // Se não precisa, pode trocar por publicUnitOfWork.tx(...) direto.
+        publicUnitOfWork.requiresNew(() -> {
             account.setDeletedAt(appClock.now());
             accountRepository.save(account);
         });
 
-        return tenantUserAdminBridge.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+        return tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
     }
 
     private Account getAccountByIdRaw(Long accountId) {

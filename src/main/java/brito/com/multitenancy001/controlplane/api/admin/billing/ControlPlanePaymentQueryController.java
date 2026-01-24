@@ -19,13 +19,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlanePaymentQueryController {
 
-    private final ControlPlanePaymentQueryService service;
+    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
 
     // ControlPlanePaymentRepository.findByStatus
     @GetMapping("/status/{status}")
     @PreAuthorize("hasAuthority('CP_BILLING_READ')")
     public ResponseEntity<List<PaymentResponse>> findByStatus(@PathVariable PaymentStatus status) {
-        return ResponseEntity.ok(service.findByStatus(status));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.findByStatus(status));
     }
 
     // ControlPlanePaymentRepository.getTotalPaidInPeriod
@@ -36,13 +36,13 @@ public class ControlPlanePaymentQueryController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
-        return ResponseEntity.ok(service.getTotalPaidInPeriod(accountId, startDate, endDate));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.getTotalPaidInPeriod(accountId, startDate, endDate));
     }
 
     // ControlPlanePaymentRepository.countCompletedPayments
     @GetMapping("/accounts/{accountId}/count-completed")
     @PreAuthorize("hasAuthority('CP_BILLING_READ') and hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<Long> countCompleted(@PathVariable Long accountId) {
-        return ResponseEntity.ok(service.countCompletedPayments(accountId));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }
 }

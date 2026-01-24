@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 public class ControlPlanePaymentService {
 
 	private final AccountRepository accountRepository;
-	private final ControlPlanePaymentRepository paymentRepository;
+	private final ControlPlanePaymentRepository controlPlanePaymentRepository;
 	private final SecurityUtils securityUtils;
 	private final AppClock appClock;
 	private final AccountStatusService accountStatusService;
@@ -73,12 +73,12 @@ public class ControlPlanePaymentService {
 	private void checkExpiredPendingPayments(LocalDateTime now) {
 		LocalDateTime thirtyMinutesAgo = now.minusMinutes(30);
 
-		List<Payment> expiredPayments = paymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING,
+		List<Payment> expiredPayments = controlPlanePaymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING,
 				thirtyMinutesAgo);
 
 		for (Payment payment : expiredPayments) {
 			payment.setStatus(PaymentStatus.EXPIRED);
-			paymentRepository.save(payment);
+			controlPlanePaymentRepository.save(payment);
 		}
 	}
 
@@ -106,7 +106,7 @@ public class ControlPlanePaymentService {
 		        .build();
 
 
-		payment = paymentRepository.save(payment);
+		payment = controlPlanePaymentRepository.save(payment);
 
 		boolean ok = processWithPaymentGateway(payment,
 				new PaymentRequest(adminPaymentRequest.amount(), adminPaymentRequest.paymentMethod(),
@@ -140,7 +140,7 @@ public class ControlPlanePaymentService {
 		        .build();
 
 
-		payment = paymentRepository.save(payment);
+		payment = controlPlanePaymentRepository.save(payment);
 
 		boolean ok = processWithPaymentGateway(payment, paymentRequest);
 
@@ -157,7 +157,7 @@ public class ControlPlanePaymentService {
 	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
 		Long accountId = securityUtils.getCurrentAccountId();
 
-		Payment payment = paymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
+		Payment payment = controlPlanePaymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -177,19 +177,19 @@ public class ControlPlanePaymentService {
 
 	@Transactional(readOnly = true)
 	public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-		return paymentRepository.findByAccountId(accountId).stream().map(this::mapToResponse)
+		return controlPlanePaymentRepository.findByAccountId(accountId).stream().map(this::mapToResponse)
 				.collect(Collectors.toList());
 	}
 
 	@Transactional(readOnly = true)
 	public boolean hasActivePayment(Long accountId) {
-	    return paymentRepository.existsActivePayment(accountId, appClock.now());
+	    return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
 	}
 
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentById(Long paymentId) {
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 		return mapToResponse(payment);
 	}
@@ -197,7 +197,7 @@ public class ControlPlanePaymentService {
 	@Transactional
 	public PaymentResponse completePaymentManually(Long paymentId) {
 
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		if (payment.getStatus() != PaymentStatus.PENDING) {
@@ -212,7 +212,7 @@ public class ControlPlanePaymentService {
 	@Transactional
 	public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
 
-		Payment payment = paymentRepository.findById(paymentId)
+		Payment payment = controlPlanePaymentRepository.findById(paymentId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		LocalDateTime now = appClock.now();
@@ -227,13 +227,13 @@ public class ControlPlanePaymentService {
 			payment.refundPartially(now, amount, reason);
 		}
 
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 		return mapToResponse(payment);
 	}
 
 	@Transactional(readOnly = true)
 	public BigDecimal getTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
-		List<Object[]> revenueByAccount = paymentRepository.getRevenueByAccount(startDate, endDate);
+		List<Object[]> revenueByAccount = controlPlanePaymentRepository.getRevenueByAccount(startDate, endDate);
 
 		return revenueByAccount.stream().map(obj -> (BigDecimal) obj[1]).reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
@@ -250,7 +250,7 @@ public class ControlPlanePaymentService {
 
 	private void completePayment(Payment payment, Account account, LocalDateTime now) {
 		payment.markAsCompleted(now);
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 
 		account.setStatus(AccountStatus.ACTIVE);
 		account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
@@ -261,7 +261,7 @@ public class ControlPlanePaymentService {
 
 	private void failPayment(Payment payment, String reason) {
 		payment.markAsFailed(reason);
-		paymentRepository.save(payment);
+		controlPlanePaymentRepository.save(payment);
 	}
 
 	private void validatePayment(Account account, BigDecimal amount, LocalDateTime now) {
@@ -278,7 +278,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("BUILTIN ACCOUNT_NO_BILLING", "Conta BUILTIN não possui billing", 409);
 		}
 
-		boolean hasActive = paymentRepository.existsActivePayment(account.getId(), now);
+		boolean hasActive = controlPlanePaymentRepository.existsActivePayment(account.getId(), now);
 
 		if (hasActive) {
 		    throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
@@ -301,7 +301,7 @@ public class ControlPlanePaymentService {
 		if (accountId == null) {
 			throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 		}
-		return paymentRepository.existsByIdAndAccountId(paymentId, accountId);
+		return controlPlanePaymentRepository.existsByIdAndAccountId(paymentId, accountId);
 	}
 
 	@Transactional(readOnly = true)
@@ -313,7 +313,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
 		}
 
-		return paymentRepository.findByAccountIdAndStatus(accountId, status).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findByAccountIdAndStatus(accountId, status).stream().map(this::mapToResponse).toList();
 	}
 
 	@Transactional(readOnly = true)
@@ -322,7 +322,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
 		}
 
-		Payment payment = paymentRepository.findByTransactionId(transactionId.trim())
+		Payment payment = controlPlanePaymentRepository.findByTransactionId(transactionId.trim())
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -333,7 +333,7 @@ public class ControlPlanePaymentService {
 		if (transactionId == null || transactionId.isBlank()) {
 			throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
 		}
-		return paymentRepository.existsByTransactionId(transactionId.trim());
+		return controlPlanePaymentRepository.existsByTransactionId(transactionId.trim());
 	}
 
 	@Transactional(readOnly = true)
@@ -345,7 +345,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
 		}
 
-		return paymentRepository.findByValidUntilBeforeAndStatus(date, status).stream().map(this::mapToResponse)
+		return controlPlanePaymentRepository.findByValidUntilBeforeAndStatus(date, status).stream().map(this::mapToResponse)
 				.toList();
 	}
 
@@ -355,7 +355,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 		}
 
-		return paymentRepository.findCompletedPaymentsByAccount(accountId).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findCompletedPaymentsByAccount(accountId).stream().map(this::mapToResponse).toList();
 	}
 
 	@Transactional(readOnly = true)
@@ -367,7 +367,7 @@ public class ControlPlanePaymentService {
 			throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
 		}
 
-		return paymentRepository.findPaymentsInPeriod(startDate, endDate).stream().map(this::mapToResponse).toList();
+		return controlPlanePaymentRepository.findPaymentsInPeriod(startDate, endDate).stream().map(this::mapToResponse).toList();
 	}
 
 	private void sendSuspensionEmail(Account account, String reason) {

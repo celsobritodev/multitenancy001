@@ -22,10 +22,10 @@ import java.util.Map;
 public class TenantSchemaHibernateConfig {
 
     private final DataSource dataSource;
-    private final TenantSchemaConnectionProvider multiTenantConnectionProvider;
-    private final CurrentTenantSchemaResolver tenantResolver;
+    private final TenantSchemaConnectionProvider tenantSchemaConnectionProvider;
+    private final CurrentTenantSchemaResolver currentTenantSchemaResolver;
 
-    private final ConfigurableListableBeanFactory beanFactory;
+    private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "tenantEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
@@ -50,11 +50,11 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.multiTenancy", "SCHEMA");
 
         // ✅ Provider/Resolver (use constantes do Hibernate)
-        props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, multiTenantConnectionProvider);
-        props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, tenantResolver);
+        props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, tenantSchemaConnectionProvider);
+        props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, currentTenantSchemaResolver);
 
         // ✅ Hibernate resolve beans do Spring (EntityListeners @Component etc.)
-        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(beanFactory));
+        props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
         return emf;
