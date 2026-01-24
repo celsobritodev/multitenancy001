@@ -2,6 +2,7 @@ package brito.com.multitenancy001.controlplane.api.admin.users;
 
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserCreateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPermissionsUpdateRequest;
 import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserUpdateRequest;
 import brito.com.multitenancy001.controlplane.application.user.ControlPlaneUserService;
@@ -70,7 +71,7 @@ public class ControlPlaneUserController {
     @PreAuthorize("hasAuthority('CP_USER_PASSWORD_RESET')")
     public ResponseEntity<Void> resetPassword(
             @PathVariable Long userId,
-            @Valid @RequestBody brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserPasswordResetRequest request
+            @Valid @RequestBody ControlPlaneUserPasswordResetRequest request
     ) {
         controlPlaneUserService.resetControlPlaneUserPassword(userId, request);
         return ResponseEntity.noContent().build();

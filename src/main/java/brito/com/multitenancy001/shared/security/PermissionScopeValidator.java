@@ -1,7 +1,7 @@
-package brito.com.multitenancy001.infrastructure.security;
+package brito.com.multitenancy001.shared.security;
 
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.domain.DomainException;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 
 import java.util.Collection;
@@ -14,6 +14,9 @@ public final class PermissionScopeValidator {
     // =========================================================
     // STRICT (recomendado): exige prefixo correto SEMPRE
     // =========================================================
+    
+    
+    
 
     public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
@@ -25,14 +28,10 @@ public final class PermissionScopeValidator {
             if (x.isEmpty()) continue;
 
             if (x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + x,
-                        400);
+                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
             }
             if (!x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_FORMAT",
-                        "Permission inválida (esperado prefixo TEN_): " + x,
-                        400);
+                throw new DomainException("Permission inválida (esperado prefixo TEN_): " + x);
             }
             out.add(x);
         }
@@ -49,14 +48,10 @@ public final class PermissionScopeValidator {
             if (x.isEmpty()) continue;
 
             if (x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + x,
-                        400);
+                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
             }
             if (!x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_FORMAT",
-                        "Permission inválida (esperado prefixo CP_): " + x,
-                        400);
+                throw new DomainException("Permission inválida (esperado prefixo CP_): " + x);
             }
             out.add(x);
         }
@@ -77,9 +72,7 @@ public final class PermissionScopeValidator {
             if (x.isEmpty()) continue;
 
             if (x.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + x,
-                        400);
+                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
             }
 
             if (!x.startsWith("TEN_")) x = "TEN_" + x;
@@ -98,9 +91,7 @@ public final class PermissionScopeValidator {
             if (x.isEmpty()) continue;
 
             if (x.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + x,
-                        400);
+                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
             }
 
             if (!x.startsWith("CP_")) x = "CP_" + x;
@@ -110,7 +101,7 @@ public final class PermissionScopeValidator {
     }
 
     // =========================================================
-    // Enum variants (já são estritos por natureza)
+    // Enum variants
     // =========================================================
 
     public static LinkedHashSet<TenantPermission> normalizeTenantPermissions(Collection<TenantPermission> perms) {
@@ -119,22 +110,22 @@ public final class PermissionScopeValidator {
 
         for (TenantPermission p : perms) {
             if (p == null) continue;
+
             String name = p.name();
 
             if (name.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Control Plane não é permitida no Tenant: " + name,
-                        400);
+                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + name);
             }
             if (!name.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission inválida (esperado TEN_): " + name,
-                        400);
+                throw new DomainException("Permission inválida (esperado prefixo TEN_): " + name);
             }
+
             out.add(p);
         }
+
         return out;
     }
+
 
     public static LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissions(Collection<ControlPlanePermission> perms) {
         LinkedHashSet<ControlPlanePermission> out = new LinkedHashSet<>();
@@ -145,17 +136,55 @@ public final class PermissionScopeValidator {
             String name = p.name();
 
             if (name.startsWith("TEN_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission de Tenant não é permitida no Control Plane: " + name,
-                        400);
+                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + name);
             }
             if (!name.startsWith("CP_")) {
-                throw new ApiException("INVALID_PERMISSION_SCOPE",
-                        "Permission inválida (esperado CP_): " + name,
-                        400);
+                throw new DomainException("Permission inválida (esperado CP_): " + name);
             }
             out.add(p);
         }
         return out;
     }
+    
+    // =========================================================
+    // Guards (assert) - úteis para service layer
+    // =========================================================
+
+    /**
+     * Garante que uma lista de permissões (strings) NÃO contenha TEN_*
+     */
+    public static void assertNoTenantPermissionLeak(Collection<String> perms) {
+        if (perms == null) return;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("TEN_")) {
+                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
+            }
+        }
+    }
+
+    /**
+     * Garante que uma lista de permissões (strings) NÃO contenha CP_*
+     */
+    public static void assertNoControlPlanePermissionLeak(Collection<String> perms) {
+        if (perms == null) return;
+
+        for (String p : perms) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("CP_")) {
+                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
+            }
+        }
+    }
+    
+    
+
+    
 }

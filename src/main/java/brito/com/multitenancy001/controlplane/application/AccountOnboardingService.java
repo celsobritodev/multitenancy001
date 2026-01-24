@@ -5,14 +5,16 @@ import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupResponse;
+import brito.com.multitenancy001.controlplane.api.dto.signup.TenantAdminResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import brito.com.multitenancy001.shared.executor.TxExecutor;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,46 +24,56 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountOnboardingService {
 
     private final AccountApiMapper accountApiMapper;
-    private final PublicExecutor publicExecutor;
-    private final TxExecutor txExecutor;
     private final PublicAccountCreationService publicAccountCreationService;
+
     private final TenantSchemaProvisioningFacade tenantProvisioningBridge;
     private final TenantUserProvisioningFacade tenantUserAdminBridge;
-    private final AccountRepository accountRepository;
 
-    public AccountResponse createAccount(SignupRequest signupRequest) {
+    private final AccountRepository accountRepository;
+    private final PublicUnitOfWork publicUow;
+
+    public SignupResponse createAccount(SignupRequest signupRequest) {
         validateSignupRequest(signupRequest);
 
         log.info("Tentando criar conta");
 
-        Account account = txExecutor.publicTx(() ->
-            publicExecutor.run(() -> publicAccountCreationService.createAccountFromSignup(signupRequest))
+        Account account = publicUow.tx(() ->
+                publicAccountCreationService.createAccountFromSignup(signupRequest)
         );
 
         tenantProvisioningBridge.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
-        tenantUserAdminBridge.createTenantOwner(
-            account.getSchemaName(),
-            account.getId(),
-            signupRequest.loginEmail(),
-            signupRequest.password()
+        TenantUser tenantOwner = tenantUserAdminBridge.createTenantOwner(
+                account.getSchemaName(),
+                account.getId(),
+                account.getDisplayName(),      // ✅ ownerDisplayName
+                signupRequest.loginEmail(),
+                signupRequest.password()
         );
 
         log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
                 account.getId(), account.getSchemaName(), account.getSlug());
 
-        return accountApiMapper.toResponse(account);
+        AccountResponse accountResponse = accountApiMapper.toResponse(account);
+
+        TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
+                tenantOwner.getId(),
+                tenantOwner.getEmail(),
+                tenantOwner.getUsername(),
+                tenantOwner.getRole()
+        );
+
+        return new SignupResponse(accountResponse, tenantAdminResponse);
     }
 
     private void validateSignupRequest(SignupRequest signupRequest) {
-    	
-    	if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-    	        "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
-    	)) {
-    	    throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
-    	}
 
-    	
+        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
+        )) {
+            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
+        }
+
         if (!StringUtils.hasText(signupRequest.displayName())) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }

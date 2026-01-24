@@ -1,88 +1,106 @@
 package brito.com.multitenancy001.tenant.security;
 
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Set;
 
+import static brito.com.multitenancy001.tenant.security.TenantPermission.*;
+
 public final class TenantRolePermissions {
+
+    private static final EnumMap<TenantRole, Set<TenantPermission>> MAP = new EnumMap<>(TenantRole.class);
+
+    static {
+        // OWNER = tudo
+        MAP.put(TenantRole.TENANT_OWNER, unmodifiable(EnumSet.allOf(TenantPermission.class)));
+
+        // ADMIN = administra tudo do tenant (conforme seu set de TenantPermission)
+        MAP.put(TenantRole.TENANT_ADMIN, unmodifiable(EnumSet.of(
+                // Users
+                TEN_USER_READ,
+                TEN_USER_CREATE,
+                TEN_USER_UPDATE,
+                TEN_USER_SUSPEND,
+                TEN_USER_RESTORE,
+                TEN_USER_DELETE,
+
+                // Transfer ownership/admin
+                TEN_ROLE_TRANSFER,
+
+                // Products + Inventory
+                TEN_PRODUCT_READ,
+                TEN_PRODUCT_WRITE,
+                TEN_INVENTORY_READ,
+                TEN_INVENTORY_WRITE,
+
+                // Catalog
+                TEN_CATEGORY_READ,
+                TEN_CATEGORY_WRITE,
+                TEN_SUPPLIER_READ,
+                TEN_SUPPLIER_WRITE,
+
+                // Sales + Issues + Reports
+                TEN_SALE_READ,
+                TEN_SALE_WRITE,
+                TEN_SALE_ISSUES_READ,
+                TEN_SALE_ISSUES_WRITE,   // ✅ FIX: seu enum tem WRITE; admin normalmente deve ter
+                TEN_REPORT_SALES_READ,
+
+                // Billing + Settings
+                TEN_BILLING_READ,
+                TEN_BILLING_WRITE,
+                TEN_SETTINGS_READ,
+                TEN_SETTINGS_WRITE
+        )));
+
+        MAP.put(TenantRole.TENANT_PRODUCT_MANAGER, unmodifiable(EnumSet.of(
+                TEN_PRODUCT_READ,
+                TEN_PRODUCT_WRITE,
+                TEN_INVENTORY_READ,
+                TEN_INVENTORY_WRITE
+        )));
+
+        MAP.put(TenantRole.TENANT_SALES_MANAGER, unmodifiable(EnumSet.of(
+                TEN_SALE_READ,
+                TEN_SALE_WRITE,
+                TEN_SALE_ISSUES_READ,
+                TEN_SALE_ISSUES_WRITE,   // ✅ coerente com SALES_MANAGER também (remova se não quiser)
+                TEN_REPORT_SALES_READ
+        )));
+
+        MAP.put(TenantRole.TENANT_BILLING_MANAGER, unmodifiable(EnumSet.of(
+                TEN_BILLING_READ,
+                TEN_BILLING_WRITE
+        )));
+
+        MAP.put(TenantRole.TENANT_READ_ONLY, unmodifiable(EnumSet.of(
+                TEN_PRODUCT_READ,
+                TEN_INVENTORY_READ,
+                TEN_USER_READ
+        )));
+
+        // OPERATOR operacional (não administra usuários/config/billing)
+        MAP.put(TenantRole.TENANT_OPERATOR, unmodifiable(EnumSet.of(
+                TEN_PRODUCT_READ,
+                TEN_INVENTORY_READ,
+                TEN_INVENTORY_WRITE,
+                TEN_SALE_READ
+        )));
+    }
 
     private TenantRolePermissions() {}
 
+    /**
+     * Mantém o mesmo nome do seu método atual.
+     * Retorna Set imutável (consistente com CP).
+     */
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
         if (role == null) return Set.of();
+        return MAP.getOrDefault(role, Set.of());
+    }
 
-        return switch (role) {
-            case TENANT_OWNER -> EnumSet.allOf(TenantPermission.class);
-
-            // ADMIN = “administra tudo” do tenant (conforme seu set de TenantPermission)
-            case TENANT_ADMIN -> EnumSet.of(
-                    // Users
-                    TenantPermission.TEN_USER_READ,
-                    TenantPermission.TEN_USER_CREATE,
-                    TenantPermission.TEN_USER_UPDATE,
-                    TenantPermission.TEN_USER_SUSPEND,
-                    TenantPermission.TEN_USER_RESTORE,
-                    TenantPermission.TEN_USER_DELETE,
-
-                    // Transfer ownership/admin
-                    TenantPermission.TEN_ROLE_TRANSFER,
-
-                    // Products + Inventory
-                    TenantPermission.TEN_PRODUCT_READ,
-                    TenantPermission.TEN_PRODUCT_WRITE,
-                    TenantPermission.TEN_INVENTORY_READ,
-                    TenantPermission.TEN_INVENTORY_WRITE,
-
-                    // Catalog
-                    TenantPermission.TEN_CATEGORY_READ,
-                    TenantPermission.TEN_CATEGORY_WRITE,
-                    TenantPermission.TEN_SUPPLIER_READ,
-                    TenantPermission.TEN_SUPPLIER_WRITE,
-
-                    // Sales + Reports
-                    TenantPermission.TEN_SALE_READ,
-                    TenantPermission.TEN_SALE_WRITE,
-                    TenantPermission.TEN_SALE_ISSUES_READ,
-                    TenantPermission.TEN_REPORT_SALES_READ,
-
-                    // Billing + Settings
-                    TenantPermission.TEN_BILLING_READ,
-                    TenantPermission.TEN_BILLING_WRITE,
-                    TenantPermission.TEN_SETTINGS_READ,
-                    TenantPermission.TEN_SETTINGS_WRITE
-            );
-
-            case TENANT_PRODUCT_MANAGER -> EnumSet.of(
-                    TenantPermission.TEN_PRODUCT_READ,
-                    TenantPermission.TEN_PRODUCT_WRITE,
-                    TenantPermission.TEN_INVENTORY_READ,
-                    TenantPermission.TEN_INVENTORY_WRITE
-            );
-
-            case TENANT_SALES_MANAGER -> EnumSet.of(
-                    TenantPermission.TEN_SALE_READ,
-                    TenantPermission.TEN_SALE_WRITE,
-                    TenantPermission.TEN_SALE_ISSUES_READ,
-                    TenantPermission.TEN_REPORT_SALES_READ
-            );
-
-            case TENANT_BILLING_MANAGER -> EnumSet.of(
-                    TenantPermission.TEN_BILLING_READ,
-                    TenantPermission.TEN_BILLING_WRITE
-            );
-
-            case TENANT_READ_ONLY -> EnumSet.of(
-                    TenantPermission.TEN_PRODUCT_READ,
-                    TenantPermission.TEN_INVENTORY_READ,
-                    TenantPermission.TEN_USER_READ
-            );
-
-            // OPERATOR “operacional” (não administra usuários/config/billing)
-            case TENANT_OPERATOR -> EnumSet.of(
-                    TenantPermission.TEN_PRODUCT_READ,
-                    TenantPermission.TEN_INVENTORY_READ,
-                    TenantPermission.TEN_INVENTORY_WRITE,
-                    TenantPermission.TEN_SALE_READ
-            );
-        };
+    private static Set<TenantPermission> unmodifiable(EnumSet<TenantPermission> set) {
+        return Collections.unmodifiableSet(set);
     }
 }

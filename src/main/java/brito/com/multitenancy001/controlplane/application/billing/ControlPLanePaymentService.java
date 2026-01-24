@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -158,7 +157,7 @@ public class ControlPlanePaymentService {
 	public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
 		Long accountId = securityUtils.getCurrentAccountId();
 
-		Payment payment = paymentRepository.findAnyByIdAndAccountId(paymentId, accountId)
+		Payment payment = paymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
 				.orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
 		return mapToResponse(payment);
@@ -184,8 +183,9 @@ public class ControlPlanePaymentService {
 
 	@Transactional(readOnly = true)
 	public boolean hasActivePayment(Long accountId) {
-		return paymentRepository.findActivePayment(accountId, appClock.now()).isPresent();
+	    return paymentRepository.existsActivePayment(accountId, appClock.now());
 	}
+
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentById(Long paymentId) {
@@ -278,12 +278,16 @@ public class ControlPlanePaymentService {
 			throw new ApiException("BUILTIN ACCOUNT_NO_BILLING", "Conta BUILTIN não possui billing", 409);
 		}
 
-		Optional<Payment> activePayment = paymentRepository.findActivePayment(account.getId(), now);
+		boolean hasActive = paymentRepository.existsActivePayment(account.getId(), now);
 
-		if (activePayment.isPresent()) {
-			throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
+		if (hasActive) {
+		    throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
 		}
-	}
+
+			
+			
+		}
+	
 
 	// =========================================================
 	// ✅ QUERIES / HELPERS para usar métodos do PaymentRepository

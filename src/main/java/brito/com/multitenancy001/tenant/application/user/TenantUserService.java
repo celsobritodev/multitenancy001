@@ -50,6 +50,21 @@ public class TenantUserService {
                 tenantUserTxService.transferTenantOwnerRole(accountId, fromUserId, toUserId)
         );
     }
+    
+    public TenantUserDetailsResponse getMyProfile() {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+        Long userId = securityUtils.getCurrentUserId();
+
+        return tenantExecutor.run(schema, () -> {
+            TenantUser user = tenantUserTxService.getUser(userId, accountId);
+            return tenantUserApiMapper.toDetails(user);
+        });
+    }
+
+
+    
+    
 
     public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();

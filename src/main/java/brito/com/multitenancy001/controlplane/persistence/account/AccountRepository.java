@@ -50,7 +50,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // PROJECTIONS (para evitar expor entidade fora do CP)
     // =========================================================
 
-    Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalse(String slug);
+   
 
     Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
 

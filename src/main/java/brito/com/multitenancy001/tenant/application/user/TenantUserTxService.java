@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.tenant.application.user;
 
-import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;

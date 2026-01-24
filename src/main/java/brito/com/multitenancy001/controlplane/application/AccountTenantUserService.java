@@ -11,7 +11,7 @@ import brito.com.multitenancy001.controlplane.persistence.account.AccountReposit
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,13 +20,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountTenantUserService {
 
-    private final PublicExecutor publicExecutor;
+    private final PublicUnitOfWork publicUow;
     private final AccountRepository accountRepository;
     private final TenantUserProvisioningFacade tenantUserAdminBridge;
     private final AccountUserApiMapper accountUserApiMapper;
 
     public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
-        Account account = publicExecutor.run(() ->
+
+        Account account = publicUow.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
@@ -39,10 +40,9 @@ public class AccountTenantUserService {
                 .toList();
     }
 
-
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
-        Account account = publicExecutor.run(() ->
+        Account account = publicUow.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );

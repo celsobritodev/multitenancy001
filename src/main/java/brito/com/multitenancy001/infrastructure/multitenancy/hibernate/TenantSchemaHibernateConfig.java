@@ -42,6 +42,8 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.hbm2ddl.auto", "none");
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
+        props.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+
 
         // ✅ Multi-tenancy por schema (strategy)
         // (Não use AvailableSettings.MULTI_TENANT — não existe no Hibernate 6)

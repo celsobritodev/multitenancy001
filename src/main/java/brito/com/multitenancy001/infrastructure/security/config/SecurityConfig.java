@@ -87,6 +87,12 @@ public class SecurityConfig {
                 ).permitAll()
 
                 // =========================
+                // ✅ ME (TENANT) fora do prefixo /api/tenant
+                // =========================
+                // libera GET/PUT /api/me e qualquer subrota (se no futuro você criar /api/me/password, etc.)
+                .requestMatchers("/api/me/**").authenticated()
+
+                // =========================
                 // ✅ BOUNDARIES OFICIAIS
                 // =========================
                 .requestMatchers("/api/admin/**").authenticated()

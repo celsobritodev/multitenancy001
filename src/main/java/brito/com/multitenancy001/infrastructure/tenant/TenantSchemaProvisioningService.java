@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.application.provisioning;
+package brito.com.multitenancy001.infrastructure.tenant;
 
 import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
 import brito.com.multitenancy001.shared.api.error.ApiException;

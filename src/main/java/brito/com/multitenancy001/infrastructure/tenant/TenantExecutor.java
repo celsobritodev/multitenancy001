@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
-import brito.com.multitenancy001.tenant.application.provisioning.TenantSchemaProvisioningService;
 
 @Component
 public class TenantExecutor {

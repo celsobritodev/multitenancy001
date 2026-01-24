@@ -22,6 +22,7 @@ public class TenantContext {
 
     /**
      * ✅ Quando você quer um fallback explícito para public.
+     * (Útil pra logs/diagnóstico; no runtime o "public" é representado por null.)
      */
     public static String getOrDefaultPublic() {
         String t = getOrNull();
@@ -34,50 +35,59 @@ public class TenantContext {
     }
 
     public static void bind(String tenantId) {
-    	if (TransactionSynchronizationManager.isActualTransactionActive()) {
-    	    throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
-    	}
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
+        }
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
 
+        // "public" = null (sem tenant)
         if (!StringUtils.hasText(normalized)) {
             CurrentTenantSchemaResolver.bindTenantToCurrentThread(null);
-            log.info("🔄 Tenant limpo (sem tenant) | thread={}", Thread.currentThread().threadId());
+            log.info("🔄 Tenant bindado para PUBLIC (null) | thread={}", Thread.currentThread().threadId());
             return;
         }
 
         CurrentTenantSchemaResolver.bindTenantToCurrentThread(normalized);
-        log.info("🔄 Tenant bindado | thread={} | tenant={}",
-                Thread.currentThread().threadId(),
-                normalized);
+        log.info("🔄 Tenant bindado | thread={} | tenant={}", Thread.currentThread().threadId(), normalized);
     }
 
+    /**
+     * Remove qualquer tenant (equivalente a PUBLIC).
+     * Prefira usar publicScope()/scope() com try-with-resources.
+     */
     public static void clear() {
         CurrentTenantSchemaResolver.unbindTenantFromCurrentThread();
         log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
     }
 
-    // ✅ escopo seguro
+    // ✅ escopo seguro (restaura o tenant anterior ao sair)
     public static Scope scope(String tenantId) {
+        String previous = getOrNull();
         bind(tenantId);
-        return new Scope();
+        return new Scope(previous);
     }
 
-    // ✅ escopo PUBLIC explícito (garante que não ficou tenant pendurado)
+    // ✅ escopo PUBLIC explícito (restaura o tenant anterior ao sair)
     public static Scope publicScope() {
-        clear();
-        return new Scope();
+        String previous = getOrNull();
+        bind(null); // explícito: public = sem tenant
+        return new Scope(previous);
     }
 
     public static final class Scope implements AutoCloseable {
+        private final String previous;
         private boolean closed = false;
 
-        private Scope() {}
+        private Scope(String previous) {
+            this.previous = previous;
+        }
 
         @Override
         public void close() {
             if (!closed) {
-                TenantContext.clear();
+                // restaura exatamente o que estava antes (tenant ou public)
+                TenantContext.bind(previous);
                 closed = true;
             }
         }

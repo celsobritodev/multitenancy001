@@ -28,7 +28,7 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
      * Busca payment por id + account (scoped).
      * "Any" aqui não é sobre deleted; é sobre não aplicar filtros extras (status/data).
      */
-    Optional<Payment> findAnyByIdAndAccountId(Long id, Long accountId);
+    Optional<Payment> findScopedByIdAndAccountId(Long id, Long accountId);
 
     
 
@@ -55,9 +55,7 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' ORDER BY p.paymentDate DESC")
     List<Payment> findCompletedPaymentsByAccount(@Param("accountId") Long accountId);
 
-    @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.validUntil > :now AND p.status = 'COMPLETED'")
-    Optional<Payment> findActivePayment(@Param("accountId") Long accountId, @Param("now") LocalDateTime now);
-
+  
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate")
     BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId,
                                    @Param("startDate") LocalDateTime startDate,
@@ -75,4 +73,21 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
                                        @Param("endDate") LocalDateTime endDate);
 
     boolean existsByTransactionId(String transactionId);
+    
+ // Lista pagamentos de uma conta (mais recentes primeiro)
+    List<Payment> findByAccountIdOrderByCreatedAtDesc(Long accountId);
+
+    // Busca pagamento por id + accountId (protege contra acesso cruzado)
+    Optional<Payment> findByIdAndAccountId(Long id, Long accountId);
+
+    @Query("""
+    	    select (count(p) > 0)
+    	    from Payment p
+    	    where p.account.id = :accountId
+    	      and p.status = brito.com.multitenancy001.shared.domain.billing.PaymentStatus.COMPLETED
+    	      and p.validUntil is not null
+    	      and p.validUntil >= :now
+    	""")
+    	boolean existsActivePayment(@Param("accountId") Long accountId, @Param("now") LocalDateTime now);
+
 }

@@ -1,6 +1,5 @@
 package brito.com.multitenancy001.controlplane.api.dto.accounts;
 
-import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneAdminUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
 import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
@@ -16,6 +15,5 @@ public record AccountResponse(
         AccountType accountType,
         SubscriptionPlan subscriptionPlan,
         LocalDateTime createdAt,
-        LocalDateTime trialEndDate,
-        ControlPlaneAdminUserSummaryResponse admin
+        LocalDateTime trialEndDate
 ) {}

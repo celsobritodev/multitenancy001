@@ -3,7 +3,7 @@ package brito.com.multitenancy001.infrastructure.security.authorities;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRolePermissions;
-import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;

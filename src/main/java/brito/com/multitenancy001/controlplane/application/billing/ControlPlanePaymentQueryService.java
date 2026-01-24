@@ -19,6 +19,9 @@ import lombok.RequiredArgsConstructor;
 public class ControlPlanePaymentQueryService {
 
     private final ControlPlanePaymentRepository paymentRepository;
+    private final brito.com.multitenancy001.shared.time.AppClock appClock;
+
+    
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
@@ -46,6 +49,42 @@ public class ControlPlanePaymentQueryService {
         Long count = paymentRepository.countCompletedPayments(accountId);
         return count != null ? count : 0L;
     }
+    
+    
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> listByAccount(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+
+        return paymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentResponse getByAccount(Long accountId, Long paymentId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+
+        Payment payment = paymentRepository.findByIdAndAccountId(paymentId, accountId)
+                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+
+        return mapToResponse(payment);
+    }
+
+    /**
+     * "Active payment" no seu domínio: eu vou assumir que significa
+     * existir pagamento com status COMPLETED e validUntil >= now.
+     * Ajuste aqui se sua regra for diferente (ex.: status=ACTIVE).
+     */
+    @Transactional(readOnly = true)
+    public boolean hasActivePayment(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+
+        return paymentRepository.existsActivePayment(accountId, appClock.now());
+
+    }
+
 
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(

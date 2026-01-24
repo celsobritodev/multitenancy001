@@ -6,13 +6,13 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
 
-
 @Component
 public class UsernamePolicy {
 
-	public static final String USERNAME_REGEX = "^[a-z0-9._-]+$";
+    public static final String USERNAME_REGEX = "^[a-z0-9._-]+$";
     public static final int USERNAME_MAX_LENGTH = 100;
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9._-]+$");
+
+    private static final Pattern USERNAME_PATTERN = Pattern.compile(USERNAME_REGEX);
 
     private static final String FALLBACK_BASE = "user";
     private static final String SEPARATOR = "_";
@@ -21,7 +21,6 @@ public class UsernamePolicy {
         if (raw == null || raw.isBlank()) return FALLBACK_BASE;
 
         String base = raw.toLowerCase();
-        // opcional: remover acentos (se você quiser aplicar em nome também)
         base = Normalizer.normalize(base, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
 
         base = base.replaceAll("[^a-z0-9._-]", "_")
@@ -37,7 +36,29 @@ public class UsernamePolicy {
         return USERNAME_PATTERN.matcher(username).matches();
     }
 
-    /** Monta base + "_" + suffix respeitando max length, cortando só base */
+    /**
+     * Retorna um candidato "puro" (sem sufixo), já normalizado e truncado no limite do banco.
+     * Ex.: "Vendas@..." -> "vendas"
+     */
+    public String asCandidate(String rawBase) {
+        String base = normalizeBase(rawBase);
+
+        if (base.length() > USERNAME_MAX_LENGTH) {
+            base = base.substring(0, USERNAME_MAX_LENGTH).replaceAll("_+$", "");
+            if (base.isBlank()) base = "u";
+        }
+
+        if (base.length() < 3) {
+            base = FALLBACK_BASE;
+        }
+
+        return base;
+    }
+
+    /**
+     * Monta base + "_" + suffix respeitando max length, cortando só base.
+     * Ex.: vendas + 2 -> vendas_2
+     */
     public String build(String base, String suffix) {
         Objects.requireNonNull(suffix, "suffix");
 

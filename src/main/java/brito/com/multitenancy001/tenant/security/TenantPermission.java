@@ -2,6 +2,11 @@ package brito.com.multitenancy001.tenant.security;
 
 import brito.com.multitenancy001.shared.security.PermissionAuthority;
 
+
+/**
+ * Padrão: TODA permissão de tenant deve iniciar com TEN_
+ */
+
 public enum TenantPermission implements PermissionAuthority {
 
     TEN_USER_READ,

@@ -27,7 +27,7 @@ public class AccountResolver {
         return publicExecutor.run(() -> {
             LocalDateTime now = appClock.now();
 
-            AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalse(slug)
+            AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
             if (!isOperational(p, now)) {

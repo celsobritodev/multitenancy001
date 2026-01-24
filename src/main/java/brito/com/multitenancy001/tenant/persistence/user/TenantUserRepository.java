@@ -164,6 +164,18 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
     Optional<TenantUser> findAnyByIdAndAccountId(@Param("id") Long id,
                                                  @Param("accountId") Long accountId);
+    
+
+    /** Enabled por id: deleted=false e não suspenso (admin nem account). */
+    @Query("""
+        select u
+        from TenantUser u
+        where u.id = :id
+          and u.deleted = false
+          and u.suspendedByAdmin = false
+          and u.suspendedByAccount = false
+    """)
+    Optional<TenantUser> findEnabledById(@Param("id") Long id);
 
    
 

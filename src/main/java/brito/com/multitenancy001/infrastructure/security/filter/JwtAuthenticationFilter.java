@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.infrastructure.security.filter;
 
+import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -54,27 +55,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
         // ✅ TRAVA FORTE (403): token tem que bater com a rota
-        if (requiresControlPlane(httpServletRequest) && "TENANT".equals(authDomain)) {
+        // Ex.: rota tenant com token controlplane => 403
+        if (requiresControlPlane(httpServletRequest) && SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
-        if (requiresTenant(httpServletRequest) && "CONTROLPLANE".equals(authDomain)) {
+        if (requiresTenant(httpServletRequest) && SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
             httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
 
-        // Se chegou aqui, o domínio bate com a área
-        if (requiresControlPlane(httpServletRequest) && !"CONTROLPLANE".equals(authDomain)) {
+        // Se chegou aqui, o domínio "pode" bater com a área.
+        // Se a rota pede ControlPlane, só aceita CONTROLPLANE.
+        if (requiresControlPlane(httpServletRequest) && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
-        if (requiresTenant(httpServletRequest) && !"TENANT".equals(authDomain)) {
+
+        // Se a rota pede Tenant, só aceita TENANT.
+        if (requiresTenant(httpServletRequest) && !SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
 
         // só aceitamos TENANT / CONTROLPLANE aqui
-        if (!"TENANT".equals(authDomain) && !"CONTROLPLANE".equals(authDomain)) {
+        if (!SecurityConstants.AuthDomains.TENANT.equals(authDomain)
+                && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
@@ -89,10 +95,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if ("TENANT".equals(authDomain)) {
+        if (SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
 
-            if (!StringUtils.hasText(tenantSchema) ||Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
+            if (!StringUtils.hasText(tenantSchema) || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
@@ -154,11 +160,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean requiresControlPlane(HttpServletRequest httpServletRequest) {
         String path = httpServletRequest.getRequestURI();
-        return path.startsWith("/api/admin/") || path.startsWith("/api/controlplane/");
+        return path.startsWith(SecurityConstants.ApiPaths.ADMIN_PREFIX)
+                || path.startsWith(SecurityConstants.ApiPaths.CONTROLPLANE_PREFIX);
     }
 
     private boolean requiresTenant(HttpServletRequest httpServletRequest) {
         String path = httpServletRequest.getRequestURI();
-        return path.startsWith("/api/tenant/");
+
+        // ✅ /api/me é tenant (GET/PUT)
+        boolean isMe = SecurityConstants.ApiPaths.ME.equals(path)
+                || path.startsWith(SecurityConstants.ApiPaths.ME_PREFIX);
+
+        return path.startsWith(SecurityConstants.ApiPaths.TENANT_PREFIX) || isMe;
     }
 }

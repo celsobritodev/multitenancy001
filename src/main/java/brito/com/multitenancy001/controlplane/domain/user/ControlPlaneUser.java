@@ -9,12 +9,12 @@ import org.hibernate.annotations.UpdateTimestamp;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 
 import java.time.LocalDateTime;
@@ -145,21 +145,31 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @PrePersist
     @PreUpdate
     private void normalizePermissions() {
-        if (permissions == null) permissions = new LinkedHashSet<>();
-        permissions = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
+        if (permissions == null) {
+            permissions = new LinkedHashSet<>();
+            return;
+        }
+
+        // normaliza sem reatribuir a collection gerenciada
+        var normalized = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
+        permissions.clear();
+        permissions.addAll(normalized);
     }
+
 
     public boolean isAccountNonLocked(LocalDateTime now) {
         return lockedUntil == null || !lockedUntil.isAfter(now);
     }
 
     public boolean isEnabledForLogin() {
-        return !deleted && !suspendedByAccount && !suspendedByAdmin;
+        return isEnabled();
     }
+
 
     public boolean isEnabledForLogin(LocalDateTime now) {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
+
 
     public void softDelete(LocalDateTime now) {
         if (isBuiltInUser()) throw new IllegalStateException("SYSTEM_USER_READONLY");
@@ -175,4 +185,40 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this.suspendedByAccount = false;
         this.suspendedByAdmin = false;
     }
+    
+ // ============================================
+ // State semantics (PADRÃO ÚNICO)
+ // ============================================
+
+ /**
+  * enabled = usuário operacionalmente apto:
+  * - não deletado
+  * - não suspenso pela conta
+  * - não suspenso pelo admin
+  */
+ // ============================================
+ // State semantics (PADRÃO ÚNICO)
+ // ============================================
+
+ /**
+  * enabled = usuário operacionalmente apto:
+  * - não deletado (soft-delete)
+  * - não suspenso pela conta
+  * - não suspenso pelo admin
+  */
+ public boolean isEnabled() {
+     return !deleted && !suspendedByAccount && !suspendedByAdmin;
+ }
+
+ /** notDeleted = apenas soft-delete */
+ public boolean isNotDeleted() {
+     return !deleted;
+ }
+
+ /** suspended = qualquer motivo */
+ public boolean isSuspended() {
+     return suspendedByAccount || suspendedByAdmin;
+ }
+
+
 }

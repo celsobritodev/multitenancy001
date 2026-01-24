@@ -129,4 +129,20 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
     boolean existsOtherNotDeletedByEmailIgnoreCase(@Param("accountId") Long accountId,
                                                    @Param("email") String email,
                                                    @Param("userId") Long userId);
+    
+    
+    
+
+ /** Enabled por id: deleted=false e não suspenso (admin nem account). */
+ @Query("""
+     select u
+     from ControlPlaneUser u
+     where u.id = :id
+       and u.deleted = false
+       and u.suspendedByAdmin = false
+       and u.suspendedByAccount = false
+ """)
+ Optional<ControlPlaneUser> findEnabledById(@Param("id") Long id);
+
+    
 }

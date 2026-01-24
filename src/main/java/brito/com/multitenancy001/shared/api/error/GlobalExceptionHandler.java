@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.shared.api.error;
 
+import brito.com.multitenancy001.shared.domain.DomainException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import lombok.RequiredArgsConstructor;
@@ -196,4 +197,16 @@ public class GlobalExceptionHandler {
                         .build()
         );
     }
+    
+    @ExceptionHandler(DomainException.class)
+    public ResponseEntity<ApiErrorResponse> handleDomainException(DomainException ex) {
+        ApiErrorResponse body = ApiErrorResponse.builder()
+                .timestamp(now())
+                .error("DOMAIN_RULE_VIOLATION")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.badRequest().body(body);
+    }
+
 }

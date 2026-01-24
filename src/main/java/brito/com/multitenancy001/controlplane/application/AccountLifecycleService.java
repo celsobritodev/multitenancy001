@@ -8,13 +8,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountAdminDetailsResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountResponse;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.api.dto.accounts.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupResponse;
 import brito.com.multitenancy001.controlplane.api.dto.users.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
@@ -23,7 +23,8 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -33,27 +34,28 @@ public class AccountLifecycleService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
     private final AccountApiMapper accountApiMapper;
-    private final PublicExecutor publicExecutor;
     private final AccountRepository accountRepository;
     private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
     private final AccountTenantUserService accountTenantUserService;
+    private final PublicUnitOfWork publicUow;
+    private final AppClock appClock;
 
     // =========================================================
     // 1) ONBOARDING / SIGNUP
     // =========================================================
 
-    public AccountResponse createAccount(SignupRequest signupRequest) {
+    public SignupResponse createAccount(SignupRequest signupRequest) {
         return accountOnboardingService.createAccount(signupRequest);
     }
+
 
     // =========================================================
     // 2) CONSULTAS EXISTENTES
     // =========================================================
 
-    @Transactional(readOnly = true)
     public List<AccountResponse> listAccounts() {
-        return publicExecutor.run(() ->
+        return publicUow.readOnly(() ->
                 accountRepository.findAllByDeletedFalse()
                         .stream()
                         .map(accountApiMapper::toResponse)
@@ -61,18 +63,16 @@ public class AccountLifecycleService {
         );
     }
 
-    @Transactional(readOnly = true)
     public AccountResponse getAccount(Long accountId) {
-        return publicExecutor.run(() -> {
+        return publicUow.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
         });
     }
 
-    @Transactional(readOnly = true)
     public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
-        return publicExecutor.run(() -> {
+        return publicUow.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -107,7 +107,7 @@ public class AccountLifecycleService {
     }
 
     // =========================================================
-    // ✅ 4) NOVAS CONSULTAS ADMIN (PAGINAÇÃO + LIMITES)
+    // 4) CONSULTAS ADMIN (PAGINAÇÃO + LIMITES)
     // =========================================================
 
     private static final int DEFAULT_PAGE_SIZE = 20;
@@ -146,32 +146,27 @@ public class AccountLifecycleService {
         }
     }
 
-   
-
-    @Transactional(readOnly = true)
     public Page<AccountResponse> listAccountsLatest(Pageable pageable) {
         Pageable p = normalizePageable(pageable);
 
-        return publicExecutor.run(() ->
+        return publicUow.readOnly(() ->
                 accountRepository.findByDeletedFalseOrderByCreatedAtDesc(p)
                         .map(accountApiMapper::toResponse)
         );
     }
 
-    @Transactional(readOnly = true)
     public AccountResponse getAccountBySlugIgnoreCase(String slug) {
         if (slug == null || slug.isBlank()) {
             throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
         }
 
-        return publicExecutor.run(() -> {
+        return publicUow.readOnly(() -> {
             Account account = accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
             return accountApiMapper.toResponse(account);
         });
     }
 
-    @Transactional(readOnly = true)
     public Page<AccountResponse> listAccountsByStatus(AccountStatus status, Pageable pageable) {
         if (status == null) {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
@@ -179,25 +174,23 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicExecutor.run(() ->
+        return publicUow.readOnly(() ->
                 accountRepository.findByStatusAndDeletedFalse(status, p)
                         .map(accountApiMapper::toResponse)
         );
     }
 
-    @Transactional(readOnly = true)
     public Page<AccountResponse> listAccountsCreatedBetween(LocalDateTime start, LocalDateTime end, Pageable pageable) {
         assertValidCreatedBetweenRange(start, end);
 
         Pageable p = normalizePageable(pageable);
 
-        return publicExecutor.run(() ->
+        return publicUow.readOnly(() ->
                 accountRepository.findAccountsCreatedBetween(start, end, p)
                         .map(accountApiMapper::toResponse)
         );
     }
 
-    @Transactional(readOnly = true)
     public Page<AccountResponse> searchAccountsByDisplayName(String term, Pageable pageable) {
         if (term == null || term.isBlank()) {
             throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
@@ -205,72 +198,63 @@ public class AccountLifecycleService {
 
         Pageable p = normalizePageable(pageable);
 
-        return publicExecutor.run(() ->
+        return publicUow.readOnly(() ->
                 accountRepository.searchByDisplayName(term.trim(), p)
                         .map(accountApiMapper::toResponse)
         );
     }
-    
-    
- // =========================================================
- // ✅ 5) QUERIES ADMIN (usar métodos do AccountRepository)
- // =========================================================
 
- @Transactional(readOnly = true)
- public long countAccountsByStatus(AccountStatus status) {
-     if (status == null) {
-         throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
-     }
-     return publicExecutor.run(() -> accountRepository.countByStatusAndDeletedFalse(status));
- }
+    // =========================================================
+    // 5) QUERIES ADMIN (usar métodos do AccountRepository)
+    // =========================================================
 
- @Transactional(readOnly = true)
- public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
-     if (statuses == null || statuses.isEmpty()) {
-         throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
-     }
+    public long countAccountsByStatus(AccountStatus status) {
+        if (status == null) {
+            throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+        }
+        return publicUow.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
+    }
 
-     return publicExecutor.run(() ->
-             accountRepository.findByStatuses(statuses).stream()
-                     .map(accountApiMapper::toResponse)
-                     .toList()
-     );
- }
+    public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
+        }
 
- @Transactional(readOnly = true)
- public List<AccountResponse> listExpiredTrials(LocalDateTime date, AccountStatus status) {
-     // defaults seguros
-     LocalDateTime d = (date != null ? date : LocalDateTime.now());
-     AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
+        return publicUow.readOnly(() ->
+                accountRepository.findByStatuses(statuses)
+                        .stream()
+                        .map(accountApiMapper::toResponse)
+                        .toList()
+        );
+    }
 
-     return publicExecutor.run(() ->
-             accountRepository.findExpiredTrialsNotDeleted(d, st).stream()
-                     .map(accountApiMapper::toResponse)
-                     .toList()
-     );
- }
+    public List<AccountResponse> listExpiredTrials(LocalDateTime date, AccountStatus status) {
+        LocalDateTime d = (date != null ? date : appClock.now());
+        AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
 
- @Transactional(readOnly = true)
- public List<AccountResponse> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
-     // defaults seguros
-     LocalDateTime t = (today != null ? today : LocalDateTime.now());
-     AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
-
-     return publicExecutor.run(() ->
-             accountRepository.findOverdueAccountsNotDeleted(st, t).stream()
-                     .map(accountApiMapper::toResponse)
-                     .toList()
-     );
- }
- 
- @Transactional(readOnly = true)
- public long countOperationalAccounts() {
-     // Fonte da verdade: operational
-     // (por enquanto chama a query antiga do repository)
-     return publicExecutor.run(accountRepository::countOperationalAccounts);
- }
+        return publicUow.readOnly(() ->
+                accountRepository.findExpiredTrialsNotDeleted(d, st)
+                        .stream()
+                        .map(accountApiMapper::toResponse)
+                        .toList()
+        );
+    }
 
 
- 
+    public List<AccountResponse> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
+        LocalDateTime t = (today != null ? today : appClock.now());
+        AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
+        return publicUow.readOnly(() ->
+                accountRepository.findOverdueAccountsNotDeleted(st, t)
+                        .stream()
+                        .map(accountApiMapper::toResponse)
+                        .toList()
+        );
+    }
+
+
+    public long countOperationalAccounts() {
+        return publicUow.readOnly(accountRepository::countOperationalAccounts);
+    }
 }

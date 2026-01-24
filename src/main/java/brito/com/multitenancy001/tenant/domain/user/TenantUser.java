@@ -4,6 +4,7 @@ import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -90,7 +91,7 @@ public class TenantUser implements Auditable, SoftDeletable
     @Builder.Default
     private boolean suspendedByAdmin = false;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "tenant_user_permissions",
             joinColumns = @JoinColumn(name = "tenant_user_id")
@@ -99,7 +100,7 @@ public class TenantUser implements Auditable, SoftDeletable
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private Set<TenantPermission> permissions = new LinkedHashSet<>();
-    
+
     
     
     @Column(name = "last_login")
@@ -148,28 +149,35 @@ public class TenantUser implements Auditable, SoftDeletable
     @Builder.Default
     private boolean deleted = false;
 
-    @PrePersist
-    @PreUpdate
-    protected void onSave() {
-        if (origin == null) origin = TenantUserOrigin.ADMIN;
-        if (role == null) throw new IllegalStateException("Role is required");
-        if (permissions == null) permissions = new LinkedHashSet<>();
+   @PrePersist
+@PreUpdate
+protected void onSave() {
+    if (origin == null) origin = TenantUserOrigin.ADMIN;
+    if (role == null) throw new IllegalStateException("Role is required");
 
-        if (username != null) username = username.toLowerCase().trim();
-        if (email != null) email = email.toLowerCase().trim();
-
-        if (permissions.isEmpty()) {
-            permissions = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
-        }
-
-        for (TenantPermission p : permissions) {
-            if (p == null) continue;
-            String name = p.name();
-            if (!name.startsWith("TEN_")) {
-                throw new IllegalStateException("Invalid tenant permission scope: " + name);
-            }
-        }
+    if (permissions == null) {
+        permissions = new LinkedHashSet<>();
     }
+
+    if (username != null) username = username.toLowerCase().trim();
+    if (email != null) email = email.toLowerCase().trim();
+
+    // Se não vier permissions, usa o role como default (SEM reatribuir a coleção gerenciada)
+    if (permissions.isEmpty()) {
+        permissions.addAll(TenantRolePermissions.permissionsFor(role));
+    }
+
+    // Normaliza/valida escopo TEN_ e remove nulls, sem reatribuir a collection
+    var normalized = PermissionScopeValidator.normalizeTenantPermissions(permissions);
+
+    // Evita dirty-checking desnecessário quando já está normalizado
+    if (!permissions.equals(normalized)) {
+        permissions.clear();
+        permissions.addAll(normalized);
+    }
+}
+
+
     
     @Embedded
     @Builder.Default
@@ -193,8 +201,9 @@ public class TenantUser implements Auditable, SoftDeletable
     }
 
     public boolean isEnabledForLogin() {
-        return !deleted && !suspendedByAccount && !suspendedByAdmin;
+        return isEnabled();
     }
+
 
     public boolean isEnabledForLogin(LocalDateTime now) {
         return isEnabledForLogin() && isAccountNonLocked(now);
@@ -270,4 +279,30 @@ public class TenantUser implements Auditable, SoftDeletable
         suspendedByAdmin = false;
         // não altera suspendedByAccount aqui
     }
+    
+ // ============================================
+ // State semantics (PADRÃO ÚNICO)
+ // ============================================
+
+ /**
+  * enabled = usuário operacionalmente apto:
+  * - não deletado (soft-delete)
+  * - não suspenso pela conta
+  * - não suspenso pelo admin
+  */
+ public boolean isEnabled() {
+     return !deleted && !suspendedByAccount && !suspendedByAdmin;
+ }
+
+ /** notDeleted = apenas soft-delete */
+ public boolean isNotDeleted() {
+     return !deleted;
+ }
+
+ /** suspended = qualquer motivo */
+ public boolean isSuspended() {
+     return suspendedByAccount || suspendedByAdmin;
+ }
+
+
 }

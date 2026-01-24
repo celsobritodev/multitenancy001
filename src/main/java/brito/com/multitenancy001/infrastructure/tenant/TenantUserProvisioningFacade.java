@@ -6,12 +6,13 @@ import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.application.username.generator.UsernameGeneratorService;
+import brito.com.multitenancy001.tenant.application.user.username.UsernameGeneratorService;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantUserProvisioningFacade {
 
     private static final String REQUIRED_TABLE = "tenant_users";
+    private static final String OWNER_NAME_FALLBACK = "Owner";
 
     private final TenantExecutor tenantExecutor;
     private final TxExecutor txExecutor;
@@ -40,9 +42,9 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantReadOnlyTx(() -> {
 
-                	var users = onlyOperational
-                	        ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
-                	        : tenantUserRepository.findByAccountId(accountId);
+                    var users = onlyOperational
+                            ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
+                            : tenantUserRepository.findByAccountId(accountId);
 
                     return users.stream()
                             .map(u -> new UserSummaryData(
@@ -61,41 +63,66 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    public TenantUser createTenantOwner(String schemaName, Long accountId, String email, String rawPassword) {
+    /**
+     * Primeiro usuário do tenant (TENANT_OWNER).
+     * name = ownerDisplayName (ex.: account.displayName) com fallback.
+     */
+    public TenantUser createTenantOwner(
+            String schemaName,
+            Long accountId,
+            String ownerDisplayName,
+            String email,
+            String rawPassword
+    ) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
                 txExecutor.tenantTx(() -> {
 
-                    boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(email, accountId);
+                    if (accountId == null) {
+                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                    }
+                    if (!StringUtils.hasText(email)) {
+                        throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+                    }
+                    if (!StringUtils.hasText(rawPassword)) {
+                        throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+                    }
+
+                    String emailNorm = email.trim().toLowerCase();
+
+                    boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(emailNorm, accountId);
                     if (emailExists) {
                         throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
                     }
 
+                    String name = StringUtils.hasText(ownerDisplayName)
+                            ? ownerDisplayName.trim()
+                            : OWNER_NAME_FALLBACK;
+
                     TenantUser u = new TenantUser();
                     u.setAccountId(accountId);
-                    u.setName("Administrador");
-                    u.setEmail(email);
+                    u.setName(name);
+                    u.setEmail(emailNorm);
                     u.setPassword(passwordEncoder.encode(rawPassword));
                     u.setRole(TenantRole.TENANT_OWNER);
                     u.setSuspendedByAccount(false);
                     u.setSuspendedByAdmin(false);
 
-                    
                     u.setTimezone("America/Sao_Paulo");
                     u.setLocale("pt_BR");
 
                     for (int attempt = 0; attempt < 5; attempt++) {
-                        u.setUsername(usernameGenerator.generateFromEmail(email, accountId));
+                        u.setUsername(usernameGenerator.generateFromEmail(emailNorm, accountId));
                         try {
                             return tenantUserRepository.save(u);
                         } catch (DataIntegrityViolationException e) {
-                            log.warn("Colisão de username ao criar admin. Tentativa {}. accountId={} email={}",
-                                    attempt + 1, accountId, email);
+                            log.warn("Colisão de username ao criar tenant owner. Tentativa {}. accountId={} email={}",
+                                    attempt + 1, accountId, emailNorm);
                         }
                     }
 
-                    throw new IllegalStateException("Failed to create tenant admin due to repeated username collisions");
+                    throw new IllegalStateException("Failed to create tenant owner due to repeated username collisions");
                 })
         );
     }
@@ -104,12 +131,11 @@ public class TenantUserProvisioningFacade {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-        txExecutor.tenantReadOnlyTx(() -> onlyOperational
-                ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
-                : tenantUserRepository.findByAccountId(accountId)
-        )
-);
-
+                txExecutor.tenantReadOnlyTx(() -> onlyOperational
+                        ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
+                        : tenantUserRepository.findByAccountId(accountId)
+                )
+        );
     }
 
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
@@ -148,14 +174,12 @@ public class TenantUserProvisioningFacade {
                 () -> txExecutor.tenantRequiresNew(() -> {
                     List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
 
-                    // ✅ congela o "agora" uma vez (consistência)
                     LocalDateTime now = appClock.now();
                     long base = appClock.epochMillis();
 
                     long seq = 0;
                     for (TenantUser u : users) {
                         if (!u.isDeleted()) {
-                            // ✅ sufixo por usuário para evitar colisão de username/email
                             u.softDelete(now, base + (seq++));
                             u.setUpdatedAt(now);
                         }

@@ -15,10 +15,10 @@ import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserR
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
-import brito.com.multitenancy001.infrastructure.security.PermissionScopeValidator;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +26,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
@@ -37,7 +35,6 @@ import java.util.Locale;
 import java.util.Set;
 
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
 
@@ -46,19 +43,17 @@ public class ControlPlaneUserService {
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
     private final SecurityUtils securityUtils;
-    private final PublicExecutor publicExecutor;
+    private final PublicUnitOfWork publicUow;
 
     private static final Set<String> RESERVED_USERNAMES = Set.of("superadmin", "billing", "support", "operator");
 
     private Account getControlPlaneAccount() {
-        return publicExecutor.run(() ->
-                accountRepository.findBySlugAndDeletedFalse("controlplane")
-                        .orElseThrow(() -> new ApiException(
-                                "CONTROLPLANE_ACCOUNT_NOT_FOUND",
-                                "Conta controlplane não encontrada. Rode a migration V4__insert_controlplane_account.sql",
-                                500
-                        ))
-        );
+        return accountRepository.findBySlugAndDeletedFalse("controlplane")
+                .orElseThrow(() -> new ApiException(
+                        "CONTROLPLANE_ACCOUNT_NOT_FOUND",
+                        "Conta controlplane não encontrada. Rode a migration V4__insert_controlplane_account.sql",
+                        500
+                ));
     }
 
     private static final Set<ControlPlaneRole> OWNER_CAN_CREATE = EnumSet.of(
@@ -151,7 +146,7 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest req) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req.username() == null || req.username().isBlank()) {
@@ -201,11 +196,9 @@ public class ControlPlaneUserService {
                     .role(roleEnum)
                     .account(controlPlaneAccount)
                     .origin(ControlPlaneUserOrigin.ADMIN)
-                    .suspendedByAccount(false)
-                    .suspendedByAdmin(false)
                     .permissions(normalizedPermissions)
-                    .phone(req.phone())
-                    .avatarUrl(req.avatarUrl())
+                    .mustChangePassword(true)
+                    .passwordChangedAt(appClock.now())
                     .build();
 
             return mapToResponse(controlPlaneUserRepository.save(user));
@@ -213,47 +206,21 @@ public class ControlPlaneUserService {
     }
 
     // =========================
-    // READ
+    // LIST / GET
     // =========================
 
-    @Transactional(readOnly = true)
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
-            return controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId())
-                    .stream()
-                    .map(this::mapToResponse)
-                    .toList();
-        });
-    }
-    
-    @Transactional(readOnly = true)
-    public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
-        return publicExecutor.run(() -> {
-            Account controlPlaneAccount = getControlPlaneAccount();
-            return controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId())
-                    .stream()
-                    .map(this::mapToResponse)
-                    .toList();
+
+            List<ControlPlaneUser> users = controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId());
+
+            return users.stream().map(this::mapToResponse).toList();
         });
     }
 
-    @Transactional(readOnly = true)
-    public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
-        if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
-
-        return publicExecutor.run(() -> {
-            Account controlPlaneAccount = getControlPlaneAccount();
-            ControlPlaneUser u = controlPlaneUserRepository.findEnabledByIdAndAccountId(userId, controlPlaneAccount.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
-            return mapToResponse(u);
-        });
-    }
-
-
-    @Transactional(readOnly = true)
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             return mapToResponse(user);
@@ -265,62 +232,48 @@ public class ControlPlaneUserService {
     // =========================
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest req) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
+            assertOwnerOnly("UPDATE");
+
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
-            assertNotBuiltInUserReadonly(user, "UPDATE_USER");
-
-            if (req.name() != null && !req.name().isBlank()) {
-                user.setName(req.name().trim());
-            }
-
-            if (req.email() != null) {
-                String newEmail = req.email().trim();
-
-                if (newEmail.isBlank()) {
-                    throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
-                }
-
-                if (user.getEmail() == null || !newEmail.equalsIgnoreCase(user.getEmail())) {
-                    boolean existsOther = controlPlaneUserRepository
-                            .existsOtherNotDeletedByEmailIgnoreCase(controlPlaneAccount.getId(), newEmail, user.getId());
-                    if (existsOther) {
-                        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
-                    }
-                    user.setEmail(newEmail);
-                }
-            }
+            assertNotBuiltInUserReadonly(user, "UPDATE");
+            assertNotSelfTarget(userId, "UPDATE");
 
             if (req.username() != null && !req.username().isBlank()) {
-                String newUsername = normalizeUsername(req.username());
-
-                if (!newUsername.matches(ValidationPatterns.USERNAME_PATTERN)) {
+                String username = normalizeUsername(req.username());
+                if (!username.matches(ValidationPatterns.USERNAME_PATTERN)) {
                     throw new ApiException("INVALID_USERNAME", "Username inválido", 400);
                 }
+                assertReservedUsernameOnlyAllowedForBuiltInUsers(username, user.isBuiltInUser());
 
-                assertReservedUsernameOnlyAllowedForBuiltInUsers(newUsername, user.isBuiltInUser());
+                boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByUsernameIgnoreCase(
+                        controlPlaneAccount.getId(), username, user.getId()
+                );
+                if (existsOther) throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
 
-                if (!newUsername.equalsIgnoreCase(user.getUsername())) {
-                    boolean existsOther = controlPlaneUserRepository
-                            .existsOtherNotDeletedByUsernameIgnoreCase(controlPlaneAccount.getId(), newUsername, user.getId());
-                    if (existsOther) {
-                        throw new ApiException("USERNAME_ALREADY_EXISTS", "Username já existe", 409);
-                    }
-                    user.setUsername(newUsername);
-                }
+                user.setUsername(username);
+            }
+
+            if (req.name() != null) {
+                user.setName(req.name());
+            }
+
+            if (req.email() != null && !req.email().isBlank()) {
+                String email = req.email().trim();
+                boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByEmailIgnoreCase(
+                        controlPlaneAccount.getId(), email, user.getId()
+                );
+                if (existsOther) throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já existe", 409);
+
+                user.setEmail(email);
             }
 
             if (req.role() != null) {
-                assertOwnerOnly("UPDATE_ROLE");
+                ControlPlaneRole creatorRole = securityUtils.getCurrentControlPlaneRole();
+                assertCanCreateRole(creatorRole, req.role());
                 user.setRole(req.role());
-            }
-
-            if (req.permissions() != null) {
-                assertOwnerOnly("UPDATE_PERMISSIONS");
-                LinkedHashSet<ControlPlanePermission> normalized =
-                        normalizeControlPlanePermissionsStrict(req.permissions());
-                user.setPermissions(normalized);
             }
 
             return mapToResponse(controlPlaneUserRepository.save(user));
@@ -328,52 +281,51 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
-            Long userId,
-            ControlPlaneUserPermissionsUpdateRequest req
+            Long userId, ControlPlaneUserPermissionsUpdateRequest req
     ) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
-            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
-
-            assertNotBuiltInUserReadonly(user, "UPDATE_PERMISSIONS");
             assertOwnerOnly("UPDATE_PERMISSIONS");
 
-            LinkedHashSet<ControlPlanePermission> normalized =
+            ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
+            assertNotBuiltInUserReadonly(user, "UPDATE_PERMISSIONS");
+
+            LinkedHashSet<ControlPlanePermission> normalizedPermissions =
                     normalizeControlPlanePermissionsStrict(req.permissions());
 
-            user.setPermissions(normalized);
+            // opcional: valida coerência com role
+            PermissionScopeValidator.assertNoTenantPermissionLeak(
+                    normalizedPermissions.stream().map(Enum::name).toList()
+            );
+
+            user.setPermissions(normalizedPermissions);
 
             return mapToResponse(controlPlaneUserRepository.save(user));
         });
     }
 
     // =========================
-    // STATUS / DELETE / RESTORE
+    // SOFT DELETE / RESTORE / SUSPEND
     // =========================
 
     public void softDeleteControlPlaneUser(Long userId) {
-        publicExecutor.run(() -> {
+        publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
+            assertOwnerOnly("SOFT_DELETE");
+            assertNotSelfTarget(userId, "SOFT_DELETE");
+
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
+            assertNotBuiltInUserReadonly(user, "SOFT_DELETE");
 
-            assertNotBuiltInUserReadonly(user, "DELETE");
-            assertOwnerOnly("DELETE");
-            assertNotSelfTarget(userId, "DELETE");
-
-            if (user.getRole() == ControlPlaneRole.CONTROLPLANE_OWNER) {
-                throw new ApiException("OWNER_DELETE_BLOCKED", "Não é permitido remover CONTROLPLANE_OWNER", 409);
-            }
-
-            LocalDateTime now = appClock.now();
-            user.softDelete(now);
+            user.softDelete(appClock.now());
             controlPlaneUserRepository.save(user);
         });
     }
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             assertOwnerOnly("RESTORE");
@@ -397,7 +349,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserSuspended(Long userId, boolean suspended) {
-        return publicExecutor.run(() -> {
+        return publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
@@ -415,9 +367,8 @@ public class ControlPlaneUserService {
     // ME
     // =========================
 
-    @Transactional(readOnly = true)
     public ControlPlaneMeResponse getMe() {
-        return publicExecutor.run(() -> {
+        return publicUow.readOnly(() -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated()) {
                 throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
@@ -444,7 +395,7 @@ public class ControlPlaneUserService {
     }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest req) {
-        publicExecutor.run(() -> {
+        publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -458,7 +409,6 @@ public class ControlPlaneUserService {
             Long meId = securityUtils.getCurrentUserId();
             if (meId == null) throw new ApiException("UNAUTHORIZED", "Usuário não autenticado", 401);
 
-            // ✅ sem active: NOT_DELETED (e depois valida enabled via flags)
             ControlPlaneUser me = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(meId, controlPlaneAccount.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -490,7 +440,7 @@ public class ControlPlaneUserService {
     }
 
     public void resetControlPlaneUserPassword(Long targetUserId, ControlPlaneUserPasswordResetRequest req) {
-        publicExecutor.run(() -> {
+        publicUow.tx(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
 
             if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
@@ -504,7 +454,6 @@ public class ControlPlaneUserService {
             assertOwnerOnly("RESET_PASSWORD");
             assertNotSelfTarget(targetUserId, "RESET_PASSWORD");
 
-            // ✅ sem active
             ControlPlaneUser superAdmin = controlPlaneUserRepository.findNotDeletedSuperAdmin(controlPlaneAccount.getId())
                     .orElseThrow(() -> new ApiException(
                             "SUPERADMIN_NOT_FOUND",
@@ -516,7 +465,6 @@ public class ControlPlaneUserService {
                 throw new ApiException("SUPERADMIN_CANNOT_RESET_SELF", "Superadmin não pode resetar a própria senha", 409);
             }
 
-            // ✅ BUG FIX: era findNotDeletedByAccountId(userId, accountId) -> método errado
             ControlPlaneUser target = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(targetUserId, controlPlaneAccount.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -586,6 +534,39 @@ public class ControlPlaneUserService {
         }
         return out;
     }
+    
+    
+ // =========================
+ // ENABLED (not deleted + not suspended)
+ // =========================
+
+ public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
+     return publicUow.tx(() -> {
+         Account controlPlaneAccount = getControlPlaneAccount();
+
+         List<ControlPlaneUser> users =
+                 controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId());
+
+         return users.stream().map(this::mapToResponse).toList();
+     });
+ }
+
+ public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
+     return publicUow.tx(() -> {
+         Account controlPlaneAccount = getControlPlaneAccount();
+
+         ControlPlaneUser user = controlPlaneUserRepository
+                 .findEnabledByIdAndAccountId(userId, controlPlaneAccount.getId())
+                 .orElseThrow(() -> new ApiException(
+                         "USER_NOT_ENABLED",
+                         "Usuário não encontrado ou não habilitado",
+                         404
+                 ));
+
+         return mapToResponse(user);
+     });
+ }
+
 
     private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
         return new ControlPlaneUserDetailsResponse(
