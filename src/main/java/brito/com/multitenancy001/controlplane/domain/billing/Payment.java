@@ -8,10 +8,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
-import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
 import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

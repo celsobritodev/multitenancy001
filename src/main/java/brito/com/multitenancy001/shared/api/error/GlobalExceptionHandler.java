@@ -6,8 +6,12 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -183,6 +187,34 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(errorResponse);
     }
+    
+    
+    /**
+     * ✅ Login inválido (não vazar se o usuário existe).
+     * - senha errada -> BadCredentialsException
+     * - userDetails falha -> InternalAuthenticationServiceException (wrap do Spring)
+     * - qualquer falha auth -> AuthenticationException
+     */
+    @ExceptionHandler({
+            BadCredentialsException.class,
+            InternalAuthenticationServiceException.class,
+            AuthenticationException.class
+    })
+    public ResponseEntity<ApiEnumErrorResponse> handleAuthentication(AuthenticationException ex) {
+
+        // log detalhado só no server (ajuda debug sem expor para o cliente)
+        log.warn("Authentication failed: {}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(now())
+                        .error("INVALID_USER")
+                        .message("usuario ou senha invalidos")
+                        .build()
+        );
+    }
+
+    
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {

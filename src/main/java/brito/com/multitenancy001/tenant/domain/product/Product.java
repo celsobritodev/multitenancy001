@@ -3,7 +3,7 @@ package brito.com.multitenancy001.tenant.domain.product;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
-import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 import brito.com.multitenancy001.tenant.domain.category.Category;
 import brito.com.multitenancy001.tenant.domain.category.Subcategory;
 import brito.com.multitenancy001.tenant.domain.supplier.Supplier;

@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.infrastructure.audit;
+package brito.com.multitenancy001.shared.persistence.audit;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.shared.domain.audit.AuditActor;

@@ -3,7 +3,7 @@ package brito.com.multitenancy001.tenant.domain.user;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
-import brito.com.multitenancy001.shared.infrastructure.audit.AuditEntityListener;
+import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantPermission;

@@ -40,8 +40,10 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         LocalDateTime now = now();
 
-        TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(username)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
+        // ✅ NÃO use ApiException aqui: Spring Security trata "user não encontrado"
+        String login = (username == null ? "" : username.trim().toLowerCase());
+        TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(login)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
@@ -51,6 +53,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         LocalDateTime now = now();
 
         if (accountId == null) {
+            // ✅ aqui pode continuar ApiException (erro de request/config)
             throw new ApiException(
                     "ACCOUNT_REQUIRED",
                     "accountId é obrigatório para autenticar usuário da controlplane",
@@ -58,13 +61,10 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             );
         }
 
+        // ✅ user não encontrado => UsernameNotFoundException
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByUsernameAndAccount_IdAndDeletedFalse(username, accountId)
-                .orElseThrow(() -> new ApiException(
-                        "USER_NOT_FOUND",
-                        "Usuário controlplane não encontrado para esta conta",
-                        404
-                ));
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
@@ -73,8 +73,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     public UserDetails loadControlPlaneUser(String username) {
         LocalDateTime now = now();
 
+        // ✅ user não encontrado => UsernameNotFoundException
         ControlPlaneUser user = controlPlaneUserRepository.findByUsernameAndDeletedFalse(username)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário controlplane não encontrado", 404));
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
@@ -82,7 +83,8 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     public UserDetails loadTenantUser(String username, Long accountId) {
         String schemaName = TenantContext.getOrNull();
-        if (schemaName == null ||  Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
+        if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
+            // ✅ aqui pode continuar ApiException (erro de contexto)
             throw new ApiException(
                     "TENANT_CONTEXT_REQUIRED",
                     "TenantContext não está bindado para autenticar usuário tenant",
@@ -91,6 +93,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
 
         if (accountId == null) {
+            // ✅ aqui pode continuar ApiException (erro de request/config)
             throw new ApiException(
                     "ACCOUNT_REQUIRED",
                     "accountId é obrigatório para autenticar usuário tenant",
@@ -100,9 +103,10 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         LocalDateTime now = now();
 
+        // ✅ user não encontrado => UsernameNotFoundException
         TenantUser user = tenantUserRepository
                 .findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
-                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado no tenant", 404));
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);

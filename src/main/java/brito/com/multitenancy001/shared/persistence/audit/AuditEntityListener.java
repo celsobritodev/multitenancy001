@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.infrastructure.audit;
+package brito.com.multitenancy001.shared.persistence.audit;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditActor;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
@@ -13,9 +13,7 @@ public class AuditEntityListener {
 
     private AuditActorProvider auditActorProvider;
 
-    // ✅ robusto: Hibernate pode instanciar por reflexão
-    public AuditEntityListener() {
-    }
+    public AuditEntityListener() {}
 
     @Autowired
     public void setProvider(AuditActorProvider auditActorProvider) {
@@ -35,7 +33,9 @@ public class AuditEntityListener {
         var actor = currentActorOrThrow();
         auditable.getAudit().onUpdate(actor);
 
-        if (entity instanceof SoftDeletable softDeletable && softDeletable.isDeleted() && auditable.getAudit().getDeletedBy() == null) {
+        if (entity instanceof SoftDeletable softDeletable
+                && softDeletable.isDeleted()
+                && auditable.getAudit().getDeletedBy() == null) {
             auditable.getAudit().onDelete(actor);
         }
     }
