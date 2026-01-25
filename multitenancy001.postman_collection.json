@@ -477,7 +477,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"vendas\",\n  \"password\": \"admin123\",\n   \"slug\": \"foton-devices-97a7f6\"\n}",
+              "raw": "{\n  \"username\": \"vendas\",\n  \"password\": \"admin123\",\n\"slug\": \"foton-devices-446cad\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
