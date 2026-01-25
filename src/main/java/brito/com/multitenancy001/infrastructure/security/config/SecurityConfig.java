@@ -45,6 +45,16 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
+            		
+            		
+            		// =========================
+            		// 🔓 SWAGGER / OPENAPI
+            		// =========================
+            		.requestMatchers(
+            		    "/v3/api-docs/**",
+            		    "/swagger-ui.html",
+            		    "/swagger-ui/**"
+            		).permitAll()
 
                 // =========================
                 // 🔓 PUBLIC
