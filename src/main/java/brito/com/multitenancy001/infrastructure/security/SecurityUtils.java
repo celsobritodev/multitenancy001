@@ -39,14 +39,7 @@ public class SecurityUtils {
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
     }
     
-    public String getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
-            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
-            return userDetails.getUsername();
-        }
-        return authentication != null ? authentication.getName() : null;
-    }
+  
     
     public String getCurrentRoleAuthority() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -73,6 +66,16 @@ public class SecurityUtils {
             throw new ApiException("FORBIDDEN", "Role não reconhecida: " + roleName, 403);
         }
     }
+    
+    public String getCurrentEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext) {
+            AuthenticatedUserContext userDetails = (AuthenticatedUserContext) authentication.getPrincipal();
+            return userDetails.getEmail();
+        }
+        return authentication != null ? authentication.getName() : null;
+    }
+
     
     
 }

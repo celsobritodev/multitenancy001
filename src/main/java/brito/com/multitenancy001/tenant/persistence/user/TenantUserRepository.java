@@ -1,51 +1,125 @@
 package brito.com.multitenancy001.tenant.persistence.user;
 
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
-	Optional<TenantUser> findByEmailAndDeletedFalse(String email);
+    // =========================================================
+    // LOGIN / IDENTIDADE (email)
+    // =========================================================
 
-	
-	
-	
-    // ==========================
-    // Bulk operations (Tenant)
-    // ==========================
+    Optional<TenantUser> findByEmailAndDeletedFalse(String email);
 
-    // ✅ Suspende por CONTA (sem mexer na suspensão por admin)
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    Optional<TenantUser> findByEmailAndAccountId(String email, Long accountId);
+
+    Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
+
+    boolean existsByEmailAndAccountId(String email, Long accountId);
+
+    boolean existsByEmailAndAccountIdAndIdNot(String email, Long accountId, Long id);
+
+    // =========================================================
+    // PASSWORD RESET
+    // =========================================================
+
+    Optional<TenantUser> findByPasswordResetTokenAndAccountId(String passwordResetToken, Long accountId);
+
+    // =========================================================
+    // LISTS
+    // =========================================================
+
+    List<TenantUser> findByAccountId(Long accountId);
+
+    List<TenantUser> findByAccountIdAndDeletedFalse(Long accountId);
+
+    /**
+     * Enabled = NOT deleted + NOT suspendedByAccount + NOT suspendedByAdmin
+     */
+    List<TenantUser> findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
+
+    /**
+     * Alias legível (evita nome gigante espalhado no projeto).
+     */
+    default List<TenantUser> findEnabledUsersByAccount(Long accountId) {
+        return findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+    }
+
+    // =========================================================
+    // COUNTS / LIMITS
+    // =========================================================
+
+    long countByAccountIdAndDeletedFalse(Long accountId);
+
+    long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
+
+    default long countEnabledUsersByAccount(Long accountId) {
+        return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+    }
+
+    // =========================================================
+    // SCOPED ID (READ)
+    // =========================================================
+
+    /**
+     * DEFAULT (NotDeleted): leitura normal do domínio.
+     */
+    Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
+
+    /**
+     * DEFAULT (Enabled): login/uso ativo.
+     */
     @Query("""
-        update TenantUser u
-           set u.suspendedByAccount = true
-         where u.accountId = :accountId
-           and u.deleted = false
+        select u from TenantUser u
+        where u.id = :id
+          and u.accountId = :accountId
+          and u.deleted = false
+          and u.suspendedByAccount = false
+          and u.suspendedByAdmin = false
     """)
-    int suspendAllByAccount(@Param("accountId") Long accountId);
+    Optional<TenantUser> findEnabledByIdAndAccountId(
+            @Param("id") Long id,
+            @Param("accountId") Long accountId
+    );
 
-    // ✅ Reativa por CONTA (sem mexer na suspensão por admin)
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    /**
+     * ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore.
+     */
     @Query("""
-        update TenantUser u
-           set u.suspendedByAccount = false
-         where u.accountId = :accountId
-           and u.deleted = false
+        select u from TenantUser u
+        where u.id = :id
+          and u.accountId = :accountId
     """)
-    int unsuspendAllByAccount(@Param("accountId") Long accountId);
+    Optional<TenantUser> findIncludingDeletedByIdAndAccountId(
+            @Param("id") Long id,
+            @Param("accountId") Long accountId
+    );
 
-    // ✅ Suspende/Reativa por ADMIN (1 usuário)
+    /**
+     * Alias (mesma coisa do findIncludingDeletedByIdAndAccountId).
+     * Mantido se houver código chamando "findAny...".
+     */
+    default Optional<TenantUser> findAnyByIdAndAccountId(Long id, Long accountId) {
+        return findIncludingDeletedByIdAndAccountId(id, accountId);
+    }
+
+    // =========================================================
+    // UPDATE: SUSPENSÕES
+    // =========================================================
+
+    /**
+     * Suspende/Reativa por ADMIN (1 usuário) - não mexe em suspendedByAccount.
+     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -61,125 +135,85 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("suspended") boolean suspended
     );
 
-    // ==========================
-    // Finds (login / reset)
-    // ==========================
-
-    Optional<TenantUser> findByPasswordResetTokenAndAccountId(String passwordResetToken, Long accountId);
-
-
-
-    Optional<TenantUser> findByEmailAndAccountId(String email, Long accountId);
-
-    Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
-
-
-
-    // ==========================
-    // Exists
-    // ==========================
-
- 
-    boolean existsByEmailAndAccountId(String email, Long accountId);
-
-    boolean existsByEmailAndAccountIdAndIdNot(String email, Long accountId, Long id);
-
-    // ==========================
-    // Lists (Tenant)
-    // ==========================
-
-    List<TenantUser> findByAccountId(Long accountId);
-
-    List<TenantUser> findByAccountIdAndDeletedFalse(Long accountId);
-
-    // "Ativos" = não deletado e não suspenso (por conta e por admin)
-    List<TenantUser> findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
-
-    // ✅ Alias legível (evita nome gigante espalhado no projeto)
-    default List<TenantUser> findEnabledUsersByAccount(Long accountId) {
-        return findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
-    }
-
-    // ==========================
-    // Counts / Limits
-    // ==========================
-
-    // SEATS (Política A): conta todos não deletados
-    long countByAccountIdAndDeletedFalse(Long accountId);
-
-    // ACTIVE_USERS_ONLY: conta não deletados e não suspensos
-    long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
-
-    // ✅ Alias legível (opcional)
-    default long countEnabledUsersByAccount(Long accountId) {
-        return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
-    }
-
-    // ==========================
-    // Scoped ID
-    // ==========================
-
-   
-
-    
-    
-    // ==========================
-    // ⚠️ Bypass consciente: INCLUDING DELETED
-    // Só use para auditoria/suporte/restore.
-    // ==========================
-
-    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
-    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
-    Optional<TenantUser> findIncludingDeletedByIdAndAccountId(@Param("id") Long id,
-                                                              @Param("accountId") Long accountId);
-    
-    
-    // ==========================
-    // Scoped ID
-    // ==========================
+    /**
+     * Suspende/Reativa por CONTA (1 usuário) - não mexe em suspendedByAdmin.
+     * ✅ Este método é necessário porque o TenantUserTxService chama ele.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+        update TenantUser u
+           set u.suspendedByAccount = :suspended
+         where u.id = :userId
+           and u.accountId = :accountId
+           and u.deleted = false
+    """)
+    int setSuspendedByAccount(
+            @Param("accountId") Long accountId,
+            @Param("userId") Long userId,
+            @Param("suspended") boolean suspended
+    );
 
     /**
-     * DEFAULT (NotDeleted): leitura normal do domínio.
+     * Suspende TODOS por CONTA (bulk) - não mexe em suspendedByAdmin.
      */
-    Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+        update TenantUser u
+           set u.suspendedByAccount = true
+         where u.accountId = :accountId
+           and u.deleted = false
+    """)
+    int suspendAllByAccount(@Param("accountId") Long accountId);
 
     /**
-     * DEFAULT (Enabled): login/uso ativo.
-     * enabled = NOT DELETED + NOT suspended (account/admin)
+     * Reativa TODOS por CONTA (bulk) - não mexe em suspendedByAdmin.
      */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("""
-        select u from TenantUser u
-        where u.id = :id
-          and u.accountId = :accountId
-          and u.deleted = false
-          and u.suspendedByAccount = false
-          and u.suspendedByAdmin = false
+        update TenantUser u
+           set u.suspendedByAccount = false
+         where u.accountId = :accountId
+           and u.deleted = false
     """)
-    Optional<TenantUser> findEnabledByIdAndAccountId(@Param("id") Long id,
-                                                     @Param("accountId") Long accountId);
+    int unsuspendAllByAccount(@Param("accountId") Long accountId);
 
-    // ==========================
-    // ⚠️ ANY (bypass consciente): INCLUDING DELETED
-    // ==========================
+    // =========================================================
+    // UPDATE: SOFT DELETE / RESTORE (bulk)
+    // =========================================================
 
-    /** ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore. */
-    @Query("select u from TenantUser u where u.id = :id and u.accountId = :accountId")
-    Optional<TenantUser> findAnyByIdAndAccountId(@Param("id") Long id,
-                                                 @Param("accountId") Long accountId);
-    
-
-    /** Enabled por id: deleted=false e não suspenso (admin nem account). */
+    /**
+     * Soft-delete em massa por conta.
+     * ✅ Necessário porque o TenantUserProvisioningFacade chama este método.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
     @Query("""
-        select u
-        from TenantUser u
-        where u.id = :id
-          and u.deleted = false
-          and u.suspendedByAdmin = false
-          and u.suspendedByAccount = false
+        update TenantUser u
+           set u.deleted = true,
+               u.deletedAt = :deletedAt
+         where u.accountId = :accountId
+           and u.deleted = false
     """)
-    Optional<TenantUser> findEnabledById(@Param("id") Long id);
+    int softDeleteAllByAccount(
+            @Param("accountId") Long accountId,
+            @Param("deletedAt") LocalDateTime deletedAt
+    );
 
-   
-
-   
+    /**
+     * Restore em massa por conta.
+     * ✅ Necessário porque o TenantUserProvisioningFacade chama este método.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+        update TenantUser u
+           set u.deleted = false,
+               u.deletedAt = null
+         where u.accountId = :accountId
+           and u.deleted = true
+    """)
+    int restoreAllByAccount(@Param("accountId") Long accountId);
 }

@@ -31,9 +31,8 @@ public class JwtTokenProvider {
     public static final String CLAIM_ACCOUNT_ID = "accountId";
     public static final String CLAIM_USER_ID = "userId";
 
-    // ✅ NOVO (type-safe no servidor, string no JWT)
-    public static final String CLAIM_ROLE_NAME = "roleName";           // ex: CONTROLPLANE_OWNER
-    public static final String CLAIM_ROLE_AUTHORITY = "roleAuthority"; // ex: ROLE_CONTROLPLANE_OWNER
+    public static final String CLAIM_ROLE_NAME = "roleName";
+    public static final String CLAIM_ROLE_AUTHORITY = "roleAuthority";
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -60,23 +59,18 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    private Date issuedAt() {
-        return Date.from(appClock.instant());
-    }
+    private Date issuedAt() { return Date.from(appClock.instant()); }
 
     private Date expiresAtInMs(long ttlMillis) {
         Instant exp = appClock.instant().plusMillis(ttlMillis);
         return Date.from(exp);
     }
 
-    /* =========================
-       ACCESS TOKEN - CONTROLPLANE
-       ========================= */
     public String generateControlPlaneToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
-                .subject(user.getUsername())
+                .subject(user.getEmail())
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
@@ -84,7 +78,6 @@ public class JwtTokenProvider {
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
-                // ✅ NOVO
                 .claim(CLAIM_ROLE_NAME, user.getRoleName())
                 .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
                 .issuedAt(issuedAt())
@@ -93,14 +86,11 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /* =========================
-       ACCESS TOKEN - TENANT
-       ========================= */
     public String generateTenantToken(Authentication authentication, Long accountId, String context) {
         AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
 
         return Jwts.builder()
-                .subject(user.getUsername())
+                .subject(user.getEmail())
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
@@ -108,7 +98,6 @@ public class JwtTokenProvider {
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
-                // ✅ NOVO
                 .claim(CLAIM_ROLE_NAME, user.getRoleName())
                 .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
                 .issuedAt(issuedAt())
@@ -117,12 +106,9 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /* =========================
-       REFRESH TOKEN
-       ========================= */
-    public String generateRefreshToken(String username, String context) {
+    public String generateRefreshToken(String email, String context) {
         return Jwts.builder()
-                .subject(username)
+                .subject(email)
                 .claim(CLAIM_AUTH_DOMAIN, "REFRESH")
                 .claim(CLAIM_CONTEXT, context)
                 .issuedAt(issuedAt())
@@ -131,14 +117,11 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /* =========================
-       PASSWORD RESET TOKEN
-       ========================= */
-    public String generatePasswordResetToken(String username, String context, Long accountId) {
+    public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;
 
         return Jwts.builder()
-                .subject(username)
+                .subject(email)
                 .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET")
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
@@ -148,9 +131,6 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /* =========================
-       LEITURA DE CLAIMS
-       ========================= */
     public Claims getAllClaimsFromToken(String token) {
         return Jwts.parser()
                 .verifyWith(key)
@@ -159,7 +139,7 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
-    public String getUsernameFromToken(String token) {
+    public String getEmailFromToken(String token) {
         return getAllClaimsFromToken(token).getSubject();
     }
 
@@ -167,9 +147,7 @@ public class JwtTokenProvider {
         Claims claims = getAllClaimsFromToken(token);
 
         String context = claims.get(CLAIM_CONTEXT, String.class);
-        if (context == null) {
-            context = claims.get("tenantSchema", String.class);
-        }
+        if (context == null) context = claims.get("tenantSchema", String.class);
 
         String authDomain = getAuthDomain(token);
 
@@ -203,7 +181,6 @@ public class JwtTokenProvider {
         return authDomain;
     }
 
-    // ✅ NOVO: role no JWT (opcional para debug/front)
     public String getRoleNameFromToken(String token) {
         return getAllClaimsFromToken(token).get(CLAIM_ROLE_NAME, String.class);
     }
@@ -258,23 +235,5 @@ public class JwtTokenProvider {
 
     public boolean isTenantToken(String token) {
         return "TENANT".equals(getAuthDomain(token));
-    }
-
-    public boolean isRefreshToken(String token) {
-        return "REFRESH".equals(getAuthDomain(token));
-    }
-
-    public boolean isPasswordResetToken(String token) {
-        return "PASSWORD_RESET".equals(getAuthDomain(token));
-    }
-
-    public boolean isTokenInContext(String token, String expectedContext) {
-        String actualContext = getContextFromToken(token);
-        return expectedContext.equals(actualContext);
-    }
-
-    public boolean isControlPlaneContextToken(String token) {
-        String context = getContextFromToken(token);
-        return Schemas.CONTROL_PLANE.equals(context);
     }
 }

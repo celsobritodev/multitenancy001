@@ -413,10 +413,9 @@ public class ControlPlaneUserService {
             me.setMustChangePassword(false);
             me.setPasswordChangedAt(appClock.now());
 
-            me.setFailedLoginAttempts(0);
-            me.setLockedUntil(null);
-            me.setPasswordResetToken(null);
-            me.setPasswordResetExpires(null);
+            me.clearSecurityLockState();
+            me.clearPasswordResetToken();
+
 
             controlPlaneUserRepository.save(me);
         });
@@ -467,10 +466,8 @@ public class ControlPlaneUserService {
             target.setMustChangePassword(true);
             target.setPasswordChangedAt(appClock.now());
 
-            target.setFailedLoginAttempts(0);
-            target.setLockedUntil(null);
-            target.setPasswordResetToken(null);
-            target.setPasswordResetExpires(null);
+            target.clearSecurityLockState();
+            target.clearPasswordResetToken();
 
             controlPlaneUserRepository.save(target);
         });

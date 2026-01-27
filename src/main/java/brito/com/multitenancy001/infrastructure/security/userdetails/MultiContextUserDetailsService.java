@@ -26,34 +26,39 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     private final TenantUserRepository tenantUserRepository;
     private final AppClock appClock;
 
-    private LocalDateTime now() {
-        return appClock.now();
+    private LocalDateTime now() { return appClock.now(); }
+
+    private static String normalizeEmail(String raw) {
+        return raw == null ? null : raw.trim().toLowerCase();
     }
 
+    // ✅ COLOQUE AQUI (dentro da classe)
+    private static void assertEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new UsernameNotFoundException("INVALID_USER");
+        }
+    }
+
+    /**
+     * Spring Security exige essa assinatura, mas aqui tratamos o parâmetro como EMAIL.
+     */
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         String schemaName = TenantContext.getOrNull();
 
+        // CONTROL PLANE continua normal (email é único globalmente)
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
-            return loadControlPlaneUser(username);
+            return loadControlPlaneUserByEmail(email);
         }
 
-        LocalDateTime now = now();
-
-        // ✅ NÃO use ApiException aqui: Spring Security trata "user não encontrado"
-        String loginEmail = (username == null ? "" : username.trim().toLowerCase());
-        TenantUser user = tenantUserRepository.findByEmailAndDeletedFalse(loginEmail)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
-
-        var authorities = AuthoritiesFactory.forTenant(user);
-        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
+        // 🔒 TENANT: nunca autentica sem accountId
+        throw new UsernameNotFoundException("TENANT_LOGIN_REQUIRES_ACCOUNT");
     }
 
-    public UserDetails loadControlPlaneUser(String username, Long accountId) {
+    public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
         LocalDateTime now = now();
 
         if (accountId == null) {
-            // ✅ aqui pode continuar ApiException (erro de request/config)
             throw new ApiException(
                     "ACCOUNT_REQUIRED",
                     "accountId é obrigatório para autenticar usuário da controlplane",
@@ -61,31 +66,33 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             );
         }
 
-        // ✅ user não encontrado => UsernameNotFoundException
+        String loginEmail = normalizeEmail(email);
+        assertEmail(loginEmail);
+
         ControlPlaneUser user = controlPlaneUserRepository
-                .findByEmailAndAccount_IdAndDeletedFalse(username, accountId)
+                .findByEmailAndAccount_IdAndDeletedFalse(loginEmail, accountId)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
-    public UserDetails loadControlPlaneUser(String username) {
+    public UserDetails loadControlPlaneUserByEmail(String email) {
         LocalDateTime now = now();
 
-        // ✅ user não encontrado => UsernameNotFoundException
-        ControlPlaneUser user = controlPlaneUserRepository.findByEmailAndDeletedFalse(username)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+        String loginEmail = normalizeEmail(email);
+        assertEmail(loginEmail);
 
+        ControlPlaneUser user = controlPlaneUserRepository.findByEmailAndDeletedFalse(loginEmail)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
-    public UserDetails loadTenantUser(String username, Long accountId) {
+    public UserDetails loadTenantUserByEmail(String email, Long accountId) {
         String schemaName = TenantContext.getOrNull();
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
-            // ✅ aqui pode continuar ApiException (erro de contexto)
             throw new ApiException(
                     "TENANT_CONTEXT_REQUIRED",
                     "TenantContext não está bindado para autenticar usuário tenant",
@@ -94,7 +101,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
 
         if (accountId == null) {
-            // ✅ aqui pode continuar ApiException (erro de request/config)
             throw new ApiException(
                     "ACCOUNT_REQUIRED",
                     "accountId é obrigatório para autenticar usuário tenant",
@@ -104,11 +110,12 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         LocalDateTime now = now();
 
-        // ✅ user não encontrado => UsernameNotFoundException
-        TenantUser user = tenantUserRepository
-                .findByEmailAndDeletedFalse(username)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+        String loginEmail = normalizeEmail(email);
+        assertEmail(loginEmail);
 
+        TenantUser user = tenantUserRepository
+                .findByEmailAndAccountIdAndDeletedFalse(loginEmail, accountId)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);

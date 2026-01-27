@@ -19,30 +19,42 @@ public class AuditInfo {
     @Column(name = "deleted_by")
     private Long deletedBy;
 
-    @Column(name = "created_by_username", length = 120)
-    private String createdByUsername;
+    @Column(name = "created_by_email", length = 150)
+    private String createdByEmail;
 
-    @Column(name = "updated_by_username", length = 120)
-    private String updatedByUsername;
+    @Column(name = "updated_by_email", length = 150)
+    private String updatedByEmail;
 
-    @Column(name = "deleted_by_username", length = 120)
-    private String deletedByUsername;
+    @Column(name = "deleted_by_email", length = 150)
+    private String deletedByEmail;
 
     public void onCreate(AuditActor actor) {
+        if (actor == null) return;
+
         if (this.createdBy == null) this.createdBy = actor.userId();
-        if (this.createdByUsername == null) this.createdByUsername = actor.username();
+        if (this.createdByEmail == null) this.createdByEmail = safeEmail(actor.email());
 
         this.updatedBy = actor.userId();
-        this.updatedByUsername = actor.username();
+        this.updatedByEmail = safeEmail(actor.email());
     }
 
     public void onUpdate(AuditActor actor) {
+        if (actor == null) return;
+
         this.updatedBy = actor.userId();
-        this.updatedByUsername = actor.username();
+        this.updatedByEmail = safeEmail(actor.email());
     }
 
     public void onDelete(AuditActor actor) {
+        if (actor == null) return;
+
         this.deletedBy = actor.userId();
-        this.deletedByUsername = actor.username();
+        this.deletedByEmail = safeEmail(actor.email());
+    }
+
+    private static String safeEmail(String email) {
+        if (email == null) return null;
+        String v = email.trim().toLowerCase();
+        return v.length() <= 150 ? v : v.substring(0, 150);
     }
 }

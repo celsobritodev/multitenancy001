@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS sales (
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_username VARCHAR(120),
-  updated_by_username VARCHAR(120),
-  deleted_by_username VARCHAR(120)
+  created_by_email VARCHAR(120),
+  updated_by_email VARCHAR(120),
+  deleted_by_email VARCHAR(120)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);

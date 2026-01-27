@@ -23,8 +23,17 @@ public class AuditEntityListener {
     @PrePersist
     public void prePersist(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
-        auditable.getAudit().onCreate(currentActorOrThrow());
+
+        var actor = currentActorOrThrow();
+        auditable.getAudit().onCreate(actor);
+
+        if (entity instanceof SoftDeletable softDeletable
+                && softDeletable.isDeleted()
+                && auditable.getAudit().getDeletedBy() == null) {
+            auditable.getAudit().onDelete(actor);
+        }
     }
+
 
     @PreUpdate
     public void preUpdate(Object entity) {

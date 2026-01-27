@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.application.billing;
 
-import brito.com.multitenancy001.controlplane.application.billing.ControlPlanePaymentQueryService;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.shared.billing.PaymentQueryFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,20 +12,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantBillingService {
 
-    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
+    private final PaymentQueryFacade paymentQueryFacade;
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
-        return controlPlanePaymentQueryService.listByAccount(accountId);
+        return paymentQueryFacade.listByAccount(accountId);
     }
 
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
-        return controlPlanePaymentQueryService.getByAccount(accountId, paymentId);
+        return paymentQueryFacade.getByAccount(accountId, paymentId);
     }
 
     @Transactional(readOnly = true)
     public boolean hasActivePayment(Long accountId) {
-        return controlPlanePaymentQueryService.hasActivePayment(accountId);
+        return paymentQueryFacade.hasActivePayment(accountId);
     }
 }

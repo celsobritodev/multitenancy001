@@ -16,6 +16,6 @@ public class AuditActorProvider {
             return AuditActor.system();
         }
 
-        return new AuditActor(ctx.getUserId(), ctx.getUsername());
+        return new AuditActor(ctx.getUserId(), ctx.getEmail());
     }
 }

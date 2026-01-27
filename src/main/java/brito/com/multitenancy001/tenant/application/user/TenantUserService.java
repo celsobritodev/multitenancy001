@@ -151,6 +151,19 @@ public class TenantUserService {
             return tenantUserApiMapper.toSummary(updated);
         });
     }
+    
+    
+    public TenantUserSummaryResponse setTenantUserSuspendedByAccount(Long userId, boolean suspended) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+
+        return tenantExecutor.run(schema, () -> {
+            tenantUserTxService.setSuspendedByAccount(accountId, userId, suspended);
+            TenantUser updated = tenantUserTxService.getUser(userId, accountId);
+            return tenantUserApiMapper.toSummary(updated);
+        });
+    }
+
 
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -190,48 +203,48 @@ public class TenantUserService {
     // PASSWORD RESET (PUBLIC -> TENANT)
     // =========================================================
 
-    public String generatePasswordResetToken(String slug, String usernameOrEmail) {
-        if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
-        if (!StringUtils.hasText(usernameOrEmail)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
+   public String generatePasswordResetToken(String slug, String email) {
+    if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
+    if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
-        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
+    AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        return tenantExecutor.run(account.schemaName(), () -> {
-            TenantUser user = tenantUserTxService.getUserByUsernameOrEmail(usernameOrEmail, account.id());
+    return tenantExecutor.run(account.schemaName(), () -> {
+        TenantUser user = tenantUserTxService.getUserByEmail(email, account.id());
 
-            if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
-                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-            }
+        if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+        }
 
-            // legacy: campo “username” do token = email
-            String token = jwtTokenProvider.generatePasswordResetToken(
-                    user.getEmail(),
-                    account.schemaName(),
-                    account.id()
-            );
-
-            user.setPasswordResetToken(token);
-            user.setPasswordResetExpires(appClock.now().plusHours(1));
-            tenantUserTxService.save(user);
-
-            return token;
-        });
-    }
-
-    public void resetPasswordWithToken(String token, String newPassword) {
-        if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
-
-        String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
-        Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
-
-        // legacy “username” = email
-        String username = jwtTokenProvider.getUsernameFromToken(token);
-
-        tenantExecutor.run(schema, () ->
-                tenantUserTxService.resetPasswordWithToken(accountId, username, token, newPassword)
+        String token = jwtTokenProvider.generatePasswordResetToken(
+                user.getEmail(),
+                account.schemaName(),
+                account.id()
         );
-    }
+
+        user.setPasswordResetToken(token);
+        user.setPasswordResetExpires(appClock.now().plusHours(1));
+        tenantUserTxService.save(user);
+
+        return token;
+    });
+}
+
+
+   public void resetPasswordWithToken(String token, String newPassword) {
+    if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
+    if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+
+    String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
+    Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
+
+    String email = jwtTokenProvider.getEmailFromToken(token);
+
+    tenantExecutor.run(schema, () ->
+            tenantUserTxService.resetPasswordWithToken(accountId, email, token, newPassword)
+    );
+}
+
 
     // =========================================================
     // MY PROFILE

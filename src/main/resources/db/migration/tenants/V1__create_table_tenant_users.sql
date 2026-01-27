@@ -36,19 +36,17 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     updated_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
-
     deleted_by BIGINT,
 
-    created_by_username VARCHAR(120),
-    updated_by_username VARCHAR(120),
-    deleted_by_username VARCHAR(120),
+    created_by_email VARCHAR(120),
+    updated_by_email VARCHAR(120),
+    deleted_by_email VARCHAR(120),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
 
     CONSTRAINT chk_tenant_user_origin CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API')),
 
-    -- ✅ email único por account dentro do schema do tenant (mesmo que o schema tenha só 1 account)
     CONSTRAINT uk_tenant_users_email_account UNIQUE (email, account_id)
 );
 

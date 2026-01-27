@@ -14,9 +14,6 @@ public final class PermissionScopeValidator {
     // =========================================================
     // STRICT (recomendado): exige prefixo correto SEMPRE
     // =========================================================
-    
-    
-    
 
     public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
@@ -101,9 +98,13 @@ public final class PermissionScopeValidator {
     }
 
     // =========================================================
-    // Enum variants
+    // Enum variants (TIPADAS)
     // =========================================================
 
+    /**
+     * Normaliza/valida permissões do Tenant em formato enum.
+     * Regra: não aceita CP_*, e exige prefixo TEN_*.
+     */
     public static LinkedHashSet<TenantPermission> normalizeTenantPermissions(Collection<TenantPermission> perms) {
         LinkedHashSet<TenantPermission> out = new LinkedHashSet<>();
         if (perms == null) return out;
@@ -126,7 +127,10 @@ public final class PermissionScopeValidator {
         return out;
     }
 
-
+    /**
+     * Normaliza/valida permissões do ControlPlane em formato enum.
+     * Regra: não aceita TEN_*, e exige prefixo CP_*.
+     */
     public static LinkedHashSet<ControlPlanePermission> normalizeControlPlanePermissions(Collection<ControlPlanePermission> perms) {
         LinkedHashSet<ControlPlanePermission> out = new LinkedHashSet<>();
         if (perms == null) return out;
@@ -145,7 +149,27 @@ public final class PermissionScopeValidator {
         }
         return out;
     }
-    
+
+    // =========================================================
+    // Aliases SEMÂNTICOS (para ficar claro no service layer)
+    // =========================================================
+
+    /**
+     * Alias semântico usado nos services:
+     * "validateTenantPermissionsStrict" = valida e devolve set normalizado.
+     */
+    public static LinkedHashSet<TenantPermission> validateTenantPermissionsStrict(Collection<TenantPermission> perms) {
+        return normalizeTenantPermissions(perms);
+    }
+
+    /**
+     * Alias semântico usado nos services:
+     * "validateControlPlanePermissionsStrict" = valida e devolve set normalizado.
+     */
+    public static LinkedHashSet<ControlPlanePermission> validateControlPlanePermissionsStrict(Collection<ControlPlanePermission> perms) {
+        return normalizeControlPlanePermissions(perms);
+    }
+
     // =========================================================
     // Guards (assert) - úteis para service layer
     // =========================================================
@@ -183,8 +207,4 @@ public final class PermissionScopeValidator {
             }
         }
     }
-    
-    
-
-    
 }

@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_username VARCHAR(120),
-    updated_by_username VARCHAR(120),
-    deleted_by_username VARCHAR(120),
+    created_by_email VARCHAR(120),
+    updated_by_email VARCHAR(120),
+    deleted_by_email VARCHAR(120),
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 
@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
         CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API'))
 );
 
--- ✅ email único por conta (somente ativos)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
 ON controlplane_users (account_id, email)
 WHERE deleted = false;

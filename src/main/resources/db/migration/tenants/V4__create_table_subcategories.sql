@@ -13,22 +13,20 @@ CREATE TABLE IF NOT EXISTS subcategories (
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP,
   
-    -- AUDITORIA
+  -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_username VARCHAR(120),
-  updated_by_username VARCHAR(120),
-  deleted_by_username VARCHAR(120),
-
+  created_by_email VARCHAR(120),
+  updated_by_email VARCHAR(120),
+  deleted_by_email VARCHAR(120),
 
   CONSTRAINT fk_subcategories_category
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
 
   CONSTRAINT uk_subcategories_name_category UNIQUE (category_id, name)
 );
-
 
 CREATE INDEX IF NOT EXISTS idx_subcategories_active      ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted     ON subcategories(deleted) WHERE deleted = false;

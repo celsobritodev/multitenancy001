@@ -52,7 +52,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // ✅ authDomain = TENANT/CONTROLPLANE/...
         final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
-        final String username = jwtTokenProvider.getUsernameFromToken(jwt);
+        final String emailRaw = jwtTokenProvider.getEmailFromToken(jwt);
+        final String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
 
         // ✅ TRAVA FORTE (403): token tem que bater com a rota
         // Ex.: rota tenant com token controlplane => 403
@@ -85,7 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!StringUtils.hasText(username)) {
+        if (!StringUtils.hasText(email)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
@@ -117,7 +118,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // ✅ escopo seguro: sempre limpa no final
             try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
 
-                UserDetails userDetails = multiContextUserDetailsService.loadTenantUser(username, accountId);
+                UserDetails userDetails = multiContextUserDetailsService.loadTenantUserByEmail(email, accountId);
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
@@ -144,7 +145,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUser(username, accountId);
+            UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
 
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(

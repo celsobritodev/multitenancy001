@@ -13,8 +13,8 @@ import brito.com.multitenancy001.controlplane.persistence.account.AccountReposit
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,10 +43,10 @@ public class AccountOnboardingService {
 
         tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
-        TenantUser tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
+        UserSummaryData tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
                 account.getSchemaName(),
                 account.getId(),
-                account.getDisplayName(),      // ✅ ownerDisplayName
+                account.getDisplayName(),
                 signupRequest.loginEmail(),
                 signupRequest.password()
         );
@@ -57,21 +57,19 @@ public class AccountOnboardingService {
         AccountResponse accountResponse = accountApiMapper.toResponse(account);
 
         TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
-                tenantOwner.getId(),
-                tenantOwner.getEmail(),
-        
-                tenantOwner.getRole()
+                tenantOwner.id(),
+                tenantOwner.email(),
+                tenantOwner.role()
         );
+
+
 
         return new SignupResponse(accountResponse, tenantAdminResponse);
     }
 
     private void validateSignupRequest(SignupRequest signupRequest) {
-
-        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
-        )) {
-            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
+        if (signupRequest == null) {
+            throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         }
 
         if (!StringUtils.hasText(signupRequest.displayName())) {
@@ -82,7 +80,9 @@ public class AccountOnboardingService {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
 
-        if (!signupRequest.loginEmail().contains("@")) {
+        String email = signupRequest.loginEmail().trim().toLowerCase();
+
+        if (!email.contains("@")) {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
@@ -102,12 +102,20 @@ public class AccountOnboardingService {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        if (accountRepository.existsByLoginEmailAndDeletedFalse(signupRequest.loginEmail())) {
+        if (accountRepository.existsByLoginEmailAndDeletedFalse(email)) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
         if (accountRepository.existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(
                 signupRequest.taxIdType(), signupRequest.taxIdNumber()
+        )) {
+            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
+        }
+
+        // Se você quer travar especificamente "BR" aqui, ok.
+        // Caso deseje tornar multi-país, troque para signupRequest.taxCountryCode().
+        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }

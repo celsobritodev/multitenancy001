@@ -11,19 +11,19 @@ import brito.com.multitenancy001.controlplane.domain.billing.Payment;
 import brito.com.multitenancy001.controlplane.persistence.billing.ControlPlanePaymentRepository;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.billing.PaymentQueryFacade;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class ControlPlanePaymentQueryService {
+public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
 
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
     private final brito.com.multitenancy001.shared.time.AppClock appClock;
 
-    
-
     @Transactional(readOnly = true)
+    @Override
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
         if (status == null) throw new ApiException("PAYMENT_STATUS_REQUIRED", "status é obrigatório", 400);
 
@@ -34,6 +34,7 @@ public class ControlPlanePaymentQueryService {
     }
 
     @Transactional(readOnly = true)
+    @Override
     public BigDecimal getTotalPaidInPeriod(Long accountId, LocalDateTime startDate, LocalDateTime endDate) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (startDate == null || endDate == null) throw new ApiException("DATE_RANGE_REQUIRED", "startDate/endDate são obrigatórios", 400);
@@ -43,15 +44,16 @@ public class ControlPlanePaymentQueryService {
     }
 
     @Transactional(readOnly = true)
+    @Override
     public long countCompletedPayments(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
         Long count = controlPlanePaymentRepository.countCompletedPayments(accountId);
         return count != null ? count : 0L;
     }
-    
-    
+
     @Transactional(readOnly = true)
+    @Override
     public List<PaymentResponse> listByAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
@@ -62,6 +64,7 @@ public class ControlPlanePaymentQueryService {
     }
 
     @Transactional(readOnly = true)
+    @Override
     public PaymentResponse getByAccount(Long accountId, Long paymentId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
@@ -73,18 +76,17 @@ public class ControlPlanePaymentQueryService {
     }
 
     /**
-     * "Active payment" no seu domínio: eu vou assumir que significa
+     * "Active payment" no seu domínio: assume que significa
      * existir pagamento com status COMPLETED e validUntil >= now.
      * Ajuste aqui se sua regra for diferente (ex.: status=ACTIVE).
      */
     @Transactional(readOnly = true)
+    @Override
     public boolean hasActivePayment(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
         return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
-
     }
-
 
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(

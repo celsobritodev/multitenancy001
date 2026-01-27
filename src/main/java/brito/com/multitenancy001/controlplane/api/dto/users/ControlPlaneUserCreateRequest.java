@@ -18,11 +18,6 @@ public record ControlPlaneUserCreateRequest(
         @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
         String name,
 
-        @NotBlank(message = "Username é obrigatório")
-        @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido...")
-        @Size(min = 3, max = 50, message = "Username deve ter entre 3 e 50 caracteres")
-        String username,
-
         @NotBlank(message = "Email é obrigatório")
         @Email(message = "Email inválido")
         @Size(max = 150, message = "Email não pode exceder 150 caracteres")
@@ -31,7 +26,7 @@ public record ControlPlaneUserCreateRequest(
         @NotBlank(message = "Senha é obrigatória")
         @Pattern(
                 regexp = ValidationPatterns.PASSWORD_PATTERN,
-                message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas, números e caracteres especiais"
+                message = "Senha fraca / inválida"
         )
         String password,
 
@@ -50,5 +45,6 @@ public record ControlPlaneUserCreateRequest(
     public ControlPlaneUserCreateRequest {
         if (phone != null) phone = phone.trim();
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();
+        if (email != null) email = email.trim().toLowerCase();
     }
 }

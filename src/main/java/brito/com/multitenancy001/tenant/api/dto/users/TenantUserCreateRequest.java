@@ -12,6 +12,17 @@ import lombok.Builder;
 
 import java.util.LinkedHashSet;
 
+/**
+ * Request para criação de usuário no Tenant.
+ *
+ * Login é por EMAIL (não existe username).
+ *
+ * Observações:
+ * - locale/timezone são opcionais (defaults são aplicados no service).
+ * - mustChangePassword é opcional (default false).
+ * - permissions aqui são strings TEN_* (extras), se você quiser tipar isso com enum,
+ *   podemos evoluir depois (mas hoje mantém compatibilidade).
+ */
 @Builder
 public record TenantUserCreateRequest(
 
@@ -48,6 +59,14 @@ public record TenantUserCreateRequest(
         @Size(max = 500, message = "URL do avatar não pode exceder 500 caracteres")
         String avatarUrl,
 
+        @Size(max = 10, message = "Locale não pode exceder 10 caracteres")
+        String locale,
+
+        @Size(max = 50, message = "Timezone não pode exceder 50 caracteres")
+        String timezone,
+
+        Boolean mustChangePassword,
+
         TenantUserOrigin origin
 
 ) {
@@ -56,5 +75,7 @@ public record TenantUserCreateRequest(
         if (email != null) email = email.trim();
         if (phone != null) phone = phone.trim();
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();
+        if (locale != null) locale = locale.trim();
+        if (timezone != null) timezone = timezone.trim();
     }
 }

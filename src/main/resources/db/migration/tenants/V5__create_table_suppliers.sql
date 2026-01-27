@@ -1,7 +1,5 @@
 -- V5__create_table_suppliers.sql
 
-
--- 1) Tabela suppliers com UUID gerado automaticamente
 CREATE TABLE IF NOT EXISTS suppliers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -30,19 +28,16 @@ CREATE TABLE IF NOT EXISTS suppliers (
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP,
   
-    -- AUDITORIA
+  -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_username VARCHAR(120),
-  updated_by_username VARCHAR(120),
-  deleted_by_username VARCHAR(120)
-
-  
+  created_by_email VARCHAR(120),
+  updated_by_email VARCHAR(120),
+  deleted_by_email VARCHAR(120)
 );
 
--- 3) document único somente para fornecedores ativos (não deletados) e com documento preenchido
 CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_document_active
 ON suppliers(document)
 WHERE document IS NOT NULL AND deleted = false;

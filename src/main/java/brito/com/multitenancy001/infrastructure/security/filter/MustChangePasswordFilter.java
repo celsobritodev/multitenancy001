@@ -50,39 +50,36 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
             return;
         }
 
-        // ✅ libera GET /api/admin/me (para o front exibir estado e mensagem)
-        if ("GET".equalsIgnoreCase(method) && path.equals(ME_PATH)) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedUserContext ctx)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // só aplica no escopo do controlplane (/api/admin/**)
-        if (!path.startsWith("/api/admin/")) {
+        // ✅ libera /me (pra UI conseguir saber que precisa trocar senha)
+        if (path.startsWith(ME_PATH)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof AuthenticatedUserContext ctx) {
+        if (ctx.isMustChangePassword()) {
+            response.setStatus(428);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
-            if (ctx.isMustChangePassword()) {
-                response.setStatus(428); // Precondition Required
-                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            Map<String, Object> body = Map.of(
+                    "error", "MUST_CHANGE_PASSWORD",
+                    "message", "Você precisa alterar a senha antes de continuar.",
+                    "status", 428,
+                    "details", Map.of(
+                            "userId", ctx.getUserId(),
+                            "email", ctx.getEmail(),
+                            "accountId", ctx.getAccountId()
+                    )
+            );
 
-                Map<String, Object> body = Map.of(
-                        "error", "MUST_CHANGE_PASSWORD",
-                        "message", "Você precisa alterar a senha antes de continuar.",
-                        "status", 428,
-                        "details", Map.of(
-                                "userId", ctx.getUserId(),
-                                "username", ctx.getUsername(),
-                                "accountId", ctx.getAccountId()
-                        )
-                );
-
-                response.getWriter().write(objectMapper.writeValueAsString(body));
-                return;
-            }
+            response.getWriter().write(objectMapper.writeValueAsString(body));
+            return;
         }
 
         filterChain.doFilter(request, response);

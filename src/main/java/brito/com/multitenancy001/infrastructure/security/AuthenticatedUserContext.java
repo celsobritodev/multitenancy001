@@ -3,8 +3,6 @@ package brito.com.multitenancy001.infrastructure.security;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import lombok.Getter;
-
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,18 +10,23 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.time.LocalDateTime;
 import java.util.Collection;
 
-@Getter
+/**
+ * Principal autenticado usado pelo Spring Security.
+ *
+ * Observação importante:
+ * - O método do contrato UserDetails se chama getUsername().
+ * - No nosso domínio, "username" NÃO existe (login é por email).
+ * - Por isso, aqui guardamos o principal como principalEmail e
+ *   implementamos getUsername() retornando esse email.
+ */
 public class AuthenticatedUserContext implements UserDetails {
 
     private static final long serialVersionUID = 1L;
 
     private final Long userId;
 
-    /**
-     * Principal do Spring Security (UserDetails.getUsername()).
-     * ✅ Sempre email.
-     */
-    private final String username;
+    /** Email usado como principal (UserDetails#getUsername). */
+    private final String principalEmail;
 
     private final String name;
     private final String email;
@@ -37,24 +40,17 @@ public class AuthenticatedUserContext implements UserDetails {
     private final Long accountId;
     private final String schemaName;
 
-    // ✅ flags usadas no /me
     private final boolean suspendedByAccount;
     private final boolean suspendedByAdmin;
     private final boolean deleted;
 
-    /**
-     * ✅ Role como Enum (type-safe).
-     */
     private final RoleAuthority roleAuthority;
 
-    /**
-     * ✅ Authorities efetivas (permission-only).
-     */
     private final Collection<? extends GrantedAuthority> authorities;
 
     private AuthenticatedUserContext(
             Long userId,
-            String username,
+            String principalEmail,
             String name,
             String email,
             String password,
@@ -66,11 +62,11 @@ public class AuthenticatedUserContext implements UserDetails {
             boolean suspendedByAccount,
             boolean suspendedByAdmin,
             boolean deleted,
-            RoleAuthority role,
+            RoleAuthority roleAuthority,
             Collection<? extends GrantedAuthority> authorities
     ) {
         this.userId = userId;
-        this.username = username;
+        this.principalEmail = principalEmail;
         this.name = name;
         this.email = email;
         this.password = password;
@@ -82,8 +78,48 @@ public class AuthenticatedUserContext implements UserDetails {
         this.suspendedByAccount = suspendedByAccount;
         this.suspendedByAdmin = suspendedByAdmin;
         this.deleted = deleted;
-        this.roleAuthority = role;
+        this.roleAuthority = roleAuthority;
         this.authorities = authorities;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public String getSchemaName() {
+        return schemaName;
+    }
+
+    public boolean isSuspendedByAccount() {
+        return suspendedByAccount;
+    }
+
+    public boolean isSuspendedByAdmin() {
+        return suspendedByAdmin;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public RoleAuthority getRoleAuthorityEnum() {
+        return roleAuthority;
     }
 
     public String getRoleAuthority() {
@@ -113,7 +149,7 @@ public class AuthenticatedUserContext implements UserDetails {
 
         return new AuthenticatedUserContext(
                 user.getId(),
-                email,                 // username = email (principal)
+                email,
                 user.getName(),
                 email,
                 user.getPassword(),
@@ -125,7 +161,7 @@ public class AuthenticatedUserContext implements UserDetails {
                 user.isSuspendedByAccount(),
                 user.isSuspendedByAdmin(),
                 user.isDeleted(),
-                user.getRole(),        // ✅ TenantRole implements RoleAuthority
+                user.getRole(),
                 authorities
         );
     }
@@ -144,7 +180,7 @@ public class AuthenticatedUserContext implements UserDetails {
 
         return new AuthenticatedUserContext(
                 user.getId(),
-                email,                 // username = email (principal)
+                email,
                 user.getName(),
                 email,
                 user.getPassword(),
@@ -156,17 +192,46 @@ public class AuthenticatedUserContext implements UserDetails {
                 user.isSuspendedByAccount(),
                 user.isSuspendedByAdmin(),
                 user.isDeleted(),
-                user.getRole(),        // ✅ ControlPlaneRole implements RoleAuthority
+                user.getRole(),
                 authorities
         );
     }
 
-    @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }
-    @Override public String getPassword() { return password; }
-    @Override public String getUsername() { return username; }
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return authorities;
+    }
 
-    @Override public boolean isAccountNonExpired() { return true; }
-    @Override public boolean isAccountNonLocked() { return accountNonLocked; }
-    @Override public boolean isCredentialsNonExpired() { return true; }
-    @Override public boolean isEnabled() { return enabled; }
+    /**
+     * Contrato do Spring Security. No nosso sistema, isso é SEMPRE o email.
+     */
+    @Override
+    public String getUsername() {
+        return principalEmail;
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return accountNonLocked;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
 }

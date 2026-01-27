@@ -1,6 +1,4 @@
 -- V6__create_table_products.sql
-
-
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -38,15 +36,14 @@ CREATE TABLE products (
   deleted BOOLEAN NOT NULL DEFAULT false,
   deleted_at TIMESTAMP,
   
-    -- AUDITORIA
+  -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_username VARCHAR(120),
-  updated_by_username VARCHAR(120),
-  deleted_by_username VARCHAR(120),
-
+  created_by_email VARCHAR(120),
+  updated_by_email VARCHAR(120),
+  deleted_by_email VARCHAR(120),
 
   CONSTRAINT fk_products_category
     FOREIGN KEY (category_id) REFERENCES categories(id),
@@ -61,23 +58,19 @@ CREATE TABLE products (
     CHECK (length(trim(sku)) > 0)
 );
 
--- ✅ SKU único para produtos não deletados (soft delete)
 CREATE UNIQUE INDEX ux_products_sku_not_deleted
 ON products (sku)
 WHERE deleted = false;
 
--- IgnoreCase em name/brand (LOWER(..))
 CREATE INDEX idx_products_name_lower
 ON products (LOWER(name));
 
 CREATE INDEX idx_products_brand_lower
 ON products (LOWER(brand));
 
--- findByActiveTrueAndDeletedFalse()
 CREATE INDEX idx_products_active_deleted
 ON products (active, deleted);
 
--- filtros comuns
 CREATE INDEX idx_products_supplier_id
 ON products (supplier_id);
 
@@ -87,6 +80,5 @@ ON products (category_id);
 CREATE INDEX idx_products_subcategory_id
 ON products (subcategory_id);
 
--- listagens recentes
 CREATE INDEX idx_products_created_at
 ON products (created_at);

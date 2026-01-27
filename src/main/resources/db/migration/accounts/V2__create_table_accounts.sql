@@ -1,4 +1,5 @@
 -- V2__create_table_accounts.sql
+
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS accounts (
@@ -42,17 +43,14 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
     
-        -- AUDITORIA (quem criou/alterou/deletou)
+    -- AUDITORIA (quem criou/alterou/deletou)
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_username VARCHAR(120),
-    updated_by_username VARCHAR(120),
-    deleted_by_username VARCHAR(120),
-
-    
-    
+    created_by_email VARCHAR(120),
+    updated_by_email VARCHAR(120),
+    deleted_by_email VARCHAR(120),
 
     trial_end_date   TIMESTAMP,
     payment_due_date TIMESTAMP,
@@ -84,13 +82,10 @@ ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_legal_entity_type
     CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
 
--- tax_id_type: hoje você usa CPF/CNPJ, mas deixei neutro para crescer.
--- se quiser travar estrito em CPF/CNPJ por enquanto, use a versão "estreita" abaixo.
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_tax_id_type
     CHECK (tax_id_type IS NULL OR tax_id_type IN ('CPF', 'CNPJ'));
 
--- Coerência: ou preenche ambos ou nenhum
 ALTER TABLE accounts
     ADD CONSTRAINT chk_accounts_tax_id_pair
     CHECK (
@@ -103,22 +98,18 @@ ALTER TABLE accounts
 -- Índices / Uniques
 -- =========================
 
--- Só 1 PLATFORM no banco (seu requisito)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_single_platform
 ON accounts (account_type)
 WHERE account_type = 'PLATFORM';
 
--- Unicidade de documento por conta ativa (neutro)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
 ON accounts (tax_country_code, tax_id_type, tax_id_number)
 WHERE deleted = false AND tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL;
 
--- Unicidade de email principal por conta ativa (sua regra atual)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_login_email_active
 ON accounts (login_email)
 WHERE deleted = false;
 
--- schema e slug globais
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
 ON accounts (schema_name);
 
@@ -131,6 +122,3 @@ WHERE deleted = false AND billing_email IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_accounts_display_name
 ON accounts (display_name);
-
-
-

@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
+import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -48,9 +49,8 @@ public class TenantUserProvisioningFacade {
                                     u.getId(),
                                     u.getAccountId(),
                                     u.getName(),
-                          
                                     u.getEmail(),
-                                    u.getRole() == null ? null : u.getRole().name(),
+                                    u.getRole() == null ? null : TenantRoleName.valueOf(u.getRole().name()),
                                     u.isSuspendedByAccount(),
                                     u.isSuspendedByAdmin(),
                                     u.isDeleted()
@@ -61,10 +61,14 @@ public class TenantUserProvisioningFacade {
     }
 
     /**
-     * Primeiro usuário do tenant (TENANT_OWNER).
-     * name = ownerDisplayName (ex.: account.displayName) com fallback.
+     * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
+     *
+     * Retorna um snapshot (UserSummaryData) para evitar vazamento do domínio Tenant
+     * para o contexto ControlPlane.
+     *
+     * Login é por EMAIL (não existe username).
      */
-    public TenantUser createTenantOwner(
+    public UserSummaryData createTenantOwner(
             String schemaName,
             Long accountId,
             String ownerDisplayName,
@@ -108,26 +112,70 @@ public class TenantUserProvisioningFacade {
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
 
-                    return tenantUserRepository.save(tenantUser);
+                    TenantUser saved = tenantUserRepository.save(tenantUser);
 
-
-
-                   
+                    return new UserSummaryData(
+                            saved.getId(),
+                            saved.getAccountId(),
+                            saved.getName(),
+                            saved.getEmail(),
+                            saved.getRole() == null ? null : TenantRoleName.valueOf(saved.getRole().name()),
+                            saved.isSuspendedByAccount(),
+                            saved.isSuspendedByAdmin(),
+                            saved.isDeleted()
+                    );
                 })
         );
     }
 
-    public List<TenantUser> listUsers(String schemaName, Long accountId, boolean onlyOperational) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
-
-        return tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantReadOnlyTx(() -> onlyOperational
-                        ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
-                        : tenantUserRepository.findByAccountId(accountId)
-                )
+    public int suspendAllUsersByAccount(String schemaName, Long accountId) {
+        return tenantExecutor.runIfReady(
+                schemaName,
+                REQUIRED_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
+                0
         );
     }
 
+    public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
+        return tenantExecutor.runIfReady(
+                schemaName,
+                REQUIRED_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
+                0
+        );
+    }
+
+    /**
+     * Soft delete em massa de usuários no schema tenant.
+     * Usado pelo ControlPlane ao excluir/cancelar conta.
+     */
+    public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
+        return tenantExecutor.runIfReady(
+                schemaName,
+                REQUIRED_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.now())),
+                0
+        );
+    }
+
+    /**
+     * Restore em massa de usuários no schema tenant.
+     * Usado pelo ControlPlane ao restaurar conta.
+     */
+    public int restoreAllUsersByAccount(String schemaName, Long accountId) {
+        return tenantExecutor.runIfReady(
+                schemaName,
+                REQUIRED_TABLE,
+                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.restoreAllByAccount(accountId)),
+                0
+        );
+    }
+
+    /**
+     * Suspende/reativa um usuário por ADMIN (ação administrativa do ControlPlane).
+     * Não depende de username; identidade é EMAIL, mas aqui o alvo é por userId.
+     */
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
@@ -142,65 +190,28 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    public int suspendAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName, REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
-                0
+    public void setPasswordResetToken(String schemaName, Long accountId, Long userId, String token, LocalDateTime expiresAt) {
+        tenantExecutor.runIfReady(schemaName, REQUIRED_TABLE, () ->
+                txExecutor.tenantTx(() -> {
+                    TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
+                            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+                    user.setPasswordResetToken(token);
+                    user.setPasswordResetExpires(expiresAt);
+                    tenantUserRepository.save(user);
+                    return null;
+                })
         );
     }
 
-    public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName, REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
-                0
-        );
-    }
+    public TenantUser findByPasswordResetToken(String schemaName, Long accountId, String token) {
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
-    public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName, REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> {
-                    List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
-
-                    LocalDateTime now = appClock.now();
-                    long base = appClock.epochMillis();
-
-                    long seq = 0;
-                    for (TenantUser u : users) {
-                        if (!u.isDeleted()) {
-                            u.softDelete(now, base + (seq++));
-                            u.setUpdatedAt(now);
-                        }
-                    }
-
-                    tenantUserRepository.saveAll(users);
-                    return users.size();
-                }),
-                0
-        );
-    }
-
-    public int restoreAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName, REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> {
-                    List<TenantUser> users = tenantUserRepository.findByAccountId(accountId);
-
-                    LocalDateTime now = appClock.now();
-
-                    for (TenantUser u : users) {
-                        if (u.isDeleted()) {
-                            u.restore();
-                            u.setUpdatedAt(now);
-                        }
-                    }
-
-                    tenantUserRepository.saveAll(users);
-                    return users.size();
-                }),
-                0
+        return tenantExecutor.run(schemaName, () ->
+                txExecutor.tenantReadOnlyTx(() ->
+                        tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
+                                .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400))
+                )
         );
     }
 }

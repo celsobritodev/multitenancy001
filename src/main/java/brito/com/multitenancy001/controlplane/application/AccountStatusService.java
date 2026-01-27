@@ -25,33 +25,46 @@ public class AccountStatusService {
     private final AppClock appClock;
 
     public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        }
+        if (req == null || req.status() == null) {
+            throw new ApiException("STATUS_REQUIRED", "status é obrigatório", 400);
+        }
+
         return publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
             AccountStatus previous = account.getStatus();
 
-            account.setStatus(req.status());
-            if (req.status() == AccountStatus.ACTIVE) {
+            AccountStatus newStatus = req.status();
+            account.setStatus(newStatus);
+
+            // Mantém seu comportamento atual:
+            // - quando volta para ACTIVE, limpa deletedAt
+            // OBS: se isso não for desejado, remova este bloco e use somente restoreAccount().
+            if (newStatus == AccountStatus.ACTIVE) {
                 account.setDeletedAt(null);
             }
+
             accountRepository.save(account);
 
             int affected = 0;
             boolean applied = false;
-            String action = "NONE";
+            AccountStatusSideEffect action = AccountStatusSideEffect.NONE;
 
-            if (req.status() == AccountStatus.SUSPENDED) {
+            if (newStatus == AccountStatus.SUSPENDED) {
                 affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
-                action = "SUSPEND_BY_ACCOUNT";
-            } else if (req.status() == AccountStatus.ACTIVE) {
+                action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;
+            } else if (newStatus == AccountStatus.ACTIVE) {
                 affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
-                action = "UNSUSPEND_BY_ACCOUNT";
-            } else if (req.status() == AccountStatus.CANCELLED) {
+                action = AccountStatusSideEffect.UNSUSPEND_BY_ACCOUNT;
+            } else if (newStatus == AccountStatus.CANCELLED) {
                 affected = cancelAccount(account);
                 applied = true;
-                action = "CANCELLED";
+                action = AccountStatusSideEffect.CANCELLED;
             }
 
             return buildStatusChangeResponse(account, previous, applied, action, affected);
@@ -59,13 +72,20 @@ public class AccountStatusService {
     }
 
     public void softDeleteAccount(Long accountId) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        }
+
         publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount()) {
-                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED",
-                        "Não é permitido excluir contas do sistema", 403);
+                throw new ApiException(
+                        "BUILTIN_ACCOUNT_PROTECTED",
+                        "Não é permitido excluir contas do sistema",
+                        403
+                );
             }
 
             account.softDelete(appClock.now());
@@ -76,13 +96,20 @@ public class AccountStatusService {
     }
 
     public void restoreAccount(Long accountId) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        }
+
         publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount() && account.isDeleted()) {
-                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED",
-                        "Contas do sistema não podem ser restauradas via este endpoint", 403);
+                throw new ApiException(
+                        "BUILTIN_ACCOUNT_PROTECTED",
+                        "Contas do sistema não podem ser restauradas via este endpoint",
+                        403
+                );
             }
 
             account.restore();
@@ -93,8 +120,7 @@ public class AccountStatusService {
     }
 
     private int cancelAccount(Account account) {
-        // Se você quer garantir "marca deleted_at" em TX separada, mantém requiresNew.
-        // Se não precisa, pode trocar por publicUnitOfWork.tx(...) direto.
+        // Mantém sua ideia de "marca deleted_at" em TX separada.
         publicUnitOfWork.requiresNew(() -> {
             account.setDeletedAt(appClock.now());
             accountRepository.save(account);
@@ -112,16 +138,31 @@ public class AccountStatusService {
             Account account,
             AccountStatus previous,
             boolean tenantUsersUpdated,
-            String action,
+            AccountStatusSideEffect action,
             int count
     ) {
         return new AccountStatusChangeResponse(
                 account.getId(),
                 account.getStatus().name(),
-                previous.name(),
+                previous == null ? null : previous.name(),
                 appClock.now(),
                 account.getSchemaName(),
-                new AccountStatusChangeResponse.SideEffects(tenantUsersUpdated, action, count)
+                new AccountStatusChangeResponse.SideEffects(
+                        tenantUsersUpdated,
+                        action.name(),
+                        count
+                )
         );
+    }
+
+    /**
+     * Side effect tipado para manter padrão de consistência.
+     * Ainda é serializado como String no response (action.name()).
+     */
+    private enum AccountStatusSideEffect {
+        NONE,
+        SUSPEND_BY_ACCOUNT,
+        UNSUSPEND_BY_ACCOUNT,
+        CANCELLED
     }
 }

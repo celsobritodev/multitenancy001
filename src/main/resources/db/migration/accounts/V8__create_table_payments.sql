@@ -31,10 +31,9 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_username VARCHAR(120),
-    updated_by_username VARCHAR(120),
-    deleted_by_username VARCHAR(120),
-
+    created_by_email VARCHAR(120),
+    updated_by_email VARCHAR(120),
+    deleted_by_email VARCHAR(120),
 
     refunded_at TIMESTAMP,
     refund_amount NUMERIC(10,2),
@@ -46,5 +45,4 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
 CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
-
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);

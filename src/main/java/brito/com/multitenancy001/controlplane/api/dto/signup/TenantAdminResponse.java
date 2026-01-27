@@ -1,9 +1,14 @@
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
-import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.shared.security.TenantRoleName;
 
+/**
+ * DTO do ControlPlane (Signup).
+ *
+ * Mantém role tipada sem depender do enum do contexto Tenant.
+ */
 public record TenantAdminResponse(
         Long id,
         String email,
-        TenantRole role
+        TenantRoleName role
 ) {}
