@@ -6,15 +6,14 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     name VARCHAR(100) NOT NULL,
 
-    username VARCHAR(100) NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    -- ✅ email é a identidade de login
     email VARCHAR(150) NOT NULL,
+    password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50) NOT NULL,
 
     account_id BIGINT NOT NULL,
 
-    -- ✅ origem do usuário (substitui is_built_in_user)
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
@@ -32,8 +31,7 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP,
     deleted_at TIMESTAMP,
-    
-        -- AUDITORIA (quem criou/alterou/deletou)
+
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
@@ -41,7 +39,7 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     created_by_username VARCHAR(120),
     updated_by_username VARCHAR(120),
     deleted_by_username VARCHAR(120),
-    
+
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     password_reset_token VARCHAR(255),
@@ -54,21 +52,10 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
 
     CONSTRAINT chk_cp_user_origin
-        CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API')),
-
-    CONSTRAINT chk_cp_reserved_usernames_block
-        CHECK (
-            NOT (
-                lower(username) IN ('superadmin','billing','support','operator')
-                AND user_origin <> 'BUILT_IN'
-            )
-        )
+        CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_username_active
-ON controlplane_users (account_id, username)
-WHERE deleted = false;
-
+-- ✅ email único por conta (somente ativos)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
 ON controlplane_users (account_id, email)
 WHERE deleted = false;

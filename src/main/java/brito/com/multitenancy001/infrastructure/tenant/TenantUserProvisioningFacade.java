@@ -3,7 +3,6 @@ package brito.com.multitenancy001.infrastructure.tenant;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -12,7 +11,6 @@ import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.application.user.username.UsernameGeneratorService;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -31,7 +29,6 @@ public class TenantUserProvisioningFacade {
     private final TxExecutor txExecutor;
 
     private final TenantUserRepository tenantUserRepository;
-    private final UsernameGeneratorService usernameGeneratorService;
     private final PasswordEncoder passwordEncoder;
 
     private final AppClock appClock;
@@ -51,7 +48,7 @@ public class TenantUserProvisioningFacade {
                                     u.getId(),
                                     u.getAccountId(),
                                     u.getName(),
-                                    u.getUsername(),
+                          
                                     u.getEmail(),
                                     u.getRole() == null ? null : u.getRole().name(),
                                     u.isSuspendedByAccount(),
@@ -100,29 +97,22 @@ public class TenantUserProvisioningFacade {
                             ? ownerDisplayName.trim()
                             : OWNER_NAME_FALLBACK;
 
-                    TenantUser u = new TenantUser();
-                    u.setAccountId(accountId);
-                    u.setName(name);
-                    u.setEmail(emailNorm);
-                    u.setPassword(passwordEncoder.encode(rawPassword));
-                    u.setRole(TenantRole.TENANT_OWNER);
-                    u.setSuspendedByAccount(false);
-                    u.setSuspendedByAdmin(false);
+                    TenantUser tenantUser = new TenantUser();
+                    tenantUser.setAccountId(accountId);
+                    tenantUser.setName(name);
+                    tenantUser.setEmail(emailNorm);
+                    tenantUser.setPassword(passwordEncoder.encode(rawPassword));
+                    tenantUser.setRole(TenantRole.TENANT_OWNER);
+                    tenantUser.setSuspendedByAccount(false);
+                    tenantUser.setSuspendedByAdmin(false);
+                    tenantUser.setTimezone("America/Sao_Paulo");
+                    tenantUser.setLocale("pt_BR");
 
-                    u.setTimezone("America/Sao_Paulo");
-                    u.setLocale("pt_BR");
+                    return tenantUserRepository.save(tenantUser);
 
-                    for (int attempt = 0; attempt < 5; attempt++) {
-                        u.setUsername(usernameGeneratorService.generateFromEmail(emailNorm, accountId));
-                        try {
-                            return tenantUserRepository.save(u);
-                        } catch (DataIntegrityViolationException e) {
-                            log.warn("Colisão de username ao criar tenant owner. Tentativa {}. accountId={} email={}",
-                                    attempt + 1, accountId, emailNorm);
-                        }
-                    }
 
-                    throw new IllegalStateException("Failed to create tenant owner due to repeated username collisions");
+
+                   
                 })
         );
     }

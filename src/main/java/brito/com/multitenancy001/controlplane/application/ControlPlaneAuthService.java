@@ -26,13 +26,13 @@ public class ControlPlaneAuthService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final PublicExecutor publicExecutor;
 
-    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
+    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest controlPlaneAdminLoginRequest) {
 
         return publicExecutor.run(() -> {
 
             // 1) busca user (public)
             ControlPlaneUser user = controlPlaneUserRepository
-                    .findByUsernameAndDeletedFalse(req.username())
+                    .findByEmailAndDeletedFalse(controlPlaneAdminLoginRequest.email())
                     .orElseThrow(() -> new ApiException(
                             "USER_NOT_FOUND",
                             "Usuário de plataforma não encontrado",
@@ -46,7 +46,7 @@ public class ControlPlaneAuthService {
 
             // 3) autentica de fato (senha)
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.username(), req.password())
+                    new UsernamePasswordAuthenticationToken(controlPlaneAdminLoginRequest.email(), controlPlaneAdminLoginRequest.password())
             );
 
             // ✅ IMPORTANTE:
@@ -62,15 +62,14 @@ public class ControlPlaneAuthService {
             );
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
-                    user.getUsername(),
+                    user.getEmail(),
                     DEFAULT_SCHEMA
             );
 
-            return new JwtResponse(
+            return JwtResponse.forEmailLogin(
                     accessToken,
                     refreshToken,
                     user.getId(),
-                    user.getUsername(),
                     user.getEmail(),
                     user.getRole().name(),
                     user.getAccount().getId(),

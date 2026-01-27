@@ -12,10 +12,10 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -141,12 +141,10 @@ public class GlobalExceptionHandler {
 
     private String extractValue(String message, String fieldName) {
         try {
-            // PostgreSQL pt-BR: "Chave (tax_id_number)=(...) já existe."
             Pattern pattern = Pattern.compile("\\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) return matcher.group(1);
 
-            // Alternativo EN: "Key (tax_id_number)=(...) already exists."
             Pattern pattern2 = Pattern.compile("Key \\(" + Pattern.quote(fieldName) + "\\)=\\(([^\\)]+)\\)");
             Matcher matcher2 = pattern2.matcher(message);
             if (matcher2.find()) return matcher2.group(1);
@@ -165,9 +163,14 @@ public class GlobalExceptionHandler {
                         .timestamp(now())
                         .error(ex.getError())
                         .message(ex.getMessage())
+                        .field(ex.getField())
+                        .invalidValue(ex.getInvalidValue())
+                        .allowedValues(ex.getAllowedValues())
+                        .details(ex.getDetails())
                         .build()
         );
     }
+
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -187,13 +190,9 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(errorResponse);
     }
-    
-    
+
     /**
      * ✅ Login inválido (não vazar se o usuário existe).
-     * - senha errada -> BadCredentialsException
-     * - userDetails falha -> InternalAuthenticationServiceException (wrap do Spring)
-     * - qualquer falha auth -> AuthenticationException
      */
     @ExceptionHandler({
             BadCredentialsException.class,
@@ -202,7 +201,6 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiEnumErrorResponse> handleAuthentication(AuthenticationException ex) {
 
-        // log detalhado só no server (ajuda debug sem expor para o cliente)
         log.warn("Authentication failed: {}", ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
@@ -214,11 +212,8 @@ public class GlobalExceptionHandler {
         );
     }
 
-    
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
-        // log só o suficiente (sem stacktrace enorme por padrão)
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
 
         return ResponseEntity.internalServerError().body(
@@ -229,7 +224,7 @@ public class GlobalExceptionHandler {
                         .build()
         );
     }
-    
+
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ApiErrorResponse> handleDomainException(DomainException ex) {
         ApiErrorResponse body = ApiErrorResponse.builder()
@@ -240,5 +235,4 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(body);
     }
-
 }

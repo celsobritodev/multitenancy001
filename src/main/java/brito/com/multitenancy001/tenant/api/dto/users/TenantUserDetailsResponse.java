@@ -4,7 +4,6 @@ public record TenantUserDetailsResponse(
         Long id,
         Long accountId,
         String name,
-        String username,
         String email,
         String role,
         String phone,

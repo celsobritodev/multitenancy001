@@ -18,7 +18,7 @@ public class TenantUserApiMapper {
 
         return new TenantUserSummaryResponse(
                 tenantUser.getId(),
-                tenantUser.getUsername(),
+    
                 tenantUser.getEmail(),
                 tenantUser.isSuspendedByAccount(),
                 tenantUser.isSuspendedByAdmin(),
@@ -36,7 +36,7 @@ public class TenantUserApiMapper {
                 tenantUser.getId(),
                 tenantUser.getAccountId(),
                 tenantUser.getName(),
-                tenantUser.getUsername(),
+  
                 tenantUser.getEmail(),
                 tenantUser.getRole() != null ? tenantUser.getRole().name() : null,
                 tenantUser.getPhone(),
@@ -57,7 +57,7 @@ public class TenantUserApiMapper {
                 tenantUser.getId(),
                 tenantUser.getAccountId(),
                 tenantUser.getName(),
-                tenantUser.getUsername(),
+        
                 tenantUser.getEmail(),
                 tenantUser.getRole() != null ? tenantUser.getRole().name() : null,
                 tenantUser.getPhone(),

@@ -19,7 +19,6 @@ public class AccountUserApiMapper {
                 user.id(),
                 user.accountId(),
                 user.name(),
-                user.username(),
                 user.email(),
                 user.role(),
                 user.suspendedByAccount(),

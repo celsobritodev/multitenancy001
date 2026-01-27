@@ -19,11 +19,6 @@ public record TenantUserCreateRequest(
         @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
         String name,
 
-        @NotBlank(message = "Username é obrigatório")
-        @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido...")
-        @Size(min = 3, max = 50, message = "Username inválido. Use apenas letras, números, . e _")
-        String username,
-
         @NotBlank(message = "Email é obrigatório")
         @Email(message = "Email inválido")
         @Size(max = 150, message = "Email não pode exceder 150 caracteres")
@@ -39,10 +34,6 @@ public record TenantUserCreateRequest(
         @NotNull(message = "Role é obrigatória")
         TenantRole role,
 
-        /**
-         * Opcional: se null/vazio, o entity aplica defaults por role (via @PrePersist).
-         * Se vier preenchido, cada item precisa seguir TEN_*.
-         */
         LinkedHashSet<
                 @Pattern(
                         regexp = "^TEN_[A-Z0-9_]+$",
@@ -57,16 +48,11 @@ public record TenantUserCreateRequest(
         @Size(max = 500, message = "URL do avatar não pode exceder 500 caracteres")
         String avatarUrl,
 
-        /**
-         * Opcional: se null, o application service define ADMIN.
-         * BUILT_IN normalmente só em provisionamento interno.
-         */
         TenantUserOrigin origin
 
 ) {
     public TenantUserCreateRequest {
         if (name != null) name = name.trim();
-        if (username != null) username = username.trim();
         if (email != null) email = email.trim();
         if (phone != null) phone = phone.trim();
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();

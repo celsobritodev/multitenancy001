@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.controlplane.domain.user;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Pattern;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -15,8 +14,6 @@ import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -42,10 +39,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "username", nullable = false, length = 100)
-    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido.")
-    private String username;
-
+  
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
@@ -141,6 +135,12 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private Set<ControlPlanePermission> permissions = new LinkedHashSet<>();
+    
+    @PrePersist
+    @PreUpdate
+    private void normalize() {
+        if (email != null) email = email.trim().toLowerCase();
+    }
 
     @PrePersist
     @PreUpdate

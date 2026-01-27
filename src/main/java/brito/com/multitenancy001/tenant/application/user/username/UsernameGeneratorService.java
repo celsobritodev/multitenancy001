@@ -33,14 +33,14 @@ public class UsernameGeneratorService {
         String base = usernamePolicy.asCandidate(local);
 
         // 1) tenta "vendas"
-        if (!tenantUserRepository.existsByUsernameAndAccountId(base, accountId)) {
+        if (!tenantUserRepository.existsByEmailAndAccountId(base, accountId)) {
             return base;
         }
 
         // 2) tenta "vendas_2", "vendas_3", ...
         for (int counter = 2; counter < 200; counter++) {
             String candidate = usernamePolicy.build(base, String.valueOf(counter));
-            if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
+            if (!tenantUserRepository.existsByEmailAndAccountId(candidate, accountId)) {
                 return candidate;
             }
         }
@@ -48,7 +48,7 @@ public class UsernameGeneratorService {
         // 3) fallback aleatório (muito raro precisar)
         for (int attempt = 0; attempt < 20; attempt++) {
             String candidate = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
-            if (!tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
+            if (!tenantUserRepository.existsByEmailAndAccountId(candidate, accountId)) {
                 return candidate;
             }
         }
@@ -65,7 +65,7 @@ public class UsernameGeneratorService {
 
         String candidate = usernamePolicy.asCandidate(initialUsername);
 
-        if (usernamePolicy.isValid(candidate) && !tenantUserRepository.existsByUsernameAndAccountId(candidate, accountId)) {
+        if (usernamePolicy.isValid(candidate) && !tenantUserRepository.existsByEmailAndAccountId(candidate, accountId)) {
             return candidate;
         }
 
@@ -73,14 +73,14 @@ public class UsernameGeneratorService {
 
         for (int counter = 2; counter < 200; counter++) {
             String c = usernamePolicy.build(base, String.valueOf(counter));
-            if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
+            if (!tenantUserRepository.existsByEmailAndAccountId(c, accountId)) {
                 return c;
             }
         }
 
         for (int attempt = 0; attempt < 20; attempt++) {
             String c = usernamePolicy.build(base, randomSuffix(SUFFIX_LEN));
-            if (!tenantUserRepository.existsByUsernameAndAccountId(c, accountId)) {
+            if (!tenantUserRepository.existsByEmailAndAccountId(c, accountId)) {
                 return c;
             }
         }

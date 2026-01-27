@@ -59,7 +59,7 @@ public class AccountOnboardingService {
         TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
                 tenantOwner.getId(),
                 tenantOwner.getEmail(),
-                tenantOwner.getUsername(),
+        
                 tenantOwner.getRole()
         );
 

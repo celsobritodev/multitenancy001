@@ -2,52 +2,45 @@ package brito.com.multitenancy001.shared.api.error;
 
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 public class ApiException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
+
     private final String error;
     private final int status;
+
+    // ✅ extras padronizados (opcionais)
+    private final String field;
+    private final String invalidValue;
+    private final List<String> allowedValues;
     private final Object details;
-    private final Object[] allowedValues; // 🔥 NOVO CAMPO
 
-    // Construtor sem allowedValues
     public ApiException(String error, String message, int status) {
-        super(message);
-        this.error = error;
-        this.status = status;
-        this.details = null;
-        this.allowedValues = null;
+        this(error, message, status, null, null, null, null);
     }
 
-    // Construtor com details
     public ApiException(String error, String message, int status, Object details) {
-        super(message);
-        this.error = error;
-        this.status = status;
-        this.details = details;
-        this.allowedValues = null;
+        this(error, message, status, null, null, null, details);
     }
 
-    // 🔥 NOVO CONSTRUTOR com allowedValues
-    public ApiException(String error, String message, int status, Object details, Object[] allowedValues) {
+    public ApiException(
+            String error,
+            String message,
+            int status,
+            String field,
+            String invalidValue,
+            List<String> allowedValues,
+            Object details
+    ) {
         super(message);
         this.error = error;
         this.status = status;
-        this.details = details;
+        this.field = field;
+        this.invalidValue = invalidValue;
         this.allowedValues = allowedValues;
+        this.details = details;
     }
-
-    // Método para obter allowedValues
-    public Object[] getAllowedValues() {
-        return allowedValues;
-    }
-
-    // Método para verificar se tem allowedValues
-    public boolean hasAllowedValues() {
-        return allowedValues != null && allowedValues.length > 0;
-    }
-    
-    
-    
 }

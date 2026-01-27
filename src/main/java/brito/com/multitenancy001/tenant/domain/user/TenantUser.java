@@ -25,7 +25,6 @@ import java.util.Set;
 @Table(
     name = "tenant_users",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_tenant_users_username_account", columnNames = {"username", "account_id"}),
         @UniqueConstraint(name = "uk_tenant_users_email_account", columnNames = {"email", "account_id"})
     }
 )
@@ -36,16 +35,14 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "password")
-public class TenantUser implements Auditable, SoftDeletable
-{
+public class TenantUser implements Auditable, SoftDeletable {
 
-    private static final int USERNAME_MAX_LEN = 100;
     private static final int EMAIL_MAX_LEN = 150;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "user_origin", nullable = false, length = 20)
     @Builder.Default
@@ -54,9 +51,6 @@ public class TenantUser implements Auditable, SoftDeletable
     public boolean isBuiltInUser() {
         return this.origin == TenantUserOrigin.BUILT_IN;
     }
- 
-    
-    
 
     @Column(name = "password_reset_token", length = 255)
     private String passwordResetToken;
@@ -67,15 +61,12 @@ public class TenantUser implements Auditable, SoftDeletable
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = USERNAME_MAX_LEN)
-    @Pattern(regexp = ValidationPatterns.USERNAME_PATTERN, message = "Username inválido.")
-    private String username;
+    @Column(nullable = false, length = EMAIL_MAX_LEN)
+    @Pattern(regexp = ValidationPatterns.EMAIL_PATTERN, message = "Email inválido.")
+    private String email;
 
     @Column(nullable = false)
     private String password;
-
-    @Column(nullable = false, length = EMAIL_MAX_LEN)
-    private String email;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
@@ -102,8 +93,6 @@ public class TenantUser implements Auditable, SoftDeletable
     @Builder.Default
     private Set<TenantPermission> permissions = new LinkedHashSet<>();
 
-    
-    
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -150,52 +139,39 @@ public class TenantUser implements Auditable, SoftDeletable
     @Builder.Default
     private boolean deleted = false;
 
-   @PrePersist
-@PreUpdate
-protected void onSave() {
-    if (origin == null) origin = TenantUserOrigin.ADMIN;
-    if (role == null) throw new IllegalStateException("Role is required");
+    @PrePersist
+    @PreUpdate
+    protected void onSave() {
+        if (origin == null) origin = TenantUserOrigin.ADMIN;
+        if (role == null) throw new IllegalStateException("Role is required");
 
-    if (permissions == null) {
-        permissions = new LinkedHashSet<>();
+        if (permissions == null) {
+            permissions = new LinkedHashSet<>();
+        }
+
+        if (email != null) email = email.toLowerCase().trim();
+
+        if (permissions.isEmpty()) {
+            permissions.addAll(TenantRolePermissions.permissionsFor(role));
+        }
+
+        var normalized = PermissionScopeValidator.normalizeTenantPermissions(permissions);
+
+        if (!permissions.equals(normalized)) {
+            permissions.clear();
+            permissions.addAll(normalized);
+        }
     }
 
-    if (username != null) username = username.toLowerCase().trim();
-    if (email != null) email = email.toLowerCase().trim();
-
-    // Se não vier permissions, usa o role como default (SEM reatribuir a coleção gerenciada)
-    if (permissions.isEmpty()) {
-        permissions.addAll(TenantRolePermissions.permissionsFor(role));
-    }
-
-    // Normaliza/valida escopo TEN_ e remove nulls, sem reatribuir a collection
-    var normalized = PermissionScopeValidator.normalizeTenantPermissions(permissions);
-
-    // Evita dirty-checking desnecessário quando já está normalizado
-    if (!permissions.equals(normalized)) {
-        permissions.clear();
-        permissions.addAll(normalized);
-    }
-}
-
-
-    
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
     @Override
-    public AuditInfo getAudit() {
-        return audit;
-    }
+    public AuditInfo getAudit() { return audit; }
 
     @Override
-    public boolean isDeleted() {
-        return deleted;
-    }
-
-
-
+    public boolean isDeleted() { return deleted; }
 
     public boolean isAccountNonLocked(LocalDateTime now) {
         return lockedUntil == null || !lockedUntil.isAfter(now);
@@ -205,15 +181,10 @@ protected void onSave() {
         return isEnabled();
     }
 
-
     public boolean isEnabledForLogin(LocalDateTime now) {
         return isEnabledForLogin() && isAccountNonLocked(now);
     }
 
-    /**
-     * ✅ Clock-aware: agora o tempo vem de fora (AppClock).
-     * Chamada típica: user.softDelete(appClock.now(), appClock.epochMillis());
-     */
     public void softDelete(LocalDateTime now, long suffixEpochMillis) {
         if (deleted) return;
         if (now == null) throw new IllegalArgumentException("now is required");
@@ -224,50 +195,11 @@ protected void onSave() {
         suspendedByAccount = true;
         suspendedByAdmin = true;
 
+        // liberar unique(email, account_id)
         String ts = String.valueOf(suffixEpochMillis);
-
-        renameUsernameForDelete(ts);
-        renameEmailForDelete(ts);
-    }
-
-    private void renameUsernameForDelete(String ts) {
-        String prefix = "deleted_";
-        String suffix = "_" + ts;
-
-        String middle = (username == null ? "user" : username)
-                .toLowerCase()
-                .trim()
-                .replaceAll("[^a-z0-9._-]", "_")
-                .replaceAll("_{2,}", "_")
-                .replaceAll("^_|_$", "");
-
-        if (middle.isBlank()) middle = "user";
-
-        int maxMiddleLen = USERNAME_MAX_LEN - prefix.length() - suffix.length();
-        if (maxMiddleLen < 1) maxMiddleLen = 1;
-
-        if (middle.length() > maxMiddleLen) {
-            middle = middle.substring(0, maxMiddleLen).replaceAll("_+$", "");
-            if (middle.isBlank()) middle = "u";
-        }
-
-        username = prefix + middle + suffix;
-    }
-
-    private void renameEmailForDelete(String ts) {
-        String prefix = "deleted_";
-        String suffix = "_" + ts;
-
-        String middle = (email == null ? "deleted" : email).trim();
-
-        int maxMiddleLen = EMAIL_MAX_LEN - prefix.length() - suffix.length();
-        if (maxMiddleLen < 1) maxMiddleLen = 1;
-
-        if (middle.length() > maxMiddleLen) {
-            middle = middle.substring(0, maxMiddleLen);
-        }
-
-        email = prefix + middle + suffix;
+        String newEmail = "deleted_" + (email == null ? "user" : email) + "_" + ts;
+        if (newEmail.length() > EMAIL_MAX_LEN) newEmail = newEmail.substring(0, EMAIL_MAX_LEN);
+        email = newEmail;
     }
 
     public void restore() {
@@ -275,35 +207,19 @@ protected void onSave() {
 
         deleted = false;
         deletedAt = null;
-
-        // ao restaurar: admin deixa de bloquear; account status segue mandando
         suspendedByAdmin = false;
         // não altera suspendedByAccount aqui
     }
-    
- // ============================================
- // State semantics (PADRÃO ÚNICO)
- // ============================================
 
- /**
-  * enabled = usuário operacionalmente apto:
-  * - não deletado (soft-delete)
-  * - não suspenso pela conta
-  * - não suspenso pelo admin
-  */
- public boolean isEnabled() {
-     return !deleted && !suspendedByAccount && !suspendedByAdmin;
- }
+    public boolean isEnabled() {
+        return !deleted && !suspendedByAccount && !suspendedByAdmin;
+    }
 
- /** notDeleted = apenas soft-delete */
- public boolean isNotDeleted() {
-     return !deleted;
- }
+    public boolean isNotDeleted() {
+        return !deleted;
+    }
 
- /** suspended = qualquer motivo */
- public boolean isSuspended() {
-     return suspendedByAccount || suspendedByAdmin;
- }
-
-
+    public boolean isSuspended() {
+        return suspendedByAccount || suspendedByAdmin;
+    }
 }

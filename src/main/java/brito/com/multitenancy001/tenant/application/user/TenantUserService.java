@@ -52,7 +52,7 @@ public class TenantUserService {
                 tenantUserTxService.transferTenantOwnerRole(accountId, fromUserId, toUserId)
         );
     }
-    
+
     public TenantMeResponse getMyProfile() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
@@ -64,17 +64,14 @@ public class TenantUserService {
         });
     }
 
-
-    
-    
-
     public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        String name = req.name().trim();
-        String username = req.username().trim().toLowerCase();
-        String email = req.email().trim().toLowerCase();
+        if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+
+        String name = (req.name() == null) ? null : req.name().trim();
+        String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
 
         final LinkedHashSet<String> perms =
                 (req.permissions() == null || req.permissions().isEmpty())
@@ -83,25 +80,20 @@ public class TenantUserService {
 
         TenantUserOrigin origin = (req.origin() != null) ? req.origin() : TenantUserOrigin.ADMIN;
 
-        // não permitir BUILT_IN via endpoint normal
         if (origin == TenantUserOrigin.BUILT_IN) {
             throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
         }
 
-        // 1) conta usuários no TENANT schema
         long currentUsers = tenantExecutor.run(schema, () ->
                 tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
         );
 
-        // 2) valida quota no PUBLIC
         accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
 
-        // 3) cria no TENANT schema
         return tenantExecutor.run(schema, () -> {
             TenantUser created = tenantUserTxService.createTenantUser(
                     accountId,
                     name,
-                    username,
                     email,
                     req.password(),
                     req.role(),
@@ -127,10 +119,6 @@ public class TenantUserService {
         );
     }
 
-    /**
-     * "Enabled" = não deletado e não suspenso (por account/admin).
-     * Renomeado para evitar "Active" (ambíguo).
-     */
     public List<TenantUserSummaryResponse> listEnabledTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
@@ -153,18 +141,12 @@ public class TenantUserService {
         });
     }
 
-    /**
-     * Update via UPDATE direto no repo (void), depois re-carrega para devolver Summary.
-     */
     public TenantUserSummaryResponse setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
         return tenantExecutor.run(schema, () -> {
-            // 1) atualiza (update direto)
             tenantUserTxService.setSuspendedByAdmin(accountId, userId, suspended);
-
-            // 2) recarrega para retornar dto
             TenantUser updated = tenantUserTxService.getUser(userId, accountId);
             return tenantUserApiMapper.toSummary(updated);
         });
@@ -210,12 +192,10 @@ public class TenantUserService {
 
     public String generatePasswordResetToken(String slug, String usernameOrEmail) {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
-        if (!StringUtils.hasText(usernameOrEmail)) throw new ApiException("INVALID_LOGIN", "Username/Email é obrigatório", 400);
+        if (!StringUtils.hasText(usernameOrEmail)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
-        // resolve conta (PUBLIC)
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        // executa no TENANT
         return tenantExecutor.run(account.schemaName(), () -> {
             TenantUser user = tenantUserTxService.getUserByUsernameOrEmail(usernameOrEmail, account.id());
 
@@ -223,8 +203,9 @@ public class TenantUserService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
+            // legacy: campo “username” do token = email
             String token = jwtTokenProvider.generatePasswordResetToken(
-                    user.getUsername(),
+                    user.getEmail(),
                     account.schemaName(),
                     account.id()
             );
@@ -243,6 +224,8 @@ public class TenantUserService {
 
         String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
+
+        // legacy “username” = email
         String username = jwtTokenProvider.getUsernameFromToken(token);
 
         tenantExecutor.run(schema, () ->
@@ -273,7 +256,6 @@ public class TenantUserService {
         });
     }
 
-    
     public TenantUserDetailsResponse getEnabledTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
@@ -290,7 +272,4 @@ public class TenantUserService {
 
         return tenantExecutor.run(schema, () -> tenantUserTxService.countEnabledUsersByAccount(accountId));
     }
-
-
-
 }

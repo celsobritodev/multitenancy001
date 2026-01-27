@@ -76,7 +76,7 @@ public class AccountLifecycleService {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-            long totalUsers = controlPlaneUserRepository.countByAccountIdAndDeletedFalse(accountId);
+            long totalUsers = controlPlaneUserRepository.countByAccount_IdAndDeletedFalse(accountId);
 
             return accountAdminDetailsApiMapper.toResponse(account, null, totalUsers);
         });

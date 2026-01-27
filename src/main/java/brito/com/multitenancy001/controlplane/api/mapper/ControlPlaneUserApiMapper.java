@@ -7,13 +7,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class ControlPlaneUserApiMapper {
 
-    public ControlPlaneAdminUserSummaryResponse toAdminSummary(ControlPlaneUser user) {
+    public ControlPlaneAdminUserSummaryResponse toAdminSummary(ControlPlaneUser controlPlaneUser) {
         return new ControlPlaneAdminUserSummaryResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin()
+                controlPlaneUser.getId(),
+   
+                controlPlaneUser.getEmail(),
+                controlPlaneUser.isSuspendedByAccount(),
+                controlPlaneUser.isSuspendedByAdmin()
         );
     }
 }

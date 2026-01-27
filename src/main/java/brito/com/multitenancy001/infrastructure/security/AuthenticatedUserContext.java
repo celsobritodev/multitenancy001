@@ -4,6 +4,8 @@ import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import lombok.Getter;
+
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -16,8 +18,16 @@ public class AuthenticatedUserContext implements UserDetails {
     private static final long serialVersionUID = 1L;
 
     private final Long userId;
+
+    /**
+     * Principal do Spring Security (UserDetails.getUsername()).
+     * ✅ Sempre email.
+     */
     private final String username;
+
+    private final String name;
     private final String email;
+
     private final String password;
     private final boolean mustChangePassword;
 
@@ -27,21 +37,25 @@ public class AuthenticatedUserContext implements UserDetails {
     private final Long accountId;
     private final String schemaName;
 
+    // ✅ flags usadas no /me
+    private final boolean suspendedByAccount;
+    private final boolean suspendedByAdmin;
+    private final boolean deleted;
+
     /**
      * ✅ Role como Enum (type-safe).
-     * Ex.: ControlPlaneRole.CONTROLPLANE_OWNER ou TenantRole.TENANT_ADMIN
-     * (não entra em authorities)
      */
     private final RoleAuthority roleAuthority;
 
     /**
-     * ✅ Authorities efetivas (permission-only)
+     * ✅ Authorities efetivas (permission-only).
      */
     private final Collection<? extends GrantedAuthority> authorities;
 
     private AuthenticatedUserContext(
             Long userId,
             String username,
+            String name,
             String email,
             String password,
             boolean mustChangePassword,
@@ -49,11 +63,15 @@ public class AuthenticatedUserContext implements UserDetails {
             boolean accountNonLocked,
             Long accountId,
             String schemaName,
+            boolean suspendedByAccount,
+            boolean suspendedByAdmin,
+            boolean deleted,
             RoleAuthority role,
             Collection<? extends GrantedAuthority> authorities
     ) {
         this.userId = userId;
         this.username = username;
+        this.name = name;
         this.email = email;
         this.password = password;
         this.mustChangePassword = mustChangePassword;
@@ -61,77 +79,86 @@ public class AuthenticatedUserContext implements UserDetails {
         this.accountNonLocked = accountNonLocked;
         this.accountId = accountId;
         this.schemaName = schemaName;
+        this.suspendedByAccount = suspendedByAccount;
+        this.suspendedByAdmin = suspendedByAdmin;
+        this.deleted = deleted;
         this.roleAuthority = role;
         this.authorities = authorities;
     }
 
-    /**
-     * Compat: onde você precisa da string "ROLE_..."
-     * (claims/debug/DTOs). Não armazena string, deriva do Enum.
-     */
     public String getRoleAuthority() {
         return roleAuthority == null ? null : roleAuthority.asAuthority();
     }
-    
+
     public String getRoleName() {
         return roleAuthority == null ? null : roleAuthority.toString();
     }
 
-
-    public static AuthenticatedUserContext fromControlPlaneUser(
-            ControlPlaneUser user,
-            String schemaName,
-            LocalDateTime now,
-            Collection<? extends GrantedAuthority> authorities
-    ) {
-        boolean enabled = user.isEnabledForLogin();
-        boolean nonLocked = user.isAccountNonLocked(now);
-
-        return new AuthenticatedUserContext(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getPassword(),
-                user.isMustChangePassword(),
-                enabled,
-                nonLocked,
-                user.getAccount().getId(),
-                schemaName,
-                user.getRole(),      // ✅ Enum (ControlPlaneRole)
-                authorities
-        );
+    /** Compat com código antigo que chamava getRole() */
+    public String getRole() {
+        return getRoleName();
     }
 
     public static AuthenticatedUserContext fromTenantUser(
             TenantUser user,
-            String schemaName,
+            String tenantSchema,
             LocalDateTime now,
             Collection<? extends GrantedAuthority> authorities
     ) {
-        boolean enabled = isTenantEnabledForLogin(user);
-        boolean nonLocked = isNonLocked(user.getLockedUntil(), now);
+        String email = user.getEmail();
+
+        if (!user.isEnabledForLogin(now)) {
+            throw new BadCredentialsException("USER_DISABLED");
+        }
 
         return new AuthenticatedUserContext(
                 user.getId(),
-                user.getUsername(),
-                user.getEmail(),
+                email,                 // username = email (principal)
+                user.getName(),
+                email,
                 user.getPassword(),
                 user.isMustChangePassword(),
-                enabled,
-                nonLocked,
+                user.isEnabled(),
+                user.isAccountNonLocked(now),
                 user.getAccountId(),
-                schemaName,
-                user.getRole(),      // ✅ Enum (TenantRole)
+                tenantSchema,
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.isDeleted(),
+                user.getRole(),        // ✅ TenantRole implements RoleAuthority
                 authorities
         );
     }
 
-    private static boolean isTenantEnabledForLogin(TenantUser user) {
-        return !user.isDeleted() && !user.isSuspendedByAccount() && !user.isSuspendedByAdmin();
-    }
+    public static AuthenticatedUserContext fromControlPlaneUser(
+            ControlPlaneUser user,
+            String tenantSchema,
+            LocalDateTime now,
+            Collection<? extends GrantedAuthority> authorities
+    ) {
+        String email = user.getEmail();
 
-    private static boolean isNonLocked(LocalDateTime lockedUntil, LocalDateTime now) {
-        return lockedUntil == null || !lockedUntil.isAfter(now);
+        if (!user.isEnabledForLogin(now)) {
+            throw new BadCredentialsException("USER_DISABLED");
+        }
+
+        return new AuthenticatedUserContext(
+                user.getId(),
+                email,                 // username = email (principal)
+                user.getName(),
+                email,
+                user.getPassword(),
+                user.isMustChangePassword(),
+                user.isEnabled(),
+                user.isAccountNonLocked(now),
+                user.getAccount().getId(),
+                tenantSchema,
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.isDeleted(),
+                user.getRole(),        // ✅ ControlPlaneRole implements RoleAuthority
+                authorities
+        );
     }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }

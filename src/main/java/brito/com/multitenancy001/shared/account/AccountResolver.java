@@ -19,10 +19,6 @@ public class AccountResolver {
     private final AppClock appClock;
     private final PublicExecutor publicExecutor;
 
-    /**
-     * Resolve conta no schema PUBLIC e valida se existe e se está operacional.
-     * Retorna apenas snapshot mínimo (sem expor a entidade do ControlPlane).
-     */
     public AccountSnapshot resolveActiveAccountBySlug(String slug) {
         return publicExecutor.run(() -> {
             LocalDateTime now = appClock.now();
@@ -34,14 +30,33 @@ public class AccountResolver {
                 throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
             }
 
-            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getStatus());
+            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
+        });
+    }
+
+    public AccountSnapshot resolveActiveAccountById(Long accountId) {
+        if (accountId == null) throw new ApiException("INVALID_ACCOUNT", "accountId inválido", 400);
+        return resolveActiveAccountByIdInternal(accountId);
+    }
+
+    private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
+        return publicExecutor.run(() -> {
+            LocalDateTime now = appClock.now();
+
+            AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+            if (!isOperational(p, now)) {
+                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+            }
+
+            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
         });
     }
 
     private boolean isOperational(AccountResolverProjection p, LocalDateTime now) {
         if (p == null) return false;
 
-        // BUILT_IN sempre operacional
         if ("BUILT_IN".equalsIgnoreCase(p.getOrigin())) return true;
 
         String status = p.getStatus();

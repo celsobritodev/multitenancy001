@@ -14,6 +14,11 @@ import java.util.Optional;
 @Repository
 public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
+	Optional<TenantUser> findByEmailAndDeletedFalse(String email);
+
+	
+	
+	
     // ==========================
     // Bulk operations (Tenant)
     // ==========================
@@ -62,22 +67,19 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
     Optional<TenantUser> findByPasswordResetTokenAndAccountId(String passwordResetToken, Long accountId);
 
-    Optional<TenantUser> findByUsernameAndDeletedFalse(String username);
+
 
     Optional<TenantUser> findByEmailAndAccountId(String email, Long accountId);
 
     Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
 
-    Optional<TenantUser> findByUsernameAndAccountId(String username, Long accountId);
 
-    Optional<TenantUser> findByUsernameAndAccountIdAndDeletedFalse(String username, Long accountId);
 
     // ==========================
     // Exists
     // ==========================
 
-    boolean existsByUsernameAndAccountId(String username, Long accountId);
-
+ 
     boolean existsByEmailAndAccountId(String email, Long accountId);
 
     boolean existsByEmailAndAccountIdAndIdNot(String email, Long accountId, Long id);

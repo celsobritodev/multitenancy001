@@ -41,8 +41,8 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         LocalDateTime now = now();
 
         // ✅ NÃO use ApiException aqui: Spring Security trata "user não encontrado"
-        String login = (username == null ? "" : username.trim().toLowerCase());
-        TenantUser user = tenantUserRepository.findByUsernameAndDeletedFalse(login)
+        String loginEmail = (username == null ? "" : username.trim().toLowerCase());
+        TenantUser user = tenantUserRepository.findByEmailAndDeletedFalse(loginEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
@@ -63,7 +63,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         // ✅ user não encontrado => UsernameNotFoundException
         ControlPlaneUser user = controlPlaneUserRepository
-                .findByUsernameAndAccount_IdAndDeletedFalse(username, accountId)
+                .findByEmailAndAccount_IdAndDeletedFalse(username, accountId)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
@@ -74,8 +74,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         LocalDateTime now = now();
 
         // ✅ user não encontrado => UsernameNotFoundException
-        ControlPlaneUser user = controlPlaneUserRepository.findByUsernameAndDeletedFalse(username)
+        ControlPlaneUser user = controlPlaneUserRepository.findByEmailAndDeletedFalse(username)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
@@ -105,8 +106,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         // ✅ user não encontrado => UsernameNotFoundException
         TenantUser user = tenantUserRepository
-                .findByUsernameAndAccountIdAndDeletedFalse(username, accountId)
+                .findByEmailAndDeletedFalse(username)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
