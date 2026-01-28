@@ -22,8 +22,10 @@ import java.util.Set;
 @Table(name = "controlplane_users")
 @EntityListeners(AuditEntityListener.class)
 @Getter
-@NoArgsConstructor @AllArgsConstructor @Builder
-@ToString(exclude = { "account", "password" })
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString(exclude = {"account", "password"})
 public class ControlPlaneUser implements Auditable, SoftDeletable {
 
     @Id
@@ -157,7 +159,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         return ControlPlaneBuiltInUsers.isReservedEmail(base);
     }
 
-
     private void assertMutable(String action) {
         if (isReservedBuiltInAdmin()) {
             throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: " + action);
@@ -209,7 +210,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     public void setPermissions(Set<ControlPlanePermission> permissions) {
         assertMutable("SET_PERMISSIONS");
         this.permissions = (permissions == null) ? new LinkedHashSet<>() : new LinkedHashSet<>(permissions);
-
     }
 
     // ✅ setters “de senha” são permitidos para reservados
@@ -222,66 +222,69 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     }
 
     // =========================================================
-    // Normalizações
+    // Normalizações (JPA: apenas 1 callback por tipo)
     // =========================================================
 
-  // =========================================================
-// Normalizações (JPA: apenas 1 callback por tipo)
-// =========================================================
-
-@PrePersist
-private void prePersist() {
-    normalizeInternal();
-    normalizePermissionsInternal();
-}
-
-@PreUpdate
-private void preUpdate() {
-    normalizeInternal();
-    normalizePermissionsInternal();
-    preventReservedMutationBySnapshotInternal();
-}
-
-private void normalizeInternal() {
-    if (email != null) email = email.trim().toLowerCase();
-}
-
-private void normalizePermissionsInternal() {
-    if (permissions == null) {
-        permissions = new LinkedHashSet<>();
-        return;
+    @PrePersist
+    private void prePersist() {
+        normalizeInternal();
+        normalizePermissionsInternal();
     }
-    var normalized = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
-    permissions.clear();
-    permissions.addAll(normalized);
-}
 
-// =========================================================
-// Snapshot + validação em @PreUpdate (rede de segurança)
-// =========================================================
+    @PreUpdate
+    private void preUpdate() {
+        normalizeInternal();
+        normalizePermissionsInternal();
+        preventReservedMutationBySnapshotInternal();
+    }
 
-private void preventReservedMutationBySnapshotInternal() {
-    var base = (_originalEmail != null) ? _originalEmail : this.email;
-    if (!ControlPlaneBuiltInUsers.isReservedEmail(base)) return;
+    private void normalizeInternal() {
+        if (email != null) email = email.trim().toLowerCase();
+    }
 
-    if (_originalEmail == null) return;
-
-    if (!safeEq(base, this.email)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: EMAIL");
-    if (!safeEq(_originalName, this.name)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: NAME");
-    // ...
-}
-
-
-    
-    
-    
-    
-    
+    private void normalizePermissionsInternal() {
+        if (permissions == null) {
+            permissions = new LinkedHashSet<>();
+            return;
+        }
+        var normalized = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
+        permissions.clear();
+        permissions.addAll(normalized);
+    }
 
     // =========================================================
     // Snapshot + validação em @PreUpdate (rede de segurança)
     // =========================================================
 
+    private void preventReservedMutationBySnapshotInternal() {
+        // decide se é reservado usando snapshot ou fallback
+        var base = (_originalEmail != null) ? _originalEmail : this.email;
+        if (!ControlPlaneBuiltInUsers.isReservedEmail(base)) return;
+
+        // 🔒 se não existe snapshot ainda, não valida por snapshot
+        if (_originalEmail == null) return;
+
+        // para reservado: email/nome/origin/role/suspensões/deleted NÃO podem mudar
+        if (!safeEq(base, this.email)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: EMAIL");
+        if (!safeEq(_originalName, this.name)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: NAME");
+        if (_originalRole != this.role) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: ROLE");
+        if (_originalOrigin != this.origin) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: ORIGIN");
+        if (_originalSuspendedByAccount != this.suspendedByAccount) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: SUSPENDED_BY_ACCOUNT");
+        if (_originalSuspendedByAdmin != this.suspendedByAdmin) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: SUSPENDED_BY_ADMIN");
+        if (_originalDeleted != this.deleted) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: DELETED");
+
+        // permissions (bloqueia até mutação interna do Set)
+        var original = (_originalPermissions == null) ? new LinkedHashSet<ControlPlanePermission>() : _originalPermissions;
+        var current = (this.permissions == null) ? new LinkedHashSet<ControlPlanePermission>() : this.permissions;
+
+        if (!original.equals(current)) {
+            throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: PERMISSIONS");
+        }
+    }
+
+    // =========================================================
+    // Snapshot (captura estado original)
+    // =========================================================
 
     @Transient private String _originalEmail;
     @Transient private String _originalName;
@@ -309,9 +312,7 @@ private void preventReservedMutationBySnapshotInternal() {
                 : new LinkedHashSet<>(this.permissions);
     }
 
-
-
-        private static boolean safeEq(Object a, Object b) {
+    private static boolean safeEq(Object a, Object b) {
         return a == null ? b == null : a.equals(b);
     }
 
@@ -367,27 +368,26 @@ private void preventReservedMutationBySnapshotInternal() {
     public boolean isSuspended() {
         return suspendedByAccount || suspendedByAdmin;
     }
-    
- // =========================================================
- // Security helpers (login / lock / reset) - permitido inclusive para reservados
- // =========================================================
 
- /**
-  * Zera contadores e desbloqueia o usuário.
-  * Permitido inclusive para usuários administrativos reservados.
-  */
- public void clearSecurityLockState() {
-     this.failedLoginAttempts = 0;
-     this.lockedUntil = null;
- }
+    // =========================================================
+    // Security helpers (login / lock / reset) - permitido inclusive para reservados
+    // =========================================================
 
- /**
-  * Limpa token de reset de senha.
-  * Permitido inclusive para usuários administrativos reservados.
-  */
- public void clearPasswordResetToken() {
-     this.passwordResetToken = null;
-     this.passwordResetExpires = null;
- }
+    /**
+     * Zera contadores e desbloqueia o usuário.
+     * Permitido inclusive para usuários administrativos reservados.
+     */
+    public void clearSecurityLockState() {
+        this.failedLoginAttempts = 0;
+        this.lockedUntil = null;
+    }
 
+    /**
+     * Limpa token de reset de senha.
+     * Permitido inclusive para usuários administrativos reservados.
+     */
+    public void clearPasswordResetToken() {
+        this.passwordResetToken = null;
+        this.passwordResetExpires = null;
+    }
 }
