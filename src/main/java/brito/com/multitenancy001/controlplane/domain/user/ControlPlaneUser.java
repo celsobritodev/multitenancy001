@@ -153,8 +153,10 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     // =========================================================
 
     public boolean isReservedBuiltInAdmin() {
-        return ControlPlaneBuiltInUsers.isReservedEmail(this.email);
+        var base = (_originalEmail != null) ? _originalEmail : this.email;
+        return ControlPlaneBuiltInUsers.isReservedEmail(base);
     }
+
 
     private void assertMutable(String action) {
         if (isReservedBuiltInAdmin()) {
@@ -206,7 +208,8 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
 
     public void setPermissions(Set<ControlPlanePermission> permissions) {
         assertMutable("SET_PERMISSIONS");
-        this.permissions = (permissions == null) ? new LinkedHashSet<>() : permissions;
+        this.permissions = (permissions == null) ? new LinkedHashSet<>() : new LinkedHashSet<>(permissions);
+
     }
 
     // ✅ setters “de senha” são permitidos para reservados
@@ -222,27 +225,63 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     // Normalizações
     // =========================================================
 
-    @PrePersist
-    @PreUpdate
-    private void normalize() {
-        if (email != null) email = email.trim().toLowerCase();
-    }
+  // =========================================================
+// Normalizações (JPA: apenas 1 callback por tipo)
+// =========================================================
 
-    @PrePersist
-    @PreUpdate
-    private void normalizePermissions() {
-        if (permissions == null) {
-            permissions = new LinkedHashSet<>();
-            return;
-        }
-        var normalized = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
-        permissions.clear();
-        permissions.addAll(normalized);
+@PrePersist
+private void prePersist() {
+    normalizeInternal();
+    normalizePermissionsInternal();
+}
+
+@PreUpdate
+private void preUpdate() {
+    normalizeInternal();
+    normalizePermissionsInternal();
+    preventReservedMutationBySnapshotInternal();
+}
+
+private void normalizeInternal() {
+    if (email != null) email = email.trim().toLowerCase();
+}
+
+private void normalizePermissionsInternal() {
+    if (permissions == null) {
+        permissions = new LinkedHashSet<>();
+        return;
     }
+    var normalized = PermissionScopeValidator.normalizeControlPlanePermissions(permissions);
+    permissions.clear();
+    permissions.addAll(normalized);
+}
+
+// =========================================================
+// Snapshot + validação em @PreUpdate (rede de segurança)
+// =========================================================
+
+private void preventReservedMutationBySnapshotInternal() {
+    var base = (_originalEmail != null) ? _originalEmail : this.email;
+    if (!ControlPlaneBuiltInUsers.isReservedEmail(base)) return;
+
+    if (_originalEmail == null) return;
+
+    if (!safeEq(base, this.email)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: EMAIL");
+    if (!safeEq(_originalName, this.name)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: NAME");
+    // ...
+}
+
+
+    
+    
+    
+    
+    
 
     // =========================================================
     // Snapshot + validação em @PreUpdate (rede de segurança)
     // =========================================================
+
 
     @Transient private String _originalEmail;
     @Transient private String _originalName;
@@ -251,6 +290,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Transient private boolean _originalSuspendedByAccount;
     @Transient private boolean _originalSuspendedByAdmin;
     @Transient private boolean _originalDeleted;
+    @Transient private Set<ControlPlanePermission> _originalPermissions;
 
     @PostLoad
     @PostPersist
@@ -263,28 +303,15 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this._originalSuspendedByAccount = this.suspendedByAccount;
         this._originalSuspendedByAdmin = this.suspendedByAdmin;
         this._originalDeleted = this.deleted;
+
+        this._originalPermissions = (this.permissions == null)
+                ? new LinkedHashSet<>()
+                : new LinkedHashSet<>(this.permissions);
     }
 
-    @PreUpdate
-    private void preventReservedMutationBySnapshot() {
-        // só valida se for reservado (pelo email original)
-        if (!ControlPlaneBuiltInUsers.isReservedEmail(_originalEmail)) return;
 
-        // para reservado: email/nome/origin/role/suspensões/deleted NÃO podem mudar
-        if (!safeEq(_originalEmail, this.email)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: EMAIL");
-        if (!safeEq(_originalName, this.name)) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: NAME");
-        if (_originalRole != this.role) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: ROLE");
-        if (_originalOrigin != this.origin) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: ORIGIN");
-        if (_originalSuspendedByAccount != this.suspendedByAccount) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: SUSPENDED_BY_ACCOUNT");
-        if (_originalSuspendedByAdmin != this.suspendedByAdmin) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: SUSPENDED_BY_ADMIN");
-        if (_originalDeleted != this.deleted) throw new IllegalStateException("RESERVED_BUILTIN_USER_READONLY: DELETED");
 
-        // permissions: não deveria mudar também (como a collection é mutável)
-        // Se você quiser bloquear 100% mesmo em mutação interna da coleção:
-        // o ideal é trocar para "Set copy" e comparar snapshot; aqui é o mínimo necessário
-    }
-
-    private static boolean safeEq(Object a, Object b) {
+        private static boolean safeEq(Object a, Object b) {
         return a == null ? b == null : a.equals(b);
     }
 

@@ -5624,11 +5624,346 @@ public class TenantPersistenceConfig {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/AccountEntitlementsGuard.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class AccountEntitlementsGuard {
+
+    private final AccountRepository accountRepository;
+    private final AccountEntitlementsService accountEntitlementsService;
+    private final PublicUnitOfWork publicUnitOfWork;
+
+    public void assertCanCreateUser(Long accountId, long currentUsers) {
+        if (accountId == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+        }
+
+        publicUnitOfWork.readOnly(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+            accountEntitlementsService.assertCanCreateUser(account, currentUsers);
+        });
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/AccountEntitlementsService.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AccountEntitlementsService {
+
+    private final AccountEntitlementsRepository accountEntitlementsRepository;
+
+    /**
+     * Resolve entitlements efetivos da conta:
+     * - PLATFORM => ilimitado
+     * - TENANT => lê de account_entitlements
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public AccountEntitlementsSnapshot resolveEffective(Account account) {
+        if (account == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+        }
+
+        if (account.isBuiltInAccount()) {
+            return AccountEntitlementsSnapshot.ofUnlimited();
+        }
+
+        AccountEntitlements ent = accountEntitlementsRepository.findById(account.getId())
+                .orElseThrow(() -> new ApiException(
+                        "ENTITLEMENTS_NOT_FOUND",
+                        "Entitlements não encontrados para a conta " + account.getId(),
+                        500
+                ));
+
+        Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
+        Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
+        Integer maxStorageMb = safePositive(ent.getMaxStorageMb(), "maxStorageMb");
+
+        return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
+    }
+
+    /**
+     * Valida quota para criação de usuário.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public boolean canCreateUser(Account account, long currentUsers) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+        return currentUsers < eff.maxUsers();
+    }
+
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanCreateUser(Account account, long currentUsers) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+
+        if (currentUsers >= eff.maxUsers()) {
+            throw new ApiException(
+                    "QUOTA_MAX_USERS_REACHED",
+                    "Limite de usuários atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    /**
+     * Valida quota para criação de produtos.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanCreateProduct(Account account, long currentProducts) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+
+        if (currentProducts >= eff.maxProducts()) {
+            throw new ApiException(
+                    "QUOTA_MAX_PRODUCTS_REACHED",
+                    "Limite de produtos atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    /**
+     * Valida quota de armazenamento.
+     */
+    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
+        if (deltaMb < 0) {
+            throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
+        }
+
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+        long after = currentStorageMb + deltaMb;
+
+        if (after > eff.maxStorageMb()) {
+            throw new ApiException(
+                    "QUOTA_MAX_STORAGE_REACHED",
+                    "Limite de armazenamento atingido para este plano",
+                    403
+            );
+        }
+    }
+
+    // =========================
+    // Helpers
+    // =========================
+
+    private Integer safePositive(Integer value, String field) {
+        if (value == null || value <= 0) {
+            throw new ApiException(
+                    "INVALID_ENTITLEMENT",
+                    "Entitlement inválido: " + field,
+                    500
+            );
+        }
+        return value;
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/AccountEntitlementsSnapshot.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+public record AccountEntitlementsSnapshot(
+        int maxUsers,
+        int maxProducts,
+        int maxStorageMb,
+        boolean unlimited
+) {
+
+    public static AccountEntitlementsSnapshot ofUnlimited() {
+        return new AccountEntitlementsSnapshot(
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                true
+        );
+    }
+
+    public static AccountEntitlementsSnapshot ofLimited(int maxUsers, int maxProducts, int maxStorageMb) {
+        return new AccountEntitlementsSnapshot(maxUsers, maxProducts, maxStorageMb, false);
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/AccountResolver.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+import java.time.LocalDateTime;
+
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountResolverProjection;
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.time.AppClock;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class AccountResolver {
+
+    private final AccountRepository accountRepository;
+    private final AppClock appClock;
+    private final PublicExecutor publicExecutor;
+
+    public AccountSnapshot resolveActiveAccountBySlug(String slug) {
+        return publicExecutor.run(() -> {
+            LocalDateTime now = appClock.now();
+
+            AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+            if (!isOperational(p, now)) {
+                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+            }
+
+            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
+        });
+    }
+
+    public AccountSnapshot resolveActiveAccountById(Long accountId) {
+        if (accountId == null) throw new ApiException("INVALID_ACCOUNT", "accountId inválido", 400);
+        return resolveActiveAccountByIdInternal(accountId);
+    }
+
+    private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
+        return publicExecutor.run(() -> {
+            LocalDateTime now = appClock.now();
+
+            AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+            if (!isOperational(p, now)) {
+                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+            }
+
+            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
+        });
+    }
+
+    private boolean isOperational(AccountResolverProjection p, LocalDateTime now) {
+        if (p == null) return false;
+
+        if ("BUILT_IN".equalsIgnoreCase(p.getOrigin())) return true;
+
+        String status = p.getStatus();
+        if ("ACTIVE".equalsIgnoreCase(status)) return true;
+
+        if ("FREE_TRIAL".equalsIgnoreCase(status)) {
+            return p.getTrialEndDate() != null && now != null && p.getTrialEndDate().isAfter(now);
+        }
+
+        return false;
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/AccountSnapshot.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+public record AccountSnapshot(
+        Long id,
+        String schemaName,
+        String slug,
+        String displayName
+) {}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityResolver.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Component
+@RequiredArgsConstructor
+public class LoginIdentityResolver {
+
+    private final NamedParameterJdbcTemplate jdbcTemplate;
+
+    /** ✅ nome esperado pelo TenantAuthService */
+    public List<LoginIdentityRow> findTenantAccountsByEmail(String email) {
+        return findTenantsByEmail(email);
+    }
+
+    /** ✅ implementação real */
+    public List<LoginIdentityRow> findTenantsByEmail(String email) {
+        if (email == null || email.isBlank()) return List.of();
+
+        String normalized = email.trim().toLowerCase();
+
+        String sql = """
+            select li.account_id,
+                   a.display_name,
+                   a.slug
+              from public.login_identities li
+              join public.accounts a on a.id = li.account_id
+             where lower(li.email) = lower(:email)
+               and a.deleted = false
+        """;
+
+        var params = new MapSqlParameterSource("email", normalized);
+
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new LoginIdentityRow(
+                rs.getLong("account_id"),
+                rs.getString("display_name"),
+                rs.getString("slug")
+        ));
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityRow.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+
+
+
+
+public record LoginIdentityRow(
+        Long accountId,
+        String displayName,
+        String slug
+) {}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
 ============================================================
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -5647,7 +5982,7 @@ import java.util.Collection;
  * - Por isso, aqui guardamos o principal como principalEmail e
  *   implementamos getUsername() retornando esse email.
  */
-public class AuthenticatedUserContext implements UserDetails {
+public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrincipal {
 
     private static final long serialVersionUID = 1L;
 
@@ -5710,6 +6045,7 @@ public class AuthenticatedUserContext implements UserDetails {
         this.authorities = authorities;
     }
 
+    @Override
     public Long getUserId() {
         return userId;
     }
@@ -5718,6 +6054,18 @@ public class AuthenticatedUserContext implements UserDetails {
         return name;
     }
 
+    /**
+     * Email principal usado para autenticação (mesmo valor de getUsername()).
+     * Exposto por clareza.
+     */
+    public String getPrincipalEmail() {
+        return principalEmail;
+    }
+
+    /**
+     * Contrato do AuthenticatedPrincipal.
+     */
+    @Override
     public String getEmail() {
         return email;
     }
@@ -7323,340 +7671,6 @@ public class TenantUserProvisioningFacade {
 }
 
 ============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsGuard.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-@Service
-@RequiredArgsConstructor
-public class AccountEntitlementsGuard {
-
-    private final AccountRepository accountRepository;
-    private final AccountEntitlementsService accountEntitlementsService;
-    private final PublicUnitOfWork publicUnitOfWork;
-
-    public void assertCanCreateUser(Long accountId, long currentUsers) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
-        }
-
-        publicUnitOfWork.readOnly(() -> {
-            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-            accountEntitlementsService.assertCanCreateUser(account, currentUsers);
-        });
-    }
-}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsService.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-@Service
-@RequiredArgsConstructor
-public class AccountEntitlementsService {
-
-    private final AccountEntitlementsRepository accountEntitlementsRepository;
-
-    /**
-     * Resolve entitlements efetivos da conta:
-     * - PLATFORM => ilimitado
-     * - TENANT => lê de account_entitlements
-     */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
-    public AccountEntitlementsSnapshot resolveEffective(Account account) {
-        if (account == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
-        }
-
-        if (account.isBuiltInAccount()) {
-            return AccountEntitlementsSnapshot.ofUnlimited();
-        }
-
-        AccountEntitlements ent = accountEntitlementsRepository.findById(account.getId())
-                .orElseThrow(() -> new ApiException(
-                        "ENTITLEMENTS_NOT_FOUND",
-                        "Entitlements não encontrados para a conta " + account.getId(),
-                        500
-                ));
-
-        Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
-        Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
-        Integer maxStorageMb = safePositive(ent.getMaxStorageMb(), "maxStorageMb");
-
-        return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
-    }
-
-    /**
-     * Valida quota para criação de usuário.
-     */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
-    public boolean canCreateUser(Account account, long currentUsers) {
-        AccountEntitlementsSnapshot eff = resolveEffective(account);
-        return currentUsers < eff.maxUsers();
-    }
-
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
-    public void assertCanCreateUser(Account account, long currentUsers) {
-        AccountEntitlementsSnapshot eff = resolveEffective(account);
-
-        if (currentUsers >= eff.maxUsers()) {
-            throw new ApiException(
-                    "QUOTA_MAX_USERS_REACHED",
-                    "Limite de usuários atingido para este plano",
-                    403
-            );
-        }
-    }
-
-    /**
-     * Valida quota para criação de produtos.
-     */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
-    public void assertCanCreateProduct(Account account, long currentProducts) {
-        AccountEntitlementsSnapshot eff = resolveEffective(account);
-
-        if (currentProducts >= eff.maxProducts()) {
-            throw new ApiException(
-                    "QUOTA_MAX_PRODUCTS_REACHED",
-                    "Limite de produtos atingido para este plano",
-                    403
-            );
-        }
-    }
-
-    /**
-     * Valida quota de armazenamento.
-     */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
-    public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
-        if (deltaMb < 0) {
-            throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
-        }
-
-        AccountEntitlementsSnapshot eff = resolveEffective(account);
-        long after = currentStorageMb + deltaMb;
-
-        if (after > eff.maxStorageMb()) {
-            throw new ApiException(
-                    "QUOTA_MAX_STORAGE_REACHED",
-                    "Limite de armazenamento atingido para este plano",
-                    403
-            );
-        }
-    }
-
-    // =========================
-    // Helpers
-    // =========================
-
-    private Integer safePositive(Integer value, String field) {
-        if (value == null || value <= 0) {
-            throw new ApiException(
-                    "INVALID_ENTITLEMENT",
-                    "Entitlement inválido: " + field,
-                    500
-            );
-        }
-        return value;
-    }
-}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountEntitlementsSnapshot.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-public record AccountEntitlementsSnapshot(
-        int maxUsers,
-        int maxProducts,
-        int maxStorageMb,
-        boolean unlimited
-) {
-
-    public static AccountEntitlementsSnapshot ofUnlimited() {
-        return new AccountEntitlementsSnapshot(
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                Integer.MAX_VALUE,
-                true
-        );
-    }
-
-    public static AccountEntitlementsSnapshot ofLimited(int maxUsers, int maxProducts, int maxStorageMb) {
-        return new AccountEntitlementsSnapshot(maxUsers, maxProducts, maxStorageMb, false);
-    }
-}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountResolver.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-import java.time.LocalDateTime;
-
-import org.springframework.stereotype.Service;
-
-import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
-import brito.com.multitenancy001.controlplane.persistence.account.AccountResolverProjection;
-import brito.com.multitenancy001.shared.api.error.ApiException;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import brito.com.multitenancy001.shared.time.AppClock;
-import lombok.RequiredArgsConstructor;
-
-@Service
-@RequiredArgsConstructor
-public class AccountResolver {
-
-    private final AccountRepository accountRepository;
-    private final AppClock appClock;
-    private final PublicExecutor publicExecutor;
-
-    public AccountSnapshot resolveActiveAccountBySlug(String slug) {
-        return publicExecutor.run(() -> {
-            LocalDateTime now = appClock.now();
-
-            AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-            if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
-            }
-
-            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
-        });
-    }
-
-    public AccountSnapshot resolveActiveAccountById(Long accountId) {
-        if (accountId == null) throw new ApiException("INVALID_ACCOUNT", "accountId inválido", 400);
-        return resolveActiveAccountByIdInternal(accountId);
-    }
-
-    private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
-        return publicExecutor.run(() -> {
-            LocalDateTime now = appClock.now();
-
-            AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-
-            if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
-            }
-
-            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
-        });
-    }
-
-    private boolean isOperational(AccountResolverProjection p, LocalDateTime now) {
-        if (p == null) return false;
-
-        if ("BUILT_IN".equalsIgnoreCase(p.getOrigin())) return true;
-
-        String status = p.getStatus();
-        if ("ACTIVE".equalsIgnoreCase(status)) return true;
-
-        if ("FREE_TRIAL".equalsIgnoreCase(status)) {
-            return p.getTrialEndDate() != null && now != null && p.getTrialEndDate().isAfter(now);
-        }
-
-        return false;
-    }
-}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/AccountSnapshot.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-public record AccountSnapshot(
-        Long id,
-        String schemaName,
-        String slug,
-        String displayName
-) {}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/LoginIdentityResolver.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
-
-@Component
-@RequiredArgsConstructor
-public class LoginIdentityResolver {
-
-    private final NamedParameterJdbcTemplate jdbcTemplate;
-
-    /** ✅ nome esperado pelo TenantAuthService */
-    public List<LoginIdentityRow> findTenantAccountsByEmail(String email) {
-        return findTenantsByEmail(email);
-    }
-
-    /** ✅ implementação real */
-    public List<LoginIdentityRow> findTenantsByEmail(String email) {
-        if (email == null || email.isBlank()) return List.of();
-
-        String normalized = email.trim().toLowerCase();
-
-        String sql = """
-            select li.account_id,
-                   a.display_name,
-                   a.slug
-              from public.login_identities li
-              join public.accounts a on a.id = li.account_id
-             where lower(li.email) = lower(:email)
-               and a.deleted = false
-        """;
-
-        var params = new MapSqlParameterSource("email", normalized);
-
-        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new LoginIdentityRow(
-                rs.getLong("account_id"),
-                rs.getString("display_name"),
-                rs.getString("slug")
-        ));
-    }
-}
-
-============================================================
-// FILE: ./main/java/brito/com/multitenancy001/shared/account/LoginIdentityRow.java
-============================================================
-package brito.com.multitenancy001.shared.account;
-
-
-
-
-
-public record LoginIdentityRow(
-        Long accountId,
-        String displayName,
-        String slug
-) {}
-
-============================================================
 // FILE: ./main/java/brito/com/multitenancy001/shared/account/UserLimitPolicy.java
 ============================================================
 package brito.com.multitenancy001.shared.account;
@@ -8730,8 +8744,10 @@ public class TxExecutor {
 ============================================================
 package brito.com.multitenancy001.shared.persistence.audit;
 
-import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.shared.domain.audit.AuditActor;
+import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -8739,14 +8755,60 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuditActorProvider {
 
+    @PostConstruct
+    void register() {
+        AuditActorProviders.setProvider(this);
+    }
+
+    @PreDestroy
+    void unregister() {
+        AuditActorProviders.clear();
+    }
+
     public AuditActor current() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUserContext ctx)) {
+        if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedPrincipal p)) {
             return AuditActor.system();
         }
 
-        return new AuditActor(ctx.getUserId(), ctx.getEmail());
+        return new AuditActor(p.getUserId(), p.getEmail());
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/shared/persistence/audit/AuditActorProviders.java
+============================================================
+package brito.com.multitenancy001.shared.persistence.audit;
+
+import brito.com.multitenancy001.shared.domain.audit.AuditActor;
+
+/**
+ * Holder estático para permitir que EntityListeners (instanciados pelo JPA)
+ * acessem o AuditActorProvider (bean Spring) sem injeção direta.
+ *
+ * Motivo:
+ * - EntityListeners NÃO são gerenciados pelo Spring por padrão.
+ * - Injeção @Autowired em listener costuma falhar silenciosamente.
+ */
+public final class AuditActorProviders {
+
+    private static volatile AuditActorProvider provider;
+
+    private AuditActorProviders() {}
+
+    static void setProvider(AuditActorProvider provider) {
+        AuditActorProviders.provider = provider;
+    }
+
+    static void clear() {
+        AuditActorProviders.provider = null;
+    }
+
+    public static AuditActor currentOrSystem() {
+        AuditActorProvider p = provider;
+        if (p == null) return AuditActor.system();
+        return p.current();
     }
 }
 
@@ -8760,26 +8822,22 @@ import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Listener de auditoria (JPA/Hibernate).
+ *
+ * Importante:
+ * - Este listener é instanciado pelo JPA, NÃO pelo Spring.
+ * - Por isso, NÃO use @Component/@Autowired aqui.
+ * - A ponte com Spring é feita via AuditActorProviders (holder estático).
+ */
 public class AuditEntityListener {
-
-    private AuditActorProvider auditActorProvider;
-
-    public AuditEntityListener() {}
-
-    @Autowired
-    public void setProvider(AuditActorProvider auditActorProvider) {
-        this.auditActorProvider = auditActorProvider;
-    }
 
     @PrePersist
     public void prePersist(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        var actor = currentActorOrThrow();
+        AuditActor actor = AuditActorProviders.currentOrSystem();
         auditable.getAudit().onCreate(actor);
 
         if (entity instanceof SoftDeletable softDeletable
@@ -8789,12 +8847,11 @@ public class AuditEntityListener {
         }
     }
 
-
     @PreUpdate
     public void preUpdate(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        var actor = currentActorOrThrow();
+        AuditActor actor = AuditActorProviders.currentOrSystem();
         auditable.getAudit().onUpdate(actor);
 
         if (entity instanceof SoftDeletable softDeletable
@@ -8803,16 +8860,55 @@ public class AuditEntityListener {
             auditable.getAudit().onDelete(actor);
         }
     }
+}
 
-    private AuditActor currentActorOrThrow() {
-        if (auditActorProvider == null) {
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/shared/persistence/audit/AuditWiringVerifier.java
+============================================================
+package brito.com.multitenancy001.shared.persistence.audit;
+
+import jakarta.annotation.PostConstruct;
+import org.springframework.stereotype.Component;
+
+/**
+ * Verifica no startup se o AuditActorProvider foi corretamente
+ * registrado no AuditActorProviders (holder estático).
+ *
+ * Evita cenário silencioso onde:
+ * - EntityListener funciona
+ * - Mas sempre retorna AuditActor.system()
+ * - Porque o provider Spring não foi injetado no holder.
+ */
+@Component
+public class AuditWiringVerifier {
+
+    @PostConstruct
+    public void verifyAuditWiring() {
+        try {
+            AuditActorProviders.currentOrSystem();
+        } catch (Exception e) {
             throw new IllegalStateException(
-                    "AuditActorProvider não foi injetado no AuditEntityListener. " +
-                    "Verifique BEAN_CONTAINER no EMF (PUBLIC e TENANT) e se AuditActorProvider é bean Spring."
+                "AUDIT MISCONFIGURATION: AuditActorProvider não está registrado no AuditActorProviders. " +
+                "A auditoria irá registrar tudo como SYSTEM. Verifique o bean AuditActorProvider e o método @PostConstruct.",
+                e
             );
         }
-        return auditActorProvider.current();
     }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/shared/security/AuthenticatedPrincipal.java
+============================================================
+package brito.com.multitenancy001.shared.security;
+
+/**
+ * Contrato mínimo para Principal autenticado.
+ *
+ * Evita acoplamento do shared/persistence com classes de infraestrutura.
+ */
+public interface AuthenticatedPrincipal {
+    Long getUserId();
+    String getEmail();
 }
 
 ============================================================
@@ -10638,12 +10734,12 @@ public class TenantUserAdminController {
 ============================================================
 package brito.com.multitenancy001.tenant.application.auth;
 
+import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.account.AccountResolver;
-import brito.com.multitenancy001.shared.account.AccountSnapshot;
-import brito.com.multitenancy001.shared.account.LoginIdentityResolver;
-import brito.com.multitenancy001.shared.account.LoginIdentityRow;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
@@ -11944,12 +12040,12 @@ public class TenantSupplierService {
 ============================================================
 package brito.com.multitenancy001.tenant.application.user;
 
+import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsGuard;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.account.AccountEntitlementsGuard;
-import brito.com.multitenancy001.shared.account.AccountResolver;
-import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
