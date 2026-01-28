@@ -10,11 +10,12 @@ package brito.com.multitenancy001.shared.security;
  */
 public enum TenantRoleName {
 
-    TENANT_OWNER,
+	TENANT_OWNER,
     TENANT_ADMIN,
     TENANT_PRODUCT_MANAGER,
     TENANT_SALES_MANAGER,
     TENANT_BILLING_MANAGER,
+    TENANT_READ_ONLY,
     TENANT_OPERATOR;
 
     public static TenantRoleName fromString(String value) {

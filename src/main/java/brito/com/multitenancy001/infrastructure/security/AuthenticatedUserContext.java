@@ -15,7 +15,7 @@ import java.util.Collection;
  *
  * Observação importante:
  * - O método do contrato UserDetails se chama getUsername().
- * - No nosso domínio, "username" NÃO existe (login é por email).
+ * - No nosso domínio, login é por email.
  * - Por isso, aqui guardamos o principal como principalEmail e
  *   implementamos getUsername() retornando esse email.
  */

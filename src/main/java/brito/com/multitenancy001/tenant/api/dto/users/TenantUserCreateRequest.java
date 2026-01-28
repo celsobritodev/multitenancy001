@@ -15,7 +15,7 @@ import java.util.LinkedHashSet;
 /**
  * Request para criação de usuário no Tenant.
  *
- * Login é por EMAIL (não existe username).
+ * Login é por EMAIL
  *
  * Observações:
  * - locale/timezone são opcionais (defaults são aplicados no service).

@@ -37,7 +37,7 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                                                               @Param("accountId") Long accountId);
 
     /**
-     * ✅ substitui o antigo "superadmin por username".
+     * 
      * Agora: usuário BUILT_IN + role CONTROLPLANE_OWNER.
      */
     @Query("""

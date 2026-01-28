@@ -66,7 +66,7 @@ public class TenantUserProvisioningFacade {
      * Retorna um snapshot (UserSummaryData) para evitar vazamento do domínio Tenant
      * para o contexto ControlPlane.
      *
-     * Login é por EMAIL (não existe username).
+     * Login é por EMAIL 
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -174,7 +174,7 @@ public class TenantUserProvisioningFacade {
 
     /**
      * Suspende/reativa um usuário por ADMIN (ação administrativa do ControlPlane).
-     * Não depende de username; identidade é EMAIL, mas aqui o alvo é por userId.
+     * identidade é EMAIL, mas aqui o alvo é por userId.
      */
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);

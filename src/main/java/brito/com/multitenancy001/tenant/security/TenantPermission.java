@@ -1,13 +1,11 @@
 package brito.com.multitenancy001.tenant.security;
 
-import brito.com.multitenancy001.shared.security.PermissionAuthority;
-
+import brito.com.multitenancy001.shared.security.PermissionCode;
 
 /**
  * Padrão: TODA permissão de tenant deve iniciar com TEN_
  */
-
-public enum TenantPermission implements PermissionAuthority {
+public enum TenantPermission implements PermissionCode {
 
     TEN_USER_READ,
     TEN_USER_CREATE,
@@ -16,7 +14,7 @@ public enum TenantPermission implements PermissionAuthority {
     TEN_USER_RESTORE,
     TEN_USER_DELETE,
 
-    TEN_ROLE_TRANSFER, 
+    TEN_ROLE_TRANSFER,
 
     TEN_PRODUCT_READ,
     TEN_PRODUCT_WRITE,
@@ -39,9 +37,9 @@ public enum TenantPermission implements PermissionAuthority {
 
     TEN_SETTINGS_READ,
     TEN_SETTINGS_WRITE,
-	
-	TEN_INVENTORY_READ,
-	TEN_INVENTORY_WRITE;
+
+    TEN_INVENTORY_READ,
+    TEN_INVENTORY_WRITE;
 
     @Override
     public String asAuthority() {

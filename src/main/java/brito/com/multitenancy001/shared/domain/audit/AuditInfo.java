@@ -10,6 +10,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AuditInfo {
 
+    /**
+     * IMPORTANTE:
+     * As migrations do projeto usam VARCHAR(120) para:
+     * created_by_email, updated_by_email, deleted_by_email.
+     *
+     * Então o código precisa respeitar 120 para evitar erro de persistência.
+     */
+    private static final int AUDIT_EMAIL_MAX_LEN = 120;
+
     @Column(name = "created_by")
     private Long createdBy;
 
@@ -19,13 +28,13 @@ public class AuditInfo {
     @Column(name = "deleted_by")
     private Long deletedBy;
 
-    @Column(name = "created_by_email", length = 150)
+    @Column(name = "created_by_email", length = AUDIT_EMAIL_MAX_LEN)
     private String createdByEmail;
 
-    @Column(name = "updated_by_email", length = 150)
+    @Column(name = "updated_by_email", length = AUDIT_EMAIL_MAX_LEN)
     private String updatedByEmail;
 
-    @Column(name = "deleted_by_email", length = 150)
+    @Column(name = "deleted_by_email", length = AUDIT_EMAIL_MAX_LEN)
     private String deletedByEmail;
 
     public void onCreate(AuditActor actor) {
@@ -54,7 +63,11 @@ public class AuditInfo {
 
     private static String safeEmail(String email) {
         if (email == null) return null;
+
         String v = email.trim().toLowerCase();
-        return v.length() <= 150 ? v : v.substring(0, 150);
+        if (v.isBlank()) return null;
+
+        if (v.length() <= AUDIT_EMAIL_MAX_LEN) return v;
+        return v.substring(0, AUDIT_EMAIL_MAX_LEN);
     }
 }

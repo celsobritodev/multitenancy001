@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.controlplane.security;
 
-import brito.com.multitenancy001.shared.security.PermissionAuthority;
+import brito.com.multitenancy001.shared.security.PermissionCode;
 
-public enum ControlPlanePermission implements PermissionAuthority {
+public enum ControlPlanePermission implements PermissionCode {
 
     CP_TENANT_READ,
     CP_TENANT_SUSPEND,
@@ -15,7 +15,6 @@ public enum ControlPlanePermission implements PermissionAuthority {
     CP_USER_READ,
     CP_USER_WRITE,
     CP_USER_DELETE,
-
 
     CP_USER_PASSWORD_RESET;
 

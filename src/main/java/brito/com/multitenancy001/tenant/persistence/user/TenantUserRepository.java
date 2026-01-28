@@ -21,13 +21,13 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
     Optional<TenantUser> findByEmailAndDeletedFalse(String email);
 
-    Optional<TenantUser> findByEmailAndAccountId(String email, Long accountId);
+
 
     Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
 
     boolean existsByEmailAndAccountId(String email, Long accountId);
 
-    boolean existsByEmailAndAccountIdAndIdNot(String email, Long accountId, Long id);
+
 
     // =========================================================
     // PASSWORD RESET

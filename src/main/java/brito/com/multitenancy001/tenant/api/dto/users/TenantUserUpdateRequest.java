@@ -6,7 +6,7 @@ import brito.com.multitenancy001.tenant.security.TenantRole;
  * Request para atualização parcial de usuário no Tenant.
  * Tudo é opcional (PATCH semantics).
  *
- * Login é por EMAIL (não existe username).
+ * Login é por EMAIL 
  */
 public record TenantUserUpdateRequest(
         String name,
