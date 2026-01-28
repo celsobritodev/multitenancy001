@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.tenant.application.auth;
 
+import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.account.AccountResolver;
-import brito.com.multitenancy001.shared.account.AccountSnapshot;
-import brito.com.multitenancy001.shared.account.LoginIdentityResolver;
-import brito.com.multitenancy001.shared.account.LoginIdentityRow;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;

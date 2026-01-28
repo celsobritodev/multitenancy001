@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.tenant.application.user;
 
+import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsGuard;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.account.AccountEntitlementsGuard;
-import brito.com.multitenancy001.shared.account.AccountResolver;
-import brito.com.multitenancy001.shared.account.AccountSnapshot;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;

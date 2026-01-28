@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -19,7 +20,7 @@ import java.util.Collection;
  * - Por isso, aqui guardamos o principal como principalEmail e
  *   implementamos getUsername() retornando esse email.
  */
-public class AuthenticatedUserContext implements UserDetails {
+public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrincipal {
 
     private static final long serialVersionUID = 1L;
 
@@ -82,6 +83,7 @@ public class AuthenticatedUserContext implements UserDetails {
         this.authorities = authorities;
     }
 
+    @Override
     public Long getUserId() {
         return userId;
     }
@@ -90,6 +92,18 @@ public class AuthenticatedUserContext implements UserDetails {
         return name;
     }
 
+    /**
+     * Email principal usado para autenticação (mesmo valor de getUsername()).
+     * Exposto por clareza.
+     */
+    public String getPrincipalEmail() {
+        return principalEmail;
+    }
+
+    /**
+     * Contrato do AuthenticatedPrincipal.
+     */
+    @Override
     public String getEmail() {
         return email;
     }

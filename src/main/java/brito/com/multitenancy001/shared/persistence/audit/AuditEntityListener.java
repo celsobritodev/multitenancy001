@@ -5,26 +5,22 @@ import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Listener de auditoria (JPA/Hibernate).
+ *
+ * Importante:
+ * - Este listener é instanciado pelo JPA, NÃO pelo Spring.
+ * - Por isso, NÃO use @Component/@Autowired aqui.
+ * - A ponte com Spring é feita via AuditActorProviders (holder estático).
+ */
 public class AuditEntityListener {
-
-    private AuditActorProvider auditActorProvider;
-
-    public AuditEntityListener() {}
-
-    @Autowired
-    public void setProvider(AuditActorProvider auditActorProvider) {
-        this.auditActorProvider = auditActorProvider;
-    }
 
     @PrePersist
     public void prePersist(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        var actor = currentActorOrThrow();
+        AuditActor actor = AuditActorProviders.currentOrSystem();
         auditable.getAudit().onCreate(actor);
 
         if (entity instanceof SoftDeletable softDeletable
@@ -34,12 +30,11 @@ public class AuditEntityListener {
         }
     }
 
-
     @PreUpdate
     public void preUpdate(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        var actor = currentActorOrThrow();
+        AuditActor actor = AuditActorProviders.currentOrSystem();
         auditable.getAudit().onUpdate(actor);
 
         if (entity instanceof SoftDeletable softDeletable
@@ -47,15 +42,5 @@ public class AuditEntityListener {
                 && auditable.getAudit().getDeletedBy() == null) {
             auditable.getAudit().onDelete(actor);
         }
-    }
-
-    private AuditActor currentActorOrThrow() {
-        if (auditActorProvider == null) {
-            throw new IllegalStateException(
-                    "AuditActorProvider não foi injetado no AuditEntityListener. " +
-                    "Verifique BEAN_CONTAINER no EMF (PUBLIC e TENANT) e se AuditActorProvider é bean Spring."
-            );
-        }
-        return auditActorProvider.current();
     }
 }

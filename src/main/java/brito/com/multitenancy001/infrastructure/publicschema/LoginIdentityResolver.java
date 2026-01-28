@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.account;
+package brito.com.multitenancy001.infrastructure.publicschema;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;

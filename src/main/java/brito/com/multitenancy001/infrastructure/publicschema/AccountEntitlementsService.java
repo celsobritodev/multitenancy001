@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.account;
+package brito.com.multitenancy001.infrastructure.publicschema;
 
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;

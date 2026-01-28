@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.account;
+package brito.com.multitenancy001.infrastructure.publicschema;
 
 public record AccountEntitlementsSnapshot(
         int maxUsers,
