@@ -4,12 +4,18 @@ import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
+import brito.com.multitenancy001.shared.persistence.auth.TenantLoginChallenge;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantSelectionOption;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -22,8 +28,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +48,18 @@ public class TenantAuthService {
     private final PublicExecutor publicExecutor;
     private final TenantExecutor tenantExecutor;
 
-    public JwtResponse loginTenant(TenantLoginRequest req) {
+    private final TenantLoginChallengeService tenantLoginChallengeService;
+    private final AppClock appClock;
+
+    private LocalDateTime now() { return appClock.now(); }
+
+    /**
+     * 1) INIT LOGIN
+     * email + password
+     * - se 1 tenant: JWT
+     * - se >1 tenant: challengeId + candidates (controller devolve 409)
+     */
+    public Object loginInit(TenantLoginInitRequest req) {
 
         if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         if (!StringUtils.hasText(req.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
@@ -59,30 +77,11 @@ public class TenantAuthService {
             throw new BadCredentialsException(INVALID_USER_MSG);
         }
 
-        // 2) Se veio accountId, tenta só nele (2º passo do front)
-        if (req.accountId() != null) {
-            Long chosen = req.accountId();
-
-            boolean exists = candidates.stream().anyMatch(r -> r.accountId().equals(chosen));
-            if (!exists) {
-                // evita vazar info / evita brute force de accountId
-                throw new BadCredentialsException(INVALID_USER_MSG);
-            }
-
-            AccountSnapshot account = publicExecutor.run(() ->
-                    accountResolver.resolveActiveAccountById(chosen)
-            );
-
-            return attemptLoginOnAccount(account, email, password);
-        }
-
-        // 3) Se NÃO veio accountId: tenta autenticar em cada tenant
-        //    - se só 1 bater -> JWT direto
-        //    - se várias baterem -> pede seleção
-        //    - se nenhuma bater -> invalid
-        List<SuccessfulTenantLogin> successes = new ArrayList<>();
+        // 2) Valida credenciais em cada tenant e acumula somente os tenants onde bate
+        List<AccountSnapshot> validAccounts = new ArrayList<>();
 
         for (LoginIdentityRow row : candidates) {
+
             AccountSnapshot account;
             try {
                 account = publicExecutor.run(() ->
@@ -94,45 +93,97 @@ public class TenantAuthService {
             }
 
             try {
-                JwtResponse jwt = attemptLoginOnAccount(account, email, password);
-                successes.add(new SuccessfulTenantLogin(account, jwt));
+                validateCredentialsOnAccount(account, email, password);
+                validAccounts.add(account);
             } catch (BadCredentialsException ex) {
                 // senha não bate nesse tenant -> ignora
             } catch (ApiException ex) {
-                // usuário inativo nesse tenant -> ignora (ou decide se quer bloquear)
+                // usuário inativo nesse tenant -> ignora
             }
         }
 
-        if (successes.isEmpty()) {
+        if (validAccounts.isEmpty()) {
             throw new BadCredentialsException(INVALID_USER_MSG);
         }
 
-        if (successes.size() == 1) {
-            return successes.get(0).jwt();
+        if (validAccounts.size() == 1) {
+            return issueJwtForAccount(validAccounts.get(0), email);
         }
 
-        // várias contas com senha válida -> pede escolha
-        List<TenantSelectionOption> options = successes.stream()
-                .map(s -> new TenantSelectionOption(
-                        s.account().id(),
-                        s.account().displayName(),
-                        s.account().slug()
-                ))
+        // 3) várias contas com senha válida -> cria challenge
+        Set<Long> accountIds = validAccounts.stream()
+                .map(AccountSnapshot::id)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        UUID challengeId = publicExecutor.run(() -> tenantLoginChallengeService.createChallenge(email, accountIds));
+
+        List<TenantSelectionOption> options = validAccounts.stream()
+                .map(a -> new TenantSelectionOption(a.id(), a.displayName(), a.slug()))
                 .toList();
 
-        throw new ApiException(
-                "TENANT_SELECTION_REQUIRED",
+        return new TenantLoginAmbiguousResponse(
+                "ACCOUNT_SELECTION_REQUIRED",
                 "Selecione a empresa",
-                409,
+                challengeId.toString(),
                 options
         );
     }
 
-    private JwtResponse attemptLoginOnAccount(AccountSnapshot account, String email, String password) {
+    /**
+     * 2) CONFIRM LOGIN
+     * challengeId + accountId
+     * - valida challenge (expiração + não usado)
+     * - valida accountId pertence aos candidates
+     * - gera JWT sem pedir senha novamente
+     */
+    public JwtResponse loginConfirm(TenantLoginConfirmRequest req) {
 
-        return tenantExecutor.run(account.schemaName(), () -> {
+        if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
+        if (!StringUtils.hasText(req.challengeId())) throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+        if (req.accountId() == null) throw new ApiException("INVALID_CHALLENGE", "accountId é obrigatório", 400);
 
-            Authentication authentication = authenticateOrInvalidUser(email, password);
+        UUID challengeUuid;
+        try {
+            challengeUuid = UUID.fromString(req.challengeId().trim());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 401);
+        }
+
+        TenantLoginChallenge challenge = publicExecutor.run(() -> tenantLoginChallengeService.requireValid(challengeUuid));
+
+        String email = challenge.getEmail();
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401);
+        }
+
+        Set<Long> allowed = challenge.candidateAccountIds();
+        if (allowed == null || allowed.isEmpty() || !allowed.contains(req.accountId())) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401);
+        }
+
+        AccountSnapshot account = publicExecutor.run(() ->
+                accountResolver.resolveActiveAccountById(req.accountId())
+        );
+
+        JwtResponse jwt = issueJwtForAccount(account, email);
+
+        publicExecutor.run(() -> {
+            tenantLoginChallengeService.markUsed(challenge);
+            return null;
+        });
+
+        return jwt;
+    }
+
+    /**
+     * Valida se email/senha estão corretos naquele tenant e se o usuário está ativo.
+     * Não gera token.
+     */
+    private void validateCredentialsOnAccount(AccountSnapshot account, String email, String password) {
+
+        tenantExecutor.run(account.schemaName(), () -> {
+
+            authenticateOrInvalidUser(email, password);
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndDeletedFalse(email)
@@ -141,6 +192,43 @@ public class TenantAuthService {
             if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
+
+            return null;
+        });
+    }
+
+    /**
+     * Emite JWT sem precisar da senha.
+     * - carrega TenantUser no schema
+     * - cria Authentication com principal AuthenticatedUserContext
+     * - gera access + refresh
+     */
+    private JwtResponse issueJwtForAccount(AccountSnapshot account, String email) {
+
+        return tenantExecutor.run(account.schemaName(), () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndDeletedFalse(email)
+                    .orElseThrow(() -> new BadCredentialsException(INVALID_USER_MSG));
+
+            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    account.schemaName(),
+                    now(),
+                    authorities
+            );
+
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
 
             String accessToken = jwtTokenProvider.generateTenantToken(
                     authentication,
@@ -157,7 +245,6 @@ public class TenantAuthService {
                     accessToken,
                     refreshToken,
                     user.getId(),
-        
                     user.getEmail(),
                     user.getRole().name(),
                     account.id(),
@@ -186,6 +273,4 @@ public class TenantAuthService {
             throw e;
         }
     }
-
-    private record SuccessfulTenantLogin(AccountSnapshot account, JwtResponse jwt) {}
 }

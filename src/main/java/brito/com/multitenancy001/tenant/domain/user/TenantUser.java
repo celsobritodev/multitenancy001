@@ -151,9 +151,8 @@ public class TenantUser implements Auditable, SoftDeletable {
 
         if (email != null) email = email.toLowerCase().trim();
 
-        if (permissions.isEmpty()) {
-            permissions.addAll(TenantRolePermissions.permissionsFor(role));
-        }
+        // ✅ garante permissões do role (sem duplicar, pois é Set)
+        permissions.addAll(TenantRolePermissions.permissionsFor(role));
 
         var normalized = PermissionScopeValidator.normalizeTenantPermissions(permissions);
 

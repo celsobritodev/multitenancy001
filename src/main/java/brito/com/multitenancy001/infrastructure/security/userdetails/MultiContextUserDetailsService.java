@@ -32,7 +32,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return raw == null ? null : raw.trim().toLowerCase();
     }
 
-    // ✅ COLOQUE AQUI (dentro da classe)
     private static void assertEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new UsernameNotFoundException("INVALID_USER");
@@ -41,18 +40,31 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     /**
      * Spring Security exige essa assinatura, mas aqui tratamos o parâmetro como EMAIL.
+     *
+     * Regras:
+     * - CONTROLPLANE: carrega por email no schema public
+     * - TENANT: carrega por email dentro do schema do tenant (TenantContext já está bindado)
      */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         String schemaName = TenantContext.getOrNull();
+        String loginEmail = normalizeEmail(email);
+        assertEmail(loginEmail);
 
         // CONTROL PLANE continua normal (email é único globalmente)
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
-            return loadControlPlaneUserByEmail(email);
+            return loadControlPlaneUserByEmail(loginEmail);
         }
 
-        // 🔒 TENANT: nunca autentica sem accountId
-        throw new UsernameNotFoundException("TENANT_LOGIN_REQUIRES_ACCOUNT");
+        // TENANT: dentro do schema do tenant
+        LocalDateTime now = now();
+
+        TenantUser user = tenantUserRepository
+                .findByEmailAndDeletedFalse(loginEmail)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+
+        var authorities = AuthoritiesFactory.forTenant(user);
+        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {

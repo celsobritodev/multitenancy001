@@ -13,10 +13,17 @@ import org.springframework.transaction.PlatformTransactionManager;
  * Persistência do schema PUBLIC (ControlPlane).
  * Usa o EntityManagerFactory default do Spring Boot (bean: "entityManagerFactory")
  * e cria um alias semântico: "publicEntityManagerFactory".
+ *
+ * IMPORTANTE:
+ * - Repositórios public não ficam só em controlplane.persistence.
+ * - Qualquer repository que opere no schema public (ex.: shared.persistence.auth) precisa ser escaneado aqui.
  */
 @Configuration
 @EnableJpaRepositories(
-        basePackages = "brito.com.multitenancy001.controlplane.persistence",
+        basePackages = {
+                "brito.com.multitenancy001.controlplane.persistence",
+                "brito.com.multitenancy001.shared.persistence" // ✅ inclui TenantLoginChallengeRepository
+        },
         entityManagerFactoryRef = "publicEntityManagerFactory",
         transactionManagerRef = "publicTransactionManager"
 )

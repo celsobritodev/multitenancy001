@@ -1683,7 +1683,10 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.TenantAdminResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
+import brito.com.multitenancy001.controlplane.application.account.AccountFactory;
+import brito.com.multitenancy001.controlplane.application.account.CreateAccountCommand;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
@@ -1698,8 +1701,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 
+    private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
+
     private final AccountApiMapper accountApiMapper;
-    private final PublicAccountCreationService publicAccountCreationService;
 
     private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
@@ -1708,23 +1712,50 @@ public class AccountOnboardingService {
     private final PublicUnitOfWork publicUnitOfWork;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
-        validateSignupRequest(signupRequest);
+        SignupData data = validateAndNormalize(signupRequest);
 
-        log.info("Tentando criar conta");
+        log.info("Tentando criar conta | loginEmail={}", data.loginEmail());
 
-        Account account = publicUnitOfWork.tx(() ->
-                publicAccountCreationService.createAccountFromSignup(signupRequest)
-        );
+        Account account = publicUnitOfWork.tx(() -> {
+            CreateAccountCommand cmd = new CreateAccountCommand(
+                    data.displayName(),
+                    data.loginEmail(),
+                    data.taxCountryCode(),
+                    data.taxIdType(),
+                    data.taxIdNumber()
+            );
 
+            Account created = AccountFactory.newTenantAccount(cmd);
+
+            // status inicial deve refletir que ainda falta schema+user
+            created.setStatus(AccountStatus.PROVISIONING);
+
+            return accountRepository.save(created);
+        });
+
+        // Provisionamento fora do TX do CP, porque envolve infra/DDL/migrations
         tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
         UserSummaryData tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
                 account.getSchemaName(),
                 account.getId(),
                 account.getDisplayName(),
-                signupRequest.loginEmail(),
-                signupRequest.password()
+                data.loginEmail(),
+                data.password()
         );
+
+        // Atualiza status após sucesso
+        publicUnitOfWork.tx(() -> {
+            Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+
+            // ajuste aqui se teu domínio tiver lógica diferente (FREE_TRIAL/ACTIVE etc.)
+            if (managed.getStatus() == AccountStatus.PROVISIONING) {
+                managed.setStatus(AccountStatus.FREE_TRIAL);
+            }
+            accountRepository.save(managed);
+            return null;
+        });
 
         log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
                 account.getId(), account.getSchemaName(), account.getSlug());
@@ -1737,65 +1768,92 @@ public class AccountOnboardingService {
                 tenantOwner.role()
         );
 
-
-
         return new SignupResponse(accountResponse, tenantAdminResponse);
     }
 
-    private void validateSignupRequest(SignupRequest signupRequest) {
-        if (signupRequest == null) {
+    private SignupData validateAndNormalize(SignupRequest req) {
+        if (req == null) {
             throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.displayName())) {
+        String displayName = safeTrim(req.displayName());
+        if (!StringUtils.hasText(displayName)) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.loginEmail())) {
+        String loginEmail = normalizeEmail(req.loginEmail());
+        if (!StringUtils.hasText(loginEmail)) {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
-
-        String email = signupRequest.loginEmail().trim().toLowerCase();
-
-        if (!email.contains("@")) {
+        if (!looksLikeEmail(loginEmail)) {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
-        if (signupRequest.taxIdType() == null) {
+        if (req.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.taxIdNumber())) {
+        String taxIdNumber = safeTrim(req.taxIdNumber());
+        if (!StringUtils.hasText(taxIdNumber)) {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.password()) || !StringUtils.hasText(signupRequest.confirmPassword())) {
+        String password = req.password();
+        String confirmPassword = req.confirmPassword();
+
+        if (!StringUtils.hasText(password) || !StringUtils.hasText(confirmPassword)) {
             throw new ApiException("INVALID_PASSWORD", "Senha e confirmação são obrigatórias", 400);
         }
-
-        if (!signupRequest.password().equals(signupRequest.confirmPassword())) {
+        if (!password.equals(confirmPassword)) {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        if (accountRepository.existsByLoginEmailAndDeletedFalse(email)) {
+        // Se você já tiver taxCountryCode no request no futuro, basta trocar aqui:
+        String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;
+
+        // Unicidade de email (NOT DELETED)
+        if (accountRepository.existsByLoginEmailAndDeletedFalse(loginEmail)) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        if (accountRepository.existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                signupRequest.taxIdType(), signupRequest.taxIdNumber()
+        // ✅ Regra correta: único por (taxCountryCode, taxIdType, taxIdNumber)
+        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                taxCountryCode, req.taxIdType(), taxIdNumber
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }
 
-        // Se você quer travar especificamente "BR" aqui, ok.
-        // Caso deseje tornar multi-país, troque para signupRequest.taxCountryCode().
-        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
-        )) {
-            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
-        }
+        return new SignupData(displayName, loginEmail, taxCountryCode, req.taxIdType(), taxIdNumber, password);
     }
+
+    private static String safeTrim(String s) {
+        return s == null ? null : s.trim();
+    }
+
+    private static String normalizeEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase();
+    }
+
+    private static boolean looksLikeEmail(String email) {
+        // Simples e suficiente pro seu caso (validação real pode ser outra camada)
+        int at = email.indexOf('@');
+        if (at <= 0) return false;
+        if (at != email.lastIndexOf('@')) return false;
+        if (at == email.length() - 1) return false;
+        return true;
+    }
+
+    private record SignupData(
+            String displayName,
+            String loginEmail,
+            String taxCountryCode,
+            brito.com.multitenancy001.controlplane.domain.account.TaxIdType taxIdType,
+            String taxIdNumber,
+            String password
+    ) {}
 }
+
 ============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountStatusService.java
 ============================================================
@@ -2213,7 +2271,6 @@ import java.text.Normalizer;
 import java.util.Locale;
 import java.util.UUID;
 
-import brito.com.multitenancy001.controlplane.application.AccountOnboardingService;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 
@@ -2221,7 +2278,7 @@ public final class AccountFactory {
 
     private AccountFactory() {}
 
-    public static Account newTenantAccount(AccountOnboardingService.CreateAccountCommand cmd) {
+    public static Account newTenantAccount(CreateAccountCommand cmd) {
         Account a = new Account();
 
         a.setDisplayName(cmd.displayName());
@@ -2236,12 +2293,7 @@ public final class AccountFactory {
         String schemaBase = "t_" + slugify(cmd.displayName()).replace("-", "_");
         a.setSchemaName(schemaBase + "_" + shortId());
 
-        // status muda no onboarding
         a.setStatus(AccountStatus.PROVISIONING);
-
-        // outros defaults: subscriptionPlan, accountType etc (ajuste pro seu modelo)
-        // a.setAccountType(AccountType.TENANT);
-        // a.setSubscriptionPlan(SubscriptionPlan.FREE);
 
         return a;
     }
@@ -2318,6 +2370,21 @@ public class AccountProvisioningAuditService {
         ));
     }
 }
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/application/account/CreateAccountCommand.java
+============================================================
+package brito.com.multitenancy001.controlplane.application.account;
+
+import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
+
+public record CreateAccountCommand(
+        String displayName,
+        String loginEmail,
+        String taxCountryCode,
+        TaxIdType taxIdType,
+        String taxIdNumber
+) {}
 
 ============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/application/billing/ControlPlanePaymentQueryService.java
@@ -3918,7 +3985,7 @@ public enum AccountStatus {
     SUSPENDED("Suspensa"),
     CANCELLED("Cancelada"),
     EXPIRED("Expirada"),
-	PROVISIONING("Provisionamento")
+	PROVISIONING("Provisionamento");
 
     private final String description;
 
@@ -7355,7 +7422,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return raw == null ? null : raw.trim().toLowerCase();
     }
 
-    // ✅ COLOQUE AQUI (dentro da classe)
     private static void assertEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new UsernameNotFoundException("INVALID_USER");
@@ -7364,18 +7430,31 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     /**
      * Spring Security exige essa assinatura, mas aqui tratamos o parâmetro como EMAIL.
+     *
+     * Regras:
+     * - CONTROLPLANE: carrega por email no schema public
+     * - TENANT: carrega por email dentro do schema do tenant (TenantContext já está bindado)
      */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         String schemaName = TenantContext.getOrNull();
+        String loginEmail = normalizeEmail(email);
+        assertEmail(loginEmail);
 
         // CONTROL PLANE continua normal (email é único globalmente)
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
-            return loadControlPlaneUserByEmail(email);
+            return loadControlPlaneUserByEmail(loginEmail);
         }
 
-        // 🔒 TENANT: nunca autentica sem accountId
-        throw new UsernameNotFoundException("TENANT_LOGIN_REQUIRES_ACCOUNT");
+        // TENANT: dentro do schema do tenant
+        LocalDateTime now = now();
+
+        TenantUser user = tenantUserRepository
+                .findByEmailAndDeletedFalse(loginEmail)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+
+        var authorities = AuthoritiesFactory.forTenant(user);
+        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
@@ -9218,6 +9297,88 @@ public class AuditWiringVerifier {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/shared/persistence/auth/TenantLoginChallenge.java
+============================================================
+package brito.com.multitenancy001.shared.persistence.auth;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Entity
+@Table(name = "tenant_login_challenges", schema = "public")
+@Getter
+@Setter
+public class TenantLoginChallenge {
+
+    @Id
+    @Column(name = "id", columnDefinition = "uuid")
+    private UUID id;
+
+    @Column(name = "email", nullable = false, length = 150)
+    private String email;
+
+    @Column(name = "candidate_account_ids_csv", nullable = false, columnDefinition = "text")
+    private String candidateAccountIdsCsv;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "expires_at", nullable = false)
+    private LocalDateTime expiresAt;
+
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
+    public Set<Long> candidateAccountIds() {
+        if (candidateAccountIdsCsv == null || candidateAccountIdsCsv.isBlank()) return Set.of();
+
+        return Arrays.stream(candidateAccountIdsCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .map(Long::valueOf)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    public void setCandidateAccountIds(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            this.candidateAccountIdsCsv = "";
+            return;
+        }
+        this.candidateAccountIdsCsv = ids.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    public boolean isUsed() {
+        return usedAt != null;
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/shared/persistence/auth/TenantLoginChallengeRepository.java
+============================================================
+package brito.com.multitenancy001.shared.persistence.auth;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface TenantLoginChallengeRepository extends JpaRepository<TenantLoginChallenge, UUID> {
+
+    Optional<TenantLoginChallenge> findByIdAndExpiresAtAfterAndUsedAtIsNull(UUID id, LocalDateTime now);
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/shared/security/AuthenticatedPrincipal.java
 ============================================================
 package brito.com.multitenancy001.shared.security;
@@ -9633,7 +9794,9 @@ public final class ValidationPatterns {
 package brito.com.multitenancy001.tenant.api.auth;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
-import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.application.auth.TenantAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -9648,10 +9811,41 @@ public class TenantAuthController {
 
     private final TenantAuthService tenantAuthService;
 
-    // Autentica usuário tenant e retorna JWT (access/refresh) para o contexto do tenant.
+    /**
+     * 1) email + password
+     * - se 1 tenant: retorna JWT (200)
+     * - se >1 tenant: retorna challengeId + candidates (409)
+     */
     @PostMapping("/login")
-    public ResponseEntity<JwtResponse> loginTenant(@Valid @RequestBody TenantLoginRequest tenantLoginRequest) {
-        JwtResponse jwtResponse = tenantAuthService.loginTenant(tenantLoginRequest);
+    public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
+
+        Object result = tenantAuthService.loginInit(req);
+
+        if (result instanceof JwtResponse jwt) {
+            return ResponseEntity.ok(jwt);
+        }
+
+        if (result instanceof TenantLoginAmbiguousResponse ambiguous) {
+            return ResponseEntity.status(409).body(ambiguous);
+        }
+
+        return ResponseEntity.internalServerError().body(
+                new TenantLoginAmbiguousResponse(
+                        "INTERNAL_ERROR",
+                        "Resposta inesperada do servidor",
+                        null,
+                        null
+                )
+        );
+    }
+
+    /**
+     * 2) challengeId + accountId
+     * - retorna JWT (200)
+     */
+    @PostMapping("/login/confirm")
+    public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
+        JwtResponse jwtResponse = tenantAuthService.loginConfirm(req);
         return ResponseEntity.ok(jwtResponse);
     }
 }
@@ -9978,16 +10172,42 @@ public record ResetPasswordRequest(
 ) {}
 
 ============================================================
-// FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginRequest.java
+// FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginAmbiguousResponse.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.auth;
+
+import java.util.List;
+
+public record TenantLoginAmbiguousResponse(
+        String code,
+        String message,
+        String challengeId,
+        List<TenantSelectionOption> candidates
+) {}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginConfirmRequest.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.auth;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public record TenantLoginConfirmRequest(
+        @NotBlank String challengeId,
+        @NotNull Long accountId
+) {}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginInitRequest.java
 ============================================================
 package brito.com.multitenancy001.tenant.api.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record TenantLoginRequest(
+public record TenantLoginInitRequest(
         @NotBlank String email,
-        @NotBlank String password,
-        Long accountId // opcional: só vem quando o front já escolheu o tenant
+        @NotBlank String password
 ) {}
 
 ============================================================
@@ -11059,12 +11279,18 @@ import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
-import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginRequest;
+import brito.com.multitenancy001.shared.persistence.auth.TenantLoginChallenge;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantSelectionOption;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -11077,8 +11303,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -11096,7 +11323,18 @@ public class TenantAuthService {
     private final PublicExecutor publicExecutor;
     private final TenantExecutor tenantExecutor;
 
-    public JwtResponse loginTenant(TenantLoginRequest req) {
+    private final TenantLoginChallengeService tenantLoginChallengeService;
+    private final AppClock appClock;
+
+    private LocalDateTime now() { return appClock.now(); }
+
+    /**
+     * 1) INIT LOGIN
+     * email + password
+     * - se 1 tenant: JWT
+     * - se >1 tenant: challengeId + candidates (controller devolve 409)
+     */
+    public Object loginInit(TenantLoginInitRequest req) {
 
         if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         if (!StringUtils.hasText(req.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
@@ -11114,30 +11352,11 @@ public class TenantAuthService {
             throw new BadCredentialsException(INVALID_USER_MSG);
         }
 
-        // 2) Se veio accountId, tenta só nele (2º passo do front)
-        if (req.accountId() != null) {
-            Long chosen = req.accountId();
-
-            boolean exists = candidates.stream().anyMatch(r -> r.accountId().equals(chosen));
-            if (!exists) {
-                // evita vazar info / evita brute force de accountId
-                throw new BadCredentialsException(INVALID_USER_MSG);
-            }
-
-            AccountSnapshot account = publicExecutor.run(() ->
-                    accountResolver.resolveActiveAccountById(chosen)
-            );
-
-            return attemptLoginOnAccount(account, email, password);
-        }
-
-        // 3) Se NÃO veio accountId: tenta autenticar em cada tenant
-        //    - se só 1 bater -> JWT direto
-        //    - se várias baterem -> pede seleção
-        //    - se nenhuma bater -> invalid
-        List<SuccessfulTenantLogin> successes = new ArrayList<>();
+        // 2) Valida credenciais em cada tenant e acumula somente os tenants onde bate
+        List<AccountSnapshot> validAccounts = new ArrayList<>();
 
         for (LoginIdentityRow row : candidates) {
+
             AccountSnapshot account;
             try {
                 account = publicExecutor.run(() ->
@@ -11149,45 +11368,97 @@ public class TenantAuthService {
             }
 
             try {
-                JwtResponse jwt = attemptLoginOnAccount(account, email, password);
-                successes.add(new SuccessfulTenantLogin(account, jwt));
+                validateCredentialsOnAccount(account, email, password);
+                validAccounts.add(account);
             } catch (BadCredentialsException ex) {
                 // senha não bate nesse tenant -> ignora
             } catch (ApiException ex) {
-                // usuário inativo nesse tenant -> ignora (ou decide se quer bloquear)
+                // usuário inativo nesse tenant -> ignora
             }
         }
 
-        if (successes.isEmpty()) {
+        if (validAccounts.isEmpty()) {
             throw new BadCredentialsException(INVALID_USER_MSG);
         }
 
-        if (successes.size() == 1) {
-            return successes.get(0).jwt();
+        if (validAccounts.size() == 1) {
+            return issueJwtForAccount(validAccounts.get(0), email);
         }
 
-        // várias contas com senha válida -> pede escolha
-        List<TenantSelectionOption> options = successes.stream()
-                .map(s -> new TenantSelectionOption(
-                        s.account().id(),
-                        s.account().displayName(),
-                        s.account().slug()
-                ))
+        // 3) várias contas com senha válida -> cria challenge
+        Set<Long> accountIds = validAccounts.stream()
+                .map(AccountSnapshot::id)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        UUID challengeId = publicExecutor.run(() -> tenantLoginChallengeService.createChallenge(email, accountIds));
+
+        List<TenantSelectionOption> options = validAccounts.stream()
+                .map(a -> new TenantSelectionOption(a.id(), a.displayName(), a.slug()))
                 .toList();
 
-        throw new ApiException(
-                "TENANT_SELECTION_REQUIRED",
+        return new TenantLoginAmbiguousResponse(
+                "ACCOUNT_SELECTION_REQUIRED",
                 "Selecione a empresa",
-                409,
+                challengeId.toString(),
                 options
         );
     }
 
-    private JwtResponse attemptLoginOnAccount(AccountSnapshot account, String email, String password) {
+    /**
+     * 2) CONFIRM LOGIN
+     * challengeId + accountId
+     * - valida challenge (expiração + não usado)
+     * - valida accountId pertence aos candidates
+     * - gera JWT sem pedir senha novamente
+     */
+    public JwtResponse loginConfirm(TenantLoginConfirmRequest req) {
 
-        return tenantExecutor.run(account.schemaName(), () -> {
+        if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
+        if (!StringUtils.hasText(req.challengeId())) throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+        if (req.accountId() == null) throw new ApiException("INVALID_CHALLENGE", "accountId é obrigatório", 400);
 
-            Authentication authentication = authenticateOrInvalidUser(email, password);
+        UUID challengeUuid;
+        try {
+            challengeUuid = UUID.fromString(req.challengeId().trim());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 401);
+        }
+
+        TenantLoginChallenge challenge = publicExecutor.run(() -> tenantLoginChallengeService.requireValid(challengeUuid));
+
+        String email = challenge.getEmail();
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401);
+        }
+
+        Set<Long> allowed = challenge.candidateAccountIds();
+        if (allowed == null || allowed.isEmpty() || !allowed.contains(req.accountId())) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401);
+        }
+
+        AccountSnapshot account = publicExecutor.run(() ->
+                accountResolver.resolveActiveAccountById(req.accountId())
+        );
+
+        JwtResponse jwt = issueJwtForAccount(account, email);
+
+        publicExecutor.run(() -> {
+            tenantLoginChallengeService.markUsed(challenge);
+            return null;
+        });
+
+        return jwt;
+    }
+
+    /**
+     * Valida se email/senha estão corretos naquele tenant e se o usuário está ativo.
+     * Não gera token.
+     */
+    private void validateCredentialsOnAccount(AccountSnapshot account, String email, String password) {
+
+        tenantExecutor.run(account.schemaName(), () -> {
+
+            authenticateOrInvalidUser(email, password);
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndDeletedFalse(email)
@@ -11196,6 +11467,43 @@ public class TenantAuthService {
             if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
+
+            return null;
+        });
+    }
+
+    /**
+     * Emite JWT sem precisar da senha.
+     * - carrega TenantUser no schema
+     * - cria Authentication com principal AuthenticatedUserContext
+     * - gera access + refresh
+     */
+    private JwtResponse issueJwtForAccount(AccountSnapshot account, String email) {
+
+        return tenantExecutor.run(account.schemaName(), () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndDeletedFalse(email)
+                    .orElseThrow(() -> new BadCredentialsException(INVALID_USER_MSG));
+
+            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    account.schemaName(),
+                    now(),
+                    authorities
+            );
+
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
 
             String accessToken = jwtTokenProvider.generateTenantToken(
                     authentication,
@@ -11212,7 +11520,6 @@ public class TenantAuthService {
                     accessToken,
                     refreshToken,
                     user.getId(),
-        
                     user.getEmail(),
                     user.getRole().name(),
                     account.id(),
@@ -11241,8 +11548,71 @@ public class TenantAuthService {
             throw e;
         }
     }
+}
 
-    private record SuccessfulTenantLogin(AccountSnapshot account, JwtResponse jwt) {}
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/application/auth/TenantLoginChallengeService.java
+============================================================
+package brito.com.multitenancy001.tenant.application.auth;
+
+import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.auth.TenantLoginChallenge;
+import brito.com.multitenancy001.shared.persistence.auth.TenantLoginChallengeRepository;
+import brito.com.multitenancy001.shared.time.AppClock;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class TenantLoginChallengeService {
+
+    private final TenantLoginChallengeRepository tenantLoginChallengeRepository;
+    private final AppClock appClock;
+
+    private LocalDateTime now() { return appClock.now(); }
+
+    private LocalDateTime defaultExpiresAt() {
+        return now().plusMinutes(5);
+    }
+
+    public UUID createChallenge(String email, Set<Long> candidateAccountIds) {
+        if (email == null || email.isBlank()) {
+            throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
+        }
+        if (candidateAccountIds == null || candidateAccountIds.isEmpty()) {
+            throw new ApiException("INVALID_STATE", "candidates não podem ser vazios", 500);
+        }
+
+        TenantLoginChallenge c = new TenantLoginChallenge();
+        c.setId(UUID.randomUUID());
+        c.setEmail(email.trim().toLowerCase());
+        c.setCandidateAccountIds(candidateAccountIds);
+        c.setCreatedAt(now());
+        c.setExpiresAt(defaultExpiresAt());
+
+        tenantLoginChallengeRepository.save(c);
+        return c.getId();
+    }
+
+    public TenantLoginChallenge requireValid(UUID challengeId) {
+        if (challengeId == null) {
+            throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+        }
+
+        return tenantLoginChallengeRepository
+                .findByIdAndExpiresAtAfterAndUsedAtIsNull(challengeId, now())
+                .orElseThrow(() -> new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401));
+    }
+
+    public void markUsed(TenantLoginChallenge challenge) {
+        if (challenge == null) return;
+        challenge.setUsedAt(now());
+        tenantLoginChallengeRepository.save(challenge);
+    }
 }
 
 ============================================================
@@ -12362,12 +12732,17 @@ public class TenantSupplierService {
 package brito.com.multitenancy001.tenant.application.user;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.domain.user.permission.TenantUserPermission;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 
 @Service
@@ -12375,43 +12750,92 @@ public class TenantAdminCreationService {
 
     private final TenantUserRepository tenantUserRepository;
     private final TenantUserPermissionBulkInserter permissionBulkInserter;
-    private final TenantRolePermissions rolePermissions;
 
     public TenantAdminCreationService(
             TenantUserRepository tenantUserRepository,
-            TenantUserPermissionBulkInserter permissionBulkInserter,
-            TenantRolePermissions rolePermissions
+            TenantUserPermissionBulkInserter permissionBulkInserter
     ) {
         this.tenantUserRepository = tenantUserRepository;
         this.permissionBulkInserter = permissionBulkInserter;
-        this.rolePermissions = rolePermissions;
     }
 
     public TenantAdminResult createTenantOwner(Long accountId, String email, String name, String rawPassword) {
-        // IMPORTANTE: quem chama já bindou o tenant no TenantContext (como no teu log)
-        // aqui a gente assume que o caller já fez TenantContext.bind(schemaName)
+        validate(accountId, email, name, rawPassword);
 
-        TenantUser existing = tenantUserRepository.findByEmailAndAccountId(email, accountId).orElse(null);
+        String normalizedEmail = email.trim().toLowerCase();
+
+        TenantUser existing = tenantUserRepository
+                .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, accountId)
+                .orElse(null);
+
         if (existing != null) {
+            // garante permissões do papel atual do usuário existente
+            List<TenantUserPermission> perms = toUserPermissions(
+                    TenantRolePermissions.permissionsFor(existing.getRole())
+            );
+            permissionBulkInserter.insertAll(existing.getId(), perms);
+
             return new TenantAdminResult(existing.getId(), existing.getEmail(), existing.getRole().name());
         }
 
         TenantUser admin = new TenantUser();
         admin.setAccountId(accountId);
-        admin.setEmail(email);
+        admin.setEmail(normalizedEmail);
         admin.setName(name);
         admin.setRole(TenantRole.TENANT_OWNER);
 
-        // ajuste para o teu mecanismo real (BCrypt, encoder, etc)
+        // ajuste para teu encoder real (BCrypt, etc.)
         admin.setPassword(rawPassword);
         admin.setMustChangePassword(false);
 
         TenantUser saved = tenantUserRepository.save(admin);
 
-        List<TenantUserPermission> perms = rolePermissions.permissionsFor(TenantRole.TENANT_OWNER);
+        // ✅ Agora converte corretamente
+        List<TenantUserPermission> perms = toUserPermissions(
+                TenantRolePermissions.permissionsFor(TenantRole.TENANT_OWNER)
+        );
         permissionBulkInserter.insertAll(saved.getId(), perms);
 
         return new TenantAdminResult(saved.getId(), saved.getEmail(), saved.getRole().name());
+    }
+
+    private static void validate(Long accountId, String email, String name, String rawPassword) {
+        if (accountId == null) {
+            throw new ApiException("INVALID_ACCOUNT", "accountId é obrigatório", 400);
+        }
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+        }
+        String normalizedEmail = email.trim().toLowerCase();
+        if (!looksLikeEmail(normalizedEmail)) {
+            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        }
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
+        }
+        if (!StringUtils.hasText(rawPassword)) {
+            throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+        }
+    }
+
+    private static boolean looksLikeEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) return false;
+        if (at != email.lastIndexOf('@')) return false;
+        return at < email.length() - 1;
+    }
+
+    /**
+     * Converte o Set<TenantPermission> (enum) para List<TenantUserPermission> (record code),
+     * compatível com seu bulk inserter / persistência.
+     */
+    private static List<TenantUserPermission> toUserPermissions(Set<TenantPermission> permissions) {
+        if (permissions == null || permissions.isEmpty()) return List.of();
+
+        // code = enum.name() (ex.: TEN_USER_READ)
+        return permissions.stream()
+                .map(p -> new TenantUserPermission(p.name()))
+                .toList();
     }
 
     public record TenantAdminResult(Long tenantAdminId, String email, String role) {}
@@ -12428,6 +12852,8 @@ import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.tenant.domain.user.permission.TenantUserPermission;
+
 @Component
 public class TenantUserPermissionBulkInserter {
 
@@ -12440,14 +12866,13 @@ public class TenantUserPermissionBulkInserter {
     public void insertAll(Long tenantUserId, List<TenantUserPermission> permissions) {
         if (permissions == null || permissions.isEmpty()) return;
 
-        // Uma única operação batch (sem N roundtrips)
         jdbcTemplate.batchUpdate(
                 "INSERT INTO tenant_user_permissions (tenant_user_id, permission) VALUES (?, ?)",
                 permissions,
                 500,
                 (PreparedStatement ps, TenantUserPermission perm) -> {
                     ps.setLong(1, tenantUserId);
-                    ps.setString(2, perm.name());
+                    ps.setString(2, perm.code()); // ✅ AQUI é code(), não name()
                 }
         );
     }
@@ -14160,6 +14585,33 @@ public enum TenantUserOrigin {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/domain/user/permission/TenantUserPermission.java
+============================================================
+package brito.com.multitenancy001.tenant.domain.user.permission;
+
+import brito.com.multitenancy001.tenant.security.TenantPermission;
+
+public record TenantUserPermission(String code) {
+
+    public TenantUserPermission {
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("Permission code cannot be null/blank");
+        }
+    }
+
+    /**
+     * Factory segura para criar a partir do enum TenantPermission.
+     * Garante que o código persistido seja sempre o name() do enum.
+     */
+    public static TenantUserPermission from(TenantPermission permission) {
+        if (permission == null) {
+            throw new IllegalArgumentException("Permission cannot be null");
+        }
+        return new TenantUserPermission(permission.name());
+    }
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/tenant/infra/provisioning/TenantFlywayMigrator.java
 ============================================================
 package brito.com.multitenancy001.tenant.infra.provisioning;
@@ -14821,6 +15273,7 @@ public enum TenantRole implements RoleAuthority {
 
     TENANT_OWNER,
     TENANT_ADMIN,
+    TENANT_USER,
     TENANT_PRODUCT_MANAGER,
     TENANT_SALES_MANAGER,
     TENANT_BILLING_MANAGER,
@@ -15008,6 +15461,34 @@ CREATE INDEX idx_account_prov_events_account_id
 
 CREATE INDEX idx_account_prov_events_created_at
     ON public.account_provisioning_events(created_at);
+
+============================================================
+// FILE: ./main/resources/db/migration/accounts/V12__create_table_tenant_login_challenges.sql
+============================================================
+-- V12__create_table_tenant_login_challenges.sql
+SET search_path TO public;
+
+CREATE TABLE IF NOT EXISTS tenant_login_challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    email VARCHAR(150) NOT NULL,
+
+    -- CSV simples de accountIds válidos
+    candidate_account_ids_csv TEXT NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_email
+ON tenant_login_challenges (email);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_expires_at
+ON tenant_login_challenges (expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_used_at
+ON tenant_login_challenges (used_at);
 
 ============================================================
 // FILE: ./main/resources/db/migration/accounts/V1__create_extension.sql

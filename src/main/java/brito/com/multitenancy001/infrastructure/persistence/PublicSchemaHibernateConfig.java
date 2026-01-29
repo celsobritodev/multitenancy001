@@ -29,24 +29,26 @@ public class PublicSchemaHibernateConfig {
         var emf = new LocalContainerEntityManagerFactoryBean();
         emf.setDataSource(dataSource);
 
-        // Entidades do PUBLIC (ControlPlane)
-        emf.setPackagesToScan("brito.com.multitenancy001.controlplane.domain");
+        /**
+         * ✅ Entidades do PUBLIC (ControlPlane + shared public entities)
+         * Antes você escaneava só controlplane.domain, então TenantLoginChallenge não era "managed type".
+         */
+        emf.setPackagesToScan(
+                "brito.com.multitenancy001.controlplane.domain",
+                "brito.com.multitenancy001.shared.persistence" // ✅ inclui shared.persistence.auth.TenantLoginChallenge
+        );
 
         emf.setPersistenceUnitName("PUBLIC_PU");
         emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
 
         Map<String, Object> props = new HashMap<>();
-        props.put("hibernate.hbm2ddl.auto", "none");
-        props.put("hibernate.show_sql", true);
-        props.put("hibernate.format_sql", true);
+        props.put(AvailableSettings.DEFAULT_SCHEMA, Schemas.CONTROL_PLANE);
 
-        // Default schema do PUBLIC (control plane)
-        props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
-
-        // ✅ Hibernate resolve beans gerenciados pelo Spring (EntityListeners @Component etc.)
+        // Bean container para injeção em listeners/converters/etc
         props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
+
         return emf;
     }
 }

@@ -1,12 +1,8 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -18,9 +14,7 @@ import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
-import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
-import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,7 +31,6 @@ public class TenantUserProvisioningFacade {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JdbcTemplate jdbcTemplate;
 
     private final AppClock appClock;
 
@@ -70,12 +63,9 @@ public class TenantUserProvisioningFacade {
     /**
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
      *
-     * Retorna um snapshot (UserSummaryData) para evitar vazamento do domínio Tenant
-     * para o contexto ControlPlane.
-     *
-     * Login é por EMAIL
-     *
-     * ✅ Ajuste: cria permissões em batch (1 roundtrip) na tabela tenant_user_permissions.
+     * ✅ Ajuste: permissões NÃO são inseridas manualmente.
+     * - A entidade TenantUser já gerencia permissões via @ElementCollection (tenant_user_permissions)
+     *   no @PrePersist/@PreUpdate (TenantUser.onSave()).
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -121,11 +111,8 @@ public class TenantUserProvisioningFacade {
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
 
+                    // ✅ aqui o onSave() da entidade garante as permissões do role.
                     TenantUser saved = tenantUserRepository.save(tenantUser);
-
-                    // ✅ Batch insert das permissões do TENANT_OWNER
-                    Set<TenantPermission> permissions = TenantRolePermissions.permissionsFor(TenantRole.TENANT_OWNER);
-                    batchInsertPermissions(saved.getId(), permissions);
 
                     return new UserSummaryData(
                             saved.getId(),
@@ -140,32 +127,6 @@ public class TenantUserProvisioningFacade {
                 })
         );
     }
-
-    /**
-     * Insere permissões em batch (evita N inserts via Hibernate).
-     *
-     * Assumimos que:
-     * - TenantExecutor já bindou o schema na thread (search_path do multi-tenant provider).
-     * - A tabela tenant_user_permissions existe no schema do tenant.
-     */
-   private void batchInsertPermissions(Long tenantUserId, Set<TenantPermission> permissions) {
-    if (tenantUserId == null) return;
-    if (permissions == null || permissions.isEmpty()) return;
-
-    List<TenantPermission> list = new ArrayList<>(permissions);
-
-    jdbcTemplate.batchUpdate(
-        "INSERT INTO tenant_user_permissions (tenant_user_id, permission) " +
-        "VALUES (?, ?) ON CONFLICT DO NOTHING",
-        list,
-        500,
-        (PreparedStatement ps, TenantPermission perm) -> {
-            ps.setLong(1, tenantUserId);
-            ps.setString(2, perm.name());
-        }
-    );
-}
-
 
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
@@ -185,10 +146,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Soft delete em massa de usuários no schema tenant.
-     * Usado pelo ControlPlane ao excluir/cancelar conta.
-     */
     public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
@@ -198,10 +155,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Restore em massa de usuários no schema tenant.
-     * Usado pelo ControlPlane ao restaurar conta.
-     */
     public int restoreAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
@@ -211,10 +164,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Suspende/reativa um usuário por ADMIN (ação administrativa do ControlPlane).
-     * identidade é EMAIL, mas aqui o alvo é por userId.
-     */
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 

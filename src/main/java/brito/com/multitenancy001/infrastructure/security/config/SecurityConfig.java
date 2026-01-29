@@ -45,16 +45,15 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-            		
-            		
-            		// =========================
-            		// 🔓 SWAGGER / OPENAPI
-            		// =========================
-            		.requestMatchers(
-            		    "/v3/api-docs/**",
-            		    "/swagger-ui.html",
-            		    "/swagger-ui/**"
-            		).permitAll()
+
+                // =========================
+                // 🔓 SWAGGER / OPENAPI
+                // =========================
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**"
+                ).permitAll()
 
                 // =========================
                 // 🔓 PUBLIC
@@ -77,6 +76,7 @@ public class SecurityConfig {
                 // =========================
                 .requestMatchers(
                     "/api/tenant/auth/login",
+                    "/api/tenant/auth/login/confirm", // ✅ novo endpoint
                     "/api/tenant/auth/refresh"
                 ).permitAll()
 
@@ -99,7 +99,6 @@ public class SecurityConfig {
                 // =========================
                 // ✅ ME (TENANT) fora do prefixo /api/tenant
                 // =========================
-                // libera GET/PUT /api/me e qualquer subrota (se no futuro você criar /api/me/password, etc.)
                 .requestMatchers("/api/me/**").authenticated()
 
                 // =========================
