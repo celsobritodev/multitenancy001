@@ -13,6 +13,7 @@ import brito.com.multitenancy001.controlplane.application.account.CreateAccountC
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -32,6 +33,8 @@ public class AccountOnboardingService {
 
     private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
+
+    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
     private final AccountRepository accountRepository;
     private final PublicUnitOfWork publicUnitOfWork;
@@ -69,12 +72,17 @@ public class AccountOnboardingService {
                 data.password()
         );
 
+        // ✅ CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
+        publicUnitOfWork.tx(() -> {
+            loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
+            return null;
+        });
+
         // Atualiza status após sucesso
         publicUnitOfWork.tx(() -> {
             Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
 
-            // ajuste aqui se teu domínio tiver lógica diferente (FREE_TRIAL/ACTIVE etc.)
             if (managed.getStatus() == AccountStatus.PROVISIONING) {
                 managed.setStatus(AccountStatus.FREE_TRIAL);
             }
@@ -133,15 +141,12 @@ public class AccountOnboardingService {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        // Se você já tiver taxCountryCode no request no futuro, basta trocar aqui:
         String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;
 
-        // Unicidade de email (NOT DELETED)
         if (accountRepository.existsByLoginEmailAndDeletedFalse(loginEmail)) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        // ✅ Regra correta: único por (taxCountryCode, taxIdType, taxIdNumber)
         if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
                 taxCountryCode, req.taxIdType(), taxIdNumber
         )) {
@@ -161,7 +166,6 @@ public class AccountOnboardingService {
     }
 
     private static boolean looksLikeEmail(String email) {
-        // Simples e suficiente pro seu caso (validação real pode ser outra camada)
         int at = email.indexOf('@');
         if (at <= 0) return false;
         if (at != email.lastIndexOf('@')) return false;

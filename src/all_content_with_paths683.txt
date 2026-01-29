@@ -1688,6 +1688,7 @@ import brito.com.multitenancy001.controlplane.application.account.CreateAccountC
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
+import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.api.error.ApiException;
@@ -1707,6 +1708,8 @@ public class AccountOnboardingService {
 
     private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
+
+    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
     private final AccountRepository accountRepository;
     private final PublicUnitOfWork publicUnitOfWork;
@@ -1744,12 +1747,17 @@ public class AccountOnboardingService {
                 data.password()
         );
 
+        // ✅ CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
+        publicUnitOfWork.tx(() -> {
+            loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
+            return null;
+        });
+
         // Atualiza status após sucesso
         publicUnitOfWork.tx(() -> {
             Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
 
-            // ajuste aqui se teu domínio tiver lógica diferente (FREE_TRIAL/ACTIVE etc.)
             if (managed.getStatus() == AccountStatus.PROVISIONING) {
                 managed.setStatus(AccountStatus.FREE_TRIAL);
             }
@@ -1808,15 +1816,12 @@ public class AccountOnboardingService {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        // Se você já tiver taxCountryCode no request no futuro, basta trocar aqui:
         String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;
 
-        // Unicidade de email (NOT DELETED)
         if (accountRepository.existsByLoginEmailAndDeletedFalse(loginEmail)) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        // ✅ Regra correta: único por (taxCountryCode, taxIdType, taxIdNumber)
         if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
                 taxCountryCode, req.taxIdType(), taxIdNumber
         )) {
@@ -1836,7 +1841,6 @@ public class AccountOnboardingService {
     }
 
     private static boolean looksLikeEmail(String email) {
-        // Simples e suficiente pro seu caso (validação real pode ser outra camada)
         int at = email.indexOf('@');
         if (at <= 0) return false;
         if (at != email.lastIndexOf('@')) return false;
@@ -5857,10 +5861,17 @@ import org.springframework.transaction.PlatformTransactionManager;
  * Persistência do schema PUBLIC (ControlPlane).
  * Usa o EntityManagerFactory default do Spring Boot (bean: "entityManagerFactory")
  * e cria um alias semântico: "publicEntityManagerFactory".
+ *
+ * IMPORTANTE:
+ * - Repositórios public não ficam só em controlplane.persistence.
+ * - Qualquer repository que opere no schema public (ex.: shared.persistence.auth) precisa ser escaneado aqui.
  */
 @Configuration
 @EnableJpaRepositories(
-        basePackages = "brito.com.multitenancy001.controlplane.persistence",
+        basePackages = {
+                "brito.com.multitenancy001.controlplane.persistence",
+                "brito.com.multitenancy001.shared.persistence" // ✅ inclui TenantLoginChallengeRepository
+        },
         entityManagerFactoryRef = "publicEntityManagerFactory",
         transactionManagerRef = "publicTransactionManager"
 )
@@ -5917,24 +5928,26 @@ public class PublicSchemaHibernateConfig {
         var emf = new LocalContainerEntityManagerFactoryBean();
         emf.setDataSource(dataSource);
 
-        // Entidades do PUBLIC (ControlPlane)
-        emf.setPackagesToScan("brito.com.multitenancy001.controlplane.domain");
+        /**
+         * ✅ Entidades do PUBLIC (ControlPlane + shared public entities)
+         * Antes você escaneava só controlplane.domain, então TenantLoginChallenge não era "managed type".
+         */
+        emf.setPackagesToScan(
+                "brito.com.multitenancy001.controlplane.domain",
+                "brito.com.multitenancy001.shared.persistence" // ✅ inclui shared.persistence.auth.TenantLoginChallenge
+        );
 
         emf.setPersistenceUnitName("PUBLIC_PU");
         emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
 
         Map<String, Object> props = new HashMap<>();
-        props.put("hibernate.hbm2ddl.auto", "none");
-        props.put("hibernate.show_sql", true);
-        props.put("hibernate.format_sql", true);
+        props.put(AvailableSettings.DEFAULT_SCHEMA, Schemas.CONTROL_PLANE);
 
-        // Default schema do PUBLIC (control plane)
-        props.put("hibernate.default_schema", Schemas.CONTROL_PLANE);
-
-        // ✅ Hibernate resolve beans gerenciados pelo Spring (EntityListeners @Component etc.)
+        // Bean container para injeção em listeners/converters/etc
         props.put(AvailableSettings.BEAN_CONTAINER, new SpringBeanContainer(configurableListableBeanFactory));
 
         emf.setJpaPropertyMap(props);
+
         return emf;
     }
 }
@@ -6225,6 +6238,36 @@ public record AccountSnapshot(
         String slug,
         String displayName
 ) {}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityProvisioningService.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+@Service
+@RequiredArgsConstructor
+public class LoginIdentityProvisioningService {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public void ensureTenantIdentity(String email, Long accountId) {
+        if (accountId == null) return;
+        if (!StringUtils.hasText(email)) return;
+
+        String emailNorm = email.trim().toLowerCase();
+
+        jdbcTemplate.update("""
+            INSERT INTO public.login_identities (email, account_id)
+            VALUES (?, ?)
+            ON CONFLICT DO NOTHING
+        """, emailNorm, accountId);
+    }
+}
 
 ============================================================
 // FILE: ./main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityResolver.java
@@ -6791,16 +6834,15 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-            		
-            		
-            		// =========================
-            		// 🔓 SWAGGER / OPENAPI
-            		// =========================
-            		.requestMatchers(
-            		    "/v3/api-docs/**",
-            		    "/swagger-ui.html",
-            		    "/swagger-ui/**"
-            		).permitAll()
+
+                // =========================
+                // 🔓 SWAGGER / OPENAPI
+                // =========================
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**"
+                ).permitAll()
 
                 // =========================
                 // 🔓 PUBLIC
@@ -6823,6 +6865,7 @@ public class SecurityConfig {
                 // =========================
                 .requestMatchers(
                     "/api/tenant/auth/login",
+                    "/api/tenant/auth/login/confirm", // ✅ novo endpoint
                     "/api/tenant/auth/refresh"
                 ).permitAll()
 
@@ -6845,7 +6888,6 @@ public class SecurityConfig {
                 // =========================
                 // ✅ ME (TENANT) fora do prefixo /api/tenant
                 // =========================
-                // libera GET/PUT /api/me e qualquer subrota (se no futuro você criar /api/me/password, etc.)
                 .requestMatchers("/api/me/**").authenticated()
 
                 // =========================
@@ -7815,13 +7857,9 @@ public class TenantUnitOfWork {
 ============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -7833,9 +7871,7 @@ import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
-import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
-import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -7852,7 +7888,6 @@ public class TenantUserProvisioningFacade {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JdbcTemplate jdbcTemplate;
 
     private final AppClock appClock;
 
@@ -7885,12 +7920,9 @@ public class TenantUserProvisioningFacade {
     /**
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
      *
-     * Retorna um snapshot (UserSummaryData) para evitar vazamento do domínio Tenant
-     * para o contexto ControlPlane.
-     *
-     * Login é por EMAIL
-     *
-     * ✅ Ajuste: cria permissões em batch (1 roundtrip) na tabela tenant_user_permissions.
+     * ✅ Ajuste: permissões NÃO são inseridas manualmente.
+     * - A entidade TenantUser já gerencia permissões via @ElementCollection (tenant_user_permissions)
+     *   no @PrePersist/@PreUpdate (TenantUser.onSave()).
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -7936,11 +7968,8 @@ public class TenantUserProvisioningFacade {
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
 
+                    // ✅ aqui o onSave() da entidade garante as permissões do role.
                     TenantUser saved = tenantUserRepository.save(tenantUser);
-
-                    // ✅ Batch insert das permissões do TENANT_OWNER
-                    Set<TenantPermission> permissions = TenantRolePermissions.permissionsFor(TenantRole.TENANT_OWNER);
-                    batchInsertPermissions(saved.getId(), permissions);
 
                     return new UserSummaryData(
                             saved.getId(),
@@ -7955,32 +7984,6 @@ public class TenantUserProvisioningFacade {
                 })
         );
     }
-
-    /**
-     * Insere permissões em batch (evita N inserts via Hibernate).
-     *
-     * Assumimos que:
-     * - TenantExecutor já bindou o schema na thread (search_path do multi-tenant provider).
-     * - A tabela tenant_user_permissions existe no schema do tenant.
-     */
-   private void batchInsertPermissions(Long tenantUserId, Set<TenantPermission> permissions) {
-    if (tenantUserId == null) return;
-    if (permissions == null || permissions.isEmpty()) return;
-
-    List<TenantPermission> list = new ArrayList<>(permissions);
-
-    jdbcTemplate.batchUpdate(
-        "INSERT INTO tenant_user_permissions (tenant_user_id, permission) " +
-        "VALUES (?, ?) ON CONFLICT DO NOTHING",
-        list,
-        500,
-        (PreparedStatement ps, TenantPermission perm) -> {
-            ps.setLong(1, tenantUserId);
-            ps.setString(2, perm.name());
-        }
-    );
-}
-
 
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
@@ -8000,10 +8003,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Soft delete em massa de usuários no schema tenant.
-     * Usado pelo ControlPlane ao excluir/cancelar conta.
-     */
     public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
@@ -8013,10 +8012,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Restore em massa de usuários no schema tenant.
-     * Usado pelo ControlPlane ao restaurar conta.
-     */
     public int restoreAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
@@ -8026,10 +8021,6 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    /**
-     * Suspende/reativa um usuário por ADMIN (ação administrativa do ControlPlane).
-     * identidade é EMAIL, mas aqui o alvo é por userId.
-     */
     public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
@@ -12731,32 +12722,21 @@ public class TenantSupplierService {
 ============================================================
 package brito.com.multitenancy001.tenant.application.user;
 
-import java.util.List;
-import java.util.Set;
-
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import brito.com.multitenancy001.tenant.domain.user.permission.TenantUserPermission;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
-import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
-import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 
 @Service
 public class TenantAdminCreationService {
 
     private final TenantUserRepository tenantUserRepository;
-    private final TenantUserPermissionBulkInserter permissionBulkInserter;
 
-    public TenantAdminCreationService(
-            TenantUserRepository tenantUserRepository,
-            TenantUserPermissionBulkInserter permissionBulkInserter
-    ) {
+    public TenantAdminCreationService(TenantUserRepository tenantUserRepository) {
         this.tenantUserRepository = tenantUserRepository;
-        this.permissionBulkInserter = permissionBulkInserter;
     }
 
     public TenantAdminResult createTenantOwner(Long accountId, String email, String name, String rawPassword) {
@@ -12769,33 +12749,27 @@ public class TenantAdminCreationService {
                 .orElse(null);
 
         if (existing != null) {
-            // garante permissões do papel atual do usuário existente
-            List<TenantUserPermission> perms = toUserPermissions(
-                    TenantRolePermissions.permissionsFor(existing.getRole())
-            );
-            permissionBulkInserter.insertAll(existing.getId(), perms);
-
+            // ✅ garante role (se já for owner ok; se não, promove)
+            if (existing.getRole() != TenantRole.TENANT_OWNER) {
+                existing.setRole(TenantRole.TENANT_OWNER);
+                tenantUserRepository.save(existing); // onSave() garante permissões
+            }
             return new TenantAdminResult(existing.getId(), existing.getEmail(), existing.getRole().name());
         }
 
-        TenantUser admin = new TenantUser();
-        admin.setAccountId(accountId);
-        admin.setEmail(normalizedEmail);
-        admin.setName(name);
-        admin.setRole(TenantRole.TENANT_OWNER);
+        TenantUser owner = new TenantUser();
+        owner.setAccountId(accountId);
+        owner.setEmail(normalizedEmail);
+        owner.setName(name);
+        owner.setRole(TenantRole.TENANT_OWNER);
 
-        // ajuste para teu encoder real (BCrypt, etc.)
-        admin.setPassword(rawPassword);
-        admin.setMustChangePassword(false);
+        // ⚠️ aqui você provavelmente quer um encoder (igual no ProvisioningFacade).
+        // mantendo igual ao seu original:
+        owner.setPassword(rawPassword);
 
-        TenantUser saved = tenantUserRepository.save(admin);
+        owner.setMustChangePassword(false);
 
-        // ✅ Agora converte corretamente
-        List<TenantUserPermission> perms = toUserPermissions(
-                TenantRolePermissions.permissionsFor(TenantRole.TENANT_OWNER)
-        );
-        permissionBulkInserter.insertAll(saved.getId(), perms);
-
+        TenantUser saved = tenantUserRepository.save(owner); // onSave() garante permissões
         return new TenantAdminResult(saved.getId(), saved.getEmail(), saved.getRole().name());
     }
 
@@ -12823,19 +12797,6 @@ public class TenantAdminCreationService {
         if (at <= 0) return false;
         if (at != email.lastIndexOf('@')) return false;
         return at < email.length() - 1;
-    }
-
-    /**
-     * Converte o Set<TenantPermission> (enum) para List<TenantUserPermission> (record code),
-     * compatível com seu bulk inserter / persistência.
-     */
-    private static List<TenantUserPermission> toUserPermissions(Set<TenantPermission> permissions) {
-        if (permissions == null || permissions.isEmpty()) return List.of();
-
-        // code = enum.name() (ex.: TEN_USER_READ)
-        return permissions.stream()
-                .map(p -> new TenantUserPermission(p.name()))
-                .toList();
     }
 
     public record TenantAdminResult(Long tenantAdminId, String email, String role) {}
@@ -14500,9 +14461,8 @@ public class TenantUser implements Auditable, SoftDeletable {
 
         if (email != null) email = email.toLowerCase().trim();
 
-        if (permissions.isEmpty()) {
-            permissions.addAll(TenantRolePermissions.permissionsFor(role));
-        }
+        // ✅ garante permissões do role (sem duplicar, pois é Set)
+        permissions.addAll(TenantRolePermissions.permissionsFor(role));
 
         var normalized = PermissionScopeValidator.normalizeTenantPermissions(permissions);
 

@@ -31,6 +31,7 @@ public class LoginIdentityResolver {
               from public.login_identities li
               join public.accounts a on a.id = li.account_id
              where lower(li.email) = lower(:email)
+             and li.user_type = 'TENANT'
                and a.deleted = false
         """;
 
