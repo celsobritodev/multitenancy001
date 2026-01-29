@@ -31,35 +31,29 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
 
-    boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
+    // ❌ REMOVIDO: existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(...)
+    // Motivo: a regra correta agora é única por (taxCountryCode, taxIdType, taxIdNumber).
 
     // =========================================================
     // DEFAULT DE DOMÍNIO: NOT DELETED (deleted=false)
     // =========================================================
 
-    /** Lista todas as contas não deletadas. */
     List<Account> findAllByDeletedFalse();
 
-    /** Busca por slug (não deletado). */
     Optional<Account> findBySlugAndDeletedFalse(String slug);
 
-    /** Busca por slug ignoreCase (não deletado). */
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
-    
+
     // =========================================================
     // PROJECTIONS (para evitar expor entidade fora do CP)
     // =========================================================
 
- // ✅ faltava este método (usado pelo AccountResolver)
     Optional<AccountResolverProjection> findProjectionByIdAndDeletedFalse(Long id);
 
     Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
 
-
-    /** Busca por id (não deletado). Default para leitura normal. */
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
-    /** Contas por lista de status (não deletado). */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
@@ -68,10 +62,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // enabled = NOT DELETED + status operacional
     // =========================================================
 
-    /**
-     * Conta "enabled/operacional": não deletada e status operacional.
-     * Use em fluxos que precisam garantir conta em operação (ex.: login, ações sensíveis).
-     */
     @Query("""
             SELECT a
               FROM Account a
@@ -85,10 +75,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // BYPASS CONSCIENTE: ANY (inclui deleted)
     // =========================================================
 
-    /**
-     * ⚠️ BYPASS: pode incluir soft-deleted.
-     * Use apenas para auditoria/suporte/restore.
-     */
     Optional<Account> findAnyById(Long id);
 
     // =========================================================
@@ -114,7 +100,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // busca em displayName e legalName
     @Query("""
         SELECT a FROM Account a
         WHERE a.deleted = false
@@ -126,25 +111,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
 
     // =========================================================
-    // QUERIES "ANTIGAS" (potencialmente unsafe) -> manter por compatibilidade
+    // QUERIES "ANTIGAS" -> manter por compatibilidade
     // =========================================================
 
-    /** Contas por status, NOT DELETED. Preferir esta. */
     List<Account> findByStatusAndDeletedFalse(AccountStatus status);
 
-    /** Contas com vencimento antes de X, NOT DELETED. Preferir esta. */
     List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDateTime date);
 
-    /** Trials expirados, NOT DELETED. Preferir esta. */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.trialEndDate <= :date AND a.status = :status")
     List<Account> findExpiredTrialsNotDeleted(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
 
-    /** Contas em atraso, NOT DELETED. Preferir esta. */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status = :status AND a.paymentDueDate < :today")
     List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
-
-    
-
-  
-
 }

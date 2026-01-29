@@ -5,7 +5,8 @@ public enum AccountStatus {
     ACTIVE("Ativa"),
     SUSPENDED("Suspensa"),
     CANCELLED("Cancelada"),
-    EXPIRED("Expirada");
+    EXPIRED("Expirada"),
+	PROVISIONING("Provisionamento");
 
     private final String description;
 

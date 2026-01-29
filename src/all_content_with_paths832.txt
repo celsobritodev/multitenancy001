@@ -1339,6 +1339,74 @@ public class AccountEntitlementsProvisioningService {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountFactory.java
+============================================================
+package brito.com.multitenancy001.controlplane.application;
+
+import java.text.Normalizer;
+import java.util.Locale;
+import java.util.UUID;
+
+import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+
+/**
+ * Factory para criar Account TENANT a partir do SignupRequest (DTO real do seu projeto).
+ *
+ * - Gera slug e schemaName determinísticos "bonitos" + sufixo aleatório curto.
+ * - NÃO seta status aqui (no seu domínio não existe PROVISIONING).
+ *   Deixe o PublicAccountCreationService controlar FREE_TRIAL / datas / plano etc.
+ */
+public final class AccountFactory {
+
+    private AccountFactory() {}
+
+    public static Account newTenantAccountFromSignup(SignupRequest req) {
+        Account a = new Account();
+
+        a.setDisplayName(req.displayName());
+        a.setLoginEmail(normalizeEmail(req.loginEmail()));
+
+        // Você travou BR no onboarding; manter coerente:
+        a.setTaxCountryCode("BR");
+        a.setTaxIdType(req.taxIdType());
+        a.setTaxIdNumber(req.taxIdNumber());
+
+        String baseSlug = slugify(req.displayName());
+        a.setSlug(baseSlug + "-" + shortId());
+
+        String schemaBase = "t_" + slugify(req.displayName()).replace("-", "_");
+        a.setSchemaName(schemaBase + "_" + shortId());
+
+        // ⚠️ NÃO setar status aqui. Ex:
+        // a.setStatus(AccountStatus.FREE_TRIAL);  <-- deixe no PublicAccountCreationService
+
+        return a;
+    }
+
+    private static String normalizeEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String shortId() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+    }
+
+    private static String slugify(String input) {
+        if (input == null || input.isBlank()) return "tenant";
+        String n = Normalizer.normalize(input, Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        String s = n.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .trim()
+                .replaceAll("\\s+", "-")
+                .replaceAll("-{2,}", "-");
+        return s.isBlank() ? "tenant" : s;
+    }
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountLifecycleService.java
 ============================================================
 package brito.com.multitenancy001.controlplane.application;
@@ -1728,7 +1796,6 @@ public class AccountOnboardingService {
         }
     }
 }
-
 ============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/application/AccountStatusService.java
 ============================================================
@@ -2134,6 +2201,121 @@ public class PublicAccountCreationService {
         base = base.replaceAll("(^_+|_+$)", "");
         if (base.length() < 3) base = "tenant";
         return "t_" + base + "_" + UUID.randomUUID().toString().substring(0, 6);
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/application/account/AccountFactory.java
+============================================================
+package brito.com.multitenancy001.controlplane.application.account;
+
+import java.text.Normalizer;
+import java.util.Locale;
+import java.util.UUID;
+
+import brito.com.multitenancy001.controlplane.application.AccountOnboardingService;
+import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
+
+public final class AccountFactory {
+
+    private AccountFactory() {}
+
+    public static Account newTenantAccount(AccountOnboardingService.CreateAccountCommand cmd) {
+        Account a = new Account();
+
+        a.setDisplayName(cmd.displayName());
+        a.setLoginEmail(cmd.loginEmail());
+        a.setTaxCountryCode(cmd.taxCountryCode());
+        a.setTaxIdType(cmd.taxIdType());
+        a.setTaxIdNumber(cmd.taxIdNumber());
+
+        String baseSlug = slugify(cmd.displayName());
+        a.setSlug(baseSlug + "-" + shortId());
+
+        String schemaBase = "t_" + slugify(cmd.displayName()).replace("-", "_");
+        a.setSchemaName(schemaBase + "_" + shortId());
+
+        // status muda no onboarding
+        a.setStatus(AccountStatus.PROVISIONING);
+
+        // outros defaults: subscriptionPlan, accountType etc (ajuste pro seu modelo)
+        // a.setAccountType(AccountType.TENANT);
+        // a.setSubscriptionPlan(SubscriptionPlan.FREE);
+
+        return a;
+    }
+
+    private static String shortId() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+    }
+
+    private static String slugify(String input) {
+        if (input == null || input.isBlank()) return "tenant";
+        String n = Normalizer.normalize(input, Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        String s = n.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .trim()
+                .replaceAll("\\s+", "-")
+                .replaceAll("-{2,}", "-");
+        return s.isBlank() ? "tenant" : s;
+    }
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/application/account/AccountProvisioningAuditService.java
+============================================================
+package brito.com.multitenancy001.controlplane.application.account;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import brito.com.multitenancy001.controlplane.domain.account.AccountProvisioningEvent;
+import brito.com.multitenancy001.controlplane.domain.account.ProvisioningFailureCode;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountProvisioningEventRepository;
+
+@Service
+public class AccountProvisioningAuditService {
+
+    private final AccountProvisioningEventRepository repository;
+
+    public AccountProvisioningAuditService(AccountProvisioningEventRepository repository) {
+        this.repository = repository;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logStarted(Long accountId, String detailsJson) {
+        repository.save(new AccountProvisioningEvent(
+                accountId,
+                "STARTED",
+                null,
+                "Provisioning started",
+                detailsJson
+        ));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logSuccess(Long accountId, String detailsJson) {
+        repository.save(new AccountProvisioningEvent(
+                accountId,
+                "SUCCESS",
+                null,
+                "Provisioning succeeded",
+                detailsJson
+        ));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logFailure(Long accountId, ProvisioningFailureCode code, String message, String detailsJson) {
+        repository.save(new AccountProvisioningEvent(
+                accountId,
+                "FAILED",
+                code,
+                message,
+                detailsJson
+        ));
     }
 }
 
@@ -3671,6 +3853,61 @@ public enum AccountOrigin {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountProvisioningEvent.java
+============================================================
+package brito.com.multitenancy001.controlplane.domain.account;
+
+import java.time.LocalDateTime;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "account_provisioning_events", schema = "public")
+public class AccountProvisioningEvent {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;
+
+    @Column(name = "event_type", nullable = false, length = 50)
+    private String eventType;
+
+    @Column(name = "failure_code", length = 50)
+    private String failureCode;
+
+    @Column(name = "message", columnDefinition = "text")
+    private String message;
+
+    @Column(name = "details_json", columnDefinition = "text")
+    private String detailsJson;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    protected AccountProvisioningEvent() { }
+
+    public AccountProvisioningEvent(
+            Long accountId,
+            String eventType,
+            ProvisioningFailureCode failureCode,
+            String message,
+            String detailsJson
+    ) {
+        this.accountId = accountId;
+        this.eventType = eventType;
+        this.failureCode = (failureCode == null ? null : failureCode.name());
+        this.message = message;
+        this.detailsJson = detailsJson;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public Long getId() { return id; }
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/AccountStatus.java
 ============================================================
 package brito.com.multitenancy001.controlplane.domain.account;
@@ -3680,7 +3917,8 @@ public enum AccountStatus {
     ACTIVE("Ativa"),
     SUSPENDED("Suspensa"),
     CANCELLED("Cancelada"),
-    EXPIRED("Expirada");
+    EXPIRED("Expirada"),
+	PROVISIONING("Provisionamento")
 
     private final String description;
 
@@ -3730,6 +3968,20 @@ package brito.com.multitenancy001.controlplane.domain.account;
 public enum LegalEntityType {
     INDIVIDUAL,   // pessoa física
     COMPANY       // pessoa jurídica
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/domain/account/ProvisioningFailureCode.java
+============================================================
+package brito.com.multitenancy001.controlplane.domain.account;
+
+public enum ProvisioningFailureCode {
+    VALIDATION_ERROR,
+    PUBLIC_PERSISTENCE_ERROR,
+    SCHEMA_CREATION_ERROR,
+    TENANT_MIGRATION_ERROR,
+    TENANT_ADMIN_CREATION_ERROR,
+    UNKNOWN
 }
 
 ============================================================
@@ -4396,6 +4648,17 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/account/AccountProvisioningEventRepository.java
+============================================================
+package brito.com.multitenancy001.controlplane.persistence.account;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import brito.com.multitenancy001.controlplane.domain.account.AccountProvisioningEvent;
+
+public interface AccountProvisioningEventRepository extends JpaRepository<AccountProvisioningEvent, Long> {
+}
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/controlplane/persistence/account/AccountRepository.java
 ============================================================
 package brito.com.multitenancy001.controlplane.persistence.account;
@@ -4431,35 +4694,29 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
 
-    boolean existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(TaxIdType taxIdType, String taxIdNumber);
+    // ❌ REMOVIDO: existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(...)
+    // Motivo: a regra correta agora é única por (taxCountryCode, taxIdType, taxIdNumber).
 
     // =========================================================
     // DEFAULT DE DOMÍNIO: NOT DELETED (deleted=false)
     // =========================================================
 
-    /** Lista todas as contas não deletadas. */
     List<Account> findAllByDeletedFalse();
 
-    /** Busca por slug (não deletado). */
     Optional<Account> findBySlugAndDeletedFalse(String slug);
 
-    /** Busca por slug ignoreCase (não deletado). */
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
-    
+
     // =========================================================
     // PROJECTIONS (para evitar expor entidade fora do CP)
     // =========================================================
 
- // ✅ faltava este método (usado pelo AccountResolver)
     Optional<AccountResolverProjection> findProjectionByIdAndDeletedFalse(Long id);
 
     Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
 
-
-    /** Busca por id (não deletado). Default para leitura normal. */
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
-    /** Contas por lista de status (não deletado). */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
 
@@ -4468,10 +4725,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // enabled = NOT DELETED + status operacional
     // =========================================================
 
-    /**
-     * Conta "enabled/operacional": não deletada e status operacional.
-     * Use em fluxos que precisam garantir conta em operação (ex.: login, ações sensíveis).
-     */
     @Query("""
             SELECT a
               FROM Account a
@@ -4485,10 +4738,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // BYPASS CONSCIENTE: ANY (inclui deleted)
     // =========================================================
 
-    /**
-     * ⚠️ BYPASS: pode incluir soft-deleted.
-     * Use apenas para auditoria/suporte/restore.
-     */
     Optional<Account> findAnyById(Long id);
 
     // =========================================================
@@ -4514,7 +4763,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                                              @Param("end") LocalDateTime end,
                                              Pageable pageable);
 
-    // busca em displayName e legalName
     @Query("""
         SELECT a FROM Account a
         WHERE a.deleted = false
@@ -4526,27 +4774,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
 
     // =========================================================
-    // QUERIES "ANTIGAS" (potencialmente unsafe) -> manter por compatibilidade
+    // QUERIES "ANTIGAS" -> manter por compatibilidade
     // =========================================================
 
-    /** Contas por status, NOT DELETED. Preferir esta. */
     List<Account> findByStatusAndDeletedFalse(AccountStatus status);
 
-    /** Contas com vencimento antes de X, NOT DELETED. Preferir esta. */
     List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDateTime date);
 
-    /** Trials expirados, NOT DELETED. Preferir esta. */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.trialEndDate <= :date AND a.status = :status")
     List<Account> findExpiredTrialsNotDeleted(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
 
-    /** Contas em atraso, NOT DELETED. Preferir esta. */
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status = :status AND a.paymentDueDate < :today")
     List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
-
-    
-
-  
-
 }
 
 ============================================================
@@ -5342,7 +5581,7 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.hbm2ddl.auto", "none");
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
-        props.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
+     
 
 
         // ✅ Multi-tenancy por schema (strategy)
@@ -7321,18 +7560,22 @@ public final class TenantRequiredTables {
 ============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
+@Component
 @RequiredArgsConstructor
 public class TenantSchemaProvisioningFacade {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 
-    public void ensureSchemaExistsAndMigrate(String schemaName) {
-        tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
+    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
+        return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
+    }
+
+    public void tryDropSchema(String schemaName) {
+        tenantSchemaProvisioningService.tryDropSchema(schemaName);
     }
 }
 
@@ -7360,11 +7603,8 @@ public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
     private final TenantSchemaFlywayMigrationService tenantSchemaFlywayMigrationService;
-    private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
-    
-   
 
-    
+    private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     private void validateSchemaNameOrThrow(String schemaName) {
         if (!StringUtils.hasText(schemaName)) {
@@ -7379,7 +7619,6 @@ public class TenantSchemaProvisioningService {
                     400);
         }
 
-
         if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
             throw new ApiException(
                     "INVALID_SCHEMA",
@@ -7388,8 +7627,6 @@ public class TenantSchemaProvisioningService {
             );
         }
     }
-
-    
 
     public boolean schemaExists(String schemaName) {
         if (!StringUtils.hasText(schemaName)) return false;
@@ -7403,8 +7640,6 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-   
-
     public boolean tableExists(String schemaName, String tableName) {
         if (!StringUtils.hasText(schemaName) || !StringUtils.hasText(tableName)) return false;
 
@@ -7417,26 +7652,46 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-    public void ensureSchemaExistsAndMigrate(String schemaName) {
+    /**
+     * Cria o schema (se necessário) e roda Flyway.
+     * @return true se o schema foi criado agora por este fluxo (útil para compensação).
+     */
+    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
         validateSchemaNameOrThrow(schemaName);
 
         String normalized = schemaName.trim().toLowerCase();
 
+        boolean existedBefore = schemaExists(normalized);
 
-        if (!schemaExists(normalized)) {
+        if (!existedBefore) {
             log.info("📦 Criando schemaName {}", normalized);
-            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + normalized + "\"");
+            jdbcTemplate.execute("CREATE SCHEMA \"" + normalized + "\"");
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
         tenantSchemaFlywayMigrationService.migrateTenantSchema(normalized);
+
+        return !existedBefore;
     }
 
     /**
-     * Deve ser chamado com TenantContext já bindado no schema do tenant
+     * Compensação: tenta dropar schema CASCADE sem quebrar o erro original.
+     * (Como você sempre dropa o banco, isso vai rodar só em falhas no onboarding).
      */
-  
+    public void tryDropSchema(String schemaName) {
+        if (!StringUtils.hasText(schemaName)) return;
+
+        String normalized = schemaName.trim().toLowerCase();
+
+        try {
+            log.warn("🧹 Compensação: drop schema {} cascade", normalized);
+            jdbcTemplate.execute("DROP SCHEMA \"" + normalized + "\" CASCADE");
+        } catch (Exception e) {
+            log.error("⚠️ Falha ao dropar schema {} (ignorado)", normalized, e);
+        }
+    }
 }
+
 ============================================================
 // FILE: ./main/java/brito/com/multitenancy001/infrastructure/tenant/TenantUnitOfWork.java
 ============================================================
@@ -7481,9 +7736,13 @@ public class TenantUnitOfWork {
 ============================================================
 package brito.com.multitenancy001.infrastructure.tenant;
 
+import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -7495,7 +7754,9 @@ import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -7512,6 +7773,7 @@ public class TenantUserProvisioningFacade {
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     private final AppClock appClock;
 
@@ -7547,7 +7809,9 @@ public class TenantUserProvisioningFacade {
      * Retorna um snapshot (UserSummaryData) para evitar vazamento do domínio Tenant
      * para o contexto ControlPlane.
      *
-     * Login é por EMAIL 
+     * Login é por EMAIL
+     *
+     * ✅ Ajuste: cria permissões em batch (1 roundtrip) na tabela tenant_user_permissions.
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -7595,6 +7859,10 @@ public class TenantUserProvisioningFacade {
 
                     TenantUser saved = tenantUserRepository.save(tenantUser);
 
+                    // ✅ Batch insert das permissões do TENANT_OWNER
+                    Set<TenantPermission> permissions = TenantRolePermissions.permissionsFor(TenantRole.TENANT_OWNER);
+                    batchInsertPermissions(saved.getId(), permissions);
+
                     return new UserSummaryData(
                             saved.getId(),
                             saved.getAccountId(),
@@ -7608,6 +7876,32 @@ public class TenantUserProvisioningFacade {
                 })
         );
     }
+
+    /**
+     * Insere permissões em batch (evita N inserts via Hibernate).
+     *
+     * Assumimos que:
+     * - TenantExecutor já bindou o schema na thread (search_path do multi-tenant provider).
+     * - A tabela tenant_user_permissions existe no schema do tenant.
+     */
+   private void batchInsertPermissions(Long tenantUserId, Set<TenantPermission> permissions) {
+    if (tenantUserId == null) return;
+    if (permissions == null || permissions.isEmpty()) return;
+
+    List<TenantPermission> list = new ArrayList<>(permissions);
+
+    jdbcTemplate.batchUpdate(
+        "INSERT INTO tenant_user_permissions (tenant_user_id, permission) " +
+        "VALUES (?, ?) ON CONFLICT DO NOTHING",
+        list,
+        500,
+        (PreparedStatement ps, TenantPermission perm) -> {
+            ps.setLong(1, tenantUserId);
+            ps.setString(2, perm.name());
+        }
+    );
+}
+
 
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
@@ -12063,6 +12357,103 @@ public class TenantSupplierService {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/TenantAdminCreationService.java
+============================================================
+package brito.com.multitenancy001.tenant.application.user;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
+import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
+
+@Service
+public class TenantAdminCreationService {
+
+    private final TenantUserRepository tenantUserRepository;
+    private final TenantUserPermissionBulkInserter permissionBulkInserter;
+    private final TenantRolePermissions rolePermissions;
+
+    public TenantAdminCreationService(
+            TenantUserRepository tenantUserRepository,
+            TenantUserPermissionBulkInserter permissionBulkInserter,
+            TenantRolePermissions rolePermissions
+    ) {
+        this.tenantUserRepository = tenantUserRepository;
+        this.permissionBulkInserter = permissionBulkInserter;
+        this.rolePermissions = rolePermissions;
+    }
+
+    public TenantAdminResult createTenantOwner(Long accountId, String email, String name, String rawPassword) {
+        // IMPORTANTE: quem chama já bindou o tenant no TenantContext (como no teu log)
+        // aqui a gente assume que o caller já fez TenantContext.bind(schemaName)
+
+        TenantUser existing = tenantUserRepository.findByEmailAndAccountId(email, accountId).orElse(null);
+        if (existing != null) {
+            return new TenantAdminResult(existing.getId(), existing.getEmail(), existing.getRole().name());
+        }
+
+        TenantUser admin = new TenantUser();
+        admin.setAccountId(accountId);
+        admin.setEmail(email);
+        admin.setName(name);
+        admin.setRole(TenantRole.TENANT_OWNER);
+
+        // ajuste para o teu mecanismo real (BCrypt, encoder, etc)
+        admin.setPassword(rawPassword);
+        admin.setMustChangePassword(false);
+
+        TenantUser saved = tenantUserRepository.save(admin);
+
+        List<TenantUserPermission> perms = rolePermissions.permissionsFor(TenantRole.TENANT_OWNER);
+        permissionBulkInserter.insertAll(saved.getId(), perms);
+
+        return new TenantAdminResult(saved.getId(), saved.getEmail(), saved.getRole().name());
+    }
+
+    public record TenantAdminResult(Long tenantAdminId, String email, String role) {}
+}
+
+============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/TenantUserPermissionBulkInserter.java
+============================================================
+package brito.com.multitenancy001.tenant.application.user;
+
+import java.sql.PreparedStatement;
+import java.util.List;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TenantUserPermissionBulkInserter {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public TenantUserPermissionBulkInserter(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public void insertAll(Long tenantUserId, List<TenantUserPermission> permissions) {
+        if (permissions == null || permissions.isEmpty()) return;
+
+        // Uma única operação batch (sem N roundtrips)
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO tenant_user_permissions (tenant_user_id, permission) VALUES (?, ?)",
+                permissions,
+                500,
+                (PreparedStatement ps, TenantUserPermission perm) -> {
+                    ps.setLong(1, tenantUserId);
+                    ps.setString(2, perm.name());
+                }
+        );
+    }
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/tenant/application/user/TenantUserService.java
 ============================================================
 package brito.com.multitenancy001.tenant.application.user;
@@ -13769,6 +14160,38 @@ public enum TenantUserOrigin {
 }
 
 ============================================================
+// FILE: ./main/java/brito/com/multitenancy001/tenant/infra/provisioning/TenantFlywayMigrator.java
+============================================================
+package brito.com.multitenancy001.tenant.infra.provisioning;
+
+import javax.sql.DataSource;
+
+import org.flywaydb.core.Flyway;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TenantFlywayMigrator {
+
+    private final DataSource dataSource;
+
+    public TenantFlywayMigrator(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public void migrate(String schemaName) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schemaName)
+                .defaultSchema(schemaName)
+                .locations("classpath:db/migration/tenant")
+                .baselineOnMigrate(false)
+                .validateOnMigrate(true)
+                .load()
+                .migrate();
+    }
+}
+
+============================================================
 // FILE: ./main/java/brito/com/multitenancy001/tenant/persistence/category/TenantCategoryRepository.java
 ============================================================
 package brito.com.multitenancy001.tenant.persistence.category;
@@ -14549,6 +14972,42 @@ public final class TenantRolePermissions {
         return Collections.unmodifiableSet(set);
     }
 }
+
+============================================================
+// FILE: ./main/resources/db/migration/accounts/V10__create_table_account_provisioning_events.sql
+============================================================
+
+
+-- Regra: TaxId único por país + tipo + número, respeitando soft-delete
+CREATE UNIQUE INDEX uk_accounts_taxid_country_type_number_not_deleted
+    ON public.accounts (tax_country_code, tax_id_type, tax_id_number)
+    WHERE deleted = false;
+
+-- (Opcional, mas recomendado) evitar duplicidade de login_email também, se ainda não existir:
+-- CREATE UNIQUE INDEX uk_accounts_login_email_not_deleted
+--     ON public.accounts (login_email)
+--     WHERE deleted = false;
+
+============================================================
+// FILE: ./main/resources/db/migration/accounts/V11__create_unique_taxid_per_country_not_deleted.sql
+============================================================
+-- V11__create_unique_taxid_per_country_not_deleted
+
+CREATE TABLE public.account_provisioning_events (
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    failure_code VARCHAR(50),
+    message TEXT,
+    details_json TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_account_prov_events_account_id
+    ON public.account_provisioning_events(account_id);
+
+CREATE INDEX idx_account_prov_events_created_at
+    ON public.account_provisioning_events(created_at);
 
 ============================================================
 // FILE: ./main/resources/db/migration/accounts/V1__create_extension.sql

@@ -6,6 +6,7 @@ public enum TenantRole implements RoleAuthority {
 
     TENANT_OWNER,
     TENANT_ADMIN,
+    TENANT_USER,
     TENANT_PRODUCT_MANAGER,
     TENANT_SALES_MANAGER,
     TENANT_BILLING_MANAGER,

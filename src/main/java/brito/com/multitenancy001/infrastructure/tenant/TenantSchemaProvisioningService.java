@@ -19,11 +19,8 @@ public class TenantSchemaProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
     private final TenantSchemaFlywayMigrationService tenantSchemaFlywayMigrationService;
-    private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
-    
-   
 
-    
+    private static final Pattern SCHEMA_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     private void validateSchemaNameOrThrow(String schemaName) {
         if (!StringUtils.hasText(schemaName)) {
@@ -38,7 +35,6 @@ public class TenantSchemaProvisioningService {
                     400);
         }
 
-
         if (!SCHEMA_PATTERN.matcher(trimmed).matches()) {
             throw new ApiException(
                     "INVALID_SCHEMA",
@@ -47,8 +43,6 @@ public class TenantSchemaProvisioningService {
             );
         }
     }
-
-    
 
     public boolean schemaExists(String schemaName) {
         if (!StringUtils.hasText(schemaName)) return false;
@@ -62,8 +56,6 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-   
-
     public boolean tableExists(String schemaName, String tableName) {
         if (!StringUtils.hasText(schemaName) || !StringUtils.hasText(tableName)) return false;
 
@@ -76,23 +68,42 @@ public class TenantSchemaProvisioningService {
         return Boolean.TRUE.equals(exists);
     }
 
-    public void ensureSchemaExistsAndMigrate(String schemaName) {
+    /**
+     * Cria o schema (se necessário) e roda Flyway.
+     * @return true se o schema foi criado agora por este fluxo (útil para compensação).
+     */
+    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
         validateSchemaNameOrThrow(schemaName);
 
         String normalized = schemaName.trim().toLowerCase();
 
+        boolean existedBefore = schemaExists(normalized);
 
-        if (!schemaExists(normalized)) {
+        if (!existedBefore) {
             log.info("📦 Criando schemaName {}", normalized);
-            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + normalized + "\"");
+            jdbcTemplate.execute("CREATE SCHEMA \"" + normalized + "\"");
         }
 
         log.info("🧬 Rodando migrations do tenant: {}", normalized);
         tenantSchemaFlywayMigrationService.migrateTenantSchema(normalized);
+
+        return !existedBefore;
     }
 
     /**
-     * Deve ser chamado com TenantContext já bindado no schema do tenant
+     * Compensação: tenta dropar schema CASCADE sem quebrar o erro original.
+     * (Como você sempre dropa o banco, isso vai rodar só em falhas no onboarding).
      */
-  
+    public void tryDropSchema(String schemaName) {
+        if (!StringUtils.hasText(schemaName)) return;
+
+        String normalized = schemaName.trim().toLowerCase();
+
+        try {
+            log.warn("🧹 Compensação: drop schema {} cascade", normalized);
+            jdbcTemplate.execute("DROP SCHEMA \"" + normalized + "\" CASCADE");
+        } catch (Exception e) {
+            log.error("⚠️ Falha ao dropar schema {} (ignorado)", normalized, e);
+        }
+    }
 }

@@ -1,16 +1,20 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 
-@Service
+@Component
 @RequiredArgsConstructor
 public class TenantSchemaProvisioningFacade {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
 
-    public void ensureSchemaExistsAndMigrate(String schemaName) {
-        tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
+    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
+        return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
+    }
+
+    public void tryDropSchema(String schemaName) {
+        tenantSchemaProvisioningService.tryDropSchema(schemaName);
     }
 }

@@ -8,7 +8,10 @@ import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupResponse;
 import brito.com.multitenancy001.controlplane.api.dto.signup.TenantAdminResponse;
 import brito.com.multitenancy001.controlplane.api.mapper.AccountApiMapper;
+import brito.com.multitenancy001.controlplane.application.account.AccountFactory;
+import brito.com.multitenancy001.controlplane.application.account.CreateAccountCommand;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
+import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
@@ -23,8 +26,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountOnboardingService {
 
+    private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
+
     private final AccountApiMapper accountApiMapper;
-    private final PublicAccountCreationService publicAccountCreationService;
 
     private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
@@ -33,23 +37,50 @@ public class AccountOnboardingService {
     private final PublicUnitOfWork publicUnitOfWork;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
-        validateSignupRequest(signupRequest);
+        SignupData data = validateAndNormalize(signupRequest);
 
-        log.info("Tentando criar conta");
+        log.info("Tentando criar conta | loginEmail={}", data.loginEmail());
 
-        Account account = publicUnitOfWork.tx(() ->
-                publicAccountCreationService.createAccountFromSignup(signupRequest)
-        );
+        Account account = publicUnitOfWork.tx(() -> {
+            CreateAccountCommand cmd = new CreateAccountCommand(
+                    data.displayName(),
+                    data.loginEmail(),
+                    data.taxCountryCode(),
+                    data.taxIdType(),
+                    data.taxIdNumber()
+            );
 
+            Account created = AccountFactory.newTenantAccount(cmd);
+
+            // status inicial deve refletir que ainda falta schema+user
+            created.setStatus(AccountStatus.PROVISIONING);
+
+            return accountRepository.save(created);
+        });
+
+        // Provisionamento fora do TX do CP, porque envolve infra/DDL/migrations
         tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
 
         UserSummaryData tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
                 account.getSchemaName(),
                 account.getId(),
                 account.getDisplayName(),
-                signupRequest.loginEmail(),
-                signupRequest.password()
+                data.loginEmail(),
+                data.password()
         );
+
+        // Atualiza status após sucesso
+        publicUnitOfWork.tx(() -> {
+            Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+
+            // ajuste aqui se teu domínio tiver lógica diferente (FREE_TRIAL/ACTIVE etc.)
+            if (managed.getStatus() == AccountStatus.PROVISIONING) {
+                managed.setStatus(AccountStatus.FREE_TRIAL);
+            }
+            accountRepository.save(managed);
+            return null;
+        });
 
         log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
                 account.getId(), account.getSchemaName(), account.getSlug());
@@ -62,62 +93,88 @@ public class AccountOnboardingService {
                 tenantOwner.role()
         );
 
-
-
         return new SignupResponse(accountResponse, tenantAdminResponse);
     }
 
-    private void validateSignupRequest(SignupRequest signupRequest) {
-        if (signupRequest == null) {
+    private SignupData validateAndNormalize(SignupRequest req) {
+        if (req == null) {
             throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.displayName())) {
+        String displayName = safeTrim(req.displayName());
+        if (!StringUtils.hasText(displayName)) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.loginEmail())) {
+        String loginEmail = normalizeEmail(req.loginEmail());
+        if (!StringUtils.hasText(loginEmail)) {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
-
-        String email = signupRequest.loginEmail().trim().toLowerCase();
-
-        if (!email.contains("@")) {
+        if (!looksLikeEmail(loginEmail)) {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
-        if (signupRequest.taxIdType() == null) {
+        if (req.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.taxIdNumber())) {
+        String taxIdNumber = safeTrim(req.taxIdNumber());
+        if (!StringUtils.hasText(taxIdNumber)) {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
-        if (!StringUtils.hasText(signupRequest.password()) || !StringUtils.hasText(signupRequest.confirmPassword())) {
+        String password = req.password();
+        String confirmPassword = req.confirmPassword();
+
+        if (!StringUtils.hasText(password) || !StringUtils.hasText(confirmPassword)) {
             throw new ApiException("INVALID_PASSWORD", "Senha e confirmação são obrigatórias", 400);
         }
-
-        if (!signupRequest.password().equals(signupRequest.confirmPassword())) {
+        if (!password.equals(confirmPassword)) {
             throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
         }
 
-        if (accountRepository.existsByLoginEmailAndDeletedFalse(email)) {
+        // Se você já tiver taxCountryCode no request no futuro, basta trocar aqui:
+        String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;
+
+        // Unicidade de email (NOT DELETED)
+        if (accountRepository.existsByLoginEmailAndDeletedFalse(loginEmail)) {
             throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
         }
 
-        if (accountRepository.existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                signupRequest.taxIdType(), signupRequest.taxIdNumber()
+        // ✅ Regra correta: único por (taxCountryCode, taxIdType, taxIdNumber)
+        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
+                taxCountryCode, req.taxIdType(), taxIdNumber
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }
 
-        // Se você quer travar especificamente "BR" aqui, ok.
-        // Caso deseje tornar multi-país, troque para signupRequest.taxCountryCode().
-        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                "BR", signupRequest.taxIdType(), signupRequest.taxIdNumber()
-        )) {
-            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
-        }
+        return new SignupData(displayName, loginEmail, taxCountryCode, req.taxIdType(), taxIdNumber, password);
     }
+
+    private static String safeTrim(String s) {
+        return s == null ? null : s.trim();
+    }
+
+    private static String normalizeEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase();
+    }
+
+    private static boolean looksLikeEmail(String email) {
+        // Simples e suficiente pro seu caso (validação real pode ser outra camada)
+        int at = email.indexOf('@');
+        if (at <= 0) return false;
+        if (at != email.lastIndexOf('@')) return false;
+        if (at == email.length() - 1) return false;
+        return true;
+    }
+
+    private record SignupData(
+            String displayName,
+            String loginEmail,
+            String taxCountryCode,
+            brito.com.multitenancy001.controlplane.domain.account.TaxIdType taxIdType,
+            String taxIdNumber,
+            String password
+    ) {}
 }
