@@ -3,7 +3,6 @@ package brito.com.multitenancy001.shared.context;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.infrastructure.multitenancy.hibernate.CurrentTenantSchemaResolver;
 import brito.com.multitenancy001.shared.db.Schemas;
 import lombok.extern.slf4j.Slf4j;
 
@@ -12,17 +11,19 @@ public class TenantContext {
 
     public static final String PUBLIC_SCHEMA = Schemas.CONTROL_PLANE;
 
+    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
+
     /**
      * ✅ Retorna o tenant REALMENTE bindado (ou null).
-     * Não mascara com Schemas.CONTROL_PLANE.
+     * public = null
      */
     public static String getOrNull() {
-        return CurrentTenantSchemaResolver.resolveBoundTenantOrNull();
+        String t = TENANT_THREAD_LOCAL.get();
+        return StringUtils.hasText(t) ? t : null;
     }
 
     /**
      * ✅ Quando você quer um fallback explícito para public.
-     * (Útil pra logs/diagnóstico; no runtime o "public" é representado por null.)
      */
     public static String getOrDefaultPublic() {
         String t = getOrNull();
@@ -30,8 +31,7 @@ public class TenantContext {
     }
 
     public static boolean isPublic() {
-        String t = getOrNull();
-        return t == null || PUBLIC_SCHEMA.equalsIgnoreCase(t);
+        return getOrNull() == null;
     }
 
     public static void bind(String tenantId) {
@@ -40,16 +40,29 @@ public class TenantContext {
         }
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
+        String target = StringUtils.hasText(normalized) ? normalized : null; // public = null
+        String previous = getOrNull(); // já normalizado (public = null)
 
-        // "public" = null (sem tenant)
-        if (!StringUtils.hasText(normalized)) {
-            CurrentTenantSchemaResolver.bindTenantToCurrentThread(null);
-            log.info("🔄 Tenant bindado para PUBLIC (null) | thread={}", Thread.currentThread().threadId());
+        // ✅ Sem mudança: não re-binda e evita log repetido
+        if ((previous == null && target == null) || (previous != null && previous.equals(target))) {
+            if (log.isDebugEnabled()) {
+                log.debug("🔄 TenantContext.bind sem mudança | thread={} | tenant={}",
+                        Thread.currentThread().threadId(),
+                        (target != null ? target : "PUBLIC(null)"));
+            }
             return;
         }
 
-        CurrentTenantSchemaResolver.bindTenantToCurrentThread(normalized);
-        log.info("🔄 Tenant bindado | thread={} | tenant={}", Thread.currentThread().threadId(), normalized);
+        // aplica mudança
+        if (target == null) {
+            TENANT_THREAD_LOCAL.remove();
+            log.info("🔄 Tenant bindado para PUBLIC (null) | anterior={} | thread={}",
+                    previous, Thread.currentThread().threadId());
+        } else {
+            TENANT_THREAD_LOCAL.set(target);
+            log.info("🔄 Tenant bindado | thread={} | {} -> {}",
+                    Thread.currentThread().threadId(), previous, target);
+        }
     }
 
     /**
@@ -57,8 +70,18 @@ public class TenantContext {
      * Prefira usar publicScope()/scope() com try-with-resources.
      */
     public static void clear() {
-        CurrentTenantSchemaResolver.unbindTenantFromCurrentThread();
-        log.info("🧹 Tenant desbindado | thread={}", Thread.currentThread().threadId());
+        String previous = getOrNull();
+        if (previous == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("🧹 TenantContext.clear sem mudança (já estava PUBLIC) | thread={}",
+                        Thread.currentThread().threadId());
+            }
+            return;
+        }
+
+        TENANT_THREAD_LOCAL.remove();
+        log.info("🧹 Tenant desbindado | thread={} | anterior={}",
+                Thread.currentThread().threadId(), previous);
     }
 
     // ✅ escopo seguro (restaura o tenant anterior ao sair)
@@ -86,8 +109,7 @@ public class TenantContext {
         @Override
         public void close() {
             if (!closed) {
-                // restaura exatamente o que estava antes (tenant ou public)
-                TenantContext.bind(previous);
+                TenantContext.bind(previous); // restaura exatamente o anterior
                 closed = true;
             }
         }

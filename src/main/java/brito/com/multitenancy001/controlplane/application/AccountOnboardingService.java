@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.application;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -19,6 +21,7 @@ import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFac
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountOnboardingService {
 
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
+    private static final long DEFAULT_TRIAL_DAYS = 14L;
 
     private final AccountApiMapper accountApiMapper;
 
@@ -38,6 +42,7 @@ public class AccountOnboardingService {
 
     private final AccountRepository accountRepository;
     private final PublicUnitOfWork publicUnitOfWork;
+    private final AppClock appClock;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
         SignupData data = validateAndNormalize(signupRequest);
@@ -72,28 +77,23 @@ public class AccountOnboardingService {
                 data.password()
         );
 
-        // ✅ CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
+        // CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
         publicUnitOfWork.tx(() -> {
             loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
             return null;
         });
 
-        // Atualiza status após sucesso
-        publicUnitOfWork.tx(() -> {
-            Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+        Account finalized = finalizeProvisioning(account.getId());
 
-            if (managed.getStatus() == AccountStatus.PROVISIONING) {
-                managed.setStatus(AccountStatus.FREE_TRIAL);
-            }
-            accountRepository.save(managed);
-            return null;
-        });
+        log.info("✅ Account criada | accountId={} | schemaName={} | slug={} | status={} | trialEndDate={}",
+                finalized.getId(),
+                finalized.getSchemaName(),
+                finalized.getSlug(),
+                finalized.getStatus(),
+                finalized.getTrialEndDate()
+        );
 
-        log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
-                account.getId(), account.getSchemaName(), account.getSlug());
-
-        AccountResponse accountResponse = accountApiMapper.toResponse(account);
+        AccountResponse accountResponse = accountApiMapper.toResponse(finalized);
 
         TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
                 tenantOwner.id(),
@@ -102,6 +102,27 @@ public class AccountOnboardingService {
         );
 
         return new SignupResponse(accountResponse, tenantAdminResponse);
+    }
+
+    private Account finalizeProvisioning(Long accountId) {
+        return publicUnitOfWork.tx(() -> {
+            Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+
+            LocalDateTime now = appClock.now();
+
+            // Se ainda está provisionando, entra em FREE_TRIAL
+            if (managed.getStatus() == AccountStatus.PROVISIONING) {
+                managed.setStatus(AccountStatus.FREE_TRIAL);
+            }
+
+            // Garantia de consistência: FREE_TRIAL precisa de trialEndDate
+            if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndDate() == null) {
+                managed.setTrialEndDate(now.plusDays(DEFAULT_TRIAL_DAYS));
+            }
+
+            return accountRepository.save(managed);
+        });
     }
 
     private SignupData validateAndNormalize(SignupRequest req) {

@@ -5,80 +5,42 @@ import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
 
 @Slf4j
 @Component
-public class CurrentTenantSchemaResolver
-        implements CurrentTenantIdentifierResolver<String> {
+public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResolver<String> {
 
-	private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
-    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
+    private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
     /**
-     * Bind do tenant na thread atual.
-     * - Se vier vazio/nulo: remove o tenant (fica "sem tenant", e o resolver decide fallback).
-     * - Se vier preenchido: seta no ThreadLocal.
+     * ✅ Compatibilidade: mantém os mesmos métodos estáticos que seu código já usa.
+     * Agora eles delegam ao TenantContext (fonte única).
      */
+
     public static void bindTenantToCurrentThread(String tenantId) {
-        String previous = TENANT_THREAD_LOCAL.get();
-
-        String normalized = (tenantId != null ? tenantId.trim() : null);
-
-        if (StringUtils.hasText(normalized)) {
-            TENANT_THREAD_LOCAL.set(normalized);
-            if (!normalized.equals(previous)) {
-                log.info("🔄 Tenant bindado à thread: {} -> {}", previous, normalized);
-            } else {
-                log.debug("🔄 Tenant já estava bindado: {}", normalized);
-            }
-        } else {
-            TENANT_THREAD_LOCAL.remove();
-            if (previous != null) {
-                log.info("🧹 Tenant removido da thread (anterior: {})", previous);
-            } else {
-                log.debug("🧹 Tenant já estava vazio (nada para remover)");
-            }
-        }
+        TenantContext.bind(tenantId);
     }
 
-    /**
-     * Retorna o tenant REALMENTE bindado.
-     * ✅ Importante: aqui retornamos null quando não há tenant,
-     * pra não mascarar estado e facilitar debug.
-     */
     public static String resolveBoundTenantOrNull() {
-        String t = TENANT_THREAD_LOCAL.get();
-        return StringUtils.hasText(t) ? t : null;
+        // TenantContext.getOrNull() já devolve null quando está em PUBLIC
+        return TenantContext.getOrNull();
     }
 
-    /**
-     * Mantém compatibilidade com seu código atual (ex.: logs do provider).
-     * Use isso somente quando você quer um fallback explícito para public.
-     */
     public static String resolveBoundTenantOrDefault() {
-        String t = resolveBoundTenantOrNull();
+        String t = TenantContext.getOrNull();
         return (t != null ? t : DEFAULT_SCHEMA);
     }
 
     public static void unbindTenantFromCurrentThread() {
-        String previous = TENANT_THREAD_LOCAL.get();
-        TENANT_THREAD_LOCAL.remove();
-        if (previous != null) {
-            log.info("🧹 Tenant desbindado da thread (anterior: {})", previous);
-        } else {
-            log.debug("🧹 Tenant desbindado (já estava vazio)");
-        }
+        TenantContext.clear();
     }
 
-    /**
-     * O Hibernate sempre precisa de um tenant válido.
-     * ✅ Aqui sim a gente aplica fallback para DEFAULT_SCHEMA.
-     */
     @Override
     public String resolveCurrentTenantIdentifier() {
-        String tenant = resolveBoundTenantOrNull();
-        String resolved = (tenant != null ? tenant : DEFAULT_SCHEMA);
+        String tenant = TenantContext.getOrNull(); // null = public
+        String resolved = (StringUtils.hasText(tenant) ? tenant : DEFAULT_SCHEMA);
 
         if (log.isDebugEnabled()) {
             log.debug("🏷️ Hibernate resolveu tenant={} (bound={}, default={})",

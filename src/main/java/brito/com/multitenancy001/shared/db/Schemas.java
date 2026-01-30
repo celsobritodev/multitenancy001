@@ -4,7 +4,7 @@ public final class Schemas {
 
     /**
      * Schema do Control Plane (tabelas globais).
-     * Hoje é Schemas.CONTROL_PLANE (Postgres default).
+     * É o schema fallback (root) quando não há tenant bindado.
      */
     public static final String CONTROL_PLANE = "public";
 

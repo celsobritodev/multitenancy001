@@ -15,13 +15,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-@Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -36,27 +34,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         final String authHeader = httpServletRequest.getHeader("Authorization");
-
-        // "Bearer ..." é esquema HTTP, não é domínio do token
         if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
 
         final String jwt = authHeader.substring(7);
-
         if (!jwtTokenProvider.validateToken(jwt)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
 
-        // ✅ authDomain = TENANT/CONTROLPLANE/...
         final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
         final String emailRaw = jwtTokenProvider.getEmailFromToken(jwt);
         final String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
 
-        // ✅ TRAVA FORTE (403): token tem que bater com a rota
-        // Ex.: rota tenant com token controlplane => 403
         if (requiresControlPlane(httpServletRequest) && SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
@@ -66,20 +58,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Se chegou aqui, o domínio "pode" bater com a área.
-        // Se a rota pede ControlPlane, só aceita CONTROLPLANE.
         if (requiresControlPlane(httpServletRequest) && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
-
-        // Se a rota pede Tenant, só aceita TENANT.
         if (requiresTenant(httpServletRequest) && !SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
             return;
         }
 
-        // só aceitamos TENANT / CONTROLPLANE aqui
         if (!SecurityConstants.AuthDomains.TENANT.equals(authDomain)
                 && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
             filterChain.doFilter(httpServletRequest, httpServletResponse);
@@ -96,6 +83,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        // ======================
+        // TENANT
+        // ======================
         if (SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
             final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
 
@@ -103,7 +93,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
-
             if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
@@ -115,48 +104,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // ✅ escopo seguro: sempre limpa no final
-            try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
+            // ✅ se já existe tenant no contexto (vindo do header), não rebindar
+            String alreadyBoundTenant = TenantContext.getOrNull();
+            if (StringUtils.hasText(alreadyBoundTenant)) {
 
                 UserDetails userDetails = multiContextUserDetailsService.loadTenantUserByEmail(email, accountId);
-
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails, null, userDetails.getAuthorities()
-                        );
-
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-
+                setAuth(httpServletRequest, userDetails);
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
 
-        } else { // CONTROLPLANE
-            String context = jwtTokenProvider.getContextFromToken(jwt);
-            if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+            // ✅ se não existe tenant, usa o do token somente pro load
+            try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
+                UserDetails userDetails = multiContextUserDetailsService.loadTenantUserByEmail(email, accountId);
+                setAuth(httpServletRequest, userDetails);
                 filterChain.doFilter(httpServletRequest, httpServletResponse);
                 return;
             }
-
-            Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
-            if (accountId == null) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
-                return;
-            }
-
-            UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
-
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities()
-                    );
-
-            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
-            SecurityContextHolder.getContext().setAuthentication(authToken);
-
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
         }
+
+        // ======================
+        // CONTROLPLANE
+        // ======================
+        String context = jwtTokenProvider.getContextFromToken(jwt);
+        if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            return;
+        }
+
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+        if (accountId == null) {
+            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            return;
+        }
+
+        UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
+        setAuth(httpServletRequest, userDetails);
+        filterChain.doFilter(httpServletRequest, httpServletResponse);
+    }
+
+    private void setAuth(HttpServletRequest request, UserDetails userDetails) {
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
     }
 
     private boolean requiresControlPlane(HttpServletRequest httpServletRequest) {
@@ -167,11 +158,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean requiresTenant(HttpServletRequest httpServletRequest) {
         String path = httpServletRequest.getRequestURI();
-
-        // ✅ /api/me é tenant (GET/PUT)
         boolean isMe = SecurityConstants.ApiPaths.ME.equals(path)
                 || path.startsWith(SecurityConstants.ApiPaths.ME_PREFIX);
-
         return path.startsWith(SecurityConstants.ApiPaths.TENANT_PREFIX) || isMe;
     }
 }

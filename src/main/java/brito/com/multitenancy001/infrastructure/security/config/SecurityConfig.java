@@ -2,6 +2,9 @@ package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.TenantHeaderTenantContextFilter;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,7 +25,22 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final MultiContextUserDetailsService multiContextUserDetailsService;
+
+    // ===========
+    // BEANS
+    // ===========
+
+    @Bean
+    public TenantHeaderTenantContextFilter tenantHeaderTenantContextFilter() {
+        return new TenantHeaderTenantContextFilter();
+    }
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtTokenProvider, multiContextUserDetailsService);
+    }
 
     @Bean
     public MustChangePasswordFilter mustChangePasswordFilter() {
@@ -39,84 +57,49 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
+    // ===========
+    // CHAIN
+    // ===========
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-
-                // =========================
-                // 🔓 SWAGGER / OPENAPI
-                // =========================
                 .requestMatchers(
                     "/v3/api-docs/**",
                     "/swagger-ui.html",
-                    "/swagger-ui/**"
-                ).permitAll()
-
-                // =========================
-                // 🔓 PUBLIC
-                // =========================
-                .requestMatchers("/actuator/health").permitAll()
-
-                // =========================
-                // 🔓 AUTH CONTROLPLANE (admin)
-                // =========================
-                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/actuator/health",
                     "/api/admin/auth/login",
-                    "/api/admin/auth/refresh"
-                ).permitAll()
-
-                // ✅ troca de senha do próprio usuário (precisa estar autenticado)
-                .requestMatchers("/api/admin/me/password").authenticated()
-
-                // =========================
-                // 🔓 AUTH TENANT
-                // =========================
-                .requestMatchers(
+                    "/api/admin/auth/refresh",
                     "/api/tenant/auth/login",
-                    "/api/tenant/auth/login/confirm", // ✅ novo endpoint
-                    "/api/tenant/auth/refresh"
-                ).permitAll()
-
-                // =========================
-                // 🔓 PASSWORD RESET TENANT
-                // =========================
-                .requestMatchers(
+                    "/api/tenant/auth/login/confirm",
+                    "/api/tenant/auth/refresh",
                     "/api/tenant/password/forgot",
-                    "/api/tenant/password/reset"
-                ).permitAll()
-
-                // =========================
-                // 🔓 SIGNUP / CHECKUSER
-                // =========================
-                .requestMatchers(
+                    "/api/tenant/password/reset",
                     "/api/accounts/auth/checkuser",
                     "/api/signup"
                 ).permitAll()
 
-                // =========================
-                // ✅ ME (TENANT) fora do prefixo /api/tenant
-                // =========================
+                .requestMatchers("/api/admin/me/password").authenticated()
                 .requestMatchers("/api/me/**").authenticated()
 
-                // =========================
-                // ✅ BOUNDARIES OFICIAIS
-                // =========================
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/controlplane/**").authenticated()
                 .requestMatchers("/api/tenant/**").authenticated()
 
-                // =========================
-                // ❌ Qualquer rota fora disso é erro de arquitetura
-                // =========================
                 .anyRequest().denyAll()
             );
 
-        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // ✅ 1) Tenant cedo (X-Tenant) + 1 log por request
+        http.addFilterBefore(tenantHeaderTenantContextFilter(), UsernamePasswordAuthenticationFilter.class);
 
-        // ✅ MustChangePassword precisa rodar DEPOIS do JWT filter
+        // ✅ 2) JWT depois do TenantHeaderFilter
+        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ 3) MustChangePassword depois do JWT
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
 
         return http.build();

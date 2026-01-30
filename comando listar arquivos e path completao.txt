@@ -1,0 +1,30 @@
+{
+  echo "### PROJECT FILE INDEX"
+  find . -type f \
+    -not -path "./target/*" \
+    \( -name "*.java" \
+       -o -path "./src/main/resources/db/migration/*/V*.sql" \
+       -o -path "./pom.xml" \
+       -o -path "./src/main/resources/application.properties" \
+       -o -path "./src/main/resources/application-dev.properties" \
+    \) | sort
+
+  echo
+  echo "### FILE CONTENTS"
+  echo
+
+  find . -type f \
+    -not -path "./target/*" \
+    \( -name "*.java" \
+       -o -path "./src/main/resources/db/migration/*/V*.sql" \
+       -o -path "./pom.xml" \
+       -o -path "./src/main/resources/application.properties" \
+       -o -path "./src/main/resources/application-dev.properties" \
+    \) | sort | while IFS= read -r f; do
+      echo "============================================================"
+      echo "### FILE: $f"
+      echo "============================================================"
+      sed 's/\r$//' "$f"
+      echo
+    done
+} > all_content_with_paths555.txt
