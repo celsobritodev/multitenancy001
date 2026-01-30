@@ -26,9 +26,9 @@ public record SignupRequest(
 
         @NotBlank(message = "Senha é obrigatória")
         @Pattern(
-                regexp = ValidationPatterns.PASSWORD_PATTERN,
-                message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas e números"
-        )
+        	    regexp = "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{8,}$",
+        	    message = "Senha deve ter pelo menos 8 caracteres, contendo letras e números"
+        	)
         String password,
 
         @NotBlank(message = "Confirmação de senha é obrigatória")
