@@ -19,9 +19,9 @@ public class AccountEntitlementsService {
     /**
      * Resolve entitlements efetivos da conta:
      * - BUILTIN/PLATFORM => ilimitado
-     * - TENANT => lê de account_entitlements (se não existir, provisiona default em DEV)
+     * - TENANT => lê de account_entitlements (se não existir, provisiona default)
      */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    @Transactional(transactionManager = "publicTransactionManager")
     public AccountEntitlementsSnapshot resolveEffective(Account account) {
         if (account == null || account.getId() == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
@@ -31,12 +31,15 @@ public class AccountEntitlementsService {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 
-        // 1) tenta ler
         AccountEntitlements ent = accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
 
-        // 2) se não existir, provisiona e tenta de novo
         if (ent == null) {
+            // ✅ provisiona automaticamente
             provisioningService.ensureDefaultEntitlementsForTenant(account);
+
+            // ✅ garante visibilidade imediata no mesmo fluxo
+            accountEntitlementsRepository.flush();
+
             ent = accountEntitlementsRepository.findByAccount_Id(account.getId())
                     .orElseThrow(() -> new ApiException(
                             "ENTITLEMENTS_NOT_FOUND",
@@ -52,26 +55,31 @@ public class AccountEntitlementsService {
         return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Não pode ser readOnly=true, porque resolveEffective() pode provisionar.
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public boolean canCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         return currentUsers < eff.maxUsers();
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ✅ já está correto (sem readOnly)
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
 
         if (currentUsers >= eff.maxUsers()) {
-            throw new ApiException(
-                    "QUOTA_MAX_USERS_REACHED",
-                    "Limite de usuários atingido para este plano",
-                    403
-            );
+            throw new ApiException("QUOTA_MAX_USERS_REACHED", "Limite de usuários atingido para este plano", 403);
         }
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Também não pode ser readOnly=true
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanCreateProduct(Account account, long currentProducts) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
 
@@ -84,7 +92,10 @@ public class AccountEntitlementsService {
         }
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Também não pode ser readOnly=true
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
         if (deltaMb < 0) {
             throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);

@@ -28,15 +28,27 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
             AccessDeniedException accessDeniedException
     ) throws IOException, ServletException {
 
+        String message = resolveMessage(accessDeniedException);
+
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
                 .timestamp(appClock.now())
                 .error("FORBIDDEN")
-                .message("Acesso negado")
+                .message(message)     // ✅ agora devolve a mensagem real quando existir
                 .details(null)
                 .build();
 
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+
         response.getWriter().write(objectMapper.writeValueAsString(body));
+    }
+
+    private String resolveMessage(AccessDeniedException ex) {
+        if (ex == null) return "Acesso negado";
+        String msg = ex.getMessage();
+        if (msg == null) return "Acesso negado";
+        msg = msg.trim();
+        return msg.isEmpty() ? "Acesso negado" : msg;
     }
 }

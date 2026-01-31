@@ -20,7 +20,8 @@ public class AccountEntitlementsGuard {
             throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
         }
 
-        publicUnitOfWork.readOnly(() -> {
+        // ✅ PRECISA ser TX normal, porque pode provisionar entitlements
+        publicUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 

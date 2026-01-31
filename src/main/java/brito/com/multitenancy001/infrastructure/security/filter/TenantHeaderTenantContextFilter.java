@@ -27,27 +27,32 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
         final String method = request.getMethod();
         final String uri = request.getRequestURI();
 
-        final String raw = request.getHeader(TENANT_HEADER);
-        final String tenantHeader = (raw == null ? null : raw.trim());
-        final String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
+        // ✅ Se tem Bearer, QUEM MANDA É O TOKEN (não o header)
+        final String authHeader = request.getHeader("Authorization");
+        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+            String raw = request.getHeader(TENANT_HEADER);
+            String tenantHeader = (raw == null ? null : raw.trim());
+            String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
 
-        // ✅ bind no começo; restaura o anterior ao sair do try
-        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
-
-            // ✅ 1 linha por request (limpa)
             log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
                     method, uri, tenantForLog, threadId);
 
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        // ✅ Sem Bearer (ex.: rotas públicas) -> pode bindar por header se você quiser
+        final String raw = request.getHeader(TENANT_HEADER);
+        final String tenantHeader = (raw == null ? null : raw.trim());
+        final String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
+
+        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
+            log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
+                    method, uri, tenantForLog, threadId);
+            filterChain.doFilter(request, response);
 
         } finally {
-            // ✅ HARD RESET: garante que a thread termina PUBLIC (sem tenant)
-            // Perfeito pra debug e evita "vazamento" de tenant em reuso de thread.
-            try {
-                TenantContext.clear();
-            } catch (Exception ignore) {
-                // no-op (debug hardening)
-            }
+            try { TenantContext.clear(); } catch (Exception ignore) {}
         }
     }
 

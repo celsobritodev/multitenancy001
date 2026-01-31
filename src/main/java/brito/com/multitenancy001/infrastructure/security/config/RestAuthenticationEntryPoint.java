@@ -27,7 +27,6 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
             AuthenticationException authException
     ) throws IOException {
 
-        // ✅ 401 sempre que token estiver ausente/inválido/expirado
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
                 .timestamp(appClock.now())
                 .error("UNAUTHORIZED")
@@ -37,6 +36,8 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }

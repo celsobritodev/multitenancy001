@@ -14,12 +14,17 @@ CREATE TABLE IF NOT EXISTS account_entitlements (
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'fk_account_entitlements_account'
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE c.conname = 'fk_account_entitlements_account'
+          AND n.nspname = 'public'
+          AND t.relname = 'account_entitlements'
     ) THEN
-        ALTER TABLE account_entitlements
+        ALTER TABLE public.account_entitlements
             ADD CONSTRAINT fk_account_entitlements_account
-            FOREIGN KEY (account_id) REFERENCES accounts(id)
+            FOREIGN KEY (account_id) REFERENCES public.accounts(id)
             ON DELETE CASCADE;
     END IF;
 END $$;

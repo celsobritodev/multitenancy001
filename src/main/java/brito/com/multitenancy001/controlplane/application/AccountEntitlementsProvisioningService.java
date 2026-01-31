@@ -5,6 +5,7 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements
 import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,21 +22,36 @@ public class AccountEntitlementsProvisioningService {
         }
 
         if (account.isBuiltInAccount()) {
-            // BUILTIN/PLATFORM => ilimitado / não precisa persistir entitlements
+            // BUILT_IN/PLATFORM => ilimitado / não persiste entitlements
             return null;
         }
 
-        if (accountEntitlementsRepository.existsByAccount_Id(account.getId())) {
-            return accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
+        // 1) tenta ler primeiro (caminho feliz)
+        AccountEntitlements existing = accountEntitlementsRepository
+                .findByAccount_Id(account.getId())
+                .orElse(null);
+
+        if (existing != null) return existing;
+
+        // 2) tenta criar (race-safe)
+        try {
+            AccountEntitlements ent = AccountEntitlements.builder()
+                    .account(account)
+                    .maxUsers(5)
+                    .maxProducts(100)
+                    .maxStorageMb(100)
+                    .build();
+
+            return accountEntitlementsRepository.save(ent);
+
+        } catch (DataIntegrityViolationException e) {
+            // outra thread criou ao mesmo tempo -> lê de volta
+            return accountEntitlementsRepository.findByAccount_Id(account.getId())
+                    .orElseThrow(() -> new ApiException(
+                            "ENTITLEMENTS_NOT_FOUND",
+                            "Entitlements não encontrados para a conta " + account.getId(),
+                            500
+                    ));
         }
-
-        AccountEntitlements ent = AccountEntitlements.builder()
-                .account(account)
-                .maxUsers(5)
-                .maxProducts(100)
-                .maxStorageMb(100)
-                .build();
-
-        return accountEntitlementsRepository.save(ent);
     }
 }

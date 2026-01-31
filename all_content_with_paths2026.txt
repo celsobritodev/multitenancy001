@@ -95,9 +95,12 @@
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/SecurityConstants.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/SecurityUtils.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/authorities/AuthoritiesFactory.java
+./src/main/java/brito/com/multitenancy001/infrastructure/security/config/RestAccessDeniedHandler.java
+./src/main/java/brito/com/multitenancy001/infrastructure/security/config/RestAuthenticationEntryPoint.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/config/SecurityConfig.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/JwtAuthenticationFilter.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/MustChangePasswordFilter.java
+./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/RequestLoggingFilter.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/TenantHeaderTenantContextFilter.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/jwt/JwtTokenProvider.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/MultiContextUserDetailsService.java
@@ -159,9 +162,9 @@
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginAmbiguousResponse.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginConfirmRequest.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantLoginInitRequest.java
+./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantRefreshRequest.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantSelectionOption.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/me/TenantMeResponse.java
-./src/main/java/brito/com/multitenancy001/tenant/api/dto/me/TenantMeUpdateRequest.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/me/UpdateMyProfileRequest.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/products/ProductResponse.java
 ./src/main/java/brito/com/multitenancy001/tenant/api/dto/products/ProductUpsertRequest.java
@@ -224,7 +227,7 @@
 ./src/main/resources/db/migration/accounts/V6__insert_controlplane_users.sql
 ./src/main/resources/db/migration/accounts/V7__create_table_controlplane_user_permissions.sql
 ./src/main/resources/db/migration/accounts/V8__create_table_payments.sql
-./src/main/resources/db/migration/accounts/V9__crete_table_login_identities.sql
+./src/main/resources/db/migration/accounts/V9__create_table_login_identities.sql
 ./src/main/resources/db/migration/tenants/V1__create_table_tenant_users.sql
 ./src/main/resources/db/migration/tenants/V2__create_table_tenant_users_permissions.sql
 ./src/main/resources/db/migration/tenants/V3__create_table_categories.sql
@@ -1703,6 +1706,7 @@ import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements
 import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1719,22 +1723,37 @@ public class AccountEntitlementsProvisioningService {
         }
 
         if (account.isBuiltInAccount()) {
-            // BUILTIN/PLATFORM => ilimitado / não precisa persistir entitlements
+            // BUILT_IN/PLATFORM => ilimitado / não persiste entitlements
             return null;
         }
 
-        if (accountEntitlementsRepository.existsByAccount_Id(account.getId())) {
-            return accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
+        // 1) tenta ler primeiro (caminho feliz)
+        AccountEntitlements existing = accountEntitlementsRepository
+                .findByAccount_Id(account.getId())
+                .orElse(null);
+
+        if (existing != null) return existing;
+
+        // 2) tenta criar (race-safe)
+        try {
+            AccountEntitlements ent = AccountEntitlements.builder()
+                    .account(account)
+                    .maxUsers(5)
+                    .maxProducts(100)
+                    .maxStorageMb(100)
+                    .build();
+
+            return accountEntitlementsRepository.save(ent);
+
+        } catch (DataIntegrityViolationException e) {
+            // outra thread criou ao mesmo tempo -> lê de volta
+            return accountEntitlementsRepository.findByAccount_Id(account.getId())
+                    .orElseThrow(() -> new ApiException(
+                            "ENTITLEMENTS_NOT_FOUND",
+                            "Entitlements não encontrados para a conta " + account.getId(),
+                            500
+                    ));
         }
-
-        AccountEntitlements ent = AccountEntitlements.builder()
-                .account(account)
-                .maxUsers(5)
-                .maxProducts(100)
-                .maxStorageMb(100)
-                .build();
-
-        return accountEntitlementsRepository.save(ent);
     }
 }
 
@@ -2575,8 +2594,10 @@ public class ControlPlaneAuthService {
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
-                    DEFAULT_SCHEMA
+                    DEFAULT_SCHEMA,
+                    user.getAccount().getId()
             );
+
 
             return JwtResponse.forEmailLogin(
                     accessToken,
@@ -6428,7 +6449,8 @@ public class AccountEntitlementsGuard {
             throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
         }
 
-        publicUnitOfWork.readOnly(() -> {
+        // ✅ PRECISA ser TX normal, porque pode provisionar entitlements
+        publicUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -6461,9 +6483,9 @@ public class AccountEntitlementsService {
     /**
      * Resolve entitlements efetivos da conta:
      * - BUILTIN/PLATFORM => ilimitado
-     * - TENANT => lê de account_entitlements (se não existir, provisiona default em DEV)
+     * - TENANT => lê de account_entitlements (se não existir, provisiona default)
      */
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    @Transactional(transactionManager = "publicTransactionManager")
     public AccountEntitlementsSnapshot resolveEffective(Account account) {
         if (account == null || account.getId() == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
@@ -6473,12 +6495,15 @@ public class AccountEntitlementsService {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 
-        // 1) tenta ler
         AccountEntitlements ent = accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
 
-        // 2) se não existir, provisiona e tenta de novo
         if (ent == null) {
+            // ✅ provisiona automaticamente
             provisioningService.ensureDefaultEntitlementsForTenant(account);
+
+            // ✅ garante visibilidade imediata no mesmo fluxo
+            accountEntitlementsRepository.flush();
+
             ent = accountEntitlementsRepository.findByAccount_Id(account.getId())
                     .orElseThrow(() -> new ApiException(
                             "ENTITLEMENTS_NOT_FOUND",
@@ -6494,26 +6519,31 @@ public class AccountEntitlementsService {
         return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Não pode ser readOnly=true, porque resolveEffective() pode provisionar.
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public boolean canCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         return currentUsers < eff.maxUsers();
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ✅ já está correto (sem readOnly)
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
 
         if (currentUsers >= eff.maxUsers()) {
-            throw new ApiException(
-                    "QUOTA_MAX_USERS_REACHED",
-                    "Limite de usuários atingido para este plano",
-                    403
-            );
+            throw new ApiException("QUOTA_MAX_USERS_REACHED", "Limite de usuários atingido para este plano", 403);
         }
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Também não pode ser readOnly=true
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanCreateProduct(Account account, long currentProducts) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
 
@@ -6526,7 +6556,10 @@ public class AccountEntitlementsService {
         }
     }
 
-    @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
+    /**
+     * ⚠️ Também não pode ser readOnly=true
+     */
+    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
         if (deltaMb < 0) {
             throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
@@ -7097,6 +7130,7 @@ public final class SecurityConstants {
         private AuthDomains() {}
         public static final String TENANT = "TENANT";
         public static final String CONTROLPLANE = "CONTROLPLANE";
+        public static final String REFRESH = "REFRESH";
     }
 
     public static final class ApiPaths {
@@ -7110,6 +7144,9 @@ public final class SecurityConstants {
         public static final String ME = "/api/me";
         public static final String ME_PREFIX = "/api/me/";
     }
+    
+
+
 }
 
 ============================================================
@@ -7277,13 +7314,118 @@ public final class AuthoritiesFactory {
 }
 
 ============================================================
+### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/config/RestAccessDeniedHandler.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security.config;
+
+import brito.com.multitenancy001.shared.api.error.ApiEnumErrorResponse;
+import brito.com.multitenancy001.shared.time.AppClock;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class RestAccessDeniedHandler implements AccessDeniedHandler {
+
+    private final ObjectMapper objectMapper;
+    private final AppClock appClock;
+
+    @Override
+    public void handle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AccessDeniedException accessDeniedException
+    ) throws IOException, ServletException {
+
+        String message = resolveMessage(accessDeniedException);
+
+        ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
+                .timestamp(appClock.now())
+                .error("FORBIDDEN")
+                .message(message)     // ✅ agora devolve a mensagem real quando existir
+                .details(null)
+                .build();
+
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+
+        response.getWriter().write(objectMapper.writeValueAsString(body));
+    }
+
+    private String resolveMessage(AccessDeniedException ex) {
+        if (ex == null) return "Acesso negado";
+        String msg = ex.getMessage();
+        if (msg == null) return "Acesso negado";
+        msg = msg.trim();
+        return msg.isEmpty() ? "Acesso negado" : msg;
+    }
+}
+
+============================================================
+### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/config/RestAuthenticationEntryPoint.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security.config;
+
+import brito.com.multitenancy001.shared.api.error.ApiEnumErrorResponse;
+import brito.com.multitenancy001.shared.time.AppClock;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
+    private final ObjectMapper objectMapper;
+    private final AppClock appClock;
+
+    @Override
+    public void commence(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException authException
+    ) throws IOException {
+
+        ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
+                .timestamp(appClock.now())
+                .error("UNAUTHORIZED")
+                .message("Não autenticado ou token inválido")
+                .details(null)
+                .build();
+
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+
+        response.getWriter().write(objectMapper.writeValueAsString(body));
+    }
+}
+
+============================================================
 ### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/config/SecurityConfig.java
 ============================================================
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
-import brito.com.multitenancy001.infrastructure.security.filter.TenantHeaderTenantContextFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFilter;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -7309,23 +7451,27 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final MultiContextUserDetailsService multiContextUserDetailsService;
 
-    // ===========
-    // BEANS
-    // ===========
-
-    @Bean
-    public TenantHeaderTenantContextFilter tenantHeaderTenantContextFilter() {
-        return new TenantHeaderTenantContextFilter();
-    }
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, multiContextUserDetailsService);
+        return new JwtAuthenticationFilter(
+                jwtTokenProvider,
+                multiContextUserDetailsService,
+                restAuthenticationEntryPoint,
+                restAccessDeniedHandler
+        );
     }
 
     @Bean
     public MustChangePasswordFilter mustChangePasswordFilter() {
         return new MustChangePasswordFilter();
+    }
+
+    @Bean
+    public RequestLoggingFilter requestLoggingFilter() {
+        return new RequestLoggingFilter();
     }
 
     @Bean
@@ -7338,15 +7484,18 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
-    // ===========
-    // CHAIN
-    // ===========
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+            // ✅ continua correto para exceções que acontecem "depois" do ExceptionTranslationFilter
+            .exceptionHandling(ex -> ex
+                    .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
+                    .accessDeniedHandler(restAccessDeniedHandler)           // 403
+            )
+
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
                     "/v3/api-docs/**",
@@ -7374,14 +7523,11 @@ public class SecurityConfig {
                 .anyRequest().denyAll()
             );
 
-        // ✅ 1) Tenant cedo (X-Tenant) + 1 log por request
-        http.addFilterBefore(tenantHeaderTenantContextFilter(), UsernamePasswordAuthenticationFilter.class);
-
-        // ✅ 2) JWT depois do TenantHeaderFilter
+        // ✅ JWT cedo: token inválido => 401 (entryPoint), mismatch => 403 (accessDeniedHandler, direto no filtro)
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
-        // ✅ 3) MustChangePassword depois do JWT
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+        http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
 
         return http.build();
     }
@@ -7403,9 +7549,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -7415,102 +7564,127 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String TENANT_HEADER = "X-Tenant";
+
     private final JwtTokenProvider jwtTokenProvider;
     private final MultiContextUserDetailsService multiContextUserDetailsService;
+    private final AuthenticationEntryPoint authenticationEntryPoint; // 401
+    private final AccessDeniedHandler accessDeniedHandler;           // 403
 
     @Override
     protected void doFilterInternal(
-            @NonNull HttpServletRequest httpServletRequest,
-            @NonNull HttpServletResponse httpServletResponse,
-            @NonNull FilterChain filterChain
+            @NonNull HttpServletRequest req,
+            @NonNull HttpServletResponse res,
+            @NonNull FilterChain chain
     ) throws ServletException, IOException {
 
-        final String authHeader = httpServletRequest.getHeader("Authorization");
+        final String authHeader = req.getHeader("Authorization");
+
+        // Sem Bearer: deixa o Spring decidir (permitAll passa; protegido vira 401 via entryPoint global)
         if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            chain.doFilter(req, res);
             return;
         }
 
-        final String jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(7).trim();
+        if (!StringUtils.hasText(jwt)) {
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Missing JWT token"));
+            return;
+        }
+
+        // Token inválido/adulterado/expirado => 401 (sem stacktrace)
         if (!jwtTokenProvider.validateToken(jwt)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT token"));
             return;
         }
 
-        final String authDomain = jwtTokenProvider.getAuthDomain(jwt);
-        final String emailRaw = jwtTokenProvider.getEmailFromToken(jwt);
-        final String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
-
-        if (requiresControlPlane(httpServletRequest) && SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
-            httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            return;
-        }
-        if (requiresTenant(httpServletRequest) && SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
-            httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            return;
-        }
-
-        if (requiresControlPlane(httpServletRequest) && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
-        }
-        if (requiresTenant(httpServletRequest) && !SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
-        }
-
-        if (!SecurityConstants.AuthDomains.TENANT.equals(authDomain)
-                && !SecurityConstants.AuthDomains.CONTROLPLANE.equals(authDomain)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
-        }
+        final String authDomain = normalizeLower(jwtTokenProvider.getAuthDomain(jwt));
+        final String email = normalizeLower(jwtTokenProvider.getEmailFromToken(jwt));
 
         if (!StringUtils.hasText(email)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (email)"));
             return;
         }
 
+        // Se já tem auth no contexto, segue
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
+            chain.doFilter(req, res);
+            return;
+        }
+
+        // NORMALIZA authDomain (se vier vazio, isso é token ruim => 401)
+        if (!StringUtils.hasText(authDomain)) {
+            SecurityContextHolder.clearContext();
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (authDomain)"));
+            return;
+        }
+
+        // ======================
+        // Regras de domínio por rota
+        // ======================
+        boolean needsControlPlane = requiresControlPlane(req);
+        boolean needsTenant = requiresTenant(req);
+
+        if (needsControlPlane && "tenant".equals(authDomain)) {
+            // ✅ 403 DIRETO: não lança exception (senão vaza pro dispatcherServlet)
+            accessDeniedHandler.handle(req, res,
+                    new org.springframework.security.access.AccessDeniedException("Tenant token cannot access control plane routes"));
+            return;
+        }
+
+        if (needsTenant && "controlplane".equals(authDomain)) {
+            // ✅ 403 DIRETO
+            accessDeniedHandler.handle(req, res,
+                    new org.springframework.security.access.AccessDeniedException("Control plane token cannot access tenant routes"));
             return;
         }
 
         // ======================
         // TENANT
         // ======================
-        if (SecurityConstants.AuthDomains.TENANT.equals(authDomain)) {
-            final String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(jwt);
+        if ("tenant".equals(authDomain)) {
 
-            if (!StringUtils.hasText(tenantSchema) || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
+            final String tenantSchema = normalize(jwtTokenProvider.getTenantSchemaFromToken(jwt));
+            if (!StringUtils.hasText(tenantSchema)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (tenantSchema)"));
+                return;
+            }
+            if (Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid tenant schema"));
                 return;
             }
             if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid tenant schema format"));
                 return;
             }
 
             Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
             if (accountId == null) {
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (accountId)"));
                 return;
             }
 
-            // ✅ se já existe tenant no contexto (vindo do header), não rebindar
-            String alreadyBoundTenant = TenantContext.getOrNull();
-            if (StringUtils.hasText(alreadyBoundTenant)) {
-
-                UserDetails userDetails = multiContextUserDetailsService.loadTenantUserByEmail(email, accountId);
-                setAuth(httpServletRequest, userDetails);
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
+            // ✅ mismatch do header TEM que ser 403
+            final String headerTenant = normalize(req.getHeader(TENANT_HEADER));
+            if (StringUtils.hasText(headerTenant) && !headerTenant.equalsIgnoreCase(tenantSchema)) {
+                accessDeniedHandler.handle(req, res,
+                        new org.springframework.security.access.AccessDeniedException("X-Tenant header does not match token tenant"));
                 return;
             }
 
-            // ✅ se não existe tenant, usa o do token somente pro load
+            // ✅ Bind tenant por TODA a request (daqui pra frente)
             try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
                 UserDetails userDetails = multiContextUserDetailsService.loadTenantUserByEmail(email, accountId);
-                setAuth(httpServletRequest, userDetails);
-                filterChain.doFilter(httpServletRequest, httpServletResponse);
+                setAuth(req, userDetails);
+                chain.doFilter(req, res);
+                return;
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authentication context"));
                 return;
             }
         }
@@ -7518,41 +7692,68 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // ======================
         // CONTROLPLANE
         // ======================
-        String context = jwtTokenProvider.getContextFromToken(jwt);
-        if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
+        if ("controlplane".equals(authDomain)) {
+
+            String context = normalize(jwtTokenProvider.getContextFromToken(jwt));
+            if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (context)"));
+                return;
+            }
+
+            Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+            if (accountId == null) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (accountId)"));
+                return;
+            }
+
+            try {
+                UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
+                setAuth(req, userDetails);
+                chain.doFilter(req, res);
+                return;
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authentication context"));
+                return;
+            }
         }
 
-        Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
-        if (accountId == null) {
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
-        }
-
-        UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
-        setAuth(httpServletRequest, userDetails);
-        filterChain.doFilter(httpServletRequest, httpServletResponse);
+        // Qualquer outro authDomain é inválido => 401 (sem stacktrace)
+        SecurityContextHolder.clearContext();
+        authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authDomain"));
     }
 
     private void setAuth(HttpServletRequest request, UserDetails userDetails) {
-        UsernamePasswordAuthenticationToken authToken =
+        UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authToken);
+        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    private boolean requiresControlPlane(HttpServletRequest httpServletRequest) {
-        String path = httpServletRequest.getRequestURI();
+    private boolean requiresControlPlane(HttpServletRequest req) {
+        String path = req.getRequestURI();
         return path.startsWith(SecurityConstants.ApiPaths.ADMIN_PREFIX)
                 || path.startsWith(SecurityConstants.ApiPaths.CONTROLPLANE_PREFIX);
     }
 
-    private boolean requiresTenant(HttpServletRequest httpServletRequest) {
-        String path = httpServletRequest.getRequestURI();
+    private boolean requiresTenant(HttpServletRequest req) {
+        String path = req.getRequestURI();
         boolean isMe = SecurityConstants.ApiPaths.ME.equals(path)
                 || path.startsWith(SecurityConstants.ApiPaths.ME_PREFIX);
         return path.startsWith(SecurityConstants.ApiPaths.TENANT_PREFIX) || isMe;
+    }
+
+    private String normalize(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private String normalizeLower(String s) {
+        String t = normalize(s);
+        return (t == null) ? null : t.toLowerCase();
     }
 }
 
@@ -7648,6 +7849,55 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
 }
 
 ============================================================
+### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/RequestLoggingFilter.java
+============================================================
+package brito.com.multitenancy001.infrastructure.security.filter;
+
+import brito.com.multitenancy001.shared.context.TenantContext;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Slf4j
+public class RequestLoggingFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+
+        long threadId = Thread.currentThread().threadId();
+        String method = req.getMethod();
+        String uri = req.getRequestURI();
+
+        try {
+            chain.doFilter(req, res);
+        } finally {
+            String tenant = TenantContext.getOrNull();
+            String tenantForLog = (tenant == null ? "PUBLIC" : tenant);
+            log.info("🌐 [REQ] {} {} | tenant={} | status={} | thread={}",
+                    method, uri, tenantForLog, res.getStatus(), threadId);
+
+            // ✅ garante limpeza
+            try { TenantContext.clear(); } catch (Exception ignore) {}
+        }
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/actuator")
+                || path.startsWith("/swagger")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/favicon.ico");
+    }
+}
+
+============================================================
 ### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/filter/TenantHeaderTenantContextFilter.java
 ============================================================
 package brito.com.multitenancy001.infrastructure.security.filter;
@@ -7679,27 +7929,32 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
         final String method = request.getMethod();
         final String uri = request.getRequestURI();
 
-        final String raw = request.getHeader(TENANT_HEADER);
-        final String tenantHeader = (raw == null ? null : raw.trim());
-        final String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
+        // ✅ Se tem Bearer, QUEM MANDA É O TOKEN (não o header)
+        final String authHeader = request.getHeader("Authorization");
+        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+            String raw = request.getHeader(TENANT_HEADER);
+            String tenantHeader = (raw == null ? null : raw.trim());
+            String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
 
-        // ✅ bind no começo; restaura o anterior ao sair do try
-        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
-
-            // ✅ 1 linha por request (limpa)
             log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
                     method, uri, tenantForLog, threadId);
 
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        // ✅ Sem Bearer (ex.: rotas públicas) -> pode bindar por header se você quiser
+        final String raw = request.getHeader(TENANT_HEADER);
+        final String tenantHeader = (raw == null ? null : raw.trim());
+        final String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
+
+        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
+            log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
+                    method, uri, tenantForLog, threadId);
+            filterChain.doFilter(request, response);
 
         } finally {
-            // ✅ HARD RESET: garante que a thread termina PUBLIC (sem tenant)
-            // Perfeito pra debug e evita "vazamento" de tenant em reuso de thread.
-            try {
-                TenantContext.clear();
-            } catch (Exception ignore) {
-                // no-op (debug hardening)
-            }
+            try { TenantContext.clear(); } catch (Exception ignore) {}
         }
     }
 
@@ -7824,16 +8079,21 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public String generateRefreshToken(String email, String context) {
+    // ✅ NOVO (recomendado): refresh token com accountId
+    public String generateRefreshToken(String email, String context, Long accountId) {
         return Jwts.builder()
                 .subject(email)
                 .claim(CLAIM_AUTH_DOMAIN, "REFRESH")
                 .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
+
+   
+
 
     public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;
@@ -10396,6 +10656,7 @@ import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginInitRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantRefreshRequest;
 import brito.com.multitenancy001.tenant.application.auth.TenantAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -10447,6 +10708,18 @@ public class TenantAuthController {
         JwtResponse jwtResponse = tenantAuthService.loginConfirm(req);
         return ResponseEntity.ok(jwtResponse);
     }
+    
+    
+    /**
+     * 3) refresh token
+     * - retorna novo accessToken (200)
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
+        JwtResponse jwtResponse = tenantAuthService.refresh(req.refreshToken());
+        return ResponseEntity.ok(jwtResponse);
+    }
+
 }
 
 ============================================================
@@ -10810,6 +11083,18 @@ public record TenantLoginInitRequest(
 ) {}
 
 ============================================================
+### FILE: ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantRefreshRequest.java
+============================================================
+package brito.com.multitenancy001.tenant.api.dto.auth;
+
+import jakarta.validation.constraints.NotBlank;
+
+public record TenantRefreshRequest(
+        @NotBlank(message = "refreshToken é obrigatório")
+        String refreshToken
+) {}
+
+============================================================
 ### FILE: ./src/main/java/brito/com/multitenancy001/tenant/api/dto/auth/TenantSelectionOption.java
 ============================================================
 package brito.com.multitenancy001.tenant.api.dto.auth;
@@ -10842,35 +11127,12 @@ public record TenantMeResponse(
 ) {}
 
 ============================================================
-### FILE: ./src/main/java/brito/com/multitenancy001/tenant/api/dto/me/TenantMeUpdateRequest.java
-============================================================
-package brito.com.multitenancy001.tenant.api.dto.me;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
-public record TenantMeUpdateRequest(
-
-        @NotBlank(message = "name é obrigatório")
-        @Size(min = 2, max = 100, message = "name deve ter entre 2 e 100 caracteres")
-        String name,
-
-        @Size(max = 20, message = "phone deve ter no máximo 20 caracteres")
-        String phone,
-
-        @Size(max = 20, message = "locale deve ter no máximo 20 caracteres")
-        String locale,
-
-        @Size(max = 60, message = "timezone deve ter no máximo 60 caracteres")
-        String timezone
-) {}
-
-============================================================
 ### FILE: ./src/main/java/brito/com/multitenancy001/tenant/api/dto/me/UpdateMyProfileRequest.java
 ============================================================
 package brito.com.multitenancy001.tenant.api.dto.me;
 
 import jakarta.validation.constraints.Size;
+import org.hibernate.validator.constraints.URL;
 
 public record UpdateMyProfileRequest(
         @Size(min = 2, max = 100, message = "name deve ter entre 2 e 100 caracteres")
@@ -10878,6 +11140,10 @@ public record UpdateMyProfileRequest(
 
         @Size(max = 20, message = "phone deve ter no máximo 20 caracteres")
         String phone,
+
+        @Size(max = 500, message = "avatarUrl deve ter no máximo 500 caracteres")
+        @URL(protocol = "https", message = "avatarUrl deve ser uma URL https válida")
+        String avatarUrl,
 
         @Size(max = 20, message = "locale deve ter no máximo 20 caracteres")
         String locale,
@@ -11879,6 +12145,7 @@ import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
@@ -12112,8 +12379,10 @@ public class TenantAuthService {
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
-                    account.schemaName()
+                    account.schemaName(),
+                    account.id()
             );
+
 
             return new JwtResponse(
                     accessToken,
@@ -12147,6 +12416,92 @@ public class TenantAuthService {
             throw e;
         }
     }
+    
+    
+    /**
+     * 3) REFRESH
+     * - valida refresh token
+     * - garante authDomain=REFRESH
+     * - carrega usuário no tenant schema
+     * - emite novo accessToken (e pode reemitir refresh se quiser)
+     */
+    public JwtResponse refresh(String refreshToken) {
+
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+        }
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String authDomain = jwtTokenProvider.getAuthDomain(refreshToken);
+        if (!SecurityConstants.AuthDomains.REFRESH.equals(authDomain)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String emailRaw = jwtTokenProvider.getEmailFromToken(refreshToken);
+        String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+        if (accountId == null) {
+            // ⚠️ esse é o ponto que vai falhar se seu refresh NÃO tiver accountId
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
+        }
+
+        return tenantExecutor.run(tenantSchema, () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                    .orElseThrow(() -> new ApiException("INVALID_REFRESH", "refreshToken inválido", 401));
+
+            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    tenantSchema,
+                    now(),
+                    authorities
+            );
+
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
+
+            String newAccessToken = jwtTokenProvider.generateTenantToken(
+                    authentication,
+                    accountId,
+                    tenantSchema
+            );
+
+            // ✅ estratégia simples: reusa o MESMO refreshToken
+            // se quiser rotação (melhor segurança), gere um novo e invalide o antigo.
+            return new JwtResponse(
+                    newAccessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    user.getRole().name(),
+                    accountId,
+                    tenantSchema
+            );
+        });
+    }
+
 }
 
 ============================================================
@@ -13713,6 +14068,7 @@ public class TenantUserService {
                     accountId,
                     req.name(),
                     req.phone(),
+                    req.avatarUrl(),
                     req.locale(),
                     req.timezone(),
                     appClock.now()
@@ -13960,32 +14316,40 @@ public class TenantUserTxService {
         });
     }
 
-    public TenantUser updateProfile(
-            Long userId,
-            Long accountId,
-            String name,
-            String phone,
-            String locale,
-            String timezone,
-            LocalDateTime now
-    ) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+   public TenantUser updateProfile(
+        Long userId,
+        Long accountId,
+        String name,
+        String phone,
+        String avatarUrl,
+        String locale,
+        String timezone,
+        LocalDateTime now
+) {
+    if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+    if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
 
-        return txExecutor.tenantTx(() -> {
-            TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+    return txExecutor.tenantTx(() -> {
+        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            if (StringUtils.hasText(name)) user.setName(name.trim());
-            if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
-            if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
-            if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
+        if (StringUtils.hasText(name)) user.setName(name.trim());
+        if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
+        if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
+        if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
 
-            // now é usado só se você quiser setar algo manualmente.
-            // updated_at já é UpdateTimestamp.
-            return tenantUserRepository.save(user);
-        });
-    }
+        // ✅ avatarUrl: suporta atualizar OU limpar
+        // - null  -> não altera
+        // - ""    -> limpa (salva null)
+        // - "xxx" -> salva trim()
+        if (avatarUrl != null) {
+            String trimmed = avatarUrl.trim();
+            user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
+        }
+
+        return tenantUserRepository.save(user);
+    });
+}
 
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
@@ -16152,38 +16516,26 @@ CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_used_at
 -- V13__seed_account_entitlements_for_existing_accounts.sql
 SET search_path TO public;
 
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name = 'account_entitlements'
-    ) THEN
-        INSERT INTO account_entitlements (
-            account_id,
-            max_users,
-            max_products,
-            max_storage_mb,
-            created_at,
-            updated_at
-        )
-        SELECT
-            a.id,
-            5,
-            100,
-            100,
-            now(),
-            now()
-        FROM accounts a
-        WHERE a.deleted = false
-          AND a.account_type = 'TENANT'
-          AND a.account_origin <> 'BUILT_IN'
-          AND NOT EXISTS (
-              SELECT 1 FROM account_entitlements e WHERE e.account_id = a.id
-          );
-    END IF;
-END $$;
+INSERT INTO account_entitlements (
+    account_id,
+    max_users,
+    max_products,
+    max_storage_mb,
+    created_at,
+    updated_at
+)
+SELECT
+    a.id,
+    5,
+    100,
+    100,
+    now(),
+    now()
+FROM accounts a
+WHERE a.deleted = false
+  AND a.account_type = 'TENANT'
+  AND a.account_origin <> 'BUILT_IN'
+ON CONFLICT (account_id) DO NOTHING;
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V1__create_extension.sql
@@ -16358,12 +16710,17 @@ CREATE TABLE IF NOT EXISTS account_entitlements (
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'fk_account_entitlements_account'
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE c.conname = 'fk_account_entitlements_account'
+          AND n.nspname = 'public'
+          AND t.relname = 'account_entitlements'
     ) THEN
-        ALTER TABLE account_entitlements
+        ALTER TABLE public.account_entitlements
             ADD CONSTRAINT fk_account_entitlements_account
-            FOREIGN KEY (account_id) REFERENCES accounts(id)
+            FOREIGN KEY (account_id) REFERENCES public.accounts(id)
             ON DELETE CASCADE;
     END IF;
 END $$;
@@ -16615,7 +16972,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_status  ON payments(status);
 CREATE INDEX IF NOT EXISTS idx_payment_date    ON payments(payment_date);
 
 ============================================================
-### FILE: ./src/main/resources/db/migration/accounts/V9__crete_table_login_identities.sql
+### FILE: ./src/main/resources/db/migration/accounts/V9__create_table_login_identities.sql
 ============================================================
 -- V9__crete_table_login_identities.sql
 SET search_path TO public;

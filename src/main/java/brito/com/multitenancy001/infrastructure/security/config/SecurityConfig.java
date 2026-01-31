@@ -36,7 +36,8 @@ public class SecurityConfig {
         return new JwtAuthenticationFilter(
                 jwtTokenProvider,
                 multiContextUserDetailsService,
-                restAuthenticationEntryPoint
+                restAuthenticationEntryPoint,
+                restAccessDeniedHandler
         );
     }
 
@@ -66,7 +67,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-            // ✅ aqui está a correção de 401 vs 403
+            // ✅ continua correto para exceções que acontecem "depois" do ExceptionTranslationFilter
             .exceptionHandling(ex -> ex
                     .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
                     .accessDeniedHandler(restAccessDeniedHandler)           // 403
@@ -99,13 +100,10 @@ public class SecurityConfig {
                 .anyRequest().denyAll()
             );
 
-        // ✅ 1) JWT cedo: se token é inválido => 401 (entryPoint)
+        // ✅ JWT cedo: token inválido => 401 (entryPoint), mismatch => 403 (accessDeniedHandler, direto no filtro)
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
-        // ✅ 2) MustChangePassword depois do JWT
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
-
-        // ✅ 3) Log no final (já com tenant resolvido)
         http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
 
         return http.build();
