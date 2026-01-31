@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.infrastructure.publicschema;
 
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -13,25 +14,19 @@ public class LoginIdentityResolver {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
-    /** ✅ nome esperado pelo TenantAuthService */
     public List<LoginIdentityRow> findTenantAccountsByEmail(String email) {
-        return findTenantsByEmail(email);
-    }
+        String normalized = EmailNormalizer.normalizeOrNull(email);
+        if (normalized == null) return List.of();
 
-    /** ✅ implementação real */
-    public List<LoginIdentityRow> findTenantsByEmail(String email) {
-        if (email == null || email.isBlank()) return List.of();
-
-        String normalized = email.trim().toLowerCase();
-
+        // email é CITEXT em public.login_identities => comparação pode ser direta
         String sql = """
             select li.account_id,
                    a.display_name,
                    a.slug
               from public.login_identities li
               join public.accounts a on a.id = li.account_id
-             where lower(li.email) = lower(:email)
-             and li.user_type = 'TENANT'
+             where li.email = :email
+               and li.user_type = 'TENANT'
                and a.deleted = false
         """;
 

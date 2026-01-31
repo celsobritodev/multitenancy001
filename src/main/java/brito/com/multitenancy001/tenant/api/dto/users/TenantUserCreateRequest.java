@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.api.dto.users;
 
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
-import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -67,7 +67,7 @@ public record TenantUserCreateRequest(
 
         Boolean mustChangePassword,
 
-        TenantUserOrigin origin
+        EntityOrigin  origin
 
 ) {
     public TenantUserCreateRequest {

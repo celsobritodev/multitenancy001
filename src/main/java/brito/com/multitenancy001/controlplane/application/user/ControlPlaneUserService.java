@@ -10,7 +10,6 @@ import brito.com.multitenancy001.controlplane.api.dto.users.ControlPlaneUserUpda
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneBuiltInUsers;
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUserOrigin;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.controlplane.persistence.user.ControlPlaneUserRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
@@ -18,8 +17,11 @@ import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -91,6 +93,22 @@ public class ControlPlaneUserService {
     }
 
     // =========================
+    // EMAIL NORMALIZATION (único ponto)
+    // =========================
+
+    private static String normalizeEmailRequired(String rawEmail) {
+        String email = EmailNormalizer.normalizeOrNull(rawEmail);
+        if (email == null) {
+            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+        }
+        return email;
+    }
+
+    private static String normalizeEmailOrNull(String rawEmail) {
+        return EmailNormalizer.normalizeOrNull(rawEmail);
+    }
+
+    // =========================
     // GUARDS
     // =========================
 
@@ -159,10 +177,7 @@ public class ControlPlaneUserService {
                 throw new ApiException("FORBIDDEN", "Apenas CONTROLPLANE_OWNER pode definir permissions explícitas", 403);
             }
 
-            String email = (req.email() == null) ? null : req.email().trim().toLowerCase(Locale.ROOT);
-            if (email == null || email.isBlank()) {
-                throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-            }
+            String email = normalizeEmailRequired(req.email());
 
             if (ControlPlaneBuiltInUsers.isReservedEmail(email)) {
                 throw new ApiException("RESERVED_EMAIL", "Este email é reservado para o sistema", 409);
@@ -181,7 +196,7 @@ public class ControlPlaneUserService {
                     .password(passwordEncoder.encode(req.password()))
                     .role(roleEnum)
                     .account(controlPlaneAccount)
-                    .origin(ControlPlaneUserOrigin.ADMIN)
+                    .origin(EntityOrigin.ADMIN)
                     .permissions(normalizedPermissions)
                     .mustChangePassword(true)
                     .passwordChangedAt(appClock.now())
@@ -238,7 +253,7 @@ public class ControlPlaneUserService {
             }
 
             if (req.email() != null && !req.email().isBlank()) {
-                String email = req.email().trim().toLowerCase(Locale.ROOT);
+                String email = normalizeEmailRequired(req.email());
 
                 if (ControlPlaneBuiltInUsers.isReservedEmail(email)) {
                     throw new ApiException("RESERVED_EMAIL", "Este email é reservado para o sistema", 409);
@@ -272,6 +287,8 @@ public class ControlPlaneUserService {
 
             ControlPlaneUser user = loadNotDeletedUserOr404(userId, controlPlaneAccount.getId());
             assertReservedBuiltInReadonly(user, "UPDATE_PERMISSIONS");
+
+            if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
 
             LinkedHashSet<ControlPlanePermission> normalizedPermissions =
                     normalizeControlPlanePermissionsStrict(req.permissions());
@@ -359,12 +376,13 @@ public class ControlPlaneUserService {
                 throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
             }
 
+            // ✅ DTO agora espera SystemRoleName (não String)
             return new ControlPlaneMeResponse(
                     ctx.getUserId(),
                     ctx.getAccountId(),
                     ctx.getName(),
                     ctx.getEmail(),
-                    ctx.getRoleName(),
+                    SystemRoleName.fromString(ctx.getRoleName()),
                     ctx.isSuspendedByAccount(),
                     ctx.isSuspendedByAdmin(),
                     ctx.isDeleted(),
@@ -416,7 +434,6 @@ public class ControlPlaneUserService {
             me.clearSecurityLockState();
             me.clearPasswordResetToken();
 
-
             controlPlaneUserRepository.save(me);
         });
     }
@@ -439,7 +456,7 @@ public class ControlPlaneUserService {
             ControlPlaneUser superAdmin = controlPlaneUserRepository
                     .findNotDeletedBuiltInOwner(
                             controlPlaneAccount.getId(),
-                            ControlPlaneUserOrigin.BUILT_IN,
+                            EntityOrigin.BUILT_IN,
                             ControlPlaneRole.CONTROLPLANE_OWNER
                     )
                     .orElseThrow(() -> new ApiException(
@@ -456,7 +473,6 @@ public class ControlPlaneUserService {
                     .findNotDeletedByIdAndAccountId(targetUserId, controlPlaneAccount.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // Não permite resetar senha de OWNER (inclusive superadmin)
             if (target.getRole() == ControlPlaneRole.CONTROLPLANE_OWNER) {
                 throw new ApiException("OWNER_PASSWORD_RESET_BLOCKED",
                         "Não é permitido resetar senha de CONTROLPLANE_OWNER", 409);
@@ -478,16 +494,17 @@ public class ControlPlaneUserService {
     // =========================
 
     private void assertRestoreNoNotDeletedCollision(Account account, ControlPlaneUser deletedUser) {
-        if (deletedUser.getEmail() != null && !deletedUser.getEmail().isBlank()) {
-            boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByEmailIgnoreCase(
-                    account.getId(),
-                    deletedUser.getEmail(),
-                    deletedUser.getId()
-            );
-            if (existsOther) {
-                throw new ApiException("EMAIL_ALREADY_EXISTS",
-                        "Não é possível restaurar: email já está em uso", 409);
-            }
+        String email = normalizeEmailOrNull(deletedUser.getEmail());
+        if (email == null) return;
+
+        boolean existsOther = controlPlaneUserRepository.existsOtherNotDeletedByEmailIgnoreCase(
+                account.getId(),
+                email,
+                deletedUser.getId()
+        );
+        if (existsOther) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS",
+                    "Não é possível restaurar: email já está em uso", 409);
         }
     }
 
@@ -545,7 +562,7 @@ public class ControlPlaneUserService {
                 user.getAccount().getId(),
                 user.getName(),
                 user.getEmail(),
-                user.getRole().name(),
+                SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
                 user.isSuspendedByAccount(),
                 user.isSuspendedByAdmin(),
                 user.isDeleted(),

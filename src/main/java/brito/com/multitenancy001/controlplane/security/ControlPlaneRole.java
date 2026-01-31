@@ -5,8 +5,10 @@ import brito.com.multitenancy001.shared.security.RoleAuthority;
 public enum ControlPlaneRole implements RoleAuthority {
 
     CONTROLPLANE_OWNER,
+    CONTROLPLANE_ADMIN,
     CONTROLPLANE_BILLING_MANAGER,
     CONTROLPLANE_SUPPORT,
+    CONTROLPLANE_VIEWER,
     CONTROLPLANE_OPERATOR;
 
     @Override

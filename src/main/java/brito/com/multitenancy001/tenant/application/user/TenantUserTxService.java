@@ -2,12 +2,12 @@ package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -71,7 +71,7 @@ public class TenantUserTxService {
             String phone,
             String avatarUrl,
             LinkedHashSet<String> permissionNames,
-            TenantUserOrigin origin
+            EntityOrigin  origin
     ) {
         return txExecutor.tenantTx(() -> {
 
@@ -102,7 +102,7 @@ public class TenantUserTxService {
             user.setPassword(passwordEncoder.encode(rawPassword));
             user.setRole(role);
 
-            user.setOrigin(origin == null ? TenantUserOrigin.ADMIN : origin);
+            user.setOrigin(origin == null ? EntityOrigin .ADMIN : origin);
 
             user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
             user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);

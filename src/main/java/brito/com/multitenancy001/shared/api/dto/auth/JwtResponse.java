@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.shared.api.dto.auth;
 
+import brito.com.multitenancy001.shared.security.SystemRoleName;
+
 public record JwtResponse(
         String accessToken,
         String refreshToken,
@@ -20,7 +22,7 @@ public record JwtResponse(
         /**
          * ✅ Role "name" (ex: CONTROLPLANE_OWNER, TENANT_ADMIN)
          */
-        String role,
+        SystemRoleName  role,
 
         Long accountId,
 
@@ -39,7 +41,7 @@ public record JwtResponse(
             String refreshToken,
             Long userId,
             String email,
-            String role,
+            SystemRoleName  role,
             Long accountId,
             String tenantSchema
     ) {
@@ -51,7 +53,7 @@ public record JwtResponse(
             String refreshToken,
             Long userId,
             String email,
-            String role,
+            SystemRoleName  role,
             Long accountId,
             String tenantSchema
     ) {

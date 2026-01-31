@@ -1,11 +1,13 @@
 package brito.com.multitenancy001.tenant.api.dto.me;
 
+import brito.com.multitenancy001.shared.security.SystemRoleName;
+
 public record TenantMeResponse(
         Long id,
         Long accountId,
         String name,
         String email,
-        String role,
+        SystemRoleName  role,
         String phone,
         String avatarUrl,
         String timezone,

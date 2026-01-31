@@ -1,8 +1,9 @@
 package brito.com.multitenancy001.controlplane.persistence.user;
 
 import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUserOrigin;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,19 +15,16 @@ import java.util.Optional;
 @Repository
 public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUser, Long> {
 
-   
+    // =========================================================
+    // BASICS
+    // =========================================================
 
-	  // ✅ alias para compat com services existentes
-    long countByAccountIdAndDeletedFalse(Long accountId);
-
-	
-	// ✅ identidade: email
     Optional<ControlPlaneUser> findByEmailAndDeletedFalse(String email);
 
     Optional<ControlPlaneUser> findByEmailAndAccount_IdAndDeletedFalse(String email, Long accountId);
 
     // =========================================================
-    // NOT DELETED (deleted=false) ✅ default do domínio
+    // NOT DELETED (deleted=false) -> default do domínio
     // =========================================================
 
     @Query("SELECT u FROM ControlPlaneUser u WHERE u.account.id = :accountId AND u.deleted = false")
@@ -37,7 +35,6 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                                                               @Param("accountId") Long accountId);
 
     /**
-     * 
      * Agora: usuário BUILT_IN + role CONTROLPLANE_OWNER.
      */
     @Query("""
@@ -49,13 +46,13 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                AND u.role = :role
            """)
     Optional<ControlPlaneUser> findNotDeletedBuiltInOwner(@Param("accountId") Long accountId,
-                                                         @Param("origin") ControlPlaneUserOrigin origin,
+                                                         @Param("origin") EntityOrigin  origin,
                                                          @Param("role") ControlPlaneRole role);
 
     long countByAccount_IdAndDeletedFalse(Long accountId);
 
     // =========================================================
-    // ENABLED = NOT DELETED + NOT suspended ✅ default segurança
+    // ENABLED = NOT DELETED + NOT suspended -> default segurança
     // =========================================================
 
     @Query("""
@@ -89,7 +86,12 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                                                        @Param("accountId") Long accountId);
 
     // =========================================================
-    // UNICIDADE NOT DELETED (deleted=false) e case-insensitive
+    // UNICIDADE NOT DELETED (deleted=false)
+    //
+    // IMPORTANTE:
+    // - A coluna email é CITEXT (case-insensitive no Postgres).
+    // - Logo a comparação pode (e deve) ser direta: u.email = :email
+    // - A normalização (trim/lower) deve acontecer fora (EmailNormalizer).
     // =========================================================
 
     @Query("""
@@ -97,7 +99,7 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
               FROM ControlPlaneUser u
              WHERE u.account.id = :accountId
                AND u.deleted = false
-               AND lower(u.email) = lower(:email)
+               AND u.email = :email
            """)
     boolean existsNotDeletedByEmailIgnoreCase(@Param("accountId") Long accountId,
                                               @Param("email") String email);
@@ -107,7 +109,7 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
               FROM ControlPlaneUser u
              WHERE u.account.id = :accountId
                AND u.deleted = false
-               AND lower(u.email) = lower(:email)
+               AND u.email = :email
                AND u.id <> :userId
            """)
     boolean existsOtherNotDeletedByEmailIgnoreCase(@Param("accountId") Long accountId,

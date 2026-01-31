@@ -4,10 +4,11 @@ import brito.com.multitenancy001.controlplane.application.AccountEntitlementsPro
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
+import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -15,87 +16,61 @@ public class AccountEntitlementsService {
 
     private final AccountEntitlementsRepository accountEntitlementsRepository;
     private final AccountEntitlementsProvisioningService provisioningService;
+    private final AccountRepository accountRepository;
+    private final PublicUnitOfWork publicUnitOfWork;
 
     /**
-     * Resolve entitlements efetivos da conta:
-     * - BUILTIN/PLATFORM => ilimitado
-     * - TENANT => lê de account_entitlements (se não existir, provisiona default)
+     * Resolve entitlements efetivos da conta.
+     * ✅ TX normal porque pode provisionar default entitlements.
      */
-    @Transactional(transactionManager = "publicTransactionManager")
     public AccountEntitlementsSnapshot resolveEffective(Account account) {
-        if (account == null || account.getId() == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
-        }
-
-        if (account.isBuiltInAccount()) {
-            return AccountEntitlementsSnapshot.ofUnlimited();
-        }
-
-        AccountEntitlements ent = accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
-
-        if (ent == null) {
-            // ✅ provisiona automaticamente
-            provisioningService.ensureDefaultEntitlementsForTenant(account);
-
-            // ✅ garante visibilidade imediata no mesmo fluxo
-            accountEntitlementsRepository.flush();
-
-            ent = accountEntitlementsRepository.findByAccount_Id(account.getId())
-                    .orElseThrow(() -> new ApiException(
-                            "ENTITLEMENTS_NOT_FOUND",
-                            "Entitlements não encontrados para a conta " + account.getId(),
-                            500
-                    ));
-        }
-
-        Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
-        Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
-        Integer maxStorageMb = safePositive(ent.getMaxStorageMb(), "maxStorageMb");
-
-        return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
+        return publicUnitOfWork.tx(() -> resolveEffectiveInternal(account));
     }
 
     /**
-     * ⚠️ Não pode ser readOnly=true, porque resolveEffective() pode provisionar.
+     * ✅ NOVO: usado na camada TENANT para expor entitlements (apenas para TENANT_OWNER)
+     * Resolve entitlements efetivos por accountId.
+     * ✅ TX normal porque pode provisionar default entitlements.
      */
-    @Transactional(transactionManager = "publicTransactionManager")
+    public AccountEntitlementsSnapshot resolveEffectiveByAccountId(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+
+        return publicUnitOfWork.tx(() -> {
+            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+
+            return resolveEffectiveInternal(account);
+        });
+    }
+
+    // =========================================================
+    // QUOTAS / ASSERTS (compatível com AccountEntitlementsGuard)
+    // =========================================================
+
     public boolean canCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         return currentUsers < eff.maxUsers();
     }
 
-    /**
-     * ✅ já está correto (sem readOnly)
-     */
-    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
-
         if (currentUsers >= eff.maxUsers()) {
             throw new ApiException("QUOTA_MAX_USERS_REACHED", "Limite de usuários atingido para este plano", 403);
         }
     }
 
-    /**
-     * ⚠️ Também não pode ser readOnly=true
-     */
-    @Transactional(transactionManager = "publicTransactionManager")
+    public boolean canCreateProduct(Account account, long currentProducts) {
+        AccountEntitlementsSnapshot eff = resolveEffective(account);
+        return currentProducts < eff.maxProducts();
+    }
+
     public void assertCanCreateProduct(Account account, long currentProducts) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
-
         if (currentProducts >= eff.maxProducts()) {
-            throw new ApiException(
-                    "QUOTA_MAX_PRODUCTS_REACHED",
-                    "Limite de produtos atingido para este plano",
-                    403
-            );
+            throw new ApiException("QUOTA_MAX_PRODUCTS_REACHED", "Limite de produtos atingido para este plano", 403);
         }
     }
 
-    /**
-     * ⚠️ Também não pode ser readOnly=true
-     */
-    @Transactional(transactionManager = "publicTransactionManager")
     public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
         if (deltaMb < 0) {
             throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
@@ -105,21 +80,47 @@ public class AccountEntitlementsService {
         long after = currentStorageMb + deltaMb;
 
         if (after > eff.maxStorageMb()) {
-            throw new ApiException(
-                    "QUOTA_MAX_STORAGE_REACHED",
-                    "Limite de armazenamento atingido para este plano",
-                    403
-            );
+            throw new ApiException("QUOTA_MAX_STORAGE_REACHED", "Limite de armazenamento atingido para este plano", 403);
         }
+    }
+
+    // =========================================================
+    // INTERNALS (sem tx aqui)
+    // =========================================================
+
+    private AccountEntitlementsSnapshot resolveEffectiveInternal(Account account) {
+        if (account == null || account.getId() == null) {
+            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+        }
+
+        // BUILT_IN/PLATFORM => ilimitado
+        if (account.isBuiltInAccount()) {
+            return AccountEntitlementsSnapshot.ofUnlimited();
+        }
+
+        AccountEntitlements ent = accountEntitlementsRepository
+                .findByAccount_Id(account.getId())
+                .orElse(null);
+
+        if (ent == null) {
+            // provisiona default (idempotente / race-safe)
+            ent = provisioningService.ensureDefaultEntitlementsForTenant(account);
+        }
+
+        if (ent == null) {
+            throw new ApiException("ENTITLEMENTS_UNEXPECTED_NULL", "Entitlements inesperadamente nulos", 500);
+        }
+
+        Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
+        Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
+        Integer maxStorageMb = safePositive(ent.getMaxStorageMb(), "maxStorageMb");
+
+        return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
     }
 
     private Integer safePositive(Integer value, String field) {
         if (value == null || value <= 0) {
-            throw new ApiException(
-                    "INVALID_ENTITLEMENT",
-                    "Entitlement inválido: " + field,
-                    500
-            );
+            throw new ApiException("INVALID_ENTITLEMENT", "Entitlement inválido: " + field, 500);
         }
         return value;
     }

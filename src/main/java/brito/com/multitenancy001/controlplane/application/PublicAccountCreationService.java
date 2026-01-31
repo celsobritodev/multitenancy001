@@ -8,12 +8,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.controlplane.api.dto.signup.SignupRequest;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
-import brito.com.multitenancy001.controlplane.domain.account.AccountOrigin;
 import brito.com.multitenancy001.controlplane.domain.account.AccountStatus;
 import brito.com.multitenancy001.controlplane.domain.account.AccountType;
 import brito.com.multitenancy001.controlplane.domain.account.SubscriptionPlan;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountRepository;
 import brito.com.multitenancy001.shared.domain.DomainException;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +38,7 @@ public class PublicAccountCreationService {
             try {
                 Account account = new Account();
                 account.setType(AccountType.TENANT);
-                account.setOrigin(AccountOrigin.ADMIN);
+                account.setOrigin(EntityOrigin .ADMIN);
                 account.setDisplayName(signupRequest.displayName());
                 account.setSlug(slug);
                 account.setSchemaName(schemaName);

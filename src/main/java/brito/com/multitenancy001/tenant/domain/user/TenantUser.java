@@ -3,6 +3,7 @@ package brito.com.multitenancy001.tenant.domain.user;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
@@ -46,10 +47,10 @@ public class TenantUser implements Auditable, SoftDeletable {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_origin", nullable = false, length = 20)
     @Builder.Default
-    private TenantUserOrigin origin = TenantUserOrigin.ADMIN;
+    private EntityOrigin  origin = EntityOrigin .ADMIN;
 
     public boolean isBuiltInUser() {
-        return this.origin == TenantUserOrigin.BUILT_IN;
+        return this.origin == EntityOrigin .BUILT_IN;
     }
 
     @Column(name = "password_reset_token", length = 255)
@@ -142,7 +143,7 @@ public class TenantUser implements Auditable, SoftDeletable {
     @PrePersist
     @PreUpdate
     protected void onSave() {
-        if (origin == null) origin = TenantUserOrigin.ADMIN;
+        if (origin == null) origin = EntityOrigin .ADMIN;
         if (role == null) throw new IllegalStateException("Role is required");
 
         if (permissions == null) {

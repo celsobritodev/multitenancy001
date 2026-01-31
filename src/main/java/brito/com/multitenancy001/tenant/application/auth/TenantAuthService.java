@@ -11,8 +11,10 @@ import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.persistence.auth.TenantLoginChallenge;
+import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
@@ -54,6 +56,20 @@ public class TenantAuthService {
 
     private LocalDateTime now() { return appClock.now(); }
 
+    private static String normalizeEmailRequired(String raw) {
+        String email = EmailNormalizer.normalizeOrNull(raw);
+        if (email == null) {
+            throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
+        }
+        return email;
+    }
+
+    private static SystemRoleName toSystemRoleOrNull(Object tenantRoleEnum) {
+        if (tenantRoleEnum == null) return null;
+        // ✅ assume que o enum do TenantUser tem nomes compatíveis com SystemRoleName (TENANT_*)
+        return SystemRoleName.fromString(tenantRoleEnum.toString());
+    }
+
     /**
      * 1) INIT LOGIN
      * email + password
@@ -66,7 +82,7 @@ public class TenantAuthService {
         if (!StringUtils.hasText(req.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
         if (!StringUtils.hasText(req.password())) throw new ApiException("INVALID_LOGIN", "password é obrigatório", 400);
 
-        final String email = req.email().trim().toLowerCase();
+        final String email = normalizeEmailRequired(req.email());
         final String password = req.password();
 
         // 1) PUBLIC — descobre quais contas (tenants) têm esse email cadastrado
@@ -116,7 +132,9 @@ public class TenantAuthService {
                 .map(AccountSnapshot::id)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        UUID challengeId = publicExecutor.run(() -> tenantLoginChallengeService.createChallenge(email, accountIds));
+        UUID challengeId = publicExecutor.run(() ->
+                tenantLoginChallengeService.createChallenge(email, accountIds)
+        );
 
         List<TenantSelectionOption> options = validAccounts.stream()
                 .map(a -> new TenantSelectionOption(a.id(), a.displayName(), a.slug()))
@@ -150,7 +168,9 @@ public class TenantAuthService {
             throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 401);
         }
 
-        TenantLoginChallenge challenge = publicExecutor.run(() -> tenantLoginChallengeService.requireValid(challengeUuid));
+        TenantLoginChallenge challenge = publicExecutor.run(() ->
+                tenantLoginChallengeService.requireValid(challengeUuid)
+        );
 
         String email = challenge.getEmail();
         if (!StringUtils.hasText(email)) {
@@ -200,9 +220,7 @@ public class TenantAuthService {
 
     /**
      * Emite JWT sem precisar da senha.
-     * - carrega TenantUser no schema
-     * - cria Authentication com principal AuthenticatedUserContext
-     * - gera access + refresh
+     * ✅ Atualiza last_login.
      */
     private JwtResponse issueJwtForAccount(AccountSnapshot account, String email) {
 
@@ -215,6 +233,9 @@ public class TenantAuthService {
             if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
+
+            // ✅ grava last_login
+            tenantUserRepository.updateLastLogin(user.getId(), now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
@@ -243,13 +264,14 @@ public class TenantAuthService {
                     account.id()
             );
 
+            SystemRoleName role = toSystemRoleOrNull(user.getRole());
 
             return new JwtResponse(
                     accessToken,
                     refreshToken,
                     user.getId(),
                     user.getEmail(),
-                    user.getRole().name(),
+                    role,
                     account.id(),
                     account.schemaName()
             );
@@ -276,14 +298,14 @@ public class TenantAuthService {
             throw e;
         }
     }
-    
-    
+
     /**
      * 3) REFRESH
      * - valida refresh token
      * - garante authDomain=REFRESH
      * - carrega usuário no tenant schema
-     * - emite novo accessToken (e pode reemitir refresh se quiser)
+     * - emite novo accessToken
+     * ✅ Atualiza last_login também
      */
     public JwtResponse refresh(String refreshToken) {
 
@@ -305,15 +327,13 @@ public class TenantAuthService {
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
-        String emailRaw = jwtTokenProvider.getEmailFromToken(refreshToken);
-        String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
+        String email = EmailNormalizer.normalizeOrNull(jwtTokenProvider.getEmailFromToken(refreshToken));
         if (!StringUtils.hasText(email)) {
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
         if (accountId == null) {
-            // ⚠️ esse é o ponto que vai falhar se seu refresh NÃO tiver accountId
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
         }
 
@@ -326,6 +346,9 @@ public class TenantAuthService {
             if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
+
+            // ✅ grava last_login também no refresh
+            tenantUserRepository.updateLastLogin(user.getId(), now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
@@ -348,18 +371,18 @@ public class TenantAuthService {
                     tenantSchema
             );
 
-            // ✅ estratégia simples: reusa o MESMO refreshToken
-            // se quiser rotação (melhor segurança), gere um novo e invalide o antigo.
+            SystemRoleName role = toSystemRoleOrNull(user.getRole());
+
+            // reusa o MESMO refreshToken
             return new JwtResponse(
                     newAccessToken,
                     refreshToken,
                     user.getId(),
                     user.getEmail(),
-                    user.getRole().name(),
+                    role,
                     accountId,
                     tenantSchema
             );
         });
     }
-
 }

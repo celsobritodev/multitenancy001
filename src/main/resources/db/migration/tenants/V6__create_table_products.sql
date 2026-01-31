@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS products (
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_email VARCHAR(120),
-  updated_by_email VARCHAR(120),
-  deleted_by_email VARCHAR(120),
+  created_by_email CITEXT,
+  updated_by_email CITEXT,
+  deleted_by_email CITEXT,
 
   CONSTRAINT fk_products_category
     FOREIGN KEY (category_id) REFERENCES categories(id),

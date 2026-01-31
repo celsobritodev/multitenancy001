@@ -5,6 +5,7 @@ import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
+import brito.com.multitenancy001.tenant.api.dto.users.TenantUsersListResponse;
 import brito.com.multitenancy001.tenant.application.user.TenantUserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -23,10 +24,10 @@ public class TenantUserController {
 
     private final TenantUserService tenantUserService;
 
-    // Lista usuários do tenant.
+    // ✅ Lista usuários do tenant (visão rica para TENANT_OWNER)
     @GetMapping
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listTenantUsers() {
+    public ResponseEntity<TenantUsersListResponse> listTenantUsers() {
         return ResponseEntity.ok(tenantUserService.listTenantUsers());
     }
 
@@ -62,7 +63,7 @@ public class TenantUserController {
         return ResponseEntity.noContent().build();
     }
 
-    // Atualiza status de suspensão do usuário 
+    // Atualiza status de suspensão do usuário
     @PatchMapping("/{userId}/status")
     @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
@@ -121,7 +122,7 @@ public class TenantUserController {
         TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
     }
-    
+
     // Busca detalhes de um usuário habilitado (enabled).
     @GetMapping("/enabled/{userId}")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
@@ -135,6 +136,4 @@ public class TenantUserController {
     public ResponseEntity<Long> countEnabledTenantUsers() {
         return ResponseEntity.ok(tenantUserService.countEnabledTenantUsers());
     }
- 
-    
 }

@@ -10,15 +10,15 @@ CREATE TABLE IF NOT EXISTS categories (
 
   created_at TIMESTAMP NOT NULL DEFAULT now(),
   updated_at TIMESTAMP,
-  
+
   -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_email VARCHAR(120),
-  updated_by_email VARCHAR(120),
-  deleted_by_email VARCHAR(120),
+  created_by_email CITEXT,
+  updated_by_email CITEXT,
+  deleted_by_email CITEXT,
 
   CONSTRAINT uk_categories_name UNIQUE (name)
 );

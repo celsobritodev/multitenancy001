@@ -1,6 +1,8 @@
 package brito.com.multitenancy001.tenant.application.user;
 
 import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsGuard;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsService;
+import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsSnapshot;
 import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -8,15 +10,14 @@ import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.api.dto.me.TenantMeResponse;
 import brito.com.multitenancy001.tenant.api.dto.me.UpdateMyProfileRequest;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserCreateRequest;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserDetailsResponse;
-import brito.com.multitenancy001.tenant.api.dto.users.TenantUserSummaryResponse;
+import brito.com.multitenancy001.tenant.api.dto.users.*;
 import brito.com.multitenancy001.tenant.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
-import brito.com.multitenancy001.tenant.domain.user.TenantUserOrigin;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -36,6 +37,9 @@ public class TenantUserService {
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
+
+    // ✅ NOVO: para buscar entitlements efetivos (somente TENANT_OWNER)
+    private final AccountEntitlementsService accountEntitlementsService;
 
     private final TenantExecutor tenantExecutor;
 
@@ -78,9 +82,9 @@ public class TenantUserService {
                         ? null
                         : new LinkedHashSet<>(req.permissions());
 
-        TenantUserOrigin origin = (req.origin() != null) ? req.origin() : TenantUserOrigin.ADMIN;
+        EntityOrigin  origin = (req.origin() != null) ? req.origin() : EntityOrigin .ADMIN;
 
-        if (origin == TenantUserOrigin.BUILT_IN) {
+        if (origin == EntityOrigin .BUILT_IN) {
             throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
         }
 
@@ -107,16 +111,35 @@ public class TenantUserService {
         });
     }
 
-    public List<TenantUserSummaryResponse> listTenantUsers() {
+    /**
+     * ✅ MUDOU: agora retorna wrapper com entitlements + lista.
+     * - TENANT_OWNER: lista rica + entitlements
+     * - outros: lista básica (compatível) e entitlements=null
+     */
+    public TenantUsersListResponse listTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () ->
-                tenantUserTxService.listUsers(accountId)
-                        .stream()
-                        .map(tenantUserApiMapper::toSummary)
-                        .toList()
-        );
+        TenantRole currentRole = securityUtils.getCurrentTenantRole();
+        boolean isOwner = currentRole != null && currentRole.isTenantOwner();
+
+        AccountEntitlementsSnapshot entitlements = null;
+        if (isOwner) {
+            entitlements = accountEntitlementsService.resolveEffectiveByAccountId(accountId);
+        }
+        AccountEntitlementsSnapshot finalEntitlements = entitlements;
+
+        return tenantExecutor.run(schema, () -> {
+            List<TenantUser> users = tenantUserTxService.listUsers(accountId);
+
+            List<TenantUserListItemResponse> mapped = users.stream()
+                    .map(u -> isOwner
+                            ? tenantUserApiMapper.toListItemRich(u)
+                            : tenantUserApiMapper.toListItemBasic(u))
+                    .toList();
+
+            return new TenantUsersListResponse(finalEntitlements, mapped);
+        });
     }
 
     public List<TenantUserSummaryResponse> listEnabledTenantUsers() {
@@ -151,8 +174,7 @@ public class TenantUserService {
             return tenantUserApiMapper.toSummary(updated);
         });
     }
-    
-    
+
     public TenantUserSummaryResponse setTenantUserSuspendedByAccount(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
@@ -163,7 +185,6 @@ public class TenantUserService {
             return tenantUserApiMapper.toSummary(updated);
         });
     }
-
 
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -203,48 +224,46 @@ public class TenantUserService {
     // PASSWORD RESET (PUBLIC -> TENANT)
     // =========================================================
 
-   public String generatePasswordResetToken(String slug, String email) {
-    if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
-    if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
+    public String generatePasswordResetToken(String slug, String email) {
+        if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
+        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
-    AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
+        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-    return tenantExecutor.run(account.schemaName(), () -> {
-        TenantUser user = tenantUserTxService.getUserByEmail(email, account.id());
+        return tenantExecutor.run(account.schemaName(), () -> {
+            TenantUser user = tenantUserTxService.getUserByEmail(email, account.id());
 
-        if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
-            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-        }
+            if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
 
-        String token = jwtTokenProvider.generatePasswordResetToken(
-                user.getEmail(),
-                account.schemaName(),
-                account.id()
+            String token = jwtTokenProvider.generatePasswordResetToken(
+                    user.getEmail(),
+                    account.schemaName(),
+                    account.id()
+            );
+
+            user.setPasswordResetToken(token);
+            user.setPasswordResetExpires(appClock.now().plusHours(1));
+            tenantUserTxService.save(user);
+
+            return token;
+        });
+    }
+
+    public void resetPasswordWithToken(String token, String newPassword) {
+        if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+
+        String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
+
+        String email = jwtTokenProvider.getEmailFromToken(token);
+
+        tenantExecutor.run(schema, () ->
+                tenantUserTxService.resetPasswordWithToken(accountId, email, token, newPassword)
         );
-
-        user.setPasswordResetToken(token);
-        user.setPasswordResetExpires(appClock.now().plusHours(1));
-        tenantUserTxService.save(user);
-
-        return token;
-    });
-}
-
-
-   public void resetPasswordWithToken(String token, String newPassword) {
-    if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
-    if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
-
-    String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
-    Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
-
-    String email = jwtTokenProvider.getEmailFromToken(token);
-
-    tenantExecutor.run(schema, () ->
-            tenantUserTxService.resetPasswordWithToken(accountId, email, token, newPassword)
-    );
-}
-
+    }
 
     // =========================================================
     // MY PROFILE

@@ -216,4 +216,19 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
            and u.deleted = true
     """)
     int restoreAllByAccount(@Param("accountId") Long accountId);
+    
+    // ✅ NOVO: grava last_login no login
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+        update TenantUser u
+           set u.lastLogin = :lastLogin
+         where u.id = :userId
+           and u.deleted = false
+    """)
+    int updateLastLogin(
+            @Param("userId") Long userId,
+            @Param("lastLogin") LocalDateTime lastLogin
+    );
+    
 }

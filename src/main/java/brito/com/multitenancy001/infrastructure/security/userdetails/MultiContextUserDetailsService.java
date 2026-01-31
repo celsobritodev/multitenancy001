@@ -7,6 +7,7 @@ import brito.com.multitenancy001.infrastructure.security.authorities.Authorities
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.domain.user.TenantUser;
 import brito.com.multitenancy001.tenant.persistence.user.TenantUserRepository;
@@ -28,14 +29,12 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     private LocalDateTime now() { return appClock.now(); }
 
-    private static String normalizeEmail(String raw) {
-        return raw == null ? null : raw.trim().toLowerCase();
-    }
-
-    private static void assertEmail(String email) {
-        if (email == null || email.isBlank()) {
+    private static String normalizeEmailOrThrow(String raw) {
+        String normalized = EmailNormalizer.normalizeOrNull(raw);
+        if (normalized == null) {
             throw new UsernameNotFoundException("INVALID_USER");
         }
+        return normalized;
     }
 
     /**
@@ -48,10 +47,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         String schemaName = TenantContext.getOrNull();
-        String loginEmail = normalizeEmail(email);
-        assertEmail(loginEmail);
+        String loginEmail = normalizeEmailOrThrow(email);
 
-        // CONTROL PLANE continua normal (email é único globalmente)
+        // CONTROL PLANE: email é único globalmente
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
             return loadControlPlaneUserByEmail(loginEmail);
         }
@@ -78,8 +76,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             );
         }
 
-        String loginEmail = normalizeEmail(email);
-        assertEmail(loginEmail);
+        String loginEmail = normalizeEmailOrThrow(email);
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByEmailAndAccount_IdAndDeletedFalse(loginEmail, accountId)
@@ -92,8 +89,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     public UserDetails loadControlPlaneUserByEmail(String email) {
         LocalDateTime now = now();
 
-        String loginEmail = normalizeEmail(email);
-        assertEmail(loginEmail);
+        String loginEmail = normalizeEmailOrThrow(email);
 
         ControlPlaneUser user = controlPlaneUserRepository.findByEmailAndDeletedFalse(loginEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
@@ -122,8 +118,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         LocalDateTime now = now();
 
-        String loginEmail = normalizeEmail(email);
-        assertEmail(loginEmail);
+        String loginEmail = normalizeEmailOrThrow(email);
 
         TenantUser user = tenantUserRepository
                 .findByEmailAndAccountIdAndDeletedFalse(loginEmail, accountId)

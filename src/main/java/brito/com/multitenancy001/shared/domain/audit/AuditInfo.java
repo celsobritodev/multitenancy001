@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.shared.domain.audit;
 
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.Getter;
@@ -12,10 +13,10 @@ public class AuditInfo {
 
     /**
      * IMPORTANTE:
-     * As migrations do projeto usam VARCHAR(120) para:
-     * created_by_email, updated_by_email, deleted_by_email.
-     *
-     * Então o código precisa respeitar 120 para evitar erro de persistência.
+     * - As colunas created_by_email / updated_by_email / deleted_by_email
+     *   estão padronizadas como CITEXT (case-insensitive) no Postgres.
+     * - Mesmo assim, mantemos limite lógico de 120 chars para proteger persistência
+     *   e padronizar payloads.
      */
     private static final int AUDIT_EMAIL_MAX_LEN = 120;
 
@@ -62,10 +63,8 @@ public class AuditInfo {
     }
 
     private static String safeEmail(String email) {
-        if (email == null) return null;
-
-        String v = email.trim().toLowerCase();
-        if (v.isBlank()) return null;
+        String v = EmailNormalizer.normalizeOrNull(email);
+        if (v == null) return null;
 
         if (v.length() <= AUDIT_EMAIL_MAX_LEN) return v;
         return v.substring(0, AUDIT_EMAIL_MAX_LEN);

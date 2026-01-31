@@ -1,7 +1,5 @@
 -- V7__create_table_sales.sql
 
-
-
 CREATE TABLE IF NOT EXISTS sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -23,9 +21,9 @@ CREATE TABLE IF NOT EXISTS sales (
   updated_by BIGINT,
   deleted_by BIGINT,
 
-  created_by_email VARCHAR(120),
-  updated_by_email VARCHAR(120),
-  deleted_by_email VARCHAR(120)
+  created_by_email CITEXT,
+  updated_by_email CITEXT,
+  deleted_by_email CITEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);

@@ -1,9 +1,18 @@
 package brito.com.multitenancy001.controlplane.domain.user;
 
-import java.util.Locale;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+
 import java.util.Set;
 
+/**
+ * Emails reservados do sistema (BUILT_IN).
+ *
+ * Regra:
+ * - comparação deve ser case-insensitive via CITEXT no banco;
+ * - aqui normalizamos uma única vez via EmailNormalizer (trim + lower) para manter consistência.
+ */
 public final class ControlPlaneBuiltInUsers {
+
     private ControlPlaneBuiltInUsers() {}
 
     public static final String SUPERADMIN_EMAIL = "superadmin@platform.local";
@@ -19,7 +28,8 @@ public final class ControlPlaneBuiltInUsers {
     );
 
     public static boolean isReservedEmail(String email) {
-        if (email == null) return false;
-        return RESERVED_EMAILS.contains(email.trim().toLowerCase(Locale.ROOT));
+        String norm = EmailNormalizer.normalizeOrNull(email);
+        if (norm == null) return false;
+        return RESERVED_EMAILS.contains(norm);
     }
 }

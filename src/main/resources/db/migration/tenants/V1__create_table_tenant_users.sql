@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 
     name VARCHAR(100) NOT NULL,
 
-    -- ✅ email é a identidade de login
-    email VARCHAR(150) NOT NULL,
+    -- email é a identidade de login (case-insensitive)
+    email CITEXT NOT NULL,
     password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50) NOT NULL,
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,

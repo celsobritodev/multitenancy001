@@ -7,6 +7,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.persistence.audit.AuditEntityListener;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import jakarta.persistence.*;
@@ -36,9 +37,9 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_origin", nullable = false, length = 20)
     @Builder.Default
-    private ControlPlaneUserOrigin origin = ControlPlaneUserOrigin.ADMIN;
+    private EntityOrigin  origin = EntityOrigin .ADMIN;
 
-    public boolean isBuiltInUser() { return this.origin == ControlPlaneUserOrigin.BUILT_IN; }
+    public boolean isBuiltInUser() { return this.origin == EntityOrigin .BUILT_IN; }
 
     @Setter(AccessLevel.NONE)
     @Column(nullable = false, length = 100)
@@ -167,7 +168,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
 
     // setters controlados (bloqueados quando reservado)
 
-    public void setOrigin(ControlPlaneUserOrigin origin) {
+    public void setOrigin(EntityOrigin  origin) {
         assertMutable("SET_ORIGIN");
         this.origin = origin;
     }
@@ -289,7 +290,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Transient private String _originalEmail;
     @Transient private String _originalName;
     @Transient private ControlPlaneRole _originalRole;
-    @Transient private ControlPlaneUserOrigin _originalOrigin;
+    @Transient private EntityOrigin  _originalOrigin;
     @Transient private boolean _originalSuspendedByAccount;
     @Transient private boolean _originalSuspendedByAdmin;
     @Transient private boolean _originalDeleted;
