@@ -1,6 +1,5 @@
 -- V1__create_extension.sql
+SET search_path TO public;
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
--- garante case-insensitive no email (idempotente)
 CREATE EXTENSION IF NOT EXISTS citext;

@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

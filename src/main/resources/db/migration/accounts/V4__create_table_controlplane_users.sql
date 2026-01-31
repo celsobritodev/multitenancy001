@@ -6,12 +6,11 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     name VARCHAR(100) NOT NULL,
 
-    -- ✅ email é a identidade de login
-    email VARCHAR(150) NOT NULL,
+    -- ✅ email case-insensitive
+    email CITEXT NOT NULL,
     password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50) NOT NULL,
-
     account_id BIGINT NOT NULL,
 
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
@@ -19,31 +18,31 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
-    last_login TIMESTAMP,
+    last_login TIMESTAMPTZ,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-    locked_until TIMESTAMP,
+    locked_until TIMESTAMPTZ,
     must_change_password BOOLEAN NOT NULL DEFAULT false,
-    password_changed_at TIMESTAMP,
+    password_changed_at TIMESTAMPTZ,
 
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-    deleted_at TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
 
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     password_reset_token VARCHAR(255),
-    password_reset_expires TIMESTAMP,
+    password_reset_expires TIMESTAMPTZ,
 
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
@@ -55,6 +54,7 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
         CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API'))
 );
 
+-- ✅ dentro de 1 conta, email único (CITEXT já resolve case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
-ON controlplane_users (account_id, email)
-WHERE deleted = false;
+    ON controlplane_users (account_id, email)
+    WHERE deleted = false;

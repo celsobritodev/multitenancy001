@@ -106,16 +106,21 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public String generateRefreshToken(String email, String context) {
+    // ✅ NOVO (recomendado): refresh token com accountId
+    public String generateRefreshToken(String email, String context, Long accountId) {
         return Jwts.builder()
                 .subject(email)
                 .claim(CLAIM_AUTH_DOMAIN, "REFRESH")
                 .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
+
+   
+
 
     public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;

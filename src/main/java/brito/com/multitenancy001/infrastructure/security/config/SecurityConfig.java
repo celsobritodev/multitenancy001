@@ -2,7 +2,7 @@ package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
-import brito.com.multitenancy001.infrastructure.security.filter.TenantHeaderTenantContextFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFilter;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -28,23 +28,26 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final MultiContextUserDetailsService multiContextUserDetailsService;
 
-    // ===========
-    // BEANS
-    // ===========
-
-    @Bean
-    public TenantHeaderTenantContextFilter tenantHeaderTenantContextFilter() {
-        return new TenantHeaderTenantContextFilter();
-    }
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, multiContextUserDetailsService);
+        return new JwtAuthenticationFilter(
+                jwtTokenProvider,
+                multiContextUserDetailsService,
+                restAuthenticationEntryPoint
+        );
     }
 
     @Bean
     public MustChangePasswordFilter mustChangePasswordFilter() {
         return new MustChangePasswordFilter();
+    }
+
+    @Bean
+    public RequestLoggingFilter requestLoggingFilter() {
+        return new RequestLoggingFilter();
     }
 
     @Bean
@@ -57,15 +60,18 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
-    // ===========
-    // CHAIN
-    // ===========
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+            // ✅ aqui está a correção de 401 vs 403
+            .exceptionHandling(ex -> ex
+                    .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
+                    .accessDeniedHandler(restAccessDeniedHandler)           // 403
+            )
+
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
                     "/v3/api-docs/**",
@@ -93,14 +99,14 @@ public class SecurityConfig {
                 .anyRequest().denyAll()
             );
 
-        // ✅ 1) Tenant cedo (X-Tenant) + 1 log por request
-        http.addFilterBefore(tenantHeaderTenantContextFilter(), UsernamePasswordAuthenticationFilter.class);
-
-        // ✅ 2) JWT depois do TenantHeaderFilter
+        // ✅ 1) JWT cedo: se token é inválido => 401 (entryPoint)
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
-        // ✅ 3) MustChangePassword depois do JWT
+        // ✅ 2) MustChangePassword depois do JWT
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+
+        // ✅ 3) Log no final (já com tenant resolvido)
+        http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
 
         return http.build();
     }

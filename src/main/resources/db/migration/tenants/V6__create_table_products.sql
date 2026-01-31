@@ -1,5 +1,5 @@
 -- V6__create_table_products.sql
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name VARCHAR(200) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE products (
 
   deleted BOOLEAN NOT NULL DEFAULT false,
   deleted_at TIMESTAMP,
-  
+
   -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
@@ -58,27 +58,27 @@ CREATE TABLE products (
     CHECK (length(trim(sku)) > 0)
 );
 
-CREATE UNIQUE INDEX ux_products_sku_not_deleted
-ON products (sku)
-WHERE deleted = false;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_not_deleted
+  ON products (sku)
+  WHERE deleted = false;
 
-CREATE INDEX idx_products_name_lower
-ON products (LOWER(name));
+CREATE INDEX IF NOT EXISTS idx_products_name_lower
+  ON products (LOWER(name));
 
-CREATE INDEX idx_products_brand_lower
-ON products (LOWER(brand));
+CREATE INDEX IF NOT EXISTS idx_products_brand_lower
+  ON products (LOWER(brand));
 
-CREATE INDEX idx_products_active_deleted
-ON products (active, deleted);
+CREATE INDEX IF NOT EXISTS idx_products_active_deleted
+  ON products (active, deleted);
 
-CREATE INDEX idx_products_supplier_id
-ON products (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_products_supplier_id
+  ON products (supplier_id);
 
-CREATE INDEX idx_products_category_id
-ON products (category_id);
+CREATE INDEX IF NOT EXISTS idx_products_category_id
+  ON products (category_id);
 
-CREATE INDEX idx_products_subcategory_id
-ON products (subcategory_id);
+CREATE INDEX IF NOT EXISTS idx_products_subcategory_id
+  ON products (subcategory_id);
 
-CREATE INDEX idx_products_created_at
-ON products (created_at);
+CREATE INDEX IF NOT EXISTS idx_products_created_at
+  ON products (created_at);

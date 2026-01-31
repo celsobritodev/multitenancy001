@@ -63,8 +63,10 @@ public class ControlPlaneAuthService {
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
-                    DEFAULT_SCHEMA
+                    DEFAULT_SCHEMA,
+                    user.getAccount().getId()
             );
+
 
             return JwtResponse.forEmailLogin(
                     accessToken,

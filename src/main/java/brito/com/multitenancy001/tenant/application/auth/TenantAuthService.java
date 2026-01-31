@@ -5,6 +5,7 @@ import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
@@ -238,8 +239,10 @@ public class TenantAuthService {
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
-                    account.schemaName()
+                    account.schemaName(),
+                    account.id()
             );
+
 
             return new JwtResponse(
                     accessToken,
@@ -273,4 +276,90 @@ public class TenantAuthService {
             throw e;
         }
     }
+    
+    
+    /**
+     * 3) REFRESH
+     * - valida refresh token
+     * - garante authDomain=REFRESH
+     * - carrega usuário no tenant schema
+     * - emite novo accessToken (e pode reemitir refresh se quiser)
+     */
+    public JwtResponse refresh(String refreshToken) {
+
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+        }
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String authDomain = jwtTokenProvider.getAuthDomain(refreshToken);
+        if (!SecurityConstants.AuthDomains.REFRESH.equals(authDomain)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String emailRaw = jwtTokenProvider.getEmailFromToken(refreshToken);
+        String email = (emailRaw == null) ? null : emailRaw.trim().toLowerCase();
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+        if (accountId == null) {
+            // ⚠️ esse é o ponto que vai falhar se seu refresh NÃO tiver accountId
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
+        }
+
+        return tenantExecutor.run(tenantSchema, () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                    .orElseThrow(() -> new ApiException("INVALID_REFRESH", "refreshToken inválido", 401));
+
+            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            }
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    tenantSchema,
+                    now(),
+                    authorities
+            );
+
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
+
+            String newAccessToken = jwtTokenProvider.generateTenantToken(
+                    authentication,
+                    accountId,
+                    tenantSchema
+            );
+
+            // ✅ estratégia simples: reusa o MESMO refreshToken
+            // se quiser rotação (melhor segurança), gere um novo e invalide o antigo.
+            return new JwtResponse(
+                    newAccessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    user.getRole().name(),
+                    accountId,
+                    tenantSchema
+            );
+        });
+    }
+
 }

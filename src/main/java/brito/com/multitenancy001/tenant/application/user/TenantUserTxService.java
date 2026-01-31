@@ -216,32 +216,40 @@ public class TenantUserTxService {
         });
     }
 
-    public TenantUser updateProfile(
-            Long userId,
-            Long accountId,
-            String name,
-            String phone,
-            String locale,
-            String timezone,
-            LocalDateTime now
-    ) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+   public TenantUser updateProfile(
+        Long userId,
+        Long accountId,
+        String name,
+        String phone,
+        String avatarUrl,
+        String locale,
+        String timezone,
+        LocalDateTime now
+) {
+    if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+    if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
 
-        return txExecutor.tenantTx(() -> {
-            TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+    return txExecutor.tenantTx(() -> {
+        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            if (StringUtils.hasText(name)) user.setName(name.trim());
-            if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
-            if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
-            if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
+        if (StringUtils.hasText(name)) user.setName(name.trim());
+        if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
+        if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
+        if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
 
-            // now é usado só se você quiser setar algo manualmente.
-            // updated_at já é UpdateTimestamp.
-            return tenantUserRepository.save(user);
-        });
-    }
+        // ✅ avatarUrl: suporta atualizar OU limpar
+        // - null  -> não altera
+        // - ""    -> limpa (salva null)
+        // - "xxx" -> salva trim()
+        if (avatarUrl != null) {
+            String trimmed = avatarUrl.trim();
+            user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
+        }
+
+        return tenantUserRepository.save(user);
+    });
+}
 
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);

@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS payments (
     account_id BIGINT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
 
-    payment_date TIMESTAMP NOT NULL,
-    valid_until TIMESTAMP,
+    payment_date TIMESTAMPTZ NOT NULL,
+    valid_until TIMESTAMPTZ,
 
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
 
@@ -23,19 +23,18 @@ CREATE TABLE IF NOT EXISTS payments (
     invoice_url TEXT,
     receipt_url TEXT,
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP,
-    
-    -- AUDITORIA
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
-    refunded_at TIMESTAMP,
+    refunded_at TIMESTAMPTZ,
     refund_amount NUMERIC(10,2),
     refund_reason VARCHAR(500),
 
@@ -44,5 +43,5 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
-CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
-CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_payment_status  ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payment_date    ON payments(payment_date);

@@ -2,13 +2,24 @@
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS account_entitlements (
-  account_id BIGINT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
-  max_users INT NOT NULL,
-  max_products INT NOT NULL,
-  max_storage_mb INT NOT NULL
+    account_id      BIGINT PRIMARY KEY,
+    max_users       INTEGER NOT NULL,
+    max_products    INTEGER NOT NULL,
+    max_storage_mb  INTEGER NOT NULL DEFAULT 100,
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- (opcional) coerência básica
-ALTER TABLE account_entitlements
-    ADD CONSTRAINT chk_entitlements_positive
-    CHECK (max_users > 0 AND max_products > 0 AND max_storage_mb > 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_account_entitlements_account'
+    ) THEN
+        ALTER TABLE account_entitlements
+            ADD CONSTRAINT fk_account_entitlements_account
+            FOREIGN KEY (account_id) REFERENCES accounts(id)
+            ON DELETE CASCADE;
+    END IF;
+END $$;

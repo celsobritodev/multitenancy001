@@ -12,6 +12,7 @@ public final class SecurityConstants {
         private AuthDomains() {}
         public static final String TENANT = "TENANT";
         public static final String CONTROLPLANE = "CONTROLPLANE";
+        public static final String REFRESH = "REFRESH";
     }
 
     public static final class ApiPaths {
@@ -25,4 +26,7 @@ public final class SecurityConstants {
         public static final String ME = "/api/me";
         public static final String ME_PREFIX = "/api/me/";
     }
+    
+
+
 }

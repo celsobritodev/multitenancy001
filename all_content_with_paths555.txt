@@ -90,6 +90,7 @@
 ./src/main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityProvisioningService.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityResolver.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/publicschema/LoginIdentityRow.java
+./src/main/java/brito/com/multitenancy001/infrastructure/publicschema/entity/AccountEntitlementsEntity.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/SecurityConstants.java
 ./src/main/java/brito/com/multitenancy001/infrastructure/security/SecurityUtils.java
@@ -213,8 +214,8 @@
 ./src/main/resources/application-dev.properties
 ./src/main/resources/application.properties
 ./src/main/resources/db/migration/accounts/V10__create_table_account_provisioning_events.sql
-./src/main/resources/db/migration/accounts/V11__create_unique_taxid_per_country_not_deleted.sql
-./src/main/resources/db/migration/accounts/V12__create_table_tenant_login_challenges.sql
+./src/main/resources/db/migration/accounts/V11__create_table_tenant_login_challenges.sql
+./src/main/resources/db/migration/accounts/V13__seed_account_entitlements_for_existing_accounts.sql
 ./src/main/resources/db/migration/accounts/V1__create_extension.sql
 ./src/main/resources/db/migration/accounts/V2__create_table_accounts.sql
 ./src/main/resources/db/migration/accounts/V3__create_table_account_entitlements.sql
@@ -1217,7 +1218,6 @@ public record ControlPlaneAdminLoginRequest(
 package brito.com.multitenancy001.controlplane.api.dto.signup;
 
 import brito.com.multitenancy001.controlplane.domain.account.TaxIdType;
-import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -1242,9 +1242,9 @@ public record SignupRequest(
 
         @NotBlank(message = "Senha é obrigatória")
         @Pattern(
-                regexp = ValidationPatterns.PASSWORD_PATTERN,
-                message = "Senha fraca. Use pelo menos 8 caracteres com letras maiúsculas, minúsculas e números"
-        )
+        	    regexp = "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{8,}$",
+        	    message = "Senha deve ter pelo menos 8 caracteres, contendo letras e números"
+        	)
         String password,
 
         @NotBlank(message = "Confirmação de senha é obrigatória")
@@ -1713,18 +1713,18 @@ public class AccountEntitlementsProvisioningService {
     private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     @Transactional(transactionManager = "publicTransactionManager")
-    public void ensureDefaultEntitlementsForTenant(Account account) {
+    public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
         }
 
         if (account.isBuiltInAccount()) {
-            // BUILTIN não tem entitlements
-            return;
+            // BUILTIN/PLATFORM => ilimitado / não precisa persistir entitlements
+            return null;
         }
 
-        if (accountEntitlementsRepository.existsById(account.getId())) {
-            return;
+        if (accountEntitlementsRepository.existsByAccount_Id(account.getId())) {
+            return accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
         }
 
         AccountEntitlements ent = AccountEntitlements.builder()
@@ -1734,7 +1734,7 @@ public class AccountEntitlementsProvisioningService {
                 .maxStorageMb(100)
                 .build();
 
-        accountEntitlementsRepository.save(ent);
+        return accountEntitlementsRepository.save(ent);
     }
 }
 
@@ -2075,6 +2075,8 @@ public class AccountLifecycleService {
 ============================================================
 package brito.com.multitenancy001.controlplane.application;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -2094,6 +2096,7 @@ import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFac
 import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -2103,6 +2106,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountOnboardingService {
 
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
+    private static final long DEFAULT_TRIAL_DAYS = 14L;
 
     private final AccountApiMapper accountApiMapper;
 
@@ -2113,6 +2117,7 @@ public class AccountOnboardingService {
 
     private final AccountRepository accountRepository;
     private final PublicUnitOfWork publicUnitOfWork;
+    private final AppClock appClock;
 
     public SignupResponse createAccount(SignupRequest signupRequest) {
         SignupData data = validateAndNormalize(signupRequest);
@@ -2147,28 +2152,23 @@ public class AccountOnboardingService {
                 data.password()
         );
 
-        // ✅ CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
+        // CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
         publicUnitOfWork.tx(() -> {
             loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
             return null;
         });
 
-        // Atualiza status após sucesso
-        publicUnitOfWork.tx(() -> {
-            Account managed = accountRepository.findByIdAndDeletedFalse(account.getId())
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+        Account finalized = finalizeProvisioning(account.getId());
 
-            if (managed.getStatus() == AccountStatus.PROVISIONING) {
-                managed.setStatus(AccountStatus.FREE_TRIAL);
-            }
-            accountRepository.save(managed);
-            return null;
-        });
+        log.info("✅ Account criada | accountId={} | schemaName={} | slug={} | status={} | trialEndDate={}",
+                finalized.getId(),
+                finalized.getSchemaName(),
+                finalized.getSlug(),
+                finalized.getStatus(),
+                finalized.getTrialEndDate()
+        );
 
-        log.info("✅ Account criada | accountId={} | schemaName={} | slug={}",
-                account.getId(), account.getSchemaName(), account.getSlug());
-
-        AccountResponse accountResponse = accountApiMapper.toResponse(account);
+        AccountResponse accountResponse = accountApiMapper.toResponse(finalized);
 
         TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
                 tenantOwner.id(),
@@ -2177,6 +2177,27 @@ public class AccountOnboardingService {
         );
 
         return new SignupResponse(accountResponse, tenantAdminResponse);
+    }
+
+    private Account finalizeProvisioning(Long accountId) {
+        return publicUnitOfWork.tx(() -> {
+            Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
+                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+
+            LocalDateTime now = appClock.now();
+
+            // Se ainda está provisionando, entra em FREE_TRIAL
+            if (managed.getStatus() == AccountStatus.PROVISIONING) {
+                managed.setStatus(AccountStatus.FREE_TRIAL);
+            }
+
+            // Garantia de consistência: FREE_TRIAL precisa de trialEndDate
+            if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndDate() == null) {
+                managed.setTrialEndDate(now.plusDays(DEFAULT_TRIAL_DAYS));
+            }
+
+            return accountRepository.save(managed);
+        });
     }
 
     private SignupData validateAndNormalize(SignupRequest req) {
@@ -5115,7 +5136,13 @@ package brito.com.multitenancy001.controlplane.persistence.account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface AccountEntitlementsRepository extends JpaRepository<AccountEntitlements, Long> {
+
+    boolean existsByAccount_Id(Long accountId);
+
+    Optional<AccountEntitlements> findByAccount_Id(Long accountId);
 }
 
 ============================================================
@@ -6415,6 +6442,7 @@ public class AccountEntitlementsGuard {
 ============================================================
 package brito.com.multitenancy001.infrastructure.publicschema;
 
+import brito.com.multitenancy001.controlplane.application.AccountEntitlementsProvisioningService;
 import brito.com.multitenancy001.controlplane.domain.account.Account;
 import brito.com.multitenancy001.controlplane.domain.account.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.persistence.account.AccountEntitlementsRepository;
@@ -6428,15 +6456,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountEntitlementsService {
 
     private final AccountEntitlementsRepository accountEntitlementsRepository;
+    private final AccountEntitlementsProvisioningService provisioningService;
 
     /**
      * Resolve entitlements efetivos da conta:
-     * - PLATFORM => ilimitado
-     * - TENANT => lê de account_entitlements
+     * - BUILTIN/PLATFORM => ilimitado
+     * - TENANT => lê de account_entitlements (se não existir, provisiona default em DEV)
      */
     @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
     public AccountEntitlementsSnapshot resolveEffective(Account account) {
-        if (account == null) {
+        if (account == null || account.getId() == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
         }
 
@@ -6444,12 +6473,19 @@ public class AccountEntitlementsService {
             return AccountEntitlementsSnapshot.ofUnlimited();
         }
 
-        AccountEntitlements ent = accountEntitlementsRepository.findById(account.getId())
-                .orElseThrow(() -> new ApiException(
-                        "ENTITLEMENTS_NOT_FOUND",
-                        "Entitlements não encontrados para a conta " + account.getId(),
-                        500
-                ));
+        // 1) tenta ler
+        AccountEntitlements ent = accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
+
+        // 2) se não existir, provisiona e tenta de novo
+        if (ent == null) {
+            provisioningService.ensureDefaultEntitlementsForTenant(account);
+            ent = accountEntitlementsRepository.findByAccount_Id(account.getId())
+                    .orElseThrow(() -> new ApiException(
+                            "ENTITLEMENTS_NOT_FOUND",
+                            "Entitlements não encontrados para a conta " + account.getId(),
+                            500
+                    ));
+        }
 
         Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
         Integer maxProducts = safePositive(ent.getMaxProducts(), "maxProducts");
@@ -6458,9 +6494,6 @@ public class AccountEntitlementsService {
         return AccountEntitlementsSnapshot.ofLimited(maxUsers, maxProducts, maxStorageMb);
     }
 
-    /**
-     * Valida quota para criação de usuário.
-     */
     @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
     public boolean canCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
@@ -6480,9 +6513,6 @@ public class AccountEntitlementsService {
         }
     }
 
-    /**
-     * Valida quota para criação de produtos.
-     */
     @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
     public void assertCanCreateProduct(Account account, long currentProducts) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
@@ -6496,9 +6526,6 @@ public class AccountEntitlementsService {
         }
     }
 
-    /**
-     * Valida quota de armazenamento.
-     */
     @Transactional(readOnly = true, transactionManager = "publicTransactionManager")
     public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
         if (deltaMb < 0) {
@@ -6516,10 +6543,6 @@ public class AccountEntitlementsService {
             );
         }
     }
-
-    // =========================
-    // Helpers
-    // =========================
 
     private Integer safePositive(Integer value, String field) {
         if (value == null || value <= 0) {
@@ -6741,6 +6764,66 @@ public record LoginIdentityRow(
         String displayName,
         String slug
 ) {}
+
+============================================================
+### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/publicschema/entity/AccountEntitlementsEntity.java
+============================================================
+package brito.com.multitenancy001.infrastructure.publicschema.entity;
+
+import jakarta.persistence.*;
+import java.time.Instant;
+
+@Entity
+@Table(
+    name = "account_entitlements",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_account_entitlements_account_id", columnNames = {"account_id"})
+    }
+)
+public class AccountEntitlementsEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "account_id", nullable = false)
+    private Long accountId;
+
+    @Column(name = "max_users", nullable = false)
+    private Integer maxUsers;
+
+    @Column(name = "max_products", nullable = false)
+    private Integer maxProducts;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    protected AccountEntitlementsEntity() { }
+
+    public AccountEntitlementsEntity(Long accountId, Integer maxUsers, Integer maxProducts) {
+        this.accountId = accountId;
+        this.maxUsers = maxUsers;
+        this.maxProducts = maxProducts;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
+    public Long getId() { return id; }
+    public Long getAccountId() { return accountId; }
+    public Integer getMaxUsers() { return maxUsers; }
+    public Integer getMaxProducts() { return maxProducts; }
+
+    public void setMaxUsers(Integer maxUsers) { this.maxUsers = maxUsers; }
+    public void setMaxProducts(Integer maxProducts) { this.maxProducts = maxProducts; }
+}
 
 ============================================================
 ### FILE: ./src/main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
@@ -16016,81 +16099,105 @@ spring.profiles.active=dev
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V10__create_table_account_provisioning_events.sql
 ============================================================
+-- V10__create_table_account_provisioning_events.sql
+SET search_path TO public;
 
-
--- Regra: TaxId único por país + tipo + número, respeitando soft-delete
-CREATE UNIQUE INDEX uk_accounts_taxid_country_type_number_not_deleted
-    ON public.accounts (tax_country_code, tax_id_type, tax_id_number)
-    WHERE deleted = false;
-
--- (Opcional, mas recomendado) evitar duplicidade de login_email também, se ainda não existir:
--- CREATE UNIQUE INDEX uk_accounts_login_email_not_deleted
---     ON public.accounts (login_email)
---     WHERE deleted = false;
-
-============================================================
-### FILE: ./src/main/resources/db/migration/accounts/V11__create_unique_taxid_per_country_not_deleted.sql
-============================================================
--- V11__create_unique_taxid_per_country_not_deleted
-
-CREATE TABLE public.account_provisioning_events (
+CREATE TABLE IF NOT EXISTS account_provisioning_events (
     id BIGSERIAL PRIMARY KEY,
     account_id BIGINT NOT NULL,
     event_type VARCHAR(50) NOT NULL,
     failure_code VARCHAR(50),
     message TEXT,
     details_json TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_account_prov_events_account_id
-    ON public.account_provisioning_events(account_id);
+CREATE INDEX IF NOT EXISTS idx_account_prov_events_account_id
+    ON account_provisioning_events(account_id);
 
-CREATE INDEX idx_account_prov_events_created_at
-    ON public.account_provisioning_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_account_prov_events_created_at
+    ON account_provisioning_events(created_at);
 
 ============================================================
-### FILE: ./src/main/resources/db/migration/accounts/V12__create_table_tenant_login_challenges.sql
+### FILE: ./src/main/resources/db/migration/accounts/V11__create_table_tenant_login_challenges.sql
 ============================================================
--- V12__create_table_tenant_login_challenges.sql
+-- V11__create_table_tenant_login_challenges.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS tenant_login_challenges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    email VARCHAR(150) NOT NULL,
+    email CITEXT NOT NULL,
 
-    -- CSV simples de accountIds válidos
+    -- CSV simples de accountIds válidos (ex: "1,2,3")
     candidate_account_ids_csv TEXT NOT NULL,
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    expires_at TIMESTAMP NOT NULL,
-    used_at TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_email
-ON tenant_login_challenges (email);
+    ON tenant_login_challenges (email);
 
 CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_expires_at
-ON tenant_login_challenges (expires_at);
+    ON tenant_login_challenges (expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_used_at
-ON tenant_login_challenges (used_at);
+    ON tenant_login_challenges (used_at);
+
+============================================================
+### FILE: ./src/main/resources/db/migration/accounts/V13__seed_account_entitlements_for_existing_accounts.sql
+============================================================
+-- V13__seed_account_entitlements_for_existing_accounts.sql
+SET search_path TO public;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'account_entitlements'
+    ) THEN
+        INSERT INTO account_entitlements (
+            account_id,
+            max_users,
+            max_products,
+            max_storage_mb,
+            created_at,
+            updated_at
+        )
+        SELECT
+            a.id,
+            5,
+            100,
+            100,
+            now(),
+            now()
+        FROM accounts a
+        WHERE a.deleted = false
+          AND a.account_type = 'TENANT'
+          AND a.account_origin <> 'BUILT_IN'
+          AND NOT EXISTS (
+              SELECT 1 FROM account_entitlements e WHERE e.account_id = a.id
+          );
+    END IF;
+END $$;
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V1__create_extension.sql
 ============================================================
 -- V1__create_extension.sql
+SET search_path TO public;
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
--- garante case-insensitive no email (idempotente)
 CREATE EXTENSION IF NOT EXISTS citext;
+
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V2__create_table_accounts.sql
 ============================================================
 -- V2__create_table_accounts.sql
-
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS accounts (
@@ -16099,7 +16206,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     account_type   VARCHAR(20) NOT NULL DEFAULT 'TENANT',
     account_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
-    -- Core identity (neutro)
     display_name VARCHAR(150) NOT NULL,
     legal_name   VARCHAR(200),
     legal_entity_type VARCHAR(20) NOT NULL DEFAULT 'COMPANY', -- INDIVIDUAL | COMPANY
@@ -16110,109 +16216,128 @@ CREATE TABLE IF NOT EXISTS accounts (
     status            VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
     subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    -- Emails (neutro)
-    login_email   VARCHAR(150) NOT NULL,
-    billing_email VARCHAR(150),
+    -- ✅ emails case-insensitive
+    login_email   CITEXT NOT NULL,
+    billing_email CITEXT,
 
-    -- Documento fiscal/identificador legal (neutro)
     tax_id_type      VARCHAR(20),
     tax_id_number    VARCHAR(40),
     tax_country_code VARCHAR(2)  NOT NULL DEFAULT 'BR',
 
-    -- Contato / Endereço (neutro)
     phone   VARCHAR(20),
     address VARCHAR(500),
     city    VARCHAR(100),
     state   VARCHAR(50),
     country VARCHAR(60) NOT NULL DEFAULT 'Brasil',
 
-    -- Preferências
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
-    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
+    currency VARCHAR(3)  NOT NULL DEFAULT 'BRL',
 
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-    
-    -- AUDITORIA (quem criou/alterou/deletou)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
-    trial_end_date   TIMESTAMP,
-    payment_due_date TIMESTAMP,
-    next_billing_date TIMESTAMP,
+    trial_end_date    TIMESTAMPTZ,
+    payment_due_date  TIMESTAMPTZ,
+    next_billing_date TIMESTAMPTZ,
 
     settings_json TEXT,
     metadata_json TEXT,
 
-    deleted   BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMP
+    deleted    BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMPTZ
 );
 
 -- =========================
--- CHECK constraints (enums)
+-- CHECK constraints (idempotente)
 -- =========================
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_account_type
-    CHECK (account_type IN ('TENANT', 'PLATFORM'));
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_account_type') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_account_type
+            CHECK (account_type IN ('TENANT', 'PLATFORM'));
+    END IF;
 
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_account_origin
-    CHECK (account_origin IN ('BUILT_IN', 'ADMIN', 'API'));
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_account_origin') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_account_origin
+            CHECK (account_origin IN ('BUILT_IN', 'ADMIN', 'API'));
+    END IF;
 
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_subscription_plan
-    CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'BUILT_IN_PLAN'));
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_subscription_plan') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_subscription_plan
+            CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'BUILT_IN_PLAN'));
+    END IF;
 
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_legal_entity_type
-    CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_legal_entity_type') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_legal_entity_type
+            CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
+    END IF;
 
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_tax_id_type
-    CHECK (tax_id_type IS NULL OR tax_id_type IN ('CPF', 'CNPJ'));
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_tax_id_type') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_tax_id_type
+            CHECK (tax_id_type IS NULL OR tax_id_type IN ('CPF', 'CNPJ'));
+    END IF;
 
-ALTER TABLE accounts
-    ADD CONSTRAINT chk_accounts_tax_id_pair
-    CHECK (
-        (tax_id_type IS NULL AND tax_id_number IS NULL)
-        OR
-        (tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL)
-    );
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_tax_id_pair') THEN
+        ALTER TABLE accounts
+            ADD CONSTRAINT chk_accounts_tax_id_pair
+            CHECK (
+                (tax_id_type IS NULL AND tax_id_number IS NULL)
+                OR
+                (tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL)
+            );
+    END IF;
+END $$;
 
 -- =========================
--- Índices / Uniques
+-- Indexes / Uniques
+-- (padronizado com os nomes que você queria no V10)
 -- =========================
 
+-- single PLATFORM
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_single_platform
-ON accounts (account_type)
-WHERE account_type = 'PLATFORM';
+    ON accounts (account_type)
+    WHERE account_type = 'PLATFORM';
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
-ON accounts (tax_country_code, tax_id_type, tax_id_number)
-WHERE deleted = false AND tax_id_type IS NOT NULL AND tax_id_number IS NOT NULL;
+-- TaxId único por país + tipo + número (soft-delete), ignorando NULL
+CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_taxid_country_type_number_not_deleted
+    ON accounts (tax_country_code, tax_id_type, tax_id_number)
+    WHERE deleted = false
+      AND tax_id_type IS NOT NULL
+      AND tax_id_number IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_login_email_active
-ON accounts (login_email)
-WHERE deleted = false;
+-- login_email único (case-insensitive por ser CITEXT) respeitando soft-delete
+CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_login_email_not_deleted
+    ON accounts (login_email)
+    WHERE deleted = false;
 
+-- schema/slug globais (você pode manter assim; se quiser soft-delete também, me fala)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
-ON accounts (schema_name);
+    ON accounts (schema_name);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
-ON accounts (slug);
+    ON accounts (slug);
 
+-- billing_email único quando preenchido (case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_billing_email_active
-ON accounts (billing_email)
-WHERE deleted = false AND billing_email IS NOT NULL;
+    ON accounts (billing_email)
+    WHERE deleted = false AND billing_email IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_accounts_display_name
-ON accounts (display_name);
+    ON accounts (display_name);
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V3__create_table_account_entitlements.sql
@@ -16221,16 +16346,27 @@ ON accounts (display_name);
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS account_entitlements (
-  account_id BIGINT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
-  max_users INT NOT NULL,
-  max_products INT NOT NULL,
-  max_storage_mb INT NOT NULL
+    account_id      BIGINT PRIMARY KEY,
+    max_users       INTEGER NOT NULL,
+    max_products    INTEGER NOT NULL,
+    max_storage_mb  INTEGER NOT NULL DEFAULT 100,
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- (opcional) coerência básica
-ALTER TABLE account_entitlements
-    ADD CONSTRAINT chk_entitlements_positive
-    CHECK (max_users > 0 AND max_products > 0 AND max_storage_mb > 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_account_entitlements_account'
+    ) THEN
+        ALTER TABLE account_entitlements
+            ADD CONSTRAINT fk_account_entitlements_account
+            FOREIGN KEY (account_id) REFERENCES accounts(id)
+            ON DELETE CASCADE;
+    END IF;
+END $$;
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V4__create_table_controlplane_users.sql
@@ -16243,12 +16379,11 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     name VARCHAR(100) NOT NULL,
 
-    -- ✅ email é a identidade de login
-    email VARCHAR(150) NOT NULL,
+    -- ✅ email case-insensitive
+    email CITEXT NOT NULL,
     password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50) NOT NULL,
-
     account_id BIGINT NOT NULL,
 
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
@@ -16256,31 +16391,31 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
-    last_login TIMESTAMP,
+    last_login TIMESTAMPTZ,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-    locked_until TIMESTAMP,
+    locked_until TIMESTAMPTZ,
     must_change_password BOOLEAN NOT NULL DEFAULT false,
-    password_changed_at TIMESTAMP,
+    password_changed_at TIMESTAMPTZ,
 
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-    deleted_at TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
 
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     password_reset_token VARCHAR(255),
-    password_reset_expires TIMESTAMP,
+    password_reset_expires TIMESTAMPTZ,
 
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
@@ -16292,9 +16427,10 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
         CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API'))
 );
 
+-- ✅ dentro de 1 conta, email único (CITEXT já resolve case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
-ON controlplane_users (account_id, email)
-WHERE deleted = false;
+    ON controlplane_users (account_id, email)
+    WHERE deleted = false;
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V5__insert_controlplane_account.sql
@@ -16406,7 +16542,7 @@ WHERE NOT EXISTS (
     FROM controlplane_users existing
     WHERE existing.account_id = a.id
       AND existing.deleted = false
-      AND LOWER(existing.email) = LOWER(u.email)
+      AND existing.email = u.email
 );
 
 ============================================================
@@ -16439,8 +16575,8 @@ CREATE TABLE IF NOT EXISTS payments (
     account_id BIGINT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
 
-    payment_date TIMESTAMP NOT NULL,
-    valid_until TIMESTAMP,
+    payment_date TIMESTAMPTZ NOT NULL,
+    valid_until TIMESTAMPTZ,
 
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
 
@@ -16455,19 +16591,18 @@ CREATE TABLE IF NOT EXISTS payments (
     invoice_url TEXT,
     receipt_url TEXT,
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP,
-    
-    -- AUDITORIA
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT,
 
-    created_by_email VARCHAR(120),
-    updated_by_email VARCHAR(120),
-    deleted_by_email VARCHAR(120),
+    created_by_email CITEXT,
+    updated_by_email CITEXT,
+    deleted_by_email CITEXT,
 
-    refunded_at TIMESTAMP,
+    refunded_at TIMESTAMPTZ,
     refund_amount NUMERIC(10,2),
     refund_reason VARCHAR(500),
 
@@ -16476,8 +16611,8 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
-CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status);
-CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_payment_status  ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payment_date    ON payments(payment_date);
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/accounts/V9__crete_table_login_identities.sql
@@ -16485,22 +16620,19 @@ CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(payment_date);
 -- V9__crete_table_login_identities.sql
 SET search_path TO public;
 
-
 CREATE TABLE IF NOT EXISTS login_identities (
     id BIGSERIAL PRIMARY KEY,
 
-    -- citext => comparações/unique case-insensitive
     email CITEXT NOT NULL,
 
     user_type VARCHAR(20) NOT NULL, -- 'TENANT' | 'CONTROLPLANE'
     account_id BIGINT,              -- TENANT: obrigatório / CONTROLPLANE: deve ser NULL
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_login_identities_user_type
         CHECK (user_type IN ('TENANT', 'CONTROLPLANE')),
 
-    -- integridade: TENANT precisa account_id; CONTROLPLANE não pode ter
     CONSTRAINT chk_login_identities_user_type_account
         CHECK (
             (user_type = 'TENANT' AND account_id IS NOT NULL)
@@ -16512,20 +16644,17 @@ CREATE TABLE IF NOT EXISTS login_identities (
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
--- ✅ CONTROLPLANE: email único global (case-insensitive por causa do CITEXT)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_login_identity_cp_email
-ON login_identities (email)
-WHERE user_type = 'CONTROLPLANE';
+    ON login_identities (email)
+    WHERE user_type = 'CONTROLPLANE';
 
--- ✅ TENANT: email pode repetir em vários tenants, mas não pode repetir no MESMO tenant
 CREATE UNIQUE INDEX IF NOT EXISTS ux_login_identity_tenant_email_account
-ON login_identities (email, account_id)
-WHERE user_type = 'TENANT';
+    ON login_identities (email, account_id)
+    WHERE user_type = 'TENANT';
 
--- lookup por email (lista de tenants)
 CREATE INDEX IF NOT EXISTS idx_login_identities_email_tenant
-ON login_identities (email)
-WHERE user_type = 'TENANT';
+    ON login_identities (email)
+    WHERE user_type = 'TENANT';
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/tenants/V1__create_table_tenant_users.sql
@@ -16724,7 +16853,7 @@ CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE dele
 ### FILE: ./src/main/resources/db/migration/tenants/V6__create_table_products.sql
 ============================================================
 -- V6__create_table_products.sql
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name VARCHAR(200) NOT NULL,
@@ -16760,7 +16889,7 @@ CREATE TABLE products (
 
   deleted BOOLEAN NOT NULL DEFAULT false,
   deleted_at TIMESTAMP,
-  
+
   -- AUDITORIA
   created_by BIGINT,
   updated_by BIGINT,
@@ -16783,30 +16912,30 @@ CREATE TABLE products (
     CHECK (length(trim(sku)) > 0)
 );
 
-CREATE UNIQUE INDEX ux_products_sku_not_deleted
-ON products (sku)
-WHERE deleted = false;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_products_sku_not_deleted
+  ON products (sku)
+  WHERE deleted = false;
 
-CREATE INDEX idx_products_name_lower
-ON products (LOWER(name));
+CREATE INDEX IF NOT EXISTS idx_products_name_lower
+  ON products (LOWER(name));
 
-CREATE INDEX idx_products_brand_lower
-ON products (LOWER(brand));
+CREATE INDEX IF NOT EXISTS idx_products_brand_lower
+  ON products (LOWER(brand));
 
-CREATE INDEX idx_products_active_deleted
-ON products (active, deleted);
+CREATE INDEX IF NOT EXISTS idx_products_active_deleted
+  ON products (active, deleted);
 
-CREATE INDEX idx_products_supplier_id
-ON products (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_products_supplier_id
+  ON products (supplier_id);
 
-CREATE INDEX idx_products_category_id
-ON products (category_id);
+CREATE INDEX IF NOT EXISTS idx_products_category_id
+  ON products (category_id);
 
-CREATE INDEX idx_products_subcategory_id
-ON products (subcategory_id);
+CREATE INDEX IF NOT EXISTS idx_products_subcategory_id
+  ON products (subcategory_id);
 
-CREATE INDEX idx_products_created_at
-ON products (created_at);
+CREATE INDEX IF NOT EXISTS idx_products_created_at
+  ON products (created_at);
 
 ============================================================
 ### FILE: ./src/main/resources/db/migration/tenants/V7__create_table_sales.sql

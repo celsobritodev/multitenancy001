@@ -4,6 +4,7 @@ import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginAmbiguousResponse;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.api.dto.auth.TenantLoginInitRequest;
+import brito.com.multitenancy001.tenant.api.dto.auth.TenantRefreshRequest;
 import brito.com.multitenancy001.tenant.application.auth.TenantAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -55,4 +56,16 @@ public class TenantAuthController {
         JwtResponse jwtResponse = tenantAuthService.loginConfirm(req);
         return ResponseEntity.ok(jwtResponse);
     }
+    
+    
+    /**
+     * 3) refresh token
+     * - retorna novo accessToken (200)
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
+        JwtResponse jwtResponse = tenantAuthService.refresh(req.refreshToken());
+        return ResponseEntity.ok(jwtResponse);
+    }
+
 }

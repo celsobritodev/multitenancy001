@@ -261,6 +261,7 @@ public class TenantUserService {
                     accountId,
                     req.name(),
                     req.phone(),
+                    req.avatarUrl(),
                     req.locale(),
                     req.timezone(),
                     appClock.now()

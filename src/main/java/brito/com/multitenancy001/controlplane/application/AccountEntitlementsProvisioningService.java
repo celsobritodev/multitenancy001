@@ -15,18 +15,18 @@ public class AccountEntitlementsProvisioningService {
     private final AccountEntitlementsRepository accountEntitlementsRepository;
 
     @Transactional(transactionManager = "publicTransactionManager")
-    public void ensureDefaultEntitlementsForTenant(Account account) {
+    public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
         }
 
         if (account.isBuiltInAccount()) {
-            // BUILTIN não tem entitlements
-            return;
+            // BUILTIN/PLATFORM => ilimitado / não precisa persistir entitlements
+            return null;
         }
 
-        if (accountEntitlementsRepository.existsById(account.getId())) {
-            return;
+        if (accountEntitlementsRepository.existsByAccount_Id(account.getId())) {
+            return accountEntitlementsRepository.findByAccount_Id(account.getId()).orElse(null);
         }
 
         AccountEntitlements ent = AccountEntitlements.builder()
@@ -36,6 +36,6 @@ public class AccountEntitlementsProvisioningService {
                 .maxStorageMb(100)
                 .build();
 
-        accountEntitlementsRepository.save(ent);
+        return accountEntitlementsRepository.save(ent);
     }
 }

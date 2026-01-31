@@ -54,5 +54,5 @@ WHERE NOT EXISTS (
     FROM controlplane_users existing
     WHERE existing.account_id = a.id
       AND existing.deleted = false
-      AND LOWER(existing.email) = LOWER(u.email)
+      AND existing.email = u.email
 );
