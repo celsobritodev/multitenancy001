@@ -1,9 +1,10 @@
 package brito.com.multitenancy001.infrastructure.security;
 
-import brito.com.multitenancy001.controlplane.domain.user.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
-import brito.com.multitenancy001.tenant.domain.user.TenantUser;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;

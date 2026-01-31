@@ -1,5 +1,5 @@
 {
-  PROJECT_DIR="../"
+  PROJECT_DIR="../multitenancy001"
 
   echo "### PROJECT FILE INDEX"
   find "$PROJECT_DIR" -type f \
@@ -10,7 +10,7 @@
        -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
        -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
     \) \
-    | sed "s|^$PROJECT_DIR||" \
+    | sed "s|^$PROJECT_DIR/||" \
     | sort
 
   echo
@@ -28,7 +28,7 @@
     | sort \
     | while IFS= read -r f; do
         echo "============================================================"
-        echo "### FILE: ${f#$PROJECT_DIR}"
+        echo "### FILE: ${f#$PROJECT_DIR/}"
         echo "============================================================"
         sed 's/\r$//' "$f"
         echo

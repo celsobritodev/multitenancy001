@@ -24,7 +24,6 @@ public class TenantSchemaHibernateConfig {
     private final DataSource dataSource;
     private final TenantSchemaConnectionProvider tenantSchemaConnectionProvider;
     private final CurrentTenantSchemaResolver currentTenantSchemaResolver;
-
     private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "tenantEntityManagerFactory")
@@ -32,8 +31,12 @@ public class TenantSchemaHibernateConfig {
         var emf = new LocalContainerEntityManagerFactoryBean();
         emf.setDataSource(dataSource);
 
-        // Entidades do TENANT
-        emf.setPackagesToScan("brito.com.multitenancy001.tenant.domain");
+        /**
+         * Entidades do TENANT (módulo-first: tenant.users/products/categories/etc.)
+         *
+         * Obs: não use mais "brito.com.multitenancy001.tenant.domain" (não existe mais).
+         */
+        emf.setPackagesToScan("brito.com.multitenancy001.tenant");
 
         emf.setPersistenceUnitName("TENANT_PU");
         emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
@@ -42,14 +45,11 @@ public class TenantSchemaHibernateConfig {
         props.put("hibernate.hbm2ddl.auto", "none");
         props.put("hibernate.show_sql", true);
         props.put("hibernate.format_sql", true);
-     
-
 
         // ✅ Multi-tenancy por schema (strategy)
-        // (Não use AvailableSettings.MULTI_TENANT — não existe no Hibernate 6)
         props.put("hibernate.multiTenancy", "SCHEMA");
 
-        // ✅ Provider/Resolver (use constantes do Hibernate)
+        // ✅ Provider/Resolver
         props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, tenantSchemaConnectionProvider);
         props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, currentTenantSchemaResolver);
 
