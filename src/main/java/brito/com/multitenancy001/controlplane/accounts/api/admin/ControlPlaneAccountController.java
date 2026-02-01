@@ -7,7 +7,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChan
 import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.accounts.app.AccountLifecycleService;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

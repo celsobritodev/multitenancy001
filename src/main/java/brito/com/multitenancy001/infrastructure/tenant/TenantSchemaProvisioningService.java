@@ -1,8 +1,8 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
 import brito.com.multitenancy001.infrastructure.flyway.tenantschema.TenantSchemaFlywayMigrationService;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

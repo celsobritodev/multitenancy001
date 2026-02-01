@@ -6,8 +6,8 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountResolverProjection;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 

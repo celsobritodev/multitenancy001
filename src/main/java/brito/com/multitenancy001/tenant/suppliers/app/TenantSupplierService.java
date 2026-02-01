@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.suppliers.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.suppliers.domain.Supplier;
 import brito.com.multitenancy001.tenant.suppliers.persistence.TenantSupplierRepository;

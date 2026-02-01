@@ -23,8 +23,8 @@ import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
 import brito.com.multitenancy001.controlplane.signup.api.dto.SignupResponse;
 import brito.com.multitenancy001.controlplane.signup.app.AccountOnboardingService;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 

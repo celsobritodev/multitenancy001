@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.shared.api.error;
 
 import brito.com.multitenancy001.shared.domain.DomainException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import lombok.RequiredArgsConstructor;

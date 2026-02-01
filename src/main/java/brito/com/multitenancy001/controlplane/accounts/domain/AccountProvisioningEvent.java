@@ -15,8 +15,9 @@ public class AccountProvisioningEvent {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 50)
-    private String eventType;
+    private ProvisioningStatus status;
 
     @Column(name = "failure_code", length = 50)
     private String failureCode;
@@ -34,13 +35,13 @@ public class AccountProvisioningEvent {
 
     public AccountProvisioningEvent(
             Long accountId,
-            String eventType,
+            ProvisioningStatus status,
             ProvisioningFailureCode failureCode,
             String message,
             String detailsJson
     ) {
         this.accountId = accountId;
-        this.eventType = eventType;
+        this.status = status;
         this.failureCode = (failureCode == null ? null : failureCode.name());
         this.message = message;
         this.detailsJson = detailsJson;
@@ -48,4 +49,10 @@ public class AccountProvisioningEvent {
     }
 
     public Long getId() { return id; }
+    public Long getAccountId() { return accountId; }
+    public ProvisioningStatus getStatus() { return status; }
+    public String getFailureCode() { return failureCode; }
+    public String getMessage() { return message; }
+    public String getDetailsJson() { return detailsJson; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }

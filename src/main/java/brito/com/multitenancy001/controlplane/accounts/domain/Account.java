@@ -41,7 +41,7 @@ public class Account implements Auditable, SoftDeletable {
     @Enumerated(EnumType.STRING)
     @Column(name = "account_origin", nullable = false, length = 20)
     @Builder.Default
-    private EntityOrigin  origin = EntityOrigin .ADMIN;
+    private EntityOrigin  origin = EntityOrigin.ADMIN;
 
     @Column(name = "display_name", nullable = false, length = 150)
     private String displayName;
@@ -171,7 +171,7 @@ public class Account implements Auditable, SoftDeletable {
     @PrePersist
     protected void onCreate() {
 
-        if (origin == null) origin = EntityOrigin .ADMIN;
+        if (origin == null) origin = EntityOrigin.ADMIN;
 
         if (country == null || country.isBlank()) country = "Brasil";
         if (timezone == null || timezone.isBlank()) timezone = "America/Sao_Paulo";
@@ -214,7 +214,7 @@ public class Account implements Auditable, SoftDeletable {
 
     public boolean isTenantAccount() { return type == AccountType.TENANT; }
     public boolean isPlatformAccount() { return type == AccountType.PLATFORM; }
-    public boolean isBuiltInAccount() { return origin == EntityOrigin .BUILT_IN; }
+    public boolean isBuiltInAccount() { return origin == EntityOrigin.BUILT_IN; }
 
     public boolean isTrialActive(LocalDateTime now) {
         return status == AccountStatus.FREE_TRIAL
@@ -299,7 +299,7 @@ public class Account implements Auditable, SoftDeletable {
         if (newType == null) throw new DomainException("accountType is required");
         type = newType;
 
-        if (origin == EntityOrigin .BUILT_IN && type != AccountType.PLATFORM) {
+        if (origin == EntityOrigin.BUILT_IN && type != AccountType.PLATFORM) {
             throw new DomainException("BUILT_IN account must be PLATFORM");
         }
     }
@@ -308,7 +308,7 @@ public class Account implements Auditable, SoftDeletable {
         if (newOrigin == null) throw new DomainException("accountOrigin is required");
         origin = newOrigin;
 
-        if (origin == EntityOrigin .BUILT_IN) {
+        if (origin == EntityOrigin.BUILT_IN) {
             type = AccountType.PLATFORM;
             applyBuiltInDefaults();
         }

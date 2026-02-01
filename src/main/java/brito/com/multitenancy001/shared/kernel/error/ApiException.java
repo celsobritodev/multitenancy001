@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.api.error;
+package brito.com.multitenancy001.shared.kernel.error;
 
 import lombok.Getter;
 

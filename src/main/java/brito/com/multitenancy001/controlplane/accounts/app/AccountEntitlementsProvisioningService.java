@@ -3,7 +3,7 @@ package brito.com.multitenancy001.controlplane.accounts.app;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

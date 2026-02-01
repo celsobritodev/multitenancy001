@@ -11,7 +11,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapp
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 
 @Service

@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.users.api;
 
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;

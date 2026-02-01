@@ -37,9 +37,9 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_origin", nullable = false, length = 20)
     @Builder.Default
-    private EntityOrigin  origin = EntityOrigin .ADMIN;
+    private EntityOrigin  origin = EntityOrigin.ADMIN;
 
-    public boolean isBuiltInUser() { return this.origin == EntityOrigin .BUILT_IN; }
+    public boolean isBuiltInUser() { return this.origin == EntityOrigin.BUILT_IN; }
 
     @Setter(AccessLevel.NONE)
     @Column(nullable = false, length = 100)

@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.tenant.users.app;
 
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.executor.TxExecutor;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;

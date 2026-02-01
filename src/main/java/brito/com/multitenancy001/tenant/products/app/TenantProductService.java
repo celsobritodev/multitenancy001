@@ -6,7 +6,7 @@
 // ===============================
 package brito.com.multitenancy001.tenant.products.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiException;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
 import brito.com.multitenancy001.tenant.categories.domain.Subcategory;

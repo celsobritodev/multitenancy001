@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountProvisioningEvent;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
+import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountProvisioningEventRepository;
 
 @Service
@@ -21,7 +22,7 @@ public class AccountProvisioningAuditService {
     public void logStarted(Long accountId, String detailsJson) {
         repository.save(new AccountProvisioningEvent(
                 accountId,
-                "STARTED",
+                ProvisioningStatus.STARTED,
                 null,
                 "Provisioning started",
                 detailsJson
@@ -32,7 +33,7 @@ public class AccountProvisioningAuditService {
     public void logSuccess(Long accountId, String detailsJson) {
         repository.save(new AccountProvisioningEvent(
                 accountId,
-                "SUCCESS",
+                ProvisioningStatus.SUCCESS,
                 null,
                 "Provisioning succeeded",
                 detailsJson
@@ -43,7 +44,7 @@ public class AccountProvisioningAuditService {
     public void logFailure(Long accountId, ProvisioningFailureCode code, String message, String detailsJson) {
         repository.save(new AccountProvisioningEvent(
                 accountId,
-                "FAILED",
+                ProvisioningStatus.FAILED,
                 code,
                 message,
                 detailsJson

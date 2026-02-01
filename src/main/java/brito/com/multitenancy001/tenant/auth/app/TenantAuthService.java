@@ -11,15 +11,15 @@ import brito.com.multitenancy001.infrastructure.security.authorities.Authorities
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginAmbiguousResponse;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
-import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionOption;
+import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
+import brito.com.multitenancy001.tenant.auth.app.dto.TenantSelectionOptionData;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +66,6 @@ public class TenantAuthService {
 
     private static SystemRoleName toSystemRoleOrNull(Object tenantRoleEnum) {
         if (tenantRoleEnum == null) return null;
-        // ✅ assume que o enum do TenantUser tem nomes compatíveis com SystemRoleName (TENANT_*)
         return SystemRoleName.fromString(tenantRoleEnum.toString());
     }
 
@@ -74,9 +73,9 @@ public class TenantAuthService {
      * 1) INIT LOGIN
      * email + password
      * - se 1 tenant: JWT
-     * - se >1 tenant: challengeId + candidates (controller devolve 409)
+     * - se >1 tenant: TENANT_SELECTION_REQUIRED (controller devolve 409)
      */
-    public Object loginInit(TenantLoginInitRequest req) {
+    public TenantLoginResult loginInit(TenantLoginInitRequest req) {
 
         if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         if (!StringUtils.hasText(req.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
@@ -124,7 +123,8 @@ public class TenantAuthService {
         }
 
         if (validAccounts.size() == 1) {
-            return issueJwtForAccount(validAccounts.get(0), email);
+            JwtResponse jwt = issueJwtForAccount(validAccounts.get(0), email);
+            return new TenantLoginResult.LoginSuccess(jwt);
         }
 
         // 3) várias contas com senha válida -> cria challenge
@@ -136,30 +136,31 @@ public class TenantAuthService {
                 tenantLoginChallengeService.createChallenge(email, accountIds)
         );
 
-        List<TenantSelectionOption> options = validAccounts.stream()
-                .map(a -> new TenantSelectionOption(a.id(), a.displayName(), a.slug()))
+        List<TenantSelectionOptionData> details = validAccounts.stream()
+                .map(a -> new TenantSelectionOptionData(a.id(), a.displayName(), a.slug()))
                 .toList();
 
-        return new TenantLoginAmbiguousResponse(
-                "ACCOUNT_SELECTION_REQUIRED",
-                "Selecione a empresa",
-                challengeId.toString(),
-                options
-        );
+        return new TenantLoginResult.TenantSelectionRequired(challengeId.toString(), details);
     }
 
     /**
      * 2) CONFIRM LOGIN
-     * challengeId + accountId
+     * challengeId + (accountId OU slug)
      * - valida challenge (expiração + não usado)
-     * - valida accountId pertence aos candidates
+     * - valida account pertence aos candidates
      * - gera JWT sem pedir senha novamente
      */
     public JwtResponse loginConfirm(TenantLoginConfirmRequest req) {
 
         if (req == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         if (!StringUtils.hasText(req.challengeId())) throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
-        if (req.accountId() == null) throw new ApiException("INVALID_CHALLENGE", "accountId é obrigatório", 400);
+
+        boolean hasAccountId = (req.accountId() != null);
+        boolean hasSlug = StringUtils.hasText(req.slug());
+
+        if (!hasAccountId && !hasSlug) {
+            throw new ApiException("INVALID_CHALLENGE", "accountId ou slug é obrigatório", 400);
+        }
 
         UUID challengeUuid;
         try {
@@ -178,13 +179,27 @@ public class TenantAuthService {
         }
 
         Set<Long> allowed = challenge.candidateAccountIds();
-        if (allowed == null || allowed.isEmpty() || !allowed.contains(req.accountId())) {
+        if (allowed == null || allowed.isEmpty()) {
             throw new ApiException("INVALID_CHALLENGE", "challengeId inválido ou expirado", 401);
         }
 
-        AccountSnapshot account = publicExecutor.run(() ->
-                accountResolver.resolveActiveAccountById(req.accountId())
-        );
+        AccountSnapshot account;
+
+        // resolve por accountId
+        if (hasAccountId) {
+            if (!allowed.contains(req.accountId())) {
+                throw new ApiException("INVALID_CHALLENGE", "Conta não permitida para este challenge", 401);
+            }
+            account = publicExecutor.run(() -> accountResolver.resolveActiveAccountById(req.accountId()));
+        } else {
+            // resolve por slug
+            String slug = req.slug().trim();
+            account = publicExecutor.run(() -> accountResolver.resolveActiveAccountBySlug(slug));
+
+            if (!allowed.contains(account.id())) {
+                throw new ApiException("INVALID_CHALLENGE", "Conta não permitida para este challenge", 401);
+            }
+        }
 
         JwtResponse jwt = issueJwtForAccount(account, email);
 

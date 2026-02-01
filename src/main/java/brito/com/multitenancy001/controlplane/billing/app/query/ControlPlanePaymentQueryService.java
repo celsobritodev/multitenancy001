@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 import brito.com.multitenancy001.controlplane.billing.domain.Payment;
 import brito.com.multitenancy001.controlplane.billing.persistence.ControlPlanePaymentRepository;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.shared.api.error.ApiException;
 import brito.com.multitenancy001.shared.billing.PaymentQueryFacade;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 
 @Service
