@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.users.api.dto;
 
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 
 public record TenantUserDetailsResponse(
@@ -7,11 +8,13 @@ public record TenantUserDetailsResponse(
         Long accountId,
         String name,
         String email,
-        SystemRoleName  role,
+        SystemRoleName role,
         String phone,
         String avatarUrl,
         String timezone,
         String locale,
+        boolean mustChangePassword,
+        EntityOrigin origin,
         boolean suspendedByAccount,
         boolean suspendedByAdmin,
         boolean deleted,

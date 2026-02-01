@@ -68,48 +68,53 @@ public class TenantUserService {
         });
     }
 
-    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+   public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
+    Long accountId = securityUtils.getCurrentAccountId();
+    String schema = securityUtils.getCurrentSchema();
 
-        if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+    if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
 
-        String name = (req.name() == null) ? null : req.name().trim();
-        String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
+    String name = (req.name() == null) ? null : req.name().trim();
+    String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
 
-        final LinkedHashSet<String> perms =
-                (req.permissions() == null || req.permissions().isEmpty())
-                        ? null
-                        : new LinkedHashSet<>(req.permissions());
+    final LinkedHashSet<String> perms =
+            (req.permissions() == null || req.permissions().isEmpty())
+                    ? null
+                    : new LinkedHashSet<>(req.permissions());
 
-        EntityOrigin  origin = (req.origin() != null) ? req.origin() : EntityOrigin .ADMIN;
+    EntityOrigin origin = (req.origin() != null) ? req.origin() : EntityOrigin.ADMIN;
 
-        if (origin == EntityOrigin .BUILT_IN) {
-            throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
-        }
+    if (origin == EntityOrigin.BUILT_IN) {
+        throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+    }
 
-        long currentUsers = tenantExecutor.run(schema, () ->
-                tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
+    // ✅ NOVO: pega mustChangePassword do request (default false)
+    Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
+
+    long currentUsers = tenantExecutor.run(schema, () ->
+            tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
+    );
+
+    accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
+
+    return tenantExecutor.run(schema, () -> {
+        TenantUser created = tenantUserTxService.createTenantUser(
+                accountId,
+                name,
+                email,
+                req.password(),
+                req.role(),
+                req.phone(),
+                req.avatarUrl(),
+                perms,
+                mustChangePassword,
+                origin
         );
 
-        accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
+        return tenantUserApiMapper.toDetails(created);
+    });
+}
 
-        return tenantExecutor.run(schema, () -> {
-            TenantUser created = tenantUserTxService.createTenantUser(
-                    accountId,
-                    name,
-                    email,
-                    req.password(),
-                    req.role(),
-                    req.phone(),
-                    req.avatarUrl(),
-                    perms,
-                    origin
-            );
-
-            return tenantUserApiMapper.toDetails(created);
-        });
-    }
 
     /**
      * ✅ MUDOU: agora retorna wrapper com entitlements + lista.

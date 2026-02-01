@@ -35,103 +35,113 @@ public class TenantUserApiMapper {
         );
     }
 
-    public TenantUserDetailsResponse toDetails(TenantUser tenantUser) {
-        boolean enabled =
-                !tenantUser.isDeleted()
-                        && !tenantUser.isSuspendedByAccount()
-                        && !tenantUser.isSuspendedByAdmin();
+  public TenantUserDetailsResponse toDetails(TenantUser tenantUser) {
+    boolean enabled =
+            !tenantUser.isDeleted()
+                    && !tenantUser.isSuspendedByAccount()
+                    && !tenantUser.isSuspendedByAdmin();
 
-        SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
+    SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
 
-        return new TenantUserDetailsResponse(
-                tenantUser.getId(),
-                tenantUser.getAccountId(),
-                tenantUser.getName(),
-                tenantUser.getEmail(),
-                role,
-                tenantUser.getPhone(),
-                tenantUser.getAvatarUrl(),
-                tenantUser.getTimezone(),
-                tenantUser.getLocale(),
-                tenantUser.isSuspendedByAccount(),
-                tenantUser.isSuspendedByAdmin(),
-                tenantUser.isDeleted(),
-                enabled
-        );
-    }
+    return new TenantUserDetailsResponse(
+            tenantUser.getId(),
+            tenantUser.getAccountId(),
+            tenantUser.getName(),
+            tenantUser.getEmail(),
+            role,
+            tenantUser.getPhone(),
+            tenantUser.getAvatarUrl(),
+            tenantUser.getTimezone(),
+            tenantUser.getLocale(),
+            tenantUser.isMustChangePassword(),
+            tenantUser.getOrigin(),
+            tenantUser.isSuspendedByAccount(),
+            tenantUser.isSuspendedByAdmin(),
+            tenantUser.isDeleted(),
+            enabled
+    );
+}
 
-    public TenantMeResponse toMe(TenantUser tenantUser) {
-        SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
+public TenantMeResponse toMe(TenantUser tenantUser) {
+    SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
 
-        return new TenantMeResponse(
-                tenantUser.getId(),
-                tenantUser.getAccountId(),
-                tenantUser.getName(),
-                tenantUser.getEmail(),
-                role,
-                tenantUser.getPhone(),
-                tenantUser.getAvatarUrl(),
-                tenantUser.getTimezone(),
-                tenantUser.getLocale(),
-                tenantUser.isSuspendedByAccount(),
-                tenantUser.isSuspendedByAdmin(),
-                tenantUser.isDeleted(),
-                tenantUser.isEnabled()
-        );
-    }
+    boolean enabled =
+            !tenantUser.isDeleted()
+                    && !tenantUser.isSuspendedByAccount()
+                    && !tenantUser.isSuspendedByAdmin();
 
-    // =========================================================
-    // ✅ NOVOS MAPPERS PARA /api/tenant/users
-    // =========================================================
+    return new TenantMeResponse(
+            tenantUser.getId(),
+            tenantUser.getAccountId(),
+            tenantUser.getName(),
+            tenantUser.getEmail(),
+            role,
+            tenantUser.getPhone(),
+            tenantUser.getAvatarUrl(),
+            tenantUser.getTimezone(),
+            tenantUser.getLocale(),
+            tenantUser.isMustChangePassword(),
+            tenantUser.getOrigin(),
+            tenantUser.isSuspendedByAccount(),
+            tenantUser.isSuspendedByAdmin(),
+            tenantUser.isDeleted(),
+            enabled
+    );
+}
 
-    /**
-     * Para não-owner: retorna somente o básico (sem RBAC/audit).
-     */
-    public TenantUserListItemResponse toListItemBasic(TenantUser u) {
-        boolean enabled = u.isEnabled();
+/**
+ * Para não-owner: retorna somente o básico (sem RBAC/audit).
+ */
+public TenantUserListItemResponse toListItemBasic(TenantUser u) {
+    boolean enabled = u.isEnabled();
 
-        return new TenantUserListItemResponse(
-                u.getId(),
-                u.getEmail(),
-                null,
-                null,
-                null,
-                null,
-                u.isSuspendedByAccount(),
-                u.isSuspendedByAdmin(),
-                enabled
-        );
-    }
+    return new TenantUserListItemResponse(
+            u.getId(),
+            u.getEmail(),
+            null,
+            null,
+            u.isMustChangePassword(),
+            u.getOrigin(),
+            null,
+            null,
+            u.isSuspendedByAccount(),
+            u.isSuspendedByAdmin(),
+            enabled
+    );
+}
 
-    /**
-     * Para TENANT_OWNER: retorna visão rica.
-     */
-    public TenantUserListItemResponse toListItemRich(TenantUser u) {
-        boolean enabled = u.isEnabled();
+/**
+ * Para TENANT_OWNER: retorna visão rica.
+ */
+public TenantUserListItemResponse toListItemRich(TenantUser u) {
+    boolean enabled = u.isEnabled();
 
-        List<String> perms = (u.getPermissions() == null)
-                ? List.of()
-                : u.getPermissions().stream()
-                .map(Enum::name)
-                .sorted(Comparator.naturalOrder())
-                .toList();
+    List<String> perms = (u.getPermissions() == null)
+            ? List.of()
+            : u.getPermissions().stream()
+            .map(Enum::name)
+            .sorted(Comparator.naturalOrder())
+            .toList();
 
-        TenantActorRef createdBy = mapCreatedBy(u.getAudit());
+    TenantActorRef createdBy = mapCreatedBy(u.getAudit());
 
-        SystemRoleName role = toSystemRoleOrNull(u.getRole());
+    SystemRoleName role = toSystemRoleOrNull(u.getRole());
 
-        return new TenantUserListItemResponse(
-                u.getId(),
-                u.getEmail(),
-                role,
-                perms,
-                u.getLastLogin(),
-                createdBy,
-                u.isSuspendedByAccount(),
-                u.isSuspendedByAdmin(),
-                enabled
-        );
-    }
+    return new TenantUserListItemResponse(
+            u.getId(),
+            u.getEmail(),
+            role,
+            perms,
+            u.isMustChangePassword(),
+            u.getOrigin(),
+            u.getLastLogin(),
+            createdBy,
+            u.isSuspendedByAccount(),
+            u.isSuspendedByAdmin(),
+            enabled
+    );
+}
+
 
     private TenantActorRef mapCreatedBy(AuditInfo audit) {
         if (audit == null) return null;

@@ -62,83 +62,88 @@ public class TenantUserTxService {
     // CREATE
     // =========================================================
 
-    public TenantUser createTenantUser(
-            Long accountId,
-            String name,
-            String email,
-            String rawPassword,
-            TenantRole role,
-            String phone,
-            String avatarUrl,
-            LinkedHashSet<String> permissionNames,
-            EntityOrigin  origin
-    ) {
-        return txExecutor.tenantTx(() -> {
+   public TenantUser createTenantUser(
+        Long accountId,
+        String name,
+        String email,
+        String rawPassword,
+        TenantRole role,
+        String phone,
+        String avatarUrl,
+        LinkedHashSet<String> permissionNames,
+        Boolean mustChangePassword,
+        EntityOrigin origin
+) {
+    return txExecutor.tenantTx(() -> {
 
-            if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-            if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
-            if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-            if (!StringUtils.hasText(rawPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
-            if (role == null) throw new ApiException("INVALID_ROLE", "Role é obrigatória", 400);
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
+        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+        if (!StringUtils.hasText(rawPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+        if (role == null) throw new ApiException("INVALID_ROLE", "Role é obrigatória", 400);
 
-            String normEmail = email.trim().toLowerCase();
+        String normEmail = email.trim().toLowerCase();
 
-            if (!normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
-                throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
-            }
-            if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-                throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
-            }
+        if (!normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
+            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        }
+        if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+        }
 
-            boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
-            if (exists) {
-                throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
-            }
+        boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
+        if (exists) {
+            throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
+        }
 
-            TenantUser user = new TenantUser();
-            user.setAccountId(accountId);
-            user.setName(name.trim());
-            user.setEmail(normEmail);
-            user.setPassword(passwordEncoder.encode(rawPassword));
-            user.setRole(role);
+        TenantUser user = new TenantUser();
+        user.setAccountId(accountId);
+        user.setName(name.trim());
+        user.setEmail(normEmail);
+        user.setPassword(passwordEncoder.encode(rawPassword));
+        user.setRole(role);
 
-            user.setOrigin(origin == null ? EntityOrigin .ADMIN : origin);
+        user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
 
-            user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
-            user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
+        // ✅ NOVO: grava mustChangePassword (default false)
+        user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
 
-            user.setSuspendedByAccount(false);
-            user.setSuspendedByAdmin(false);
+        user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
+        user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
 
-            // Permissões: base da role + extras desejadas
-            Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
-            Set<TenantPermission> desired = new LinkedHashSet<>();
+        user.setSuspendedByAccount(false);
+        user.setSuspendedByAdmin(false);
 
-            if (permissionNames != null && !permissionNames.isEmpty()) {
-                for (String p : permissionNames) {
-                    if (!StringUtils.hasText(p)) continue;
-                    try {
-                        desired.add(TenantPermission.valueOf(p.trim()));
-                    } catch (IllegalArgumentException ex) {
-                        throw new ApiException("INVALID_PERMISSION", "Permissão inválida: " + p, 400);
-                    }
+        // Permissões: base da role + extras desejadas
+        Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
+        Set<TenantPermission> desired = new LinkedHashSet<>();
+
+        if (permissionNames != null && !permissionNames.isEmpty()) {
+            for (String p : permissionNames) {
+                if (!StringUtils.hasText(p)) continue;
+                try {
+                    desired.add(TenantPermission.valueOf(p.trim()));
+                } catch (IllegalArgumentException ex) {
+                    throw new ApiException("INVALID_PERMISSION", "Permissão inválida: " + p, 400);
                 }
             }
+        }
 
-            desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
+        desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
 
-            Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
-            finalPerms.addAll(desired);
+        Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
+        finalPerms.addAll(desired);
 
-            user.setPermissions(finalPerms);
+        user.setPermissions(finalPerms);
 
-            // defaults
-            if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
-            if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
+        // defaults
+        if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
+        if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
 
-            return tenantUserRepository.save(user);
-        });
-    }
+        return tenantUserRepository.save(user);
+    });
+}
+
 
     // =========================================================
     // READ / LIST
