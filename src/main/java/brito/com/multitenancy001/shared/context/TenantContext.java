@@ -1,10 +1,9 @@
 package brito.com.multitenancy001.shared.context;
 
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.util.StringUtils;
-
 import brito.com.multitenancy001.shared.db.Schemas;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 public class TenantContext {
@@ -34,16 +33,19 @@ public class TenantContext {
         return getOrNull() == null;
     }
 
+    /**
+     * ✅ Regra:
+     * - NÃO pode mudar tenant dentro de transação.
+     * - MAS pode chamar bind() de forma idempotente (sem mudança) dentro de transação.
+     */
     public static void bind(String tenantId) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
-        }
 
         String normalized = (tenantId != null ? tenantId.trim() : null);
         String target = StringUtils.hasText(normalized) ? normalized : null; // public = null
         String previous = getOrNull(); // já normalizado (public = null)
 
         // ✅ Sem mudança: não re-binda e evita log repetido
+        // Remember: isso pode ocorrer dentro de transação (ex.: reentrância / nested public scopes)
         if ((previous == null && target == null) || (previous != null && previous.equals(target))) {
             if (log.isDebugEnabled()) {
                 log.debug("🔄 TenantContext.bind sem mudança | thread={} | tenant={}",
@@ -51,6 +53,11 @@ public class TenantContext {
                         (target != null ? target : "PUBLIC(null)"));
             }
             return;
+        }
+
+        // 🚫 A partir daqui, há mudança REAL -> não permitir dentro de transação
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
         }
 
         // aplica mudança

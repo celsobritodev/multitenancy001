@@ -608,7 +608,7 @@
       "name": "createTenantUser",
       "item": [
         {
-          "name": "createTenantUser1",
+          "name": "createTenantUser1_foton",
           "request": {
             "auth": {
               "type": "bearer",
