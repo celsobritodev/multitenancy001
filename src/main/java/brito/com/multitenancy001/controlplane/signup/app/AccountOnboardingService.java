@@ -7,8 +7,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
-import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.app.AccountFactory;
 import brito.com.multitenancy001.controlplane.accounts.app.audit.AccountProvisioningAuditService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.CreateAccountCommand;
@@ -16,9 +14,9 @@ import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
-import brito.com.multitenancy001.controlplane.signup.api.dto.SignupResponse;
-import brito.com.multitenancy001.controlplane.signup.api.dto.TenantAdminResponse;
+import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
+import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
+import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
 import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
@@ -37,8 +35,6 @@ public class AccountOnboardingService {
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
     private static final long DEFAULT_TRIAL_DAYS = 14L;
 
-    private final AccountApiMapper accountApiMapper;
-
     private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
 
@@ -50,8 +46,8 @@ public class AccountOnboardingService {
 
     private final AccountProvisioningAuditService provisioningAuditService;
 
-    public SignupResponse createAccount(SignupRequest signupRequest) {
-        SignupData data = validateAndNormalize(signupRequest);
+    public SignupResult createAccount(SignupCommand signupCommand) {
+        SignupData data = validateAndNormalize(signupCommand);
 
         log.info("Tentando criar conta | loginEmail={}", data.loginEmail());
 
@@ -75,7 +71,6 @@ public class AccountOnboardingService {
                 return accountRepository.save(created);
             });
         } catch (RuntimeException ex) {
-            // aqui ainda não temos accountId garantido; só log normal mesmo
             log.error("❌ Falha criando Account no PUBLIC | loginEmail={}", data.loginEmail(), ex);
             throw ex;
         }
@@ -97,7 +92,6 @@ public class AccountOnboardingService {
             } catch (DataAccessException ex) {
                 throw provisioningFailed(ProvisioningFailureCode.SCHEMA_CREATION_ERROR, ex);
             } catch (RuntimeException ex) {
-                // pode ser ApiException (schema inválido) ou qualquer outra coisa
                 ProvisioningFailureCode code = (ex instanceof ApiException)
                         ? ProvisioningFailureCode.VALIDATION_ERROR
                         : ProvisioningFailureCode.UNKNOWN;
@@ -149,15 +143,13 @@ public class AccountOnboardingService {
                     finalized.getTrialEndDate()
             );
 
-            AccountResponse accountResponse = accountApiMapper.toResponse(finalized);
-
-            TenantAdminResponse tenantAdminResponse = new TenantAdminResponse(
+            TenantAdminResult tenantAdminResult = new TenantAdminResult(
                     tenantOwner.id(),
                     tenantOwner.email(),
                     tenantOwner.role()
             );
 
-            return new SignupResponse(accountResponse, tenantAdminResponse);
+            return new SignupResult(finalized, tenantAdminResult);
 
         } catch (ProvisioningFailedException wrapped) {
             ProvisioningFailureCode code = wrapped.code();
@@ -173,14 +165,12 @@ public class AccountOnboardingService {
             log.error("❌ Falha no provisioning | accountId={} | schemaName={} | code={}",
                     account.getId(), account.getSchemaName(), code, wrapped.getCause());
 
-            // mantém a causa original (para status code/handler global decidirem)
             if (wrapped.getCause() instanceof RuntimeException re) {
                 throw re;
             }
             throw wrapped;
 
         } catch (RuntimeException ex) {
-            // fallback “impossível” (mas melhor garantir)
             provisioningAuditService.logFailure(
                     account.getId(),
                     ProvisioningFailureCode.UNKNOWN,
@@ -216,17 +206,17 @@ public class AccountOnboardingService {
         });
     }
 
-    private SignupData validateAndNormalize(SignupRequest req) {
-        if (req == null) {
+    private SignupData validateAndNormalize(SignupCommand cmd) {
+        if (cmd == null) {
             throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
         }
 
-        String displayName = safeTrim(req.displayName());
+        String displayName = safeTrim(cmd.displayName());
         if (!StringUtils.hasText(displayName)) {
             throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
         }
 
-        String loginEmail = normalizeEmail(req.loginEmail());
+        String loginEmail = normalizeEmail(cmd.loginEmail());
         if (!StringUtils.hasText(loginEmail)) {
             throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
         }
@@ -234,17 +224,17 @@ public class AccountOnboardingService {
             throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         }
 
-        if (req.taxIdType() == null) {
+        if (cmd.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
-        String taxIdNumber = safeTrim(req.taxIdNumber());
+        String taxIdNumber = safeTrim(cmd.taxIdNumber());
         if (!StringUtils.hasText(taxIdNumber)) {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
-        String password = req.password();
-        String confirmPassword = req.confirmPassword();
+        String password = cmd.password();
+        String confirmPassword = cmd.confirmPassword();
 
         if (!StringUtils.hasText(password) || !StringUtils.hasText(confirmPassword)) {
             throw new ApiException("INVALID_PASSWORD", "Senha e confirmação são obrigatórias", 400);
@@ -260,12 +250,12 @@ public class AccountOnboardingService {
         }
 
         if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                taxCountryCode, req.taxIdType(), taxIdNumber
+                taxCountryCode, cmd.taxIdType(), taxIdNumber
         )) {
             throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
         }
 
-        return new SignupData(displayName, loginEmail, taxCountryCode, req.taxIdType(), taxIdNumber, password);
+        return new SignupData(displayName, loginEmail, taxCountryCode, cmd.taxIdType(), taxIdNumber, password);
     }
 
     private static String safeTrim(String s) {
@@ -353,15 +343,9 @@ public class AccountOnboardingService {
             String password
     ) {}
 
-    /**
-     * Wrapper interno para mapear o ProvisioningFailureCode sem “perder” a causa real.
-     */
     private static class ProvisioningFailedException extends RuntimeException {
-        /**
-		 * 
-		 */
-		private static final long serialVersionUID = 1L;
-		private final ProvisioningFailureCode code;
+        private static final long serialVersionUID = 1L;
+        private final ProvisioningFailureCode code;
 
         private ProvisioningFailedException(ProvisioningFailureCode code, Throwable cause) {
             super(cause);

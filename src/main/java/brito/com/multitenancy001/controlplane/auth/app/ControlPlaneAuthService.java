@@ -1,10 +1,10 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
-import brito.com.multitenancy001.controlplane.auth.api.dto.ControlPlaneAdminLoginRequest;
+import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdminLoginCommand;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
+import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -14,6 +14,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -26,53 +27,52 @@ public class ControlPlaneAuthService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final PublicExecutor publicExecutor;
 
-    public JwtResponse loginControlPlaneUser(ControlPlaneAdminLoginRequest req) {
+    public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
-        return publicExecutor.run(() -> {
+        if (cmd == null) throw new ApiException("INVALID_LOGIN", "Requisição inválida", 400);
+        if (!StringUtils.hasText(cmd.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
+        if (!StringUtils.hasText(cmd.password())) throw new ApiException("INVALID_LOGIN", "password é obrigatório", 400);
 
-            // 1) busca user (public)
+        final String email = cmd.email().trim();
+        final String password = cmd.password();
+
+        return publicExecutor.runInPublicSchema(() -> {
+
             ControlPlaneUser user = controlPlaneUserRepository
-                    .findByEmailAndDeletedFalse(req.email())
-                    .orElseThrow(() -> new ApiException(
-                            "USER_NOT_FOUND",
-                            "Usuário de plataforma não encontrado",
-                            404
-                    ));
+                    .findByEmailAndDeletedFalse(email)
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
-            // 2) regra: suspenso por conta -> bloqueia
             if (user.isSuspendedByAccount()) {
                 throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
             }
 
-            // 3) autentica (senha)
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.email(), req.password())
+                    new UsernamePasswordAuthenticationToken(email, password)
             );
 
-            // 4) tokens
+            Long accountId = user.getAccount().getId();
+
             String accessToken = jwtTokenProvider.generateControlPlaneToken(
                     authentication,
-                    user.getAccount().getId(),
+                    accountId,
                     DEFAULT_SCHEMA
             );
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
                     DEFAULT_SCHEMA,
-                    user.getAccount().getId()
+                    accountId
             );
 
-            // ✅ TIPAGEM CORRETA
-            SystemRoleName role =
-                    SystemRoleName.fromString(user.getRole().name());
+            SystemRoleName role = SystemRoleName.fromString(user.getRole().name());
 
-            return JwtResponse.forEmailLogin(
+            return new JwtResult(
                     accessToken,
                     refreshToken,
                     user.getId(),
                     user.getEmail(),
                     role,
-                    user.getAccount().getId(),
+                    accountId,
                     DEFAULT_SCHEMA
             );
         });

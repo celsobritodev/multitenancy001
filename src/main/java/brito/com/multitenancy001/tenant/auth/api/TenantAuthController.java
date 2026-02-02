@@ -1,12 +1,15 @@
 package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
+import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
+import brito.com.multitenancy001.tenant.auth.api.dto.AccountSelectionOption;
+import brito.com.multitenancy001.tenant.auth.api.dto.AccountSelectionRequiredResponse;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
-import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionOption;
-import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionRequiredResponse;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantRefreshRequest;
 import brito.com.multitenancy001.tenant.auth.app.TenantAuthService;
+import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
+import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,38 +26,52 @@ public class TenantAuthController {
 
     private final TenantAuthService tenantAuthService;
 
+    private static JwtResponse toHttp(JwtResult r) {
+        if (r == null) return null;
+        return new JwtResponse(
+                r.accessToken(),
+                r.refreshToken(),
+                r.tokenType(),
+                r.userId(),
+                r.email(),
+                r.role(),
+                r.accountId(),
+                r.tenantSchema()
+        );
+    }
+
     /**
      * 1) email + password
-     * - se 1 tenant: retorna JWT (200)
-     * - se >1 tenant: retorna TENANT_SELECTION_REQUIRED com details (409)
+     * - se 1 conta: retorna JWT (200)
+     * - se >1 conta: retorna ACCOUNT_SELECTION_REQUIRED com candidates (409)
      */
     @PostMapping("/login")
     public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
 
-        TenantLoginResult result = tenantAuthService.loginInit(req);
+        TenantLoginInitCommand cmd = new TenantLoginInitCommand(req.email(), req.password());
+        TenantLoginResult result = tenantAuthService.loginInit(cmd);
 
         if (result instanceof TenantLoginResult.LoginSuccess ok) {
-            return ResponseEntity.ok(ok.jwt());
+            return ResponseEntity.ok(toHttp(ok.jwt()));
         }
 
-        if (result instanceof TenantLoginResult.TenantSelectionRequired sel) {
-            List<TenantSelectionOption> details = sel.details().stream()
-                    .map(o -> new TenantSelectionOption(o.accountId(), o.displayName(), o.slug()))
+        if (result instanceof TenantLoginResult.AccountSelectionRequired sel) {
+            List<AccountSelectionOption> candidates = sel.candidates().stream()
+                    .map(o -> new AccountSelectionOption(o.accountId(), o.displayName(), o.slug()))
                     .toList();
 
-            TenantSelectionRequiredResponse body = new TenantSelectionRequiredResponse(
-                    "TENANT_SELECTION_REQUIRED",
-                    "Selecione a empresa",
+            AccountSelectionRequiredResponse body = new AccountSelectionRequiredResponse(
+                    "ACCOUNT_SELECTION_REQUIRED",
+                    "Selecione a conta/empresa",
                     sel.challengeId(),
-                    details
+                    candidates
             );
 
             return ResponseEntity.status(409).body(body);
         }
 
-        // não deve acontecer, mas mantém resiliência
         return ResponseEntity.internalServerError().body(
-                new TenantSelectionRequiredResponse(
+                new AccountSelectionRequiredResponse(
                         "INTERNAL_ERROR",
                         "Resposta inesperada do servidor",
                         null,
@@ -69,8 +86,14 @@ public class TenantAuthController {
      */
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
-        JwtResponse jwtResponse = tenantAuthService.loginConfirm(req);
-        return ResponseEntity.ok(jwtResponse);
+        TenantLoginConfirmCommand cmd = new TenantLoginConfirmCommand(
+                req.challengeId(),
+                req.accountId(),
+                req.slug()
+        );
+
+        JwtResult jwt = tenantAuthService.loginConfirm(cmd);
+        return ResponseEntity.ok(toHttp(jwt));
     }
 
     /**
@@ -79,7 +102,7 @@ public class TenantAuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
-        JwtResponse jwtResponse = tenantAuthService.refresh(req.refreshToken());
-        return ResponseEntity.ok(jwtResponse);
+        JwtResult jwt = tenantAuthService.refresh(req.refreshToken());
+        return ResponseEntity.ok(toHttp(jwt));
     }
 }

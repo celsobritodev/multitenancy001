@@ -59,7 +59,9 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    private Date issuedAt() { return Date.from(appClock.instant()); }
+    private Date issuedAt() {
+        return Date.from(appClock.instant());
+    }
 
     private Date expiresAtInMs(long ttlMillis) {
         Instant exp = appClock.instant().plusMillis(ttlMillis);
@@ -106,7 +108,10 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // ✅ NOVO (recomendado): refresh token com accountId
+    /**
+     * Refresh token NÃO precisa de authorities; ele serve para renovar sessão.
+     * Guardamos apenas: subject(email) + authDomain + context(tenantSchema) + accountId
+     */
     public String generateRefreshToken(String email, String context, Long accountId) {
         return Jwts.builder()
                 .subject(email)
@@ -118,9 +123,6 @@ public class JwtTokenProvider {
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
-
-   
-
 
     public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;

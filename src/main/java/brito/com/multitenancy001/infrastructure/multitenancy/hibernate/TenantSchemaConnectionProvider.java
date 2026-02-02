@@ -41,10 +41,13 @@ public class TenantSchemaConnectionProvider
     public Connection getConnection(String tenantIdentifier) throws SQLException {
 
         long threadId = Thread.currentThread().threadId();
-        String threadTenant = TenantContext.getOrDefaultPublic(); // nunca null (public quando vazio)
 
-        String effectiveTenant = StringUtils.hasText(tenantIdentifier)
-                ? tenantIdentifier
+        // ✅ TenantContext guarda tenantSchema (null = PUBLIC). Aqui nunca devolve null.
+        String threadTenantSchema = TenantContext.getOrDefaultPublic();
+
+        // ✅ Hibernate pode passar vazio/null no root/public — isso é normal.
+        String effectiveTenantSchema = StringUtils.hasText(tenantIdentifier)
+                ? tenantIdentifier.trim()
                 : DEFAULT_SCHEMA;
 
         // ✅ Log inteligente:
@@ -52,29 +55,29 @@ public class TenantSchemaConnectionProvider
         // - WARN só quando há divergência real entre tenantParam e tenantThread
         if (!StringUtils.hasText(tenantIdentifier)) {
             if (log.isDebugEnabled()) {
-                log.debug("🏠 [MT] tenantParam vazio → usando DEFAULT ({}) | thread={} | tenantThread={}",
-                        DEFAULT_SCHEMA, threadId, threadTenant);
+                log.debug("🏠 [MT] tenantParam vazio → usando DEFAULT ({}) | thread={} | tenantSchemaThread={}",
+                        DEFAULT_SCHEMA, threadId, threadTenantSchema);
             }
-        } else if (!tenantIdentifier.equals(threadTenant)) {
-            log.warn("⚠️ [MT] mismatch tenantParam vs tenantThread | thread={} | tenantParam={} | tenantThread={}",
-                    threadId, tenantIdentifier, threadTenant);
+        } else if (!effectiveTenantSchema.equals(threadTenantSchema)) {
+            log.warn("⚠️ [MT] mismatch tenantSchemaParam vs tenantSchemaThread | thread={} | tenantSchemaParam={} | tenantSchemaThread={}",
+                    threadId, effectiveTenantSchema, threadTenantSchema);
         }
 
-        validateSchemaName(effectiveTenant);
+        validateSchemaName(effectiveTenantSchema);
 
         Connection connection = dataSource.getConnection();
 
         try (Statement stmt = connection.createStatement()) {
 
-            if (!DEFAULT_SCHEMA.equals(effectiveTenant)) {
-                ensureSchemaExists(connection, effectiveTenant);
+            if (!DEFAULT_SCHEMA.equals(effectiveTenantSchema)) {
+                ensureSchemaExists(connection, effectiveTenantSchema);
 
-                String quotedTenant = quoteIdentifier(effectiveTenant);
+                String quotedTenant = quoteIdentifier(effectiveTenantSchema);
                 String quotedDefault = quoteIdentifier(DEFAULT_SCHEMA);
 
                 String setSearchPath = "SET search_path TO " + quotedTenant + ", " + quotedDefault;
-                log.info("🎯 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL={}",
-                        threadId, tenantIdentifier, threadTenant, setSearchPath);
+                log.info("🎯 [MT] getConnection | thread={} | tenantSchemaParam={} | tenantSchemaThread={} | SQL={}",
+                        threadId, effectiveTenantSchema, threadTenantSchema, setSearchPath);
 
                 stmt.execute(setSearchPath);
 
@@ -82,8 +85,8 @@ public class TenantSchemaConnectionProvider
                 String quotedDefault = quoteIdentifier(DEFAULT_SCHEMA);
 
                 String setSearchPath = "SET search_path TO " + quotedDefault + ";";
-                log.info("🏠 [MT] getConnection | thread={} | tenantParam={} | tenantThread={} | SQL={}",
-                        threadId, tenantIdentifier, threadTenant, setSearchPath);
+                log.info("🏠 [MT] getConnection | thread={} | tenantSchemaParam={} | tenantSchemaThread={} | SQL={}",
+                        threadId, effectiveTenantSchema, threadTenantSchema, setSearchPath);
 
                 stmt.execute(setSearchPath);
             }
@@ -91,54 +94,53 @@ public class TenantSchemaConnectionProvider
             return connection;
 
         } catch (SQLException e) {
-            log.error("❌ [MT] Erro configurando conexão | effectiveTenant={}", effectiveTenant, e);
+            log.error("❌ [MT] Erro configurando conexão | effectiveTenantSchema={}", effectiveTenantSchema, e);
             try { connection.close(); } catch (SQLException ignore) {}
             throw e;
         }
     }
 
- @Override
-public void releaseConnection(String tenantIdentifier, Connection connection) throws SQLException {
-    long threadId = Thread.currentThread().threadId();
+    @Override
+    public void releaseConnection(String tenantIdentifier, Connection connection) throws SQLException {
+        long threadId = Thread.currentThread().threadId();
 
-    if (connection == null) {
-        if (log.isDebugEnabled()) {
-            log.debug("🧹 [MT] releaseConnection ignorado (connection=null) | thread={} | tenantParam={}",
-                    threadId, tenantIdentifier);
+        if (connection == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("🧹 [MT] releaseConnection ignorado (connection=null) | thread={} | tenantSchemaParam={}",
+                        threadId, tenantIdentifier);
+            }
+            return;
         }
-        return;
+
+        if (connection.isClosed()) {
+            if (log.isDebugEnabled()) {
+                log.debug("🧹 [MT] releaseConnection ignorado (connection já fechada) | thread={} | tenantSchemaParam={}",
+                        threadId, tenantIdentifier);
+            }
+            return;
+        }
+
+        try (Statement stmt = connection.createStatement()) {
+            String resetSearchPath = "SET search_path TO " + quoteIdentifier(DEFAULT_SCHEMA) + ";";
+
+            if (log.isDebugEnabled()) {
+                log.debug("🧹 [MT] releaseConnection | thread={} | tenantSchemaParam={} | SQL={}",
+                        threadId, tenantIdentifier, resetSearchPath);
+            }
+
+            stmt.execute(resetSearchPath);
+
+        } catch (SQLException e) {
+            log.warn("⚠️ [MT] Falha ao resetar search_path no releaseConnection | thread={} | tenantSchemaParam={}",
+                    threadId, tenantIdentifier, e);
+        } finally {
+            connection.close();
+
+            if (log.isDebugEnabled()) {
+                log.debug("🔒 [MT] conexão fechada | thread={} | tenantSchemaParam={}", threadId, tenantIdentifier);
+            }
+        }
     }
-
-    if (connection.isClosed()) {
-        if (log.isDebugEnabled()) {
-            log.debug("🧹 [MT] releaseConnection ignorado (connection já fechada) | thread={} | tenantParam={}",
-                    threadId, tenantIdentifier);
-        }
-        return;
-    }
-
-    try (Statement stmt = connection.createStatement()) {
-        String resetSearchPath = "SET search_path TO " + quoteIdentifier(DEFAULT_SCHEMA) + ";";
-
-        if (log.isDebugEnabled()) {
-            log.debug("🧹 [MT] releaseConnection | thread={} | tenantParam={} | SQL={}",
-                    threadId, tenantIdentifier, resetSearchPath);
-        }
-
-        stmt.execute(resetSearchPath);
-
-    } catch (SQLException e) {
-        log.warn("⚠️ [MT] Falha ao resetar search_path no releaseConnection | thread={} | tenantParam={}",
-                threadId, tenantIdentifier, e);
-    } finally {
-        connection.close();
-
-        if (log.isDebugEnabled()) {
-            log.debug("🔒 [MT] conexão fechada | thread={} | tenantParam={}", threadId, tenantIdentifier);
-        }
-    }
-}
-
 
     private void ensureSchemaExists(Connection connection, String schemaName) throws SQLException {
         String quotedSchema = quoteIdentifier(schemaName);
@@ -168,6 +170,7 @@ public void releaseConnection(String tenantIdentifier, Connection connection) th
     }
 
     private String quoteIdentifier(String identifier) {
+        // Mantive simples igual ao seu, pois você já valida o regex seguro.
         return "\"" + identifier + "\"";
     }
 }

@@ -9,19 +9,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountAdminDetailsResponse;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeRequest;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeResponse;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTenantUserSummaryResponse;
-import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
-import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
+import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountTenantUserSummaryData;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
-import brito.com.multitenancy001.controlplane.signup.api.dto.SignupResponse;
 import brito.com.multitenancy001.controlplane.signup.app.AccountOnboardingService;
+import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
+import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
+import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -33,8 +31,6 @@ import lombok.RequiredArgsConstructor;
 public class AccountLifecycleService {
 
     private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
-    private final AccountApiMapper accountApiMapper;
     private final AccountRepository accountRepository;
     private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
@@ -42,64 +38,46 @@ public class AccountLifecycleService {
     private final PublicUnitOfWork publicUnitOfWork;
     private final AppClock appClock;
 
-    // =========================================================
     // 1) ONBOARDING / SIGNUP
-    // =========================================================
-
-    public SignupResponse createAccount(SignupRequest signupRequest) {
-        return accountOnboardingService.createAccount(signupRequest);
+    public SignupResult createAccount(SignupCommand signupCommand) {
+        return accountOnboardingService.createAccount(signupCommand);
     }
 
+    // 2) CONSULTAS
+    public List<Account> listAccounts() {
+        return publicUnitOfWork.readOnly(() -> accountRepository.findAllByDeletedFalse());
+    }
 
-    // =========================================================
-    // 2) CONSULTAS EXISTENTES
-    // =========================================================
-
-    public List<AccountResponse> listAccounts() {
+    public Account getAccount(Long accountId) {
         return publicUnitOfWork.readOnly(() ->
-                accountRepository.findAllByDeletedFalse()
-                        .stream()
-                        .map(accountApiMapper::toResponse)
-                        .toList()
+                accountRepository.findByIdAndDeletedFalse(accountId)
+                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
     }
 
-    public AccountResponse getAccount(Long accountId) {
-        return publicUnitOfWork.readOnly(() -> {
-            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-            return accountApiMapper.toResponse(account);
-        });
-    }
-
-    public AccountAdminDetailsResponse getAccountAdminDetails(Long accountId) {
+    public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
         return publicUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
             long totalUsers = controlPlaneUserRepository.countByAccount_IdAndDeletedFalse(accountId);
 
-            return accountAdminDetailsApiMapper.toResponse(account, null, totalUsers);
+            // admin: pegue seu critério atual (se já existia). Se não, devolve null.
+            ControlPlaneUser admin = controlPlaneUserRepository.findFirstAdminByAccountId(accountId).orElse(null);
+
+            return new AccountAdminDetailsProjection(account, admin, totalUsers);
         });
     }
 
-    // =========================================================
-    // 3) STATUS / SOFT DELETE / RESTORE (EXISTENTES)
-    // =========================================================
-
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        return accountStatusService.changeAccountStatus(accountId, req);
+    // 3) STATUS / SOFT DELETE / RESTORE
+    public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
+        return accountStatusService.changeAccountStatus(accountId, cmd);
     }
 
-    public void softDeleteAccount(Long accountId) {
-        accountStatusService.softDeleteAccount(accountId);
-    }
+    public void softDeleteAccount(Long accountId) { accountStatusService.softDeleteAccount(accountId); }
+    public void restoreAccount(Long accountId) { accountStatusService.restoreAccount(accountId); }
 
-    public void restoreAccount(Long accountId) {
-        accountStatusService.restoreAccount(accountId);
-    }
-
-    public List<AccountTenantUserSummaryResponse> listTenantUsers(Long accountId, boolean onlyOperational) {
+    public List<AccountTenantUserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
         return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
     }
 
@@ -107,153 +85,59 @@ public class AccountLifecycleService {
         accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
     }
 
-    // =========================================================
-    // 4) CONSULTAS ADMIN (PAGINAÇÃO + LIMITES)
-    // =========================================================
-
+    // 4) CONSULTAS ADMIN (paginação)
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
     private static final long MAX_CREATED_BETWEEN_DAYS = 90;
 
     private Pageable normalizePageable(Pageable pageable) {
-        if (pageable == null) {
-            return PageRequest.of(0, DEFAULT_PAGE_SIZE);
-        }
-
-        int page = Math.max(0, pageable.getPageNumber());
+        if (pageable == null) return PageRequest.of(0, DEFAULT_PAGE_SIZE);
         int size = pageable.getPageSize();
-
         if (size <= 0) size = DEFAULT_PAGE_SIZE;
         if (size > MAX_PAGE_SIZE) size = MAX_PAGE_SIZE;
-
-        return PageRequest.of(page, size, pageable.getSort());
+        return PageRequest.of(pageable.getPageNumber(), size, pageable.getSort());
     }
 
     private void assertValidCreatedBetweenRange(LocalDateTime start, LocalDateTime end) {
-        if (start == null || end == null) {
-            throw new ApiException("INVALID_DATE_RANGE", "start e end são obrigatórios", 400);
-        }
-        if (end.isBefore(start)) {
-            throw new ApiException("INVALID_DATE_RANGE", "end deve ser >= start", 400);
-        }
-
-        long days = Duration.between(start, end).toDays();
-        if (days > MAX_CREATED_BETWEEN_DAYS) {
-            throw new ApiException(
-                    "DATE_RANGE_TOO_LARGE",
-                    "Intervalo máximo permitido é de " + MAX_CREATED_BETWEEN_DAYS + " dias",
-                    400
-            );
+        if (start == null || end == null) throw new ApiException("INVALID_RANGE", "start/end são obrigatórios", 400);
+        if (end.isBefore(start)) throw new ApiException("INVALID_RANGE", "end deve ser >= start", 400);
+        Duration d = Duration.between(start, end);
+        if (d.toDays() > MAX_CREATED_BETWEEN_DAYS) {
+            throw new ApiException("RANGE_TOO_LARGE", "Intervalo máximo é " + MAX_CREATED_BETWEEN_DAYS + " dias", 400);
         }
     }
 
-    public Page<AccountResponse> listAccountsLatest(Pageable pageable) {
-        Pageable p = normalizePageable(pageable);
-
+    public Account findBySlug(String slug) {
+        if (slug == null || slug.isBlank()) throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
         return publicUnitOfWork.readOnly(() ->
-                accountRepository.findByDeletedFalseOrderByCreatedAtDesc(p)
-                        .map(accountApiMapper::toResponse)
+                accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
+                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
     }
 
-    public AccountResponse getAccountBySlugIgnoreCase(String slug) {
-        if (slug == null || slug.isBlank()) {
-            throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
-        }
-
-        return publicUnitOfWork.readOnly(() -> {
-            Account account = accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-            return accountApiMapper.toResponse(account);
-        });
-    }
-
-    public Page<AccountResponse> listAccountsByStatus(AccountStatus status, Pageable pageable) {
-        if (status == null) {
-            throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
-        }
-
+    public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
+        if (status == null) throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.findByStatusAndDeletedFalse(status, p)
-                        .map(accountApiMapper::toResponse)
-        );
+        return publicUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
     }
 
-    public Page<AccountResponse> listAccountsCreatedBetween(LocalDateTime start, LocalDateTime end, Pageable pageable) {
+    public Page<Account> listAccountsCreatedBetween(LocalDateTime start, LocalDateTime end, Pageable pageable) {
         assertValidCreatedBetweenRange(start, end);
-
         Pageable p = normalizePageable(pageable);
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.findAccountsCreatedBetween(start, end, p)
-                        .map(accountApiMapper::toResponse)
-        );
+        return publicUnitOfWork.readOnly(() -> accountRepository.findAccountsCreatedBetween(start, end, p));
     }
 
-    public Page<AccountResponse> searchAccountsByDisplayName(String term, Pageable pageable) {
-        if (term == null || term.isBlank()) {
-            throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
-        }
-
+    public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
+        if (term == null || term.isBlank()) throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.searchByDisplayName(term.trim(), p)
-                        .map(accountApiMapper::toResponse)
-        );
+        return publicUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(term, p));
     }
 
-    // =========================================================
-    // 5) QUERIES ADMIN (usar métodos do AccountRepository)
-    // =========================================================
-
-    public long countAccountsByStatus(AccountStatus status) {
-        if (status == null) {
-            throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
-        }
-        return publicUnitOfWork.readOnly(() -> accountRepository.countByStatusAndDeletedFalse(status));
-    }
-
-    public List<AccountResponse> listAccountsByStatuses(List<AccountStatus> statuses) {
-        if (statuses == null || statuses.isEmpty()) {
-            throw new ApiException("INVALID_STATUS_LIST", "statuses é obrigatório", 400);
-        }
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.findByStatuses(statuses)
-                        .stream()
-                        .map(accountApiMapper::toResponse)
-                        .toList()
-        );
-    }
-
-    public List<AccountResponse> listExpiredTrials(LocalDateTime date, AccountStatus status) {
-        LocalDateTime d = (date != null ? date : appClock.now());
-        AccountStatus st = (status != null ? status : AccountStatus.FREE_TRIAL);
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.findExpiredTrialsNotDeleted(d, st)
-                        .stream()
-                        .map(accountApiMapper::toResponse)
-                        .toList()
-        );
-    }
-
-
-    public List<AccountResponse> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
+    public List<Account> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
         LocalDateTime t = (today != null ? today : appClock.now());
         AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
-
-        return publicUnitOfWork.readOnly(() ->
-                accountRepository.findOverdueAccountsNotDeleted(st, t)
-                        .stream()
-                        .map(accountApiMapper::toResponse)
-                        .toList()
-        );
+        return publicUnitOfWork.readOnly(() -> accountRepository.findOverdueAccountsNotDeleted(st, t));
     }
-
 
     public long countOperationalAccounts() {
         return publicUnitOfWork.readOnly(accountRepository::countOperationalAccounts);

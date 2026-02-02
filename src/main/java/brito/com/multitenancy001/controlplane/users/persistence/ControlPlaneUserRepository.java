@@ -46,10 +46,41 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                AND u.role = :role
            """)
     Optional<ControlPlaneUser> findNotDeletedBuiltInOwner(@Param("accountId") Long accountId,
-                                                         @Param("origin") EntityOrigin  origin,
+                                                         @Param("origin") EntityOrigin origin,
                                                          @Param("role") ControlPlaneRole role);
 
     long countByAccount_IdAndDeletedFalse(Long accountId);
+
+    // =========================================================
+    // ADMIN (para telas de Account Admin Details)
+    // =========================================================
+
+    /**
+     * "Admin" aqui = primeiro usuário operacional (enabled) com role de maior privilégio
+     * (OWNER > ADMIN), dentro de uma conta.
+     *
+     * - Retorna Optional.empty() se não houver usuário elegível.
+     * - Não usa getSingleResult para evitar NonUniqueResultException.
+     */
+    @Query("""
+            SELECT u
+              FROM ControlPlaneUser u
+             WHERE u.account.id = :accountId
+               AND u.deleted = false
+               AND u.suspendedByAccount = false
+               AND u.suspendedByAdmin = false
+               AND u.role IN ('CONTROLPLANE_OWNER', 'CONTROLPLANE_ADMIN')
+             ORDER BY
+               CASE WHEN u.role = 'CONTROLPLANE_OWNER' THEN 0 ELSE 1 END,
+               u.id ASC
+           """)
+    List<ControlPlaneUser> findAdminsOrderedByPriority(@Param("accountId") Long accountId);
+
+    default Optional<ControlPlaneUser> findFirstAdminByAccountId(Long accountId) {
+        if (accountId == null) return Optional.empty();
+        List<ControlPlaneUser> users = findAdminsOrderedByPriority(accountId);
+        return (users == null || users.isEmpty()) ? Optional.empty() : Optional.of(users.get(0));
+    }
 
     // =========================================================
     // ENABLED = NOT DELETED + NOT suspended -> default segurança
@@ -75,7 +106,7 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
                AND u.suspendedByAdmin = false
            """)
     Optional<ControlPlaneUser> findEnabledByIdAndAccountId(@Param("id") Long id,
-                                                           @Param("accountId") Long accountId);
+                                                          @Param("accountId") Long accountId);
 
     // =========================================================
     // ANY = BYPASS consciente (inclui deleted) ⚠️

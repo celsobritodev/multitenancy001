@@ -68,53 +68,64 @@ public class TenantUserService {
         });
     }
 
-   public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
-    Long accountId = securityUtils.getCurrentAccountId();
-    String schema = securityUtils.getCurrentSchema();
+    public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
 
-    if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+        if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
 
-    String name = (req.name() == null) ? null : req.name().trim();
-    String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
+        String name = (req.name() == null) ? null : req.name().trim();
+        String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
 
-    final LinkedHashSet<String> perms =
-            (req.permissions() == null || req.permissions().isEmpty())
-                    ? null
-                    : new LinkedHashSet<>(req.permissions());
+        // ✅ NOVO: locale/timezone do request -> trim -> vazio vira null
+        String locale = (req.locale() == null) ? null : req.locale().trim();
+        if (locale != null && locale.isBlank()) locale = null;
 
-    EntityOrigin origin = (req.origin() != null) ? req.origin() : EntityOrigin.ADMIN;
+        String timezone = (req.timezone() == null) ? null : req.timezone().trim();
+        if (timezone != null && timezone.isBlank()) timezone = null;
 
-    if (origin == EntityOrigin.BUILT_IN) {
-        throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
-    }
+        final LinkedHashSet<String> perms =
+                (req.permissions() == null || req.permissions().isEmpty())
+                        ? null
+                        : new LinkedHashSet<>(req.permissions());
 
-    // ✅ NOVO: pega mustChangePassword do request (default false)
-    Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
+        EntityOrigin origin = (req.origin() != null) ? req.origin() : EntityOrigin.ADMIN;
 
-    long currentUsers = tenantExecutor.run(schema, () ->
-            tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
-    );
+        if (origin == EntityOrigin.BUILT_IN) {
+            throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+        }
 
-    accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
+        // ✅ NOVO: pega mustChangePassword do request (default false)
+        Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
 
-    return tenantExecutor.run(schema, () -> {
-        TenantUser created = tenantUserTxService.createTenantUser(
-                accountId,
-                name,
-                email,
-                req.password(),
-                req.role(),
-                req.phone(),
-                req.avatarUrl(),
-                perms,
-                mustChangePassword,
-                origin
+        long currentUsers = tenantExecutor.run(schema, () ->
+                tenantUserTxService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
         );
 
-        return tenantUserApiMapper.toDetails(created);
-    });
-}
+        accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
 
+        String finalLocale = locale;
+        String finalTimezone = timezone;
+
+        return tenantExecutor.run(schema, () -> {
+            TenantUser created = tenantUserTxService.createTenantUser(
+                    accountId,
+                    name,
+                    email,
+                    req.password(),
+                    req.role(),
+                    req.phone(),
+                    req.avatarUrl(),
+                    finalLocale,
+                    finalTimezone,
+                    perms,
+                    mustChangePassword,
+                    origin
+            );
+
+            return tenantUserApiMapper.toDetails(created);
+        });
+    }
 
     /**
      * ✅ MUDOU: agora retorna wrapper com entitlements + lista.

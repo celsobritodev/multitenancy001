@@ -2,8 +2,8 @@ package brito.com.multitenancy001.controlplane.accounts.app;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeRequest;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeResponse;
+import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
@@ -24,25 +24,18 @@ public class AccountStatusService {
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
     private final AppClock appClock;
 
-    public AccountStatusChangeResponse changeAccountStatus(Long accountId, AccountStatusChangeRequest req) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
-        }
-        if (req == null || req.status() == null) {
-            throw new ApiException("STATUS_REQUIRED", "status é obrigatório", 400);
-        }
+    public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
+        if (cmd == null || cmd.status() == null) throw new ApiException("STATUS_REQUIRED", "status é obrigatório", 400);
 
         return publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
             AccountStatus previous = account.getStatus();
 
-            AccountStatus newStatus = req.status();
+            AccountStatus newStatus = cmd.status();
             account.setStatus(newStatus);
 
-            // Mantém seu comportamento atual:
-            // - quando volta para ACTIVE, limpa deletedAt
-            // OBS: se isso não for desejado, remova este bloco e use somente restoreAccount().
             if (newStatus == AccountStatus.ACTIVE) {
                 account.setDeletedAt(null);
             }
@@ -67,25 +60,28 @@ public class AccountStatusService {
                 action = AccountStatusSideEffect.CANCELLED;
             }
 
-            return buildStatusChangeResponse(account, previous, applied, action, affected);
+            return new AccountStatusChangeResult(
+                    account.getId(),
+                    account.getStatus().name(),
+                    previous == null ? null : previous.name(),
+                    appClock.now(),
+                    account.getSchemaName(),
+                    applied,
+                    action.name(),
+                    affected
+            );
         });
     }
 
     public void softDeleteAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
-        }
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
         publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount()) {
-                throw new ApiException(
-                        "BUILTIN_ACCOUNT_PROTECTED",
-                        "Não é permitido excluir contas do sistema",
-                        403
-                );
+                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED", "Não é permitido excluir contas do sistema", 403);
             }
 
             account.softDelete(appClock.now());
@@ -96,20 +92,14 @@ public class AccountStatusService {
     }
 
     public void restoreAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
-        }
+        if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
         publicUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount() && account.isDeleted()) {
-                throw new ApiException(
-                        "BUILTIN_ACCOUNT_PROTECTED",
-                        "Contas do sistema não podem ser restauradas via este endpoint",
-                        403
-                );
+                throw new ApiException("BUILTIN_ACCOUNT_PROTECTED", "Contas do sistema não podem ser restauradas via este endpoint", 403);
             }
 
             account.restore();
@@ -120,7 +110,6 @@ public class AccountStatusService {
     }
 
     private int cancelAccount(Account account) {
-        // Mantém sua ideia de "marca deleted_at" em TX separada.
         publicUnitOfWork.requiresNew(() -> {
             account.setDeletedAt(appClock.now());
             accountRepository.save(account);
@@ -134,31 +123,6 @@ public class AccountStatusService {
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-    private AccountStatusChangeResponse buildStatusChangeResponse(
-            Account account,
-            AccountStatus previous,
-            boolean tenantUsersUpdated,
-            AccountStatusSideEffect action,
-            int count
-    ) {
-        return new AccountStatusChangeResponse(
-                account.getId(),
-                account.getStatus().name(),
-                previous == null ? null : previous.name(),
-                appClock.now(),
-                account.getSchemaName(),
-                new AccountStatusChangeResponse.SideEffects(
-                        tenantUsersUpdated,
-                        action.name(),
-                        count
-                )
-        );
-    }
-
-    /**
-     * Side effect tipado para manter padrão de consistência.
-     * Ainda é serializado como String no response (action.name()).
-     */
     private enum AccountStatusSideEffect {
         NONE,
         SUSPEND_BY_ACCOUNT,

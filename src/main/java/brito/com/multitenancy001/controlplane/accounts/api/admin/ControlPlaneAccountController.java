@@ -5,208 +5,174 @@ import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeRequest;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTenantUserSummaryResponse;
+import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
+import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.app.AccountLifecycleService;
+import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountTenantUserSummaryData;
+import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
+import brito.com.multitenancy001.controlplane.signup.api.dto.SignupResponse;
+import brito.com.multitenancy001.controlplane.signup.api.dto.TenantAdminResponse;
+import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
+import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/admin/accounts")
+@RequestMapping("/api/controlplane/accounts")
 @RequiredArgsConstructor
-@Slf4j
 public class ControlPlaneAccountController {
 
     private final AccountLifecycleService accountLifecycleService;
 
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
+    private final AccountApiMapper accountApiMapper;
+    private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
 
-    private Pageable pageableOrDefault(Pageable pageable) {
-        if (pageable == null) {
-            return PageRequest.of(0, DEFAULT_PAGE_SIZE);
-        }
+    // signup via admin (se existir)
+    @PostMapping("/signup")
+    public ResponseEntity<SignupResponse> createAccount(@Valid @RequestBody SignupRequest req) {
 
-        int page = Math.max(0, pageable.getPageNumber());
-        int size = pageable.getPageSize();
+        SignupResult result = accountLifecycleService.createAccount(new SignupCommand(
+                req.displayName(),
+                req.loginEmail(),
+                req.taxIdType(),
+                req.taxIdNumber(),
+                req.password(),
+                req.confirmPassword()
+        ));
 
-        if (size <= 0) size = DEFAULT_PAGE_SIZE;
-        if (size > MAX_PAGE_SIZE) size = MAX_PAGE_SIZE;
+        SignupResponse http = new SignupResponse(
+                accountApiMapper.toResponse(result.account()),
+                new TenantAdminResponse(
+                        result.tenantAdmin().id(),
+                        result.tenantAdmin().email(),
+                        result.tenantAdmin().role()
+                )
+        );
 
-        return PageRequest.of(page, size, pageable.getSort());
+        return ResponseEntity.status(HttpStatus.CREATED).body(http);
     }
 
-    // Lista contas (não deletadas) com paginação, ordenadas por criação (mais recentes primeiro).
-    @GetMapping("/latest")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Page<AccountResponse>> listAccountsLatest(Pageable pageable) {
-        Pageable p = pageableOrDefault(pageable);
-        return ResponseEntity.ok(accountLifecycleService.listAccountsLatest(p));
-    }
-
-    // Lista todas as contas (não deletadas) sem paginação.
     @GetMapping
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<List<AccountResponse>> listAccounts() {
-        log.info("Listando todas as contas");
-        return ResponseEntity.ok(accountLifecycleService.listAccounts());
+        List<AccountResponse> out = accountLifecycleService.listAccounts()
+                .stream().map(accountApiMapper::toResponse).toList();
+        return ResponseEntity.ok(out);
     }
 
-    // Busca uma conta (não deletada) por ID.
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<AccountResponse> getAccount(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.getAccount(id));
+    @GetMapping("/{accountId}")
+    public ResponseEntity<AccountResponse> getAccount(@PathVariable Long accountId) {
+        Account a = accountLifecycleService.getAccount(accountId);
+        return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
-    // Busca detalhes administrativos de uma conta (inclui contagem de usuários da plataforma vinculados).
-    @GetMapping("/{id}/details")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<AccountAdminDetailsResponse> getAccountDetails(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.getAccountAdminDetails(id));
+    @GetMapping("/{accountId}/admin-details")
+    public ResponseEntity<AccountAdminDetailsResponse> getAdminDetails(@PathVariable Long accountId) {
+        AccountAdminDetailsProjection p = accountLifecycleService.getAccountAdminDetails(accountId);
+        return ResponseEntity.ok(accountAdminDetailsApiMapper.toResponse(p.account(), p.admin(), p.totalUsers()));
     }
 
-    // Lista usuários TENANT vinculados à conta (opcionalmente apenas operacionais).
-    @GetMapping("/{id}/users")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listUsersByAccount(@PathVariable Long id) {
-        log.info("Listando Usuários por conta");
-        return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, false));
-    }
-
-    // Lista usuários TENANT operacionais vinculados à conta (ex.: não suspensos/operacionais conforme regra do serviço).
-    @GetMapping("/{id}/users/operational")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listOperationalUsersByAccount(@PathVariable Long id) {
-        return ResponseEntity.ok(accountLifecycleService.listTenantUsers(id, true));
-    }
-
-    // Busca uma conta (não deletada) por slug (case-insensitive).
-    @GetMapping("/by-slug/{slug}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<AccountResponse> getBySlugIgnoreCase(@PathVariable String slug) {
-        return ResponseEntity.ok(accountLifecycleService.getAccountBySlugIgnoreCase(slug));
-    }
-
-    // Lista contas por status (não deletadas) com paginação.
-    @GetMapping("/by-status/{status}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Page<AccountResponse>> listByStatus(@PathVariable AccountStatus status, Pageable pageable) {
-        Pageable p = pageableOrDefault(pageable);
-        return ResponseEntity.ok(accountLifecycleService.listAccountsByStatus(status, p));
-    }
-
-    // Lista contas por múltiplos status (não deletadas) sem paginação.
-    @GetMapping("/by-statuses")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountResponse>> listByStatuses(@RequestParam("statuses") List<AccountStatus> statuses) {
-        return ResponseEntity.ok(accountLifecycleService.listAccountsByStatuses(statuses));
-    }
-
-    // Busca contas por termo em displayName/legalName (não deletadas) com paginação explícita.
-    @GetMapping("/search")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Page<AccountResponse>> searchByDisplayName(
-            @RequestParam("term") String term,
-            @RequestParam("page") int page,
-            @RequestParam("size") int size
+    @PostMapping("/{accountId}/status")
+    public ResponseEntity<AccountStatusChangeResponse> changeStatus(
+            @PathVariable Long accountId,
+            @Valid @RequestBody AccountStatusChangeRequest req
     ) {
-        if (page < 0) page = 0;
+        AccountStatusChangeResult r = accountLifecycleService.changeAccountStatus(
+                accountId,
+                new AccountStatusChangeCommand(req.status())
+        );
 
-        if (size <= 0) {
-            throw new ApiException("INVALID_PAGINATION", "size deve ser > 0", 400);
-        }
-        if (size > MAX_PAGE_SIZE) {
-            throw new ApiException("INVALID_PAGINATION", "size máximo é " + MAX_PAGE_SIZE, 400);
-        }
+        AccountStatusChangeResponse http = new AccountStatusChangeResponse(
+                r.accountId(),
+                r.newStatus(),
+                r.previousStatus(),
+                r.changedAt(),
+                r.tenantSchema(),
+                new AccountStatusChangeResponse.SideEffects(
+                        r.tenantUsersUpdated(),
+                        r.action(),
+                        r.affectedUsers()
+                )
+        );
 
-        Pageable p = PageRequest.of(page, size);
-        return ResponseEntity.ok(accountLifecycleService.searchAccountsByDisplayName(term, p));
+        return ResponseEntity.ok(http);
     }
 
-    // Lista contas criadas entre duas datas (não deletadas) com paginação.
-    @GetMapping("/created-between")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
-            @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+    @DeleteMapping("/{accountId}")
+    public ResponseEntity<Void> softDelete(@PathVariable Long accountId) {
+        accountLifecycleService.softDeleteAccount(accountId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{accountId}/restore")
+    public ResponseEntity<Void> restore(@PathVariable Long accountId) {
+        accountLifecycleService.restoreAccount(accountId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{accountId}/tenant-users")
+    public ResponseEntity<List<AccountTenantUserSummaryResponse>> listTenantUsers(
+            @PathVariable Long accountId,
+            @RequestParam(name = "onlyOperational", defaultValue = "false") boolean onlyOperational
+    ) {
+        List<AccountTenantUserSummaryResponse> out = accountLifecycleService.listTenantUsers(accountId, onlyOperational)
+                .stream().map(ControlPlaneAccountController::toHttpTenantUser).toList();
+        return ResponseEntity.ok(out);
+    }
+
+    @PostMapping("/{accountId}/tenant-users/{userId}/suspended-by-admin")
+    public ResponseEntity<Void> setSuspendedByAdmin(
+            @PathVariable Long accountId,
+            @PathVariable Long userId,
+            @RequestParam("value") boolean value
+    ) {
+        accountLifecycleService.setUserSuspendedByAdmin(accountId, userId, value);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/by-status")
+    public ResponseEntity<Page<AccountResponse>> listByStatus(
+            @RequestParam AccountStatus status,
             Pageable pageable
     ) {
-        Pageable p = pageableOrDefault(pageable);
-        return ResponseEntity.ok(accountLifecycleService.listAccountsCreatedBetween(start, end, p));
+        return ResponseEntity.ok(accountLifecycleService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse));
     }
 
-    // Conta quantas contas (não deletadas) existem em um status.
-    @GetMapping("/count/by-status/{status}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Long> countByStatus(@PathVariable AccountStatus status) {
-        return ResponseEntity.ok(accountLifecycleService.countAccountsByStatus(status));
-    }
-
-    // Conta quantas contas operacionais existem (definição centralizada no service/repository).
-    @GetMapping("/count/operational")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Long> countOperationalAccounts() {
-        return ResponseEntity.ok(accountLifecycleService.countOperationalAccounts());
-    }
-
-    // Lista contas com trial vencido (opcionalmente informando data/status; defaults no service).
-    @GetMapping("/expired-trials")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountResponse>> listExpiredTrials(
-            @RequestParam(value = "date", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
-            @RequestParam(value = "status", required = false) AccountStatus status
+    @GetMapping("/created-between")
+    public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
+            @RequestParam("start") String startIso,
+            @RequestParam("end") String endIso,
+            Pageable pageable
     ) {
-        return ResponseEntity.ok(accountLifecycleService.listExpiredTrials(date, status));
+        LocalDateTime start = LocalDateTime.parse(startIso);
+        LocalDateTime end = LocalDateTime.parse(endIso);
+        return ResponseEntity.ok(accountLifecycleService.listAccountsCreatedBetween(start, end, pageable).map(accountApiMapper::toResponse));
     }
 
-    // Lista contas com pagamento vencido (opcionalmente informando data/status; defaults no service).
-    @GetMapping("/overdue")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountResponse>> listOverdue(
-            @RequestParam(value = "today", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime today,
-            @RequestParam(value = "status", required = false) AccountStatus status
+    @GetMapping("/search")
+    public ResponseEntity<Page<AccountResponse>> search(
+            @RequestParam("term") String term,
+            Pageable pageable
     ) {
-        return ResponseEntity.ok(accountLifecycleService.listOverdueAccounts(today, status));
+        return ResponseEntity.ok(accountLifecycleService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse));
     }
 
-    // Altera o status de uma conta e executa efeitos colaterais (ex.: suspender/reativar usuários TENANT).
-    @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyAuthority('CP_TENANT_SUSPEND','CP_TENANT_RESUME')")
-    public ResponseEntity<AccountStatusChangeResponse> changeAccountStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody AccountStatusChangeRequest accountStatusChangeRequest
-    ) {
-        return ResponseEntity.ok(accountLifecycleService.changeAccountStatus(id, accountStatusChangeRequest));
-    }
-
-    // Executa soft delete em uma conta (e efeitos colaterais associados).
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('CP_TENANT_DELETE')")
-    public ResponseEntity<Void> softDeleteAccount(@PathVariable Long id) {
-        accountLifecycleService.softDeleteAccount(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    // Restaura uma conta previamente deletada (e efeitos colaterais associados).
-    @PostMapping("/{id}/restore")
-    @PreAuthorize("hasAuthority('CP_TENANT_RESUME')")
-    public ResponseEntity<Void> restoreAccount(@PathVariable Long id) {
-        accountLifecycleService.restoreAccount(id);
-        return ResponseEntity.noContent().build();
+    private static AccountTenantUserSummaryResponse toHttpTenantUser(AccountTenantUserSummaryData d) {
+        return new AccountTenantUserSummaryResponse(
+                d.id(), d.accountId(), d.name(), d.email(), d.role(),
+                d.suspendedByAccount(), d.suspendedByAdmin(), d.enabled()
+        );
     }
 }

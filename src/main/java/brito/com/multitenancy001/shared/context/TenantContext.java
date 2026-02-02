@@ -13,7 +13,7 @@ public class TenantContext {
     private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
 
     /**
-     * ✅ Retorna o tenant REALMENTE bindado (ou null).
+     * ✅ Retorna o tenantSchema REALMENTE bindado (ou null).
      * public = null
      */
     public static String getOrNull() {
@@ -35,20 +35,20 @@ public class TenantContext {
 
     /**
      * ✅ Regra:
-     * - NÃO pode mudar tenant dentro de transação.
-     * - MAS pode chamar bind() de forma idempotente (sem mudança) dentro de transação.
+     * - NÃO pode mudar tenantSchema dentro de transação.
+     * - MAS pode chamar bindTenantSchema() de forma idempotente (sem mudança) dentro de transação.
      */
-    public static void bind(String tenantId) {
+    public static void bindTenantSchema(String tenantSchema) {
 
-        String normalized = (tenantId != null ? tenantId.trim() : null);
+        String normalized = (tenantSchema != null ? tenantSchema.trim() : null);
         String target = StringUtils.hasText(normalized) ? normalized : null; // public = null
         String previous = getOrNull(); // já normalizado (public = null)
 
         // ✅ Sem mudança: não re-binda e evita log repetido
-        // Remember: isso pode ocorrer dentro de transação (ex.: reentrância / nested public scopes)
+        // Lembre: isso pode ocorrer dentro de transação (ex.: reentrância / nested public scopes)
         if ((previous == null && target == null) || (previous != null && previous.equals(target))) {
             if (log.isDebugEnabled()) {
-                log.debug("🔄 TenantContext.bind sem mudança | thread={} | tenant={}",
+                log.debug("🔄 TenantContext.bindTenantSchema sem mudança | thread={} | tenantSchema={}",
                         Thread.currentThread().threadId(),
                         (target != null ? target : "PUBLIC(null)"));
             }
@@ -57,7 +57,7 @@ public class TenantContext {
 
         // 🚫 A partir daqui, há mudança REAL -> não permitir dentro de transação
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("🔥 TenantContext.bind chamado DENTRO de transação! tenant=" + tenantId);
+            throw new IllegalStateException("🔥 TenantContext.bindTenantSchema chamado DENTRO de transação! tenantSchema=" + tenantSchema);
         }
 
         // aplica mudança
@@ -73,7 +73,16 @@ public class TenantContext {
     }
 
     /**
-     * Remove qualquer tenant (equivalente a PUBLIC).
+     * @deprecated use {@link #bindTenantSchema(String)}.
+     * Mantido por compatibilidade: no código antigo "tenantId" na prática é "tenantSchema".
+     */
+    @Deprecated
+    public static void bind(String tenantId) {
+        bindTenantSchema(tenantId);
+    }
+
+    /**
+     * Remove qualquer tenantSchema (equivalente a PUBLIC).
      * Prefira usar publicScope()/scope() com try-with-resources.
      */
     public static void clear() {
@@ -91,17 +100,17 @@ public class TenantContext {
                 Thread.currentThread().threadId(), previous);
     }
 
-    // ✅ escopo seguro (restaura o tenant anterior ao sair)
-    public static Scope scope(String tenantId) {
+    // ✅ escopo seguro (restaura o tenantSchema anterior ao sair)
+    public static Scope scope(String tenantSchema) {
         String previous = getOrNull();
-        bind(tenantId);
+        bindTenantSchema(tenantSchema);
         return new Scope(previous);
     }
 
-    // ✅ escopo PUBLIC explícito (restaura o tenant anterior ao sair)
+    // ✅ escopo PUBLIC explícito (restaura o tenantSchema anterior ao sair)
     public static Scope publicScope() {
         String previous = getOrNull();
-        bind(null); // explícito: public = sem tenant
+        bindTenantSchema(null); // explícito: public = sem tenantSchema
         return new Scope(previous);
     }
 
@@ -116,7 +125,7 @@ public class TenantContext {
         @Override
         public void close() {
             if (!closed) {
-                TenantContext.bind(previous); // restaura exatamente o anterior
+                TenantContext.bindTenantSchema(previous); // restaura exatamente o anterior
                 closed = true;
             }
         }

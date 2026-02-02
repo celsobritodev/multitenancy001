@@ -14,37 +14,107 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
 
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
-    /**
-     * ✅ Compatibilidade: mantém os mesmos métodos estáticos que seu código já usa.
-     * Agora eles delegam ao TenantContext (fonte única).
-     */
+    // ---------------------------------------------------------------------
+    // ✅ NOVO PADRÃO (limpo, coerente)
+    // ---------------------------------------------------------------------
 
-    public static void bindTenantToCurrentThread(String tenantId) {
-        TenantContext.bind(tenantId);
+    public static void bindSchemaToCurrentThread(String tenantSchema) {
+        TenantContext.bindTenantSchema(tenantSchema);
     }
 
-    public static String resolveBoundTenantOrNull() {
-        // TenantContext.getOrNull() já devolve null quando está em PUBLIC
-        return TenantContext.getOrNull();
+    public static String resolveBoundSchemaOrNull() {
+        return TenantContext.getOrNull(); // null = PUBLIC
     }
 
-    public static String resolveBoundTenantOrDefault() {
-        String t = TenantContext.getOrNull();
-        return (t != null ? t : DEFAULT_SCHEMA);
+    public static String resolveBoundSchemaOrDefault() {
+        String schema = TenantContext.getOrNull();
+        return (schema != null ? schema : DEFAULT_SCHEMA);
     }
 
-    public static void unbindTenantFromCurrentThread() {
+    public static void unbindSchemaFromCurrentThread() {
         TenantContext.clear();
     }
 
+    // ---------------------------------------------------------------------
+    // ⚠️ COMPATIBILIDADE (NÃO USAR EM CÓDIGO NOVO)
+    // ---------------------------------------------------------------------
+
+    /**
+     * @deprecated use {@link #bindSchemaToCurrentThread(String)}.
+     */
+    @Deprecated
+    public static void bindTenantSchemaToCurrentThread(String tenantSchema) {
+        bindSchemaToCurrentThread(tenantSchema);
+    }
+
+    /**
+     * @deprecated use {@link #bindSchemaToCurrentThread(String)}.
+     */
+    @Deprecated
+    public static void bindTenantToCurrentThread(String tenantId) {
+        bindSchemaToCurrentThread(tenantId);
+    }
+
+    /**
+     * @deprecated use {@link #resolveBoundSchemaOrNull()}.
+     */
+    @Deprecated
+    public static String resolveBoundTenantSchemaOrNull() {
+        return resolveBoundSchemaOrNull();
+    }
+
+    /**
+     * @deprecated use {@link #resolveBoundSchemaOrNull()}.
+     */
+    @Deprecated
+    public static String resolveBoundTenantOrNull() {
+        return resolveBoundSchemaOrNull();
+    }
+
+    /**
+     * @deprecated use {@link #resolveBoundSchemaOrDefault()}.
+     */
+    @Deprecated
+    public static String resolveBoundTenantSchemaOrDefault() {
+        return resolveBoundSchemaOrDefault();
+    }
+
+    /**
+     * @deprecated use {@link #resolveBoundSchemaOrDefault()}.
+     */
+    @Deprecated
+    public static String resolveBoundTenantOrDefault() {
+        return resolveBoundSchemaOrDefault();
+    }
+
+    /**
+     * @deprecated use {@link #unbindSchemaFromCurrentThread()}.
+     */
+    @Deprecated
+    public static void unbindTenantSchemaFromCurrentThread() {
+        unbindSchemaFromCurrentThread();
+    }
+
+    /**
+     * @deprecated use {@link #unbindSchemaFromCurrentThread()}.
+     */
+    @Deprecated
+    public static void unbindTenantFromCurrentThread() {
+        unbindSchemaFromCurrentThread();
+    }
+
+    // ---------------------------------------------------------------------
+    // Hibernate integration
+    // ---------------------------------------------------------------------
+
     @Override
     public String resolveCurrentTenantIdentifier() {
-        String tenant = TenantContext.getOrNull(); // null = public
-        String resolved = (StringUtils.hasText(tenant) ? tenant : DEFAULT_SCHEMA);
+        String tenantSchema = TenantContext.getOrNull(); // null = public
+        String resolved = (StringUtils.hasText(tenantSchema) ? tenantSchema : DEFAULT_SCHEMA);
 
         if (log.isDebugEnabled()) {
-            log.debug("🏷️ Hibernate resolveu tenant={} (bound={}, default={})",
-                    resolved, tenant, DEFAULT_SCHEMA);
+            log.debug("🏷️ Hibernate resolveu schema={} (bound={}, default={})",
+                    resolved, tenantSchema, DEFAULT_SCHEMA);
         }
         return resolved;
     }

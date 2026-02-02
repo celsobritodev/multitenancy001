@@ -17,15 +17,55 @@ public class TenantExecutor {
         this.tenantSchemaProvisioningService = tenantSchemaProvisioningService;
     }
 
-    public <T> T run(String schemaName, Supplier<T> fn) {
-        String theSchema = (schemaName == null ? null : schemaName.trim());
+    // ---------------------------------------------------------------------
+    // ✅ NOVO PADRÃO (semântico): "schema" / "tenantSchema"
+    // ---------------------------------------------------------------------
 
-        if (theSchema == null || theSchema.isBlank() || Schemas.CONTROL_PLANE.equalsIgnoreCase(theSchema)) {
+    public <T> T runInSchema(String tenantSchema, Supplier<T> fn) {
+        return run(tenantSchema, fn);
+    }
+
+    public void runInSchema(String tenantSchema, Runnable fn) {
+        run(tenantSchema, fn);
+    }
+
+    public <T> T runInSchemaIfReady(String tenantSchema, String requiredTable, Supplier<T> fn, T defaultValue) {
+        return runIfReady(tenantSchema, requiredTable, fn, defaultValue);
+    }
+
+    public <T> T runInSchemaIfReady(String tenantSchema, String requiredTable, Supplier<T> fn) {
+        return runIfReady(tenantSchema, requiredTable, fn, null);
+    }
+
+    public void runInSchemaIfReady(String tenantSchema, String requiredTable, Runnable fn) {
+        runIfReady(tenantSchema, requiredTable, fn);
+    }
+
+    public void assertSchemaReadyOrThrow(String tenantSchema, String requiredTable) {
+        assertReadyOrThrow(tenantSchema, requiredTable);
+    }
+
+    public <T> T runInSchemaOrThrow(String tenantSchema, String requiredTable, Supplier<T> fn) {
+        return runOrThrow(tenantSchema, requiredTable, fn);
+    }
+
+    public <T> T runInSchemaOrThrow(String tenantSchema, Supplier<T> fn) {
+        return runOrThrow(tenantSchema, null, fn);
+    }
+
+    // ---------------------------------------------------------------------
+    // ✅ API ATUAL (mantida): schemaName (compat)
+    // ---------------------------------------------------------------------
+
+    public <T> T run(String schemaName, Supplier<T> fn) {
+        String tenantSchema = normalizeTenantSchemaOrNull(schemaName);
+
+        if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
             throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
         }
 
         // ✅ padronizado: nada de bind/clear manual
-        try (TenantContext.Scope ignored = TenantContext.scope(theSchema)) {
+        try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
             return fn.get();
         }
     }
@@ -37,15 +77,15 @@ public class TenantExecutor {
         });
     }
 
-    /** Retorna defaultValue se schemaName/tabela não existir (bom p/ side-effects). */
+    /** Retorna defaultValue se tenantSchema/tabela não existir (bom p/ side-effects). */
     public <T> T runIfReady(String schemaName, String requiredTable, Supplier<T> fn, T defaultValue) {
-        String s = (schemaName == null ? null : schemaName.trim());
+        String tenantSchema = normalizeTenantSchemaOrNull(schemaName);
 
-        if (s == null || s.isBlank() || Schemas.CONTROL_PLANE.equalsIgnoreCase(s)) return defaultValue;
-        if (!tenantSchemaProvisioningService.schemaExists(s)) return defaultValue;
-        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(s, requiredTable)) return defaultValue;
+        if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) return defaultValue;
+        if (!tenantSchemaProvisioningService.schemaExists(tenantSchema)) return defaultValue;
+        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(tenantSchema, requiredTable)) return defaultValue;
 
-        return run(s, fn);
+        return run(tenantSchema, fn);
     }
 
     /**
@@ -66,17 +106,17 @@ public class TenantExecutor {
         }, null);
     }
 
-    /** Lança ApiException se schemaName/tabela não existir (bom p/ endpoints admin). */
+    /** Lança ApiException se tenantSchema/tabela não existir (bom p/ endpoints admin). */
     public void assertReadyOrThrow(String schemaName, String requiredTable) {
-        String s = (schemaName == null ? null : schemaName.trim());
+        String tenantSchema = normalizeTenantSchemaOrNull(schemaName);
 
-        if (s == null || s.isBlank() || Schemas.CONTROL_PLANE.equalsIgnoreCase(s)) {
+        if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
             throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
         }
-        if (!tenantSchemaProvisioningService.schemaExists(s)) {
+        if (!tenantSchemaProvisioningService.schemaExists(tenantSchema)) {
             throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "SchemaName do tenant não existe", 404);
         }
-        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(s, requiredTable)) {
+        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(tenantSchema, requiredTable)) {
             throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela " + requiredTable + " não existe no tenant", 404);
         }
     }
@@ -89,5 +129,14 @@ public class TenantExecutor {
     // overload conveniente
     public <T> T runOrThrow(String schemaName, Supplier<T> fn) {
         return runOrThrow(schemaName, null, fn);
+    }
+
+    // ---------------------------------------------------------------------
+    // Internals
+    // ---------------------------------------------------------------------
+
+    private static String normalizeTenantSchemaOrNull(String schemaName) {
+        String s = (schemaName == null ? null : schemaName.trim());
+        return (s == null || s.isBlank()) ? null : s;
     }
 }

@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountProvisioningEventResponse;
+import brito.com.multitenancy001.controlplane.accounts.app.query.dto.AccountProvisioningEventData;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountProvisioningEvent;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningStatus;
@@ -23,13 +23,13 @@ public class AccountProvisioningEventQueryService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountProvisioningEventResponse> listByAccount(Long accountId, Pageable pageable) {
+    public Page<AccountProvisioningEventData> listByAccount(Long accountId, Pageable pageable) {
         return repository.findByAccountId(accountId, pageable)
-                .map(this::toResponse);
+                .map(this::toData);
     }
 
     @Transactional(readOnly = true)
-    public Optional<AccountProvisioningEventResponse> getLatestByAccount(
+    public Optional<AccountProvisioningEventData> getLatestByAccount(
             Long accountId,
             ProvisioningStatus requireStatus
     ) {
@@ -38,17 +38,14 @@ public class AccountProvisioningEventQueryService {
         if (requireStatus == null) {
             event = repository.findTopByAccountIdOrderByCreatedAtDesc(accountId);
         } else {
-            event = repository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(
-                    accountId,
-                    requireStatus
-            );
+            event = repository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(accountId, requireStatus);
         }
 
-        return event.map(this::toResponse);
+        return event.map(this::toData);
     }
 
-    private AccountProvisioningEventResponse toResponse(AccountProvisioningEvent e) {
-        return new AccountProvisioningEventResponse(
+    private AccountProvisioningEventData toData(AccountProvisioningEvent e) {
+        return new AccountProvisioningEventData(
                 e.getId(),
                 e.getAccountId(),
                 e.getStatus(),

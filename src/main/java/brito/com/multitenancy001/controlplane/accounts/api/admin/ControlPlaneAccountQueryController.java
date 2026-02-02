@@ -3,52 +3,46 @@ package brito.com.multitenancy001.controlplane.accounts.api.admin;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
+import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.app.query.ControlPlaneAccountQueryService;
+import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/admin/accounts/query")
+@RequestMapping("/api/controlplane/accounts/query")
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryController {
 
-    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
+    private final ControlPlaneAccountQueryService queryService;
+    private final AccountApiMapper accountApiMapper;
 
-    // AccountRepository.findEnabledById
     @GetMapping("/{id}/enabled")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
-        return ResponseEntity.ok(controlPlaneAccountQueryService.getEnabledById(id));
+        Account a = queryService.getEnabledById(id);
+        return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
-    // AccountRepository.findAnyById (inclui deleted)
-    @GetMapping("/{id}/any")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
+    @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
-        return ResponseEntity.ok(controlPlaneAccountQueryService.getAnyById(id));
+        Account a = queryService.getAnyById(id);
+        return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
-    // AccountRepository.countByStatusesAndDeletedFalse
-    // Exemplo: /api/admin/accounts/query/count?statuses=ACTIVE&statuses=FREE_TRIAL
-    @GetMapping("/count")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<Long> countByStatuses(@RequestParam List<AccountStatus> statuses) {
-        return ResponseEntity.ok(controlPlaneAccountQueryService.countByStatusesNotDeleted(statuses));
+    @PostMapping("/count")
+    public ResponseEntity<Long> countByStatuses(@RequestBody List<AccountStatus> statuses) {
+        return ResponseEntity.ok(queryService.countByStatusesNotDeleted(statuses));
     }
 
-    // AccountRepository.findByPaymentDueDateBeforeAndDeletedFalse
-    // Exemplo: /api/admin/accounts/query/payment-due/before?date=2026-01-01T00:00:00
-    @GetMapping("/payment-due/before")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ')")
-    public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date
-    ) {
-        return ResponseEntity.ok(controlPlaneAccountQueryService.findPaymentDueBeforeNotDeleted(date));
+    @GetMapping("/payment-due-before")
+    public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(@RequestParam("date") String isoDateTime) {
+        LocalDateTime date = LocalDateTime.parse(isoDateTime);
+        return ResponseEntity.ok(
+                queryService.findPaymentDueBeforeNotDeleted(date)
+                        .stream().map(accountApiMapper::toResponse).toList()
+        );
     }
 }

@@ -65,7 +65,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
 
     default long countEnabledUsersByAccount(Long accountId) {
-        return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+       return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
     }
 
     // =========================================================
