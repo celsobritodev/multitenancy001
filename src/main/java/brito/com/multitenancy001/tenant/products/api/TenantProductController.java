@@ -32,7 +32,7 @@ public class TenantProductController {
 
     // Busca produto por id (escopo: tenant).
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<ProductResponse> getById(@PathVariable UUID id) {
         Product product = tenantProductService.findById(id);
         return ResponseEntity.ok(productApiMapper.toResponse(product));
@@ -40,7 +40,7 @@ public class TenantProductController {
 
     // Lista produtos por categoria (default: somente não-deletados/ativos conforme service).
     @GetMapping("/category/{categoryId}")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByCategory(@PathVariable Long categoryId) {
         List<Product> products = tenantProductService.findByCategoryId(categoryId);
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -48,7 +48,7 @@ public class TenantProductController {
 
     // Lista produtos por categoria com flags administrativas (incluir deletados/inativos).
     @GetMapping("/category/{categoryId}/admin")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByCategoryAdmin(
             @PathVariable Long categoryId,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
@@ -60,7 +60,7 @@ public class TenantProductController {
 
     // Lista produtos por categoria e subcategoria opcional.
     @GetMapping("/category/{categoryId}/optional")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByCategoryOptionalSubcategory(
             @PathVariable Long categoryId,
             @RequestParam(value = "subcategoryId", required = false) Long subcategoryId
@@ -71,7 +71,7 @@ public class TenantProductController {
 
     // Lista produtos por subcategoria.
     @GetMapping("/subcategory/{subcategoryId}")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsBySubcategory(@PathVariable Long subcategoryId) {
         List<Product> products = tenantProductService.findBySubcategoryId(subcategoryId);
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -79,7 +79,7 @@ public class TenantProductController {
 
     // Lista produtos por marca.
     @GetMapping("/brand/{brand}")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByBrand(@PathVariable String brand) {
         List<Product> products = tenantProductService.findByBrand(brand);
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -87,7 +87,7 @@ public class TenantProductController {
 
     // Lista produtos ativos.
     @GetMapping("/active")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getActiveProducts() {
         List<Product> products = tenantProductService.findActiveProducts();
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -95,7 +95,7 @@ public class TenantProductController {
 
     // Pesquisa produtos por nome.
     @GetMapping("/name")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByName(@RequestParam("name") String name) {
         List<Product> products = tenantProductService.findByName(name);
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -103,7 +103,7 @@ public class TenantProductController {
 
     // Pesquisa produtos por nome com paginação.
     @GetMapping("/name/paged")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<Page<ProductResponse>> getProductsByNamePaged(
             @RequestParam("name") String name,
             Pageable pageable
@@ -114,7 +114,7 @@ public class TenantProductController {
 
     // Lista produtos por faixa de preço.
     @GetMapping("/price-between")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsByPriceBetween(
             @RequestParam("minPrice") BigDecimal minPrice,
             @RequestParam("maxPrice") BigDecimal maxPrice
@@ -125,7 +125,7 @@ public class TenantProductController {
 
     // Lista produtos por fornecedor.
     @GetMapping("/supplier/{supplierId}")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> getProductsBySupplier(@PathVariable UUID supplierId) {
         List<Product> products = tenantProductService.findBySupplierId(supplierId);
         return ResponseEntity.ok(products.stream().map(productApiMapper::toResponse).toList());
@@ -133,7 +133,7 @@ public class TenantProductController {
 
     // Filtra produtos por múltiplos critérios (nome/preço/estoque).
     @GetMapping("/filter")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> filterProducts(
             @RequestParam("name") String name,
             @RequestParam("minPrice") BigDecimal minPrice,
@@ -148,14 +148,14 @@ public class TenantProductController {
 
     // Retorna contagem de produtos agrupada por fornecedor.
     @GetMapping("/stats/count-by-supplier")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<SupplierProductCountResponse>> countBySupplier() {
         return ResponseEntity.ok(tenantProductService.countProductsBySupplier());
     }
 
     // Retorna o valor total do inventário (estoque * custo) do tenant.
     @GetMapping("/inventory-value")
-    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_INVENTORY_READ.name())")
     public ResponseEntity<BigDecimal> getTotalInventoryValue() {
         BigDecimal value = tenantProductService.calculateTotalInventoryValue();
         return ResponseEntity.ok(value != null ? value : BigDecimal.ZERO);
@@ -163,7 +163,7 @@ public class TenantProductController {
 
     // Retorna a contagem de produtos com estoque baixo.
     @GetMapping("/low-stock/count")
-    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_INVENTORY_READ.name())")
     public ResponseEntity<Long> countLowStockProducts(@RequestParam(defaultValue = "10") Integer threshold) {
         Long count = tenantProductService.countLowStockProducts(threshold);
         return ResponseEntity.ok(count != null ? count : 0L);
@@ -171,7 +171,7 @@ public class TenantProductController {
 
     // Alterna status ativo/inativo do produto.
     @PatchMapping("/{id}/toggle-active")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.name())")
     public ResponseEntity<ProductResponse> toggleActive(@PathVariable UUID id) {
         Product updated = tenantProductService.toggleActive(id);
         return ResponseEntity.ok(productApiMapper.toResponse(updated));
@@ -179,7 +179,7 @@ public class TenantProductController {
 
     // Atualiza o custo do produto (costPrice).
     @PatchMapping("/{id}/cost-price")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.name())")
     public ResponseEntity<ProductResponse> updateCostPrice(
             @PathVariable UUID id,
             @RequestParam BigDecimal costPrice
@@ -190,7 +190,7 @@ public class TenantProductController {
 
     // Cria produto detalhado a partir de um request DTO (upsert).
     @PostMapping("/detailed")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.name())")
     public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest req) {
 
         Product product = new Product();
@@ -227,10 +227,10 @@ public class TenantProductController {
         Product savedProduct = tenantProductService.create(product);
         return ResponseEntity.status(HttpStatus.CREATED).body(productApiMapper.toResponse(savedProduct));
     }
-    
+
     // "Any" (pode incluir deleted/inactive) - útil para telas/admin/relatórios internos
     @GetMapping("/category/{categoryId}/any")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> listAnyByCategory(@PathVariable Long categoryId) {
         return ResponseEntity.ok(
                 tenantProductService.findAnyByCategoryId(categoryId)
@@ -241,7 +241,7 @@ public class TenantProductController {
     }
 
     @GetMapping("/subcategory/{subcategoryId}/any")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> listAnyBySubcategory(@PathVariable Long subcategoryId) {
         return ResponseEntity.ok(
                 tenantProductService.findAnyBySubcategoryId(subcategoryId)
@@ -252,7 +252,7 @@ public class TenantProductController {
     }
 
     @GetMapping("/brand/{brand}/any")
-    @PreAuthorize("hasAuthority('TEN_PRODUCT_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_READ.name())")
     public ResponseEntity<List<ProductResponse>> listAnyByBrand(@PathVariable String brand) {
         return ResponseEntity.ok(
                 tenantProductService.findAnyByBrandIgnoreCase(brand)
@@ -261,5 +261,4 @@ public class TenantProductController {
                         .toList()
         );
     }
-
 }

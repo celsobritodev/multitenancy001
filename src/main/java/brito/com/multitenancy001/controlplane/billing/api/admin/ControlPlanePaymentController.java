@@ -29,7 +29,10 @@ public class ControlPlanePaymentController {
 
     // Cria/processa um pagamento manual para uma conta (cross-tenant) e aplica efeitos no billing da conta.
     @PostMapping("/by-account/{accountId}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_WRITE')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())"
+    )
     public ResponseEntity<PaymentResponse> processPaymentForAccount(
             @PathVariable Long accountId,
             @Valid @RequestBody AdminPaymentRequest body
@@ -48,21 +51,30 @@ public class ControlPlanePaymentController {
 
     // Lista pagamentos de uma conta (cross-tenant).
     @GetMapping("/by-account/{accountId}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+    )
     public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccount(accountId));
     }
 
     // Informa se existe um pagamento COMPLETED vigente para a conta (cross-tenant).
     @GetMapping("/by-account/{accountId}/active")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+    )
     public ResponseEntity<Boolean> hasCurrentPaymentAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.hasActivePayment(accountId));
     }
 
     // Verifica se um paymentId pertence a um accountId (cross-tenant).
     @GetMapping("/by-account/{accountId}/exists/{paymentId}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+    )
     public ResponseEntity<Boolean> existsByIdAndAccountId(
             @PathVariable Long accountId,
             @PathVariable Long paymentId
@@ -72,7 +84,10 @@ public class ControlPlanePaymentController {
 
     // Lista pagamentos de uma conta filtrados por status (cross-tenant).
     @GetMapping("/by-account/{accountId}/status/{status}")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+    )
     public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAndStatus(
             @PathVariable Long accountId,
             @PathVariable PaymentStatus status
@@ -82,21 +97,21 @@ public class ControlPlanePaymentController {
 
     // Busca pagamento por transactionId (admin global).
     @GetMapping("/by-transaction/{transactionId}")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<PaymentResponse> getByTransactionId(@PathVariable String transactionId) {
         return ResponseEntity.ok(controlPlanePaymentService.getPaymentByTransactionId(transactionId));
     }
 
     // Informa se existe pagamento com transactionId (admin global).
     @GetMapping("/exists/by-transaction/{transactionId}")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<Boolean> existsByTransactionId(@PathVariable String transactionId) {
         return ResponseEntity.ok(controlPlanePaymentService.existsByTransactionId(transactionId));
     }
 
     // Lista pagamentos por status cujo validUntil é anterior a uma data (admin global).
     @GetMapping("/valid-until-before")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<List<PaymentResponse>> listByValidUntilBeforeAndStatus(
             @RequestParam("date")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date,
@@ -107,14 +122,17 @@ public class ControlPlanePaymentController {
 
     // Lista pagamentos COMPLETED de uma conta, ordenados por data de pagamento (cross-tenant).
     @GetMapping("/by-account/{accountId}/completed")
-    @PreAuthorize("hasAuthority('CP_TENANT_READ') and hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+    )
     public ResponseEntity<List<PaymentResponse>> getCompletedPaymentsByAccount(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.getCompletedPaymentsByAccount(accountId));
     }
 
     // Lista pagamentos dentro de um período (admin global).
     @GetMapping("/period")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<List<PaymentResponse>> listPaymentsInPeriod(
             @RequestParam("start")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
@@ -126,7 +144,7 @@ public class ControlPlanePaymentController {
 
     // Soma a receita (pagamentos COMPLETED) no período informado (admin global).
     @GetMapping("/revenue")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<BigDecimal> getRevenue(
             @RequestParam("start")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
@@ -138,14 +156,14 @@ public class ControlPlanePaymentController {
 
     // Marca um pagamento PENDING como COMPLETED manualmente (admin global) e aplica efeitos na conta.
     @PostMapping("/{paymentId}/complete-manual")
-    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())")
     public ResponseEntity<PaymentResponse> completeManually(@PathVariable Long paymentId) {
         return ResponseEntity.ok(controlPlanePaymentService.completePaymentManually(paymentId));
     }
 
     // Reembolsa um pagamento elegível (total ou parcial) registrando o motivo (admin global).
     @PostMapping("/{paymentId}/refund")
-    @PreAuthorize("hasAuthority('CP_BILLING_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())")
     public ResponseEntity<PaymentResponse> refund(
             @PathVariable Long paymentId,
             @Valid @RequestBody RefundRequest refundRequest

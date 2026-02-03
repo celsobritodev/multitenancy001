@@ -4,130 +4,120 @@ import brito.com.multitenancy001.shared.domain.DomainException;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
+/**
+ * Validador de escopo de permissões (shared).
+ *
+ * Objetivo:
+ * - Evitar "vazamento" de permissions entre bounded contexts (TEN_ vs CP_)
+ * - FAIL-FAST: nunca aceitar permission sem prefixo
+ * - DDD/layered: shared não conhece enums concretos (somente contratos via PermissionCode)
+ *
+ * Regras:
+ * - Tenant: somente "TEN_*" é aceito (nunca CP_ e nunca sem prefixo)
+ * - ControlPlane: somente "CP_*" é aceito (nunca TEN_ e nunca sem prefixo)
+ */
 public final class PermissionScopeValidator {
 
     private PermissionScopeValidator() {}
 
     // =========================================================
-    // STRICT (recomendado): exige prefixo correto SEMPRE
+    // STRICT (String): exige prefixo correto SEMPRE
     // =========================================================
 
     public static LinkedHashSet<String> normalizeTenantStrict(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("CP_")) {
-                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
-            }
-            if (!x.startsWith("TEN_")) {
-                throw new DomainException("Permission inválida (esperado prefixo TEN_): " + x);
-            }
-            out.add(x);
-        }
-        return out;
+        return normalizeStringStrict(perms, "TEN_", "CP_", "Tenant", "Control Plane");
     }
 
     public static LinkedHashSet<String> normalizeControlPlaneStrict(Collection<String> perms) {
+        return normalizeStringStrict(perms, "CP_", "TEN_", "Control Plane", "Tenant");
+    }
+
+    /** Aliases (continua STRICT). */
+    public static LinkedHashSet<String> normalizeTenant(Collection<String> perms) {
+        return normalizeTenantStrict(perms);
+    }
+
+    public static LinkedHashSet<String> normalizeControlPlane(Collection<String> perms) {
+        return normalizeControlPlaneStrict(perms);
+    }
+
+    private static LinkedHashSet<String> normalizeStringStrict(
+            Collection<String> perms,
+            String expectedPrefix,
+            String forbiddenPrefix,
+            String expectedContextLabel,
+            String forbiddenContextLabel
+    ) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
         if (perms == null) return out;
 
         for (String p : perms) {
             if (p == null) continue;
+
             String x = p.trim();
             if (x.isEmpty()) continue;
 
-            if (x.startsWith("TEN_")) {
-                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
+            if (x.startsWith(forbiddenPrefix)) {
+                throw new DomainException("Permission de " + forbiddenContextLabel
+                        + " não é permitida no " + expectedContextLabel + ": " + x);
             }
-            if (!x.startsWith("CP_")) {
-                throw new DomainException("Permission inválida (esperado prefixo CP_): " + x);
+
+            // ✅ NUNCA aceita permissão sem prefixo
+            if (!x.startsWith(expectedPrefix)) {
+                throw new DomainException("Permission inválida (esperado prefixo " + expectedPrefix
+                        + ") no " + expectedContextLabel + ": " + x);
             }
+
             out.add(x);
         }
+
         return out;
     }
 
     // =========================================================
-    // LENIENT (legado): auto-prefixa se faltar prefixo
+    // STRICT (Tipado): enums implementando PermissionCode
     // =========================================================
 
-    public static LinkedHashSet<String> normalizeTenantLenient(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("CP_")) {
-                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
-            }
-
-            if (!x.startsWith("TEN_")) x = "TEN_" + x;
-            out.add(x);
-        }
-        return out;
-    }
-
-    public static LinkedHashSet<String> normalizeControlPlaneLenient(Collection<String> perms) {
-        LinkedHashSet<String> out = new LinkedHashSet<>();
-        if (perms == null) return out;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("TEN_")) {
-                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
-            }
-
-            if (!x.startsWith("CP_")) x = "CP_" + x;
-            out.add(x);
-        }
-        return out;
-    }
-
-    // =========================================================
-    // TIPADO (genérico) - NÃO depende de enums concretos
-    // =========================================================
-
-    /**
-     * Normaliza/valida permissões do Tenant em formato tipado (enum).
-     *
-     * Regra:
-     * - não aceita CP_*
-     * - exige prefixo TEN_*
-     *
-     * Importante:
-     * - T é inferido pelo compilador (ex.: TenantPermission).
-     * - O shared não precisa conhecer o enum concreto.
-     */
     public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> normalizeTenantPermissions(Collection<T> perms) {
+        return normalizeTypedStrict(perms, "TEN_", "CP_", "Tenant", "Control Plane");
+    }
+
+    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> normalizeControlPlanePermissions(Collection<T> perms) {
+        return normalizeTypedStrict(perms, "CP_", "TEN_", "Control Plane", "Tenant");
+    }
+
+    private static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> normalizeTypedStrict(
+            Collection<T> perms,
+            String expectedPrefix,
+            String forbiddenPrefix,
+            String expectedContextLabel,
+            String forbiddenContextLabel
+    ) {
         LinkedHashSet<T> out = new LinkedHashSet<>();
         if (perms == null) return out;
 
         for (T p : perms) {
             if (p == null) continue;
 
-            String code = p.asAuthority(); // tipado + compat com sua infra de authorities
+            String code = p.asAuthority(); // contrato shared
             if (code == null) continue;
 
             String x = code.trim();
             if (x.isEmpty()) continue;
 
-            if (x.startsWith("CP_")) {
-                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
+            if (x.startsWith(forbiddenPrefix)) {
+                throw new DomainException("Permission de " + forbiddenContextLabel
+                        + " não é permitida no " + expectedContextLabel + ": " + x);
             }
-            if (!x.startsWith("TEN_")) {
-                throw new DomainException("Permission inválida (esperado prefixo TEN_): " + x);
+
+            // ✅ NUNCA aceita permissão sem prefixo
+            if (!x.startsWith(expectedPrefix)) {
+                throw new DomainException("Permission inválida (esperado prefixo " + expectedPrefix
+                        + ") no " + expectedContextLabel + ": " + x);
             }
 
             out.add(p);
@@ -136,80 +126,85 @@ public final class PermissionScopeValidator {
         return out;
     }
 
-    /**
-     * Normaliza/valida permissões do ControlPlane em formato tipado (enum).
-     *
-     * Regra:
-     * - não aceita TEN_*
-     * - exige prefixo CP_*
-     */
-    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> normalizeControlPlanePermissions(Collection<T> perms) {
-        LinkedHashSet<T> out = new LinkedHashSet<>();
-        if (perms == null) return out;
+    // =========================================================
+    // COMPAT (métodos antigos) - agora STRICT (sem auto-prefix)
+    // =========================================================
 
-        for (T p : perms) {
+    /** Compat: valida lista string no contexto CP. */
+    public static void assertNoTenantPermissionLeak(List<String> permissions) {
+        if (permissions == null) return;
+
+        for (String p : permissions) {
             if (p == null) continue;
-
-            String code = p.asAuthority();
-            if (code == null) continue;
-
-            String x = code.trim();
+            String x = p.trim();
             if (x.isEmpty()) continue;
 
             if (x.startsWith("TEN_")) {
                 throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
             }
+
+            // ✅ também falha se vier sem prefixo
             if (!x.startsWith("CP_")) {
-                throw new DomainException("Permission inválida (esperado prefixo CP_): " + x);
+                throw new DomainException("Permission inválida no Control Plane (esperado prefixo CP_): " + x);
+            }
+        }
+    }
+
+    /** Compat: valida lista string no contexto Tenant. */
+    public static void assertNoControlPlanePermissionLeak(List<String> permissions) {
+        if (permissions == null) return;
+
+        for (String p : permissions) {
+            if (p == null) continue;
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+
+            if (x.startsWith("CP_")) {
+                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
             }
 
-            out.add(p);
+            // ✅ também falha se vier sem prefixo
+            if (!x.startsWith("TEN_")) {
+                throw new DomainException("Permission inválida no Tenant (esperado prefixo TEN_): " + x);
+            }
         }
+    }
 
-        return out;
+    public static void assertAllTenantScoped(Collection<String> permissions) {
+        assertNoControlPlanePermissionLeak(toList(permissions));
+    }
+
+    public static void assertAllControlPlaneScoped(Collection<String> permissions) {
+        assertNoTenantPermissionLeak(toList(permissions));
     }
 
     // =========================================================
-    // Aliases SEMÂNTICOS (para ficar claro no service layer)
+    // COMPAT: validate*Strict(Set<EnumPermission>)
+    //
+    // Seu TenantUserService chama validateTenantPermissionsStrict(Set<TenantPermission>)
+    // então mantemos o nome para não sair editando call-sites.
     // =========================================================
 
-    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> validateTenantPermissionsStrict(Collection<T> perms) {
+    /**
+     * Valida permissões tipadas do Tenant (TEN_*), estritamente.
+     * - Não aceita CP_*
+     * - Não aceita sem prefixo
+     */
+    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> validateTenantPermissionsStrict(Set<T> perms) {
         return normalizeTenantPermissions(perms);
     }
 
-    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> validateControlPlanePermissionsStrict(Collection<T> perms) {
+    /**
+     * Valida permissões tipadas do ControlPlane (CP_*), estritamente.
+     * - Não aceita TEN_*
+     * - Não aceita sem prefixo
+     */
+    public static <T extends Enum<T> & PermissionCode> LinkedHashSet<T> validateControlPlanePermissionsStrict(Set<T> perms) {
         return normalizeControlPlanePermissions(perms);
     }
 
-    // =========================================================
-    // Guards (assert) - úteis para service layer
-    // =========================================================
-
-    public static void assertNoTenantPermissionLeak(Collection<String> perms) {
-        if (perms == null) return;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("TEN_")) {
-                throw new DomainException("Permission de Tenant não é permitida no Control Plane: " + x);
-            }
-        }
-    }
-
-    public static void assertNoControlPlanePermissionLeak(Collection<String> perms) {
-        if (perms == null) return;
-
-        for (String p : perms) {
-            if (p == null) continue;
-            String x = p.trim();
-            if (x.isEmpty()) continue;
-
-            if (x.startsWith("CP_")) {
-                throw new DomainException("Permission de Control Plane não é permitida no Tenant: " + x);
-            }
-        }
+    private static List<String> toList(Collection<String> c) {
+        if (c == null) return List.of();
+        return c.stream().filter(Objects::nonNull).toList();
     }
 }

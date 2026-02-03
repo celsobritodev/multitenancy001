@@ -16,7 +16,7 @@ public class TenantUserAdminController {
 
     // Suspende ou reativa usuário do tenant por ação administrativa.
     @PatchMapping("/{userId}/suspend")
-    @PreAuthorize("hasAuthority('TEN_USER_SUSPEND')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_SUSPEND.name())")
     public ResponseEntity<Void> suspendUser(
             @PathVariable Long userId,
             @RequestBody TenantUserAdminSuspendRequest tenantUserAdminSuspendRequest

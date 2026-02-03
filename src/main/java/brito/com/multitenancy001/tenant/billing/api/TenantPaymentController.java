@@ -1,6 +1,5 @@
 package brito.com.multitenancy001.tenant.billing.api;
 
-
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.tenant.billing.app.TenantBillingService;
 import lombok.RequiredArgsConstructor;
@@ -18,19 +17,19 @@ public class TenantPaymentController {
     private final TenantBillingService tenantBillingService;
 
     @GetMapping("/account/{accountId}")
-    @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
     public ResponseEntity<List<PaymentResponse>> listPayments(@PathVariable Long accountId) {
         return ResponseEntity.ok(tenantBillingService.listPaymentsForAccount(accountId));
     }
 
     @GetMapping("/account/{accountId}/{paymentId}")
-    @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
     public ResponseEntity<PaymentResponse> getPayment(@PathVariable Long accountId, @PathVariable Long paymentId) {
         return ResponseEntity.ok(tenantBillingService.getPaymentForAccount(accountId, paymentId));
     }
 
     @GetMapping("/account/{accountId}/has-active")
-    @PreAuthorize("hasAuthority('TEN_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
     public ResponseEntity<Boolean> hasActive(@PathVariable Long accountId) {
         return ResponseEntity.ok(tenantBillingService.hasActivePayment(accountId));
     }

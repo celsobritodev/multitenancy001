@@ -6,6 +6,7 @@ import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.audit.AuthEventAuditService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
@@ -53,7 +54,8 @@ public class TenantAuthService {
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final AppClock appClock;
 
-
+    // ✅ NOVO (append-only auth_events)
+    private final AuthEventAuditService authEventAuditService;
 
     private static String normalizeEmailRequired(String raw) {
         String email = EmailNormalizer.normalizeOrNull(raw);
@@ -83,48 +85,87 @@ public class TenantAuthService {
         final String email = normalizeEmailRequired(cmd.email());
         final String password = cmd.password();
 
-        // PUBLIC — descobre quais contas (tenants) têm esse email cadastrado
-        List<LoginIdentityRow> candidates = publicExecutor.run(() ->
-                loginIdentityResolver.findTenantAccountsByEmail(email)
+        // ✅ trilha append-only: tentativa (não tem conta ainda)
+        authEventAuditService.record(
+                "tenant",
+                "LOGIN_INIT",
+                "ATTEMPT",
+                email,
+                null,
+                null,
+                null,
+                "{\"stage\":\"init\"}"
         );
 
-        if (candidates == null || candidates.isEmpty()) {
-            throw new BadCredentialsException(INVALID_USER_MSG);
+        try {
+            // PUBLIC — descobre quais contas (tenants) têm esse email cadastrado
+            List<LoginIdentityRow> candidates = publicExecutor.run(() ->
+                    loginIdentityResolver.findTenantAccountsByEmail(email)
+            );
+
+            if (candidates == null || candidates.isEmpty()) {
+                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                        "{\"reason\":\"no_candidates\"}");
+                throw new BadCredentialsException(INVALID_USER_MSG);
+            }
+
+            // accountIds candidatos (distinct + preserva ordem)
+            LinkedHashSet<Long> candidateAccountIds = candidates.stream()
+                    .map(LoginIdentityRow::accountId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
+            if (candidateAccountIds.isEmpty()) {
+                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                        "{\"reason\":\"empty_candidate_ids\"}");
+                throw new BadCredentialsException(INVALID_USER_MSG);
+            }
+
+            // Se só tem 1 conta, autentica direto
+            if (candidateAccountIds.size() == 1) {
+                Long accountId = candidateAccountIds.iterator().next();
+                AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
+
+                TenantLoginResult result = doTenantAuthentication(account, email, password);
+
+                // sucesso “final” do init
+                authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
+                        "{\"mode\":\"single_account\"}");
+
+                return result;
+            }
+
+            // Se tem >1 conta, cria challenge e devolve candidatos (account selection)
+            UUID challengeId = tenantLoginChallengeService.createChallenge(email, candidateAccountIds);
+
+            // você não tem findAllByIds; então resolvemos 1 a 1 com fallback seguro
+            List<AccountSelectionOptionData> selection = new ArrayList<>();
+            for (Long id : candidateAccountIds) {
+                AccountSelectionOptionData option = tryResolveOption(id);
+                selection.add(option);
+            }
+
+            authEventAuditService.record("tenant", "SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
+                    "{\"challengeId\":\"" + challengeId + "\",\"candidates\":" + candidateAccountIds.size() + "}");
+
+            return new TenantLoginResult.AccountSelectionRequired(
+                    challengeId.toString(),
+                    selection
+            );
+
+        } catch (BadCredentialsException e) {
+            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                    "{\"reason\":\"bad_credentials\"}");
+            throw e;
+        } catch (ApiException e) {
+            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                    "{\"reason\":\"api_exception\",\"code\":\"" + e.getError() + "\"}");
+            throw e;
+        } catch (Exception e) {
+            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                    "{\"reason\":\"unexpected\"}");
+            throw e;
         }
-
-        // accountIds candidatos (distinct + preserva ordem)
-        LinkedHashSet<Long> candidateAccountIds = candidates.stream()
-                .map(LoginIdentityRow::accountId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        if (candidateAccountIds.isEmpty()) {
-            throw new BadCredentialsException(INVALID_USER_MSG);
-        }
-
-        // Se só tem 1 conta, autentica direto
-        if (candidateAccountIds.size() == 1) {
-            Long accountId = candidateAccountIds.iterator().next();
-
-            AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
-
-            return doTenantAuthentication(account, email, password);
-        }
-
-        // Se tem >1 conta, cria challenge e devolve candidatos (account selection)
-        UUID challengeId = tenantLoginChallengeService.createChallenge(email, candidateAccountIds);
-
-        // você não tem findAllByIds; então resolvemos 1 a 1 com fallback seguro
-        List<AccountSelectionOptionData> selection = new ArrayList<>();
-        for (Long id : candidateAccountIds) {
-            AccountSelectionOptionData option = tryResolveOption(id);
-            selection.add(option);
-        }
-
-        return new TenantLoginResult.AccountSelectionRequired(
-                challengeId.toString(),
-                selection
-        );
     }
 
     /**
@@ -144,11 +185,17 @@ public class TenantAuthService {
         }
 
         TenantLoginChallenge challenge = tenantLoginChallengeService.requireValid(challengeId);
+        final String email = challenge.getEmail();
+
+        authEventAuditService.record("tenant", "LOGIN_CONFIRM", "ATTEMPT", email, null, null, null,
+                "{\"challengeId\":\"" + challengeId + "\"}");
 
         Long accountId = cmd.accountId();
         String slug = StringUtils.hasText(cmd.slug()) ? cmd.slug().trim() : null;
 
         if (accountId == null && slug == null) {
+            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
+                    "{\"reason\":\"missing_selection\"}");
             throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
         }
 
@@ -162,21 +209,28 @@ public class TenantAuthService {
 
         // valida que a conta selecionada estava no challenge
         if (account == null || account.id() == null) {
+            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
+                    "{\"reason\":\"account_not_found\"}");
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
 
-        // ✅ AJUSTE: seu entity expõe candidateAccountIds() (não getCandidateAccountIds())
+        // ✅ seu entity expõe candidateAccountIds()
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
+            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, account.id(), account.schemaName(),
+                    "{\"reason\":\"account_not_in_challenge\"}");
             throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
         }
 
         // marca challenge como usado (anti replay)
         tenantLoginChallengeService.markUsed(challenge);
 
-        final String email = challenge.getEmail();
+        JwtResult jwt = issueJwtForAccountAndEmail(account, email);
 
-        return issueJwtForAccountAndEmail(account, email);
+        authEventAuditService.record("tenant", "LOGIN_SUCCESS", "SUCCESS", email, jwt.userId(), account.id(), account.schemaName(),
+                "{\"mode\":\"challenge_confirm\"}");
+
+        return jwt;
     }
 
     /**
@@ -188,31 +242,44 @@ public class TenantAuthService {
             throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
         }
 
+        authEventAuditService.record("tenant", "TOKEN_REFRESH", "ATTEMPT", null, null, null, null,
+                "{\"stage\":\"start\"}");
+
         if (!jwtTokenProvider.validateToken(refreshToken)) {
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+                    "{\"reason\":\"invalid_token\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         String authDomain = jwtTokenProvider.getAuthDomain(refreshToken);
         if (!SecurityConstants.AuthDomains.REFRESH.equals(authDomain)) {
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+                    "{\"reason\":\"invalid_auth_domain\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
         if (!StringUtils.hasText(tenantSchema)) {
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+                    "{\"reason\":\"missing_tenant_schema\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         String email = EmailNormalizer.normalizeOrNull(jwtTokenProvider.getEmailFromToken(refreshToken));
         if (!StringUtils.hasText(email)) {
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, tenantSchema,
+                    "{\"reason\":\"missing_email\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
         if (accountId == null) {
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", email, null, null, tenantSchema,
+                    "{\"reason\":\"missing_account_id\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
         }
 
-        return tenantExecutor.run(tenantSchema, () -> {
+        JwtResult result = tenantExecutor.run(tenantSchema, () -> {
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
@@ -223,7 +290,7 @@ public class TenantAuthService {
             }
 
             // grava last_login também no refresh
-            tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
@@ -259,6 +326,11 @@ public class TenantAuthService {
                     tenantSchema
             );
         });
+
+        authEventAuditService.record("tenant", "TOKEN_REFRESH", "SUCCESS", result.email(), result.userId(), result.accountId(), result.tenantSchema(),
+                "{\"stage\":\"completed\"}");
+
+        return result;
     }
 
     // =========================================================
@@ -307,7 +379,7 @@ public class TenantAuthService {
                     throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
                 }
 
-                tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
+                tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
 
                 var authorities = AuthoritiesFactory.forTenant(user);
 
@@ -344,15 +416,27 @@ public class TenantAuthService {
                         tenantSchema
                 );
 
+                // ✅ trilha append-only
+                authEventAuditService.record("tenant", "LOGIN_SUCCESS", "SUCCESS", user.getEmail(), user.getId(), account.id(), tenantSchema,
+                        "{\"mode\":\"password\"}");
+
                 return new TenantLoginResult.LoginSuccess(jwt);
             });
         } catch (BadCredentialsException e) {
+            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+                    "{\"reason\":\"bad_credentials\"}");
             throw e;
         } catch (UsernameNotFoundException e) {
+            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+                    "{\"reason\":\"user_not_found\"}");
             throw new BadCredentialsException(INVALID_USER_MSG);
         } catch (InternalAuthenticationServiceException e) {
+            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+                    "{\"reason\":\"internal_auth\"}");
             throw new BadCredentialsException(INVALID_USER_MSG);
         } catch (Exception e) {
+            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+                    "{\"reason\":\"unexpected\"}");
             throw new ApiException("AUTH_ERROR", "Falha ao autenticar", 500);
         }
     }
@@ -377,7 +461,7 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 

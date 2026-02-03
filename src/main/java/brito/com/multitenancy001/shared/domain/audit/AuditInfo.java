@@ -1,25 +1,33 @@
 package brito.com.multitenancy001.shared.domain.audit;
 
-import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 
 @Getter
 @Embeddable
 @NoArgsConstructor
 public class AuditInfo {
 
-    /**
-     * IMPORTANTE:
-     * - As colunas created_by_email / updated_by_email / deleted_by_email
-     *   estão padronizadas como CITEXT (case-insensitive) no Postgres.
-     * - Mesmo assim, mantemos limite lógico de 120 chars para proteger persistência
-     *   e padronizar payloads.
-     */
     private static final int AUDIT_EMAIL_MAX_LEN = 120;
 
+    // ===== TEMPO (padronizado: Instant <-> TIMESTAMPTZ)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "timestamptz")
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false, columnDefinition = "timestamptz")
+    private Instant updatedAt;
+
+    @Column(name = "deleted_at", columnDefinition = "timestamptz")
+    private Instant deletedAt;
+
+    // ===== ATOR
     @Column(name = "created_by")
     private Long createdBy;
 
@@ -38,7 +46,12 @@ public class AuditInfo {
     @Column(name = "deleted_by_email", length = AUDIT_EMAIL_MAX_LEN)
     private String deletedByEmail;
 
-    public void onCreate(AuditActor actor) {
+    public void onCreate(AuditActor actor, Instant now) {
+        if (now == null) return;
+
+        if (this.createdAt == null) this.createdAt = now;
+        this.updatedAt = now;
+
         if (actor == null) return;
 
         if (this.createdBy == null) this.createdBy = actor.userId();
@@ -48,14 +61,24 @@ public class AuditInfo {
         this.updatedByEmail = safeEmail(actor.email());
     }
 
-    public void onUpdate(AuditActor actor) {
+    public void onUpdate(AuditActor actor, Instant now) {
+        if (now == null) return;
+
+        // nunca mexe createdAt em update
+        if (this.createdAt == null) this.createdAt = now; // proteção (caso entidade legado)
+        this.updatedAt = now;
+
         if (actor == null) return;
 
         this.updatedBy = actor.userId();
         this.updatedByEmail = safeEmail(actor.email());
     }
 
-    public void onDelete(AuditActor actor) {
+    public void onDelete(AuditActor actor, Instant now) {
+        if (now == null) return;
+
+        if (this.deletedAt == null) this.deletedAt = now;
+
         if (actor == null) return;
 
         this.deletedBy = actor.userId();

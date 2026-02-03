@@ -11,6 +11,7 @@ import java.util.Set;
  * Regras:
  * - sempre devolve Set imutável
  * - toda role deve estar mapeada explicitamente (evita "role nova = permissão vazia" por acidente)
+ * - FAIL-FAST: role sem mapeamento explode na inicialização e/ou no uso
  */
 public final class ControlPlaneRolePermissions {
 
@@ -59,11 +60,27 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_BILLING_READ,
                 ControlPlanePermission.CP_USER_READ
         )));
+
+        // FAIL-FAST: garante que todas as roles do enum estão mapeadas.
+        assertAllRolesMapped();
     }
 
     public static Set<ControlPlanePermission> permissionsFor(ControlPlaneRole role) {
         if (role == null) return Set.of();
-        return MAP.getOrDefault(role, Set.of());
+
+        Set<ControlPlanePermission> perms = MAP.get(role);
+        if (perms == null) {
+            throw new IllegalStateException("CONTROLPLANE_ROLE_NOT_MAPPED: " + role);
+        }
+        return perms;
+    }
+
+    private static void assertAllRolesMapped() {
+        for (ControlPlaneRole r : ControlPlaneRole.values()) {
+            if (!MAP.containsKey(r)) {
+                throw new IllegalStateException("CONTROLPLANE_ROLE_NOT_MAPPED_IN_MATRIX: " + r);
+            }
+        }
     }
 
     private static Set<ControlPlanePermission> unmodifiable(EnumSet<ControlPlanePermission> set) {

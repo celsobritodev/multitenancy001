@@ -26,28 +26,28 @@ public class TenantUserController {
 
     // ✅ Lista usuários do tenant (visão rica para TENANT_OWNER)
     @GetMapping
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
     public ResponseEntity<TenantUsersListResponse> listTenantUsers() {
         return ResponseEntity.ok(tenantUserFacade.listTenantUsers());
     }
 
     // Lista usuários ativos do tenant.
     @GetMapping("/enabled")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
     public ResponseEntity<List<TenantUserSummaryResponse>> listEnabledTenantUsers() {
         return ResponseEntity.ok(tenantUserFacade.listEnabledTenantUsers());
     }
 
     // Busca detalhes de um usuário do tenant por id.
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
     public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
         return ResponseEntity.ok(tenantUserFacade.getTenantUser(userId));
     }
 
     // Cria usuário no tenant.
     @PostMapping
-    @PreAuthorize("hasAuthority('TEN_USER_CREATE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_CREATE.name())")
     public ResponseEntity<TenantUserDetailsResponse> createTenantUser(
             @Valid @RequestBody TenantUserCreateRequest tenantUserCreateRequest
     ) {
@@ -57,7 +57,7 @@ public class TenantUserController {
 
     // Transfere a propriedade/admin (owner) do tenant para o usuário informado.
     @PatchMapping("/{userId}/transfer-admin")
-    @PreAuthorize("hasAuthority('TEN_ROLE_TRANSFER')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_ROLE_TRANSFER.name())")
     public ResponseEntity<Void> transferTenantOwner(@PathVariable Long userId) {
         tenantUserFacade.transferTenantOwner(userId);
         return ResponseEntity.noContent().build();
@@ -65,7 +65,7 @@ public class TenantUserController {
 
     // Atualiza status de suspensão do usuário
     @PatchMapping("/{userId}/status")
-    @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.name())")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
             @PathVariable Long userId,
             @RequestParam(required = false) Boolean suspendedByAccount,
@@ -85,7 +85,7 @@ public class TenantUserController {
 
     // Reseta a senha do usuário do tenant para um novo valor.
     @PatchMapping("/{userId}/password")
-    @PreAuthorize("hasAuthority('TEN_USER_UPDATE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.name())")
     public ResponseEntity<TenantUserSummaryResponse> resetTenantUserPassword(
             @PathVariable Long userId,
             @RequestParam
@@ -101,7 +101,7 @@ public class TenantUserController {
 
     // Soft-delete de usuário do tenant.
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.name())")
     public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
         tenantUserFacade.softDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
@@ -109,7 +109,7 @@ public class TenantUserController {
 
     // Hard-delete de usuário do tenant.
     @DeleteMapping("/{userId}/hard")
-    @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.name())")
     public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
         tenantUserFacade.hardDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
@@ -117,7 +117,7 @@ public class TenantUserController {
 
     // Restaura usuário previamente deletado (soft-delete).
     @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAuthority('TEN_USER_RESTORE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_RESTORE.name())")
     public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
         TenantUserSummaryResponse response = tenantUserFacade.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
@@ -125,14 +125,14 @@ public class TenantUserController {
 
     // Busca detalhes de um usuário habilitado (enabled).
     @GetMapping("/enabled/{userId}")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
     public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
         return ResponseEntity.ok(tenantUserFacade.getEnabledTenantUser(userId));
     }
 
     // Conta usuários habilitados (enabled) do tenant.
     @GetMapping("/enabled/count")
-    @PreAuthorize("hasAuthority('TEN_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
     public ResponseEntity<Long> countEnabledTenantUsers() {
         return ResponseEntity.ok(tenantUserFacade.countEnabledTenantUsers());
     }

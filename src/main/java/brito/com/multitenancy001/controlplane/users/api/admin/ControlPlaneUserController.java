@@ -24,7 +24,7 @@ public class ControlPlaneUserController {
 
     // Cria um novo usuário do Control Plane (Admin), aplicando validações e regras de negócio (ex.: email único, role/permissões válidas).
     @PostMapping
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> createControlPlaneUser(
             @Valid @RequestBody ControlPlaneUserCreateRequest request
     ) {
@@ -34,21 +34,21 @@ public class ControlPlaneUserController {
 
     // Lista todos os usuários do Control Plane (Admin), incluindo estados (suspensões/deleção) conforme regras do serviço.
     @GetMapping
-    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_READ.name())")
     public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listControlPlaneUsers() {
         return ResponseEntity.ok(controlPlaneUserService.listControlPlaneUsers());
     }
 
     // Obtém os detalhes de um usuário do Control Plane (Admin) pelo id (pode incluir usuário suspenso/deletado, conforme regras do serviço).
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_READ.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> getControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.getControlPlaneUser(userId));
     }
 
     // Atualiza dados do usuário do Control Plane (Admin) pelo id (ex.: nome, email, role, flags e/ou campos permitidos), conforme validações do serviço.
     @PatchMapping("/{userId}")
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUser(
             @PathVariable Long userId,
             @Valid @RequestBody ControlPlaneUserUpdateRequest request
@@ -58,7 +58,7 @@ public class ControlPlaneUserController {
 
     // Atualiza o conjunto de permissões explícitas (overrides) do usuário do Control Plane (Admin), validando escopo e consistência (somente CP_*).
     @PatchMapping("/{userId}/permissions")
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> updateControlPlaneUserPermissions(
             @PathVariable Long userId,
             @Valid @RequestBody ControlPlaneUserPermissionsUpdateRequest request
@@ -68,7 +68,7 @@ public class ControlPlaneUserController {
 
     // Reseta/define uma nova senha para o usuário do Control Plane (Admin) (ação administrativa), conforme política de senha e regras do serviço.
     @PatchMapping("/{userId}/reset-password")
-    @PreAuthorize("hasAuthority('CP_USER_PASSWORD_RESET')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_PASSWORD_RESET.name())")
     public ResponseEntity<Void> resetPassword(
             @PathVariable Long userId,
             @Valid @RequestBody ControlPlaneUserPasswordResetRequest request
@@ -79,7 +79,7 @@ public class ControlPlaneUserController {
 
     // Realiza soft delete do usuário do Control Plane (Admin) pelo id (marca como deleted, preservando histórico/auditoria).
     @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority('CP_USER_DELETE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_DELETE.name())")
     public ResponseEntity<Void> deleteControlPlaneUser(@PathVariable Long userId) {
         controlPlaneUserService.softDeleteControlPlaneUser(userId);
         return ResponseEntity.noContent().build();
@@ -87,23 +87,22 @@ public class ControlPlaneUserController {
 
     // Restaura (undelete) um usuário do Control Plane (Admin) previamente soft-deletado, conforme regras do serviço.
     @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAuthority('CP_USER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }
 
     // Lista apenas usuários "habilitados" para operação: não deletados e não suspensos (nem por admin nem por conta), conforme regra do serviço.
     @GetMapping("/enabled")
-    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_READ.name())")
     public ResponseEntity<List<ControlPlaneUserDetailsResponse>> listEnabled() {
         return ResponseEntity.ok(controlPlaneUserService.listEnabledControlPlaneUsers());
     }
 
     // Obtém usuário "habilitado" pelo id: retorna apenas se estiver apto para operar (não deletado e não suspenso), conforme regra do serviço.
     @GetMapping("/{userId}/enabled")
-    @PreAuthorize("hasAuthority('CP_USER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_READ.name())")
     public ResponseEntity<ControlPlaneUserDetailsResponse> getEnabled(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.getEnabledControlPlaneUser(userId));
     }
-
 }

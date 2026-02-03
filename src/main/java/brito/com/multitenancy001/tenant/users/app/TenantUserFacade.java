@@ -4,6 +4,7 @@ import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
+import brito.com.multitenancy001.shared.audit.SecurityAuditService;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
@@ -42,6 +43,9 @@ public class TenantUserFacade {
     private final AccountEntitlementsService accountEntitlementsService;
 
     private final TenantExecutor tenantExecutor;
+
+    // ✅ NOVO: trilha append-only de security actions
+    private final SecurityAuditService securityAuditService;
 
     // =========================================================
     // CONTROLLER METHODS
@@ -237,34 +241,77 @@ public class TenantUserFacade {
     }
 
     // =========================================================
-    // PASSWORD RESET (PUBLIC -> TENANT)
+    // PASSWORD RESET (PUBLIC -> TENANT) + SECURITY AUDIT
     // =========================================================
 
     public String generatePasswordResetToken(String slug, String email) {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
+        // ✅ trilha append-only: tentativa (antes de resolver conta)
+        securityAuditService.record(
+                "PASSWORD_RESET_REQUESTED",
+                "ATTEMPT",
+                null,
+                null,
+                email,
+                null,
+                null,
+                null,
+                "{\"slug\":\"" + slug + "\"}"
+        );
+
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        return tenantExecutor.run(account.schemaName(), () -> {
-            TenantUser user = tenantUserService.getUserByEmail(email, account.id());
+        try {
+            String token = tenantExecutor.run(account.schemaName(), () -> {
+                TenantUser user = tenantUserService.getUserByEmail(email, account.id());
 
-            if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
-                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-            }
+                if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+                    throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+                }
 
-            String token = jwtTokenProvider.generatePasswordResetToken(
-                    user.getEmail(),
+                String t = jwtTokenProvider.generatePasswordResetToken(
+                        user.getEmail(),
+                        account.schemaName(),
+                        account.id()
+                );
+
+                user.setPasswordResetToken(t);
+                user.setPasswordResetExpires(appClock.now().plusHours(1));
+                tenantUserService.save(user);
+
+                return t;
+            });
+
+            securityAuditService.record(
+                    "PASSWORD_RESET_REQUESTED",
+                    "SUCCESS",
+                    null,
+                    null,
+                    email,
+                    null,
+                    account.id(),
                     account.schemaName(),
-                    account.id()
+                    "{\"expiresHours\":1}"
             );
 
-            user.setPasswordResetToken(token);
-            user.setPasswordResetExpires(appClock.now().plusHours(1));
-            tenantUserService.save(user);
-
             return token;
-        });
+
+        } catch (Exception e) {
+            securityAuditService.record(
+                    "PASSWORD_RESET_REQUESTED",
+                    "FAILURE",
+                    null,
+                    null,
+                    email,
+                    null,
+                    account.id(),
+                    account.schemaName(),
+                    "{\"reason\":\"error\"}"
+            );
+            throw e;
+        }
     }
 
     public void resetPasswordWithToken(String token, String newPassword) {
@@ -273,12 +320,50 @@ public class TenantUserFacade {
 
         String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
-
         String email = jwtTokenProvider.getEmailFromToken(token);
 
-        tenantExecutor.run(schema, () ->
-                tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword)
+        securityAuditService.record(
+                "PASSWORD_RESET_COMPLETED",
+                "ATTEMPT",
+                null,
+                null,
+                email,
+                null,
+                accountId,
+                schema,
+                "{\"stage\":\"start\"}"
         );
+
+        try {
+            tenantExecutor.run(schema, () ->
+                    tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword)
+            );
+
+            securityAuditService.record(
+                    "PASSWORD_RESET_COMPLETED",
+                    "SUCCESS",
+                    null,
+                    null,
+                    email,
+                    null,
+                    accountId,
+                    schema,
+                    "{\"stage\":\"done\"}"
+            );
+        } catch (Exception e) {
+            securityAuditService.record(
+                    "PASSWORD_RESET_COMPLETED",
+                    "FAILURE",
+                    null,
+                    null,
+                    email,
+                    null,
+                    accountId,
+                    schema,
+                    "{\"reason\":\"error\"}"
+            );
+            throw e;
+        }
     }
 
     // =========================================================

@@ -1,30 +1,51 @@
 {
-  echo "### PROJECT FILE INDEX"
-  find . -type f \
-    -not -path "./target/*" \
-    \( -name "*.java" \
-       -o -path "./src/main/resources/db/migration/*/V*.sql" \
-       -o -path "./pom.xml" \
-       -o -path "./src/main/resources/application.properties" \
-       -o -path "./src/main/resources/application-dev.properties" \
-    \) | sort
+    # Define o diretório base do projeto
+    PROJECT_DIR="../multitenancy001"
 
-  echo
-  echo "### FILE CONTENTS"
-  echo
+    echo "### PROJECT FILE INDEX"
 
-  find . -type f \
-    -not -path "./target/*" \
-    \( -name "*.java" \
-       -o -path "./src/main/resources/db/migration/*/V*.sql" \
-       -o -path "./pom.xml" \
-       -o -path "./src/main/resources/application.properties" \
-       -o -path "./src/main/resources/application-dev.properties" \
-    \) | sort | while IFS= read -r f; do
-      echo "============================================================"
-      echo "### FILE: $f"
-      echo "============================================================"
-      sed 's/\r$//' "$f"
-      echo
-    done
-} > all_content_with_paths555.txt
+    # --- FASE 1: GERAÇÃO DO ÍNDICE ---
+    # Busca arquivos ignorando a pasta 'target' e filtrando extensões específicas
+    find "$PROJECT_DIR" -type f \
+        -not -path "$PROJECT_DIR/target/*" \
+        \( \
+            -name "*.java" \
+            -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+            -o -path "$PROJECT_DIR/pom.xml" \
+            -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+            -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+        \) \
+        | sed "s|^$PROJECT_DIR/||" \
+        | sort
+
+    echo
+    echo "### FILE CONTENTS"
+    echo
+
+    # --- FASE 2: EXIBIÇÃO DO CONTEÚDO DOS ARQUIVOS ---
+    # Repete a busca para processar o conteúdo de cada arquivo encontrado
+    find "$PROJECT_DIR" -type f \
+        -not -path "$PROJECT_DIR/target/*" \
+        \( \
+            -name "*.java" \
+            -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+            -o -path "$PROJECT_DIR/pom.xml" \
+            -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+            -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+        \) \
+        | sort \
+        | while IFS= read -r f; do
+            # Cabeçalho visual para cada arquivo no log
+            echo "============================================================"
+            echo "### FILE: ${f#$PROJECT_DIR/}"
+            echo "============================================================"
+            
+            # Remove caracteres de fim de linha do Windows (\r) para evitar problemas de formatação
+            sed 's/\r$//' "$f"
+            
+            # Adiciona uma linha em branco após o conteúdo do arquivo
+            echo
+        done
+
+# Redireciona toda a saída do bloco acima para o arquivo de texto especificado
+} > all_content_with_paths_ideal5555.txt

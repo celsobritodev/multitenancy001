@@ -23,14 +23,17 @@ public class ControlPlanePaymentQueryController {
 
     // ControlPlanePaymentRepository.findByStatus
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<List<PaymentResponse>> findByStatus(@PathVariable PaymentStatus status) {
         return ResponseEntity.ok(controlPlanePaymentQueryService.findByStatus(status));
     }
 
     // ControlPlanePaymentRepository.getTotalPaidInPeriod
     @GetMapping("/accounts/{accountId}/total-paid")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ') and hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+    )
     public ResponseEntity<BigDecimal> totalPaid(
             @PathVariable Long accountId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
@@ -41,7 +44,10 @@ public class ControlPlanePaymentQueryController {
 
     // ControlPlanePaymentRepository.countCompletedPayments
     @GetMapping("/accounts/{accountId}/count-completed")
-    @PreAuthorize("hasAuthority('CP_BILLING_READ') and hasAuthority('CP_TENANT_READ')")
+    @PreAuthorize(
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
+    )
     public ResponseEntity<Long> countCompleted(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }

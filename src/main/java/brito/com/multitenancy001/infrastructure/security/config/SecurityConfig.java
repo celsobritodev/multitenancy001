@@ -3,6 +3,7 @@ package brito.com.multitenancy001.infrastructure.security.config;
 import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.RequestMetaContextFilter;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -47,6 +51,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public RequestMetaContextFilter requestMetaContextFilter() {
+        return new RequestMetaContextFilter();
+    }
+
+    @Bean
     public RequestLoggingFilter requestLoggingFilter() {
         return new RequestLoggingFilter();
     }
@@ -65,14 +74,44 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-            // ✅ continua correto para exceções que acontecem "depois" do ExceptionTranslationFilter
+            // ✅ CORS (opcional, mas recomendado) + X-Request-Id
+            .cors(cors -> cors.configurationSource(request -> {
+                CorsConfiguration config = new CorsConfiguration();
+
+                // ajuste conforme seu front
+                config.setAllowedOriginPatterns(List.of(
+                        "http://localhost:*",
+                        "http://127.0.0.1:*"
+                ));
+
+                config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+                // ✅ permite o cliente enviar X-Request-Id + X-Tenant
+                config.setAllowedHeaders(List.of(
+                        "Authorization",
+                        "Content-Type",
+                        "Accept",
+                        "X-Request-Id",
+                        "X-Tenant"
+                ));
+
+                // ✅ expõe X-Request-Id para leitura no front
+                config.setExposedHeaders(List.of(
+                        "Authorization",
+                        "X-Request-Id"
+                ));
+
+                config.setAllowCredentials(true);
+                config.setMaxAge(3600L);
+                return config;
+            }))
+
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(ex -> ex
                     .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
                     .accessDeniedHandler(restAccessDeniedHandler)           // 403
             )
-
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(
                     "/v3/api-docs/**",
@@ -100,10 +139,16 @@ public class SecurityConfig {
                 .anyRequest().denyAll()
             );
 
-        // ✅ JWT cedo: token inválido => 401 (entryPoint), mismatch => 403 (accessDeniedHandler, direto no filtro)
+        // ✅ 1) meta primeiro (requestId/ip/ua) + cleanup centralizado
+        http.addFilterBefore(requestMetaContextFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ 2) JWT cedo
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
+        // ✅ 3) política de senha
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+
+        // ✅ 4) log final do request
         http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
 
         return http.build();

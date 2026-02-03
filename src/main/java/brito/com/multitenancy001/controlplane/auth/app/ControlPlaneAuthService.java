@@ -4,6 +4,7 @@ import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdmin
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.audit.AuthEventAuditService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
@@ -11,6 +12,7 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,9 @@ public class ControlPlaneAuthService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final PublicExecutor publicExecutor;
 
+    // ✅ NOVO (append-only auth_events)
+    private final AuthEventAuditService authEventAuditService;
+
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
         if (cmd == null) throw new ApiException("INVALID_LOGIN", "Requisição inválida", 400);
@@ -36,45 +41,59 @@ public class ControlPlaneAuthService {
         final String email = cmd.email().trim();
         final String password = cmd.password();
 
-        return publicExecutor.runInPublicSchema(() -> {
+        authEventAuditService.record("controlplane", "LOGIN_INIT", "ATTEMPT", email, null, null, DEFAULT_SCHEMA,
+                "{\"stage\":\"init\"}");
 
-            ControlPlaneUser user = controlPlaneUserRepository
-                    .findByEmailAndDeletedFalse(email)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+        try {
+            return publicExecutor.runInPublicSchema(() -> {
 
-            if (user.isSuspendedByAccount()) {
-                throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
-            }
+                ControlPlaneUser user = controlPlaneUserRepository
+                        .findByEmailAndDeletedFalse(email)
+                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(email, password)
-            );
+                if (user.isSuspendedByAccount()) {
+                    authEventAuditService.record("controlplane", "LOGIN_DENIED", "DENIED", email, user.getId(), user.getAccount().getId(), DEFAULT_SCHEMA,
+                            "{\"reason\":\"suspended\"}");
+                    throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+                }
 
-            Long accountId = user.getAccount().getId();
+                Authentication authentication = authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(email, password)
+                );
 
-            String accessToken = jwtTokenProvider.generateControlPlaneToken(
-                    authentication,
-                    accountId,
-                    DEFAULT_SCHEMA
-            );
+                Long accountId = user.getAccount().getId();
 
-            String refreshToken = jwtTokenProvider.generateRefreshToken(
-                    user.getEmail(),
-                    DEFAULT_SCHEMA,
-                    accountId
-            );
+                String accessToken = jwtTokenProvider.generateControlPlaneToken(
+                        authentication,
+                        accountId,
+                        DEFAULT_SCHEMA
+                );
 
-            SystemRoleName role = SystemRoleName.fromString(user.getRole().name());
+                String refreshToken = jwtTokenProvider.generateRefreshToken(
+                        user.getEmail(),
+                        DEFAULT_SCHEMA,
+                        accountId
+                );
 
-            return new JwtResult(
-                    accessToken,
-                    refreshToken,
-                    user.getId(),
-                    user.getEmail(),
-                    role,
-                    accountId,
-                    DEFAULT_SCHEMA
-            );
-        });
+                SystemRoleName role = SystemRoleName.fromString(user.getRole().name());
+
+                authEventAuditService.record("controlplane", "LOGIN_SUCCESS", "SUCCESS", user.getEmail(), user.getId(), accountId, DEFAULT_SCHEMA,
+                        "{\"mode\":\"password\"}");
+
+                return new JwtResult(
+                        accessToken,
+                        refreshToken,
+                        user.getId(),
+                        user.getEmail(),
+                        role,
+                        accountId,
+                        DEFAULT_SCHEMA
+                );
+            });
+        } catch (BadCredentialsException e) {
+            authEventAuditService.record("controlplane", "LOGIN_FAILURE", "FAILURE", email, null, null, DEFAULT_SCHEMA,
+                    "{\"reason\":\"bad_credentials\"}");
+            throw e;
+        }
     }
 }

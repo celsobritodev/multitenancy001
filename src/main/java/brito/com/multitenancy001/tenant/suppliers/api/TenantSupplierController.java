@@ -21,49 +21,49 @@ public class TenantSupplierController {
 
     // Lista fornecedores (não-deletados) do tenant.
     @GetMapping
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<List<Supplier>> listAll() {
         return ResponseEntity.ok(tenantSupplierService.findAll());
     }
 
     // Lista fornecedores ativos (não-deletados) do tenant.
     @GetMapping("/active")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<List<Supplier>> listActive() {
         return ResponseEntity.ok(tenantSupplierService.findActive());
     }
 
     // Busca fornecedor por id (escopo: tenant).
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<Supplier> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(tenantSupplierService.findById(id));
     }
 
     // Busca fornecedor por documento (CPF/CNPJ) no tenant.
     @GetMapping("/document/{document}")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<Supplier> getByDocument(@PathVariable String document) {
         return ResponseEntity.ok(tenantSupplierService.findByDocument(document));
     }
 
     // Pesquisa fornecedores por nome.
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<List<Supplier>> searchByName(@RequestParam("name") String name) {
         return ResponseEntity.ok(tenantSupplierService.searchByName(name));
     }
 
     // Lista fornecedores por email.
     @GetMapping("/email")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<List<Supplier>> getByEmail(@RequestParam("email") String email) {
         return ResponseEntity.ok(tenantSupplierService.findByEmail(email));
     }
 
     // Cria fornecedor no tenant.
     @PostMapping
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.name())")
     public ResponseEntity<Supplier> create(@Valid @RequestBody Supplier supplier) {
         Supplier saved = tenantSupplierService.create(supplier);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
@@ -71,7 +71,7 @@ public class TenantSupplierController {
 
     // Atualiza fornecedor do tenant (substituição completa).
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.name())")
     public ResponseEntity<Supplier> update(@PathVariable UUID id, @RequestBody Supplier supplier) {
         Supplier updated = tenantSupplierService.update(id, supplier);
         return ResponseEntity.ok(updated);
@@ -79,14 +79,14 @@ public class TenantSupplierController {
 
     // Alterna status ativo/inativo do fornecedor.
     @PatchMapping("/{id}/toggle-active")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.name())")
     public ResponseEntity<Supplier> toggleActive(@PathVariable UUID id) {
         return ResponseEntity.ok(tenantSupplierService.toggleActive(id));
     }
 
     // Soft-delete de fornecedor no tenant.
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.name())")
     public ResponseEntity<Void> softDelete(@PathVariable UUID id) {
         tenantSupplierService.softDelete(id);
         return ResponseEntity.noContent().build();
@@ -94,16 +94,15 @@ public class TenantSupplierController {
 
     // Restaura fornecedor previamente deletado (soft-delete).
     @PatchMapping("/{id}/restore")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.name())")
     public ResponseEntity<Supplier> restore(@PathVariable UUID id) {
         return ResponseEntity.ok(tenantSupplierService.restore(id));
     }
-    
+
     // "Any" (pode incluir deleted/inactive) - útil para admin/auditoria
     @GetMapping("/email/any")
-    @PreAuthorize("hasAuthority('TEN_SUPPLIER_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.name())")
     public ResponseEntity<List<Supplier>> findAnyByEmail(@RequestParam String email) {
         return ResponseEntity.ok(tenantSupplierService.findAnyByEmail(email));
     }
-
 }

@@ -7,6 +7,14 @@ import java.util.Set;
 
 import static brito.com.multitenancy001.tenant.security.TenantPermission.*;
 
+/**
+ * Centraliza a matriz Role -> Permissions do Tenant.
+ *
+ * Regras:
+ * - sempre devolve Set imutável
+ * - toda role deve estar mapeada explicitamente
+ * - FAIL-FAST: role sem mapeamento explode na inicialização e/ou no uso
+ */
 public final class TenantRolePermissions {
 
     private static final EnumMap<TenantRole, Set<TenantPermission>> MAP = new EnumMap<>(TenantRole.class);
@@ -44,7 +52,7 @@ public final class TenantRolePermissions {
                 TEN_SALE_READ,
                 TEN_SALE_WRITE,
                 TEN_SALE_ISSUES_READ,
-                TEN_SALE_ISSUES_WRITE,   // ✅ FIX: seu enum tem WRITE; admin normalmente deve ter
+                TEN_SALE_ISSUES_WRITE,
                 TEN_REPORT_SALES_READ,
 
                 // Billing + Settings
@@ -65,7 +73,7 @@ public final class TenantRolePermissions {
                 TEN_SALE_READ,
                 TEN_SALE_WRITE,
                 TEN_SALE_ISSUES_READ,
-                TEN_SALE_ISSUES_WRITE,   // ✅ coerente com SALES_MANAGER também (remova se não quiser)
+                TEN_SALE_ISSUES_WRITE,
                 TEN_REPORT_SALES_READ
         )));
 
@@ -87,6 +95,13 @@ public final class TenantRolePermissions {
                 TEN_INVENTORY_WRITE,
                 TEN_SALE_READ
         )));
+
+        // TENANT_USER existe no enum. Se você quiser que ele seja diferente do READ_ONLY, mapeie aqui.
+        // (Se for igual ao READ_ONLY, pode apontar para o mesmo set, mantendo imutável.)
+        MAP.put(TenantRole.TENANT_USER, MAP.get(TenantRole.TENANT_READ_ONLY));
+
+        // FAIL-FAST: garante que todas as roles do enum estão mapeadas.
+        assertAllRolesMapped();
     }
 
     private TenantRolePermissions() {}
@@ -97,7 +112,20 @@ public final class TenantRolePermissions {
      */
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
         if (role == null) return Set.of();
-        return MAP.getOrDefault(role, Set.of());
+
+        Set<TenantPermission> perms = MAP.get(role);
+        if (perms == null) {
+            throw new IllegalStateException("TENANT_ROLE_NOT_MAPPED: " + role);
+        }
+        return perms;
+    }
+
+    private static void assertAllRolesMapped() {
+        for (TenantRole r : TenantRole.values()) {
+            if (!MAP.containsKey(r)) {
+                throw new IllegalStateException("TENANT_ROLE_NOT_MAPPED_IN_MATRIX: " + r);
+            }
+        }
     }
 
     private static Set<TenantPermission> unmodifiable(EnumSet<TenantPermission> set) {
