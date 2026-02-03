@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.shared.executor;
+package brito.com.multitenancy001.infrastructure.persistence;
 
 import java.util.function.Supplier;
 
@@ -9,7 +9,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
-public class TxExecutor {
+public class TransactionExecutor {
 
     private final TransactionTemplate transactionTemplatePublicTx;
     private final TransactionTemplate transactionTemplatePublicRequiresNew;
@@ -23,7 +23,7 @@ public class TxExecutor {
     private final TransactionTemplate transactionTemplateTenantReadOnlyTx;
     private final TransactionTemplate transactionTemplateTenantRequiresNewReadOnly;
 
-    public TxExecutor(
+    public TransactionExecutor(
             @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
             @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
     ) {
@@ -65,60 +65,60 @@ public class TxExecutor {
     }
 
     // ---------- PUBLIC ----------
-    public <T> T publicTx(Supplier<T> fn) {
+    public <T> T inPublicTx(Supplier<T> fn) {
         return transactionTemplatePublicTx.execute(status -> fn.get());
     }
-    public void publicTx(Runnable fn) {
+    public void inPublicTx(Runnable fn) {
         transactionTemplatePublicTx.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T publicRequiresNew(Supplier<T> fn) {
+    public <T> T inPublicRequiresNew(Supplier<T> fn) {
         return transactionTemplatePublicRequiresNew.execute(status -> fn.get());
     }
-    public void publicRequiresNew(Runnable fn) {
+    public void inPublicRequiresNew(Runnable fn) {
         transactionTemplatePublicRequiresNew.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T publicReadOnlyTx(Supplier<T> fn) {
+    public <T> T inPublicReadOnlyTx(Supplier<T> fn) {
         return transactionTemplatePublicReadOnlyTx.execute(status -> fn.get());
     }
-    public void publicReadOnlyTx(Runnable fn) {
+    public void inPublicReadOnlyTx(Runnable fn) {
         transactionTemplatePublicReadOnlyTx.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T publicRequiresNewReadOnly(Supplier<T> fn) {
+    public <T> T inPublicRequiresNewReadOnly(Supplier<T> fn) {
         return transactionTemplatePublicRequiresNewReadOnly.execute(status -> fn.get());
     }
-    public void publicRequiresNewReadOnly(Runnable fn) {
+    public void inPublicRequiresNewReadOnly(Runnable fn) {
         transactionTemplatePublicRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 
     // ---------- TENANT ----------
-    public <T> T tenantTx(Supplier<T> fn) {
+    public <T> T inTenantTx(Supplier<T> fn) {
         return transactionTemplateTenantTx.execute(status -> fn.get());
     }
-    public void tenantTx(Runnable fn) {
+    public void inTenantTx(Runnable fn) {
         transactionTemplateTenantTx.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T tenantRequiresNew(Supplier<T> fn) {
+    public <T> T inTenantRequiresNew(Supplier<T> fn) {
         return transactionTemplateTenantRequiresNew.execute(status -> fn.get());
     }
-    public void tenantRequiresNew(Runnable fn) {
+    public void inTenantRequiresNew(Runnable fn) {
         transactionTemplateTenantRequiresNew.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T tenantReadOnlyTx(Supplier<T> fn) {
+    public <T> T inTenantReadOnlyTx(Supplier<T> fn) {
         return transactionTemplateTenantReadOnlyTx.execute(status -> fn.get());
     }
-    public void tenantReadOnlyTx(Runnable fn) {
+    public void inTenantReadOnlyTx(Runnable fn) {
         transactionTemplateTenantReadOnlyTx.executeWithoutResult(status -> fn.run());
     }
 
-    public <T> T tenantRequiresNewReadOnly(Supplier<T> fn) {
+    public <T> T inTenantRequiresNewReadOnly(Supplier<T> fn) {
         return transactionTemplateTenantRequiresNewReadOnly.execute(status -> fn.get());
     }
-    public void tenantRequiresNewReadOnly(Runnable fn) {
+    public void inTenantRequiresNewReadOnly(Runnable fn) {
         transactionTemplateTenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
     }
 }

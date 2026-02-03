@@ -7,8 +7,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
-import brito.com.multitenancy001.shared.executor.TxExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -27,7 +27,7 @@ public class TenantUserProvisioningFacade {
     private static final String OWNER_NAME_FALLBACK = "Owner";
 
     private final TenantExecutor tenantExecutor;
-    private final TxExecutor txExecutor;
+    private final TransactionExecutor transactionExecutor;
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -38,7 +38,7 @@ public class TenantUserProvisioningFacade {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantReadOnlyTx(() -> {
+                transactionExecutor.inTenantReadOnlyTx(() -> {
 
                     var users = onlyOperational
                             ? tenantUserRepository.findByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId)
@@ -77,7 +77,7 @@ public class TenantUserProvisioningFacade {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantTx(() -> {
+                transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
                         throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
@@ -132,7 +132,7 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
+                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
                 0
         );
     }
@@ -141,7 +141,7 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
+                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
                 0
         );
     }
@@ -150,7 +150,7 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.now())),
+                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.now())),
                 0
         );
     }
@@ -159,7 +159,7 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> txExecutor.tenantRequiresNew(() -> tenantUserRepository.restoreAllByAccount(accountId)),
+                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.restoreAllByAccount(accountId)),
                 0
         );
     }
@@ -168,7 +168,7 @@ public class TenantUserProvisioningFacade {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantTx(() -> {
+                transactionExecutor.inTenantTx(() -> {
                     int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
                     if (updated == 0) {
                         throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
@@ -180,7 +180,7 @@ public class TenantUserProvisioningFacade {
 
     public void setPasswordResetToken(String schemaName, Long accountId, Long userId, String token, LocalDateTime expiresAt) {
         tenantExecutor.runIfReady(schemaName, REQUIRED_TABLE, () ->
-                txExecutor.tenantTx(() -> {
+                transactionExecutor.inTenantTx(() -> {
                     TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
                             .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
@@ -196,7 +196,7 @@ public class TenantUserProvisioningFacade {
         tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
 
         return tenantExecutor.run(schemaName, () ->
-                txExecutor.tenantReadOnlyTx(() ->
+                transactionExecutor.inTenantReadOnlyTx(() ->
                         tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
                                 .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400))
                 )

@@ -4,7 +4,7 @@ import java.util.function.Supplier;
 
 import org.springframework.stereotype.Component;
 
-import brito.com.multitenancy001.shared.executor.TxExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -12,24 +12,24 @@ import lombok.RequiredArgsConstructor;
 public class TenantUnitOfWork {
 
     private final TenantExecutor tenantExecutor;
-    private final TxExecutor txExecutor;
+    private final TransactionExecutor transactionExecutor;
 
     public <T> T tx(String schemaName, Supplier<T> fn) {
-        return tenantExecutor.run(schemaName, () -> txExecutor.tenantTx(fn));
+        return tenantExecutor.run(schemaName, () -> transactionExecutor.inTenantTx(fn));
     }
     public void tx(String schemaName, Runnable fn) {
-        tenantExecutor.run(schemaName, () -> txExecutor.tenantTx(fn));
+        tenantExecutor.run(schemaName, () -> transactionExecutor.inTenantTx(fn));
     }
 
     public <T> T readOnly(String schemaName, Supplier<T> fn) {
-        return tenantExecutor.run(schemaName, () -> txExecutor.tenantReadOnlyTx(fn));
+        return tenantExecutor.run(schemaName, () -> transactionExecutor.inTenantReadOnlyTx(fn));
     }
 
     public <T> T requiresNew(String schemaName, Supplier<T> fn) {
-        return tenantExecutor.run(schemaName, () -> txExecutor.tenantRequiresNew(fn));
+        return tenantExecutor.run(schemaName, () -> transactionExecutor.inTenantRequiresNew(fn));
     }
 
     public <T> T requiresNewReadOnly(String schemaName, Supplier<T> fn) {
-        return tenantExecutor.run(schemaName, () -> txExecutor.tenantRequiresNewReadOnly(fn));
+        return tenantExecutor.run(schemaName, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
     }
 }

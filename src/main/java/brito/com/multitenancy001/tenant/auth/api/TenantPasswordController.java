@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.tenant.auth.api.dto.ForgotPasswordRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.ResetPasswordRequest;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
+import brito.com.multitenancy001.tenant.users.app.TenantUserFacade;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,19 +14,19 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TenantPasswordController {
 
-    private final TenantUserService tenantUserService;
+    private final TenantUserFacade tenantUserFacade;
 
     // Gera token de reset de senha para usuário tenant (por slug + email).
     @PostMapping("/forgot")
     public ResponseEntity<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {
-        tenantUserService.generatePasswordResetToken(forgotPasswordRequest.slug(), forgotPasswordRequest.email());
+        tenantUserFacade.generatePasswordResetToken(forgotPasswordRequest.slug(), forgotPasswordRequest.email());
         return ResponseEntity.ok("Token gerado");
     }
 
     // Redefine a senha do usuário tenant validando o token de reset.
     @PostMapping("/reset")
     public ResponseEntity<String> resetPassword(@Valid @RequestBody ResetPasswordRequest resetPasswordRequest) {
-        tenantUserService.resetPasswordWithToken(resetPasswordRequest.token(), resetPasswordRequest.newPassword());
+        tenantUserFacade.resetPasswordWithToken(resetPasswordRequest.token(), resetPasswordRequest.newPassword());
         return ResponseEntity.ok("Senha redefinida com sucesso");
     }
 }

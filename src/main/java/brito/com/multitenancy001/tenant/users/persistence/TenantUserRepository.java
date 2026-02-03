@@ -138,7 +138,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
     /**
      * Suspende/Reativa por CONTA (1 usuário) - não mexe em suspendedByAdmin.
-     * ✅ Este método é necessário porque o TenantUserTxService chama ele.
+     * ✅ Este método é necessário porque o TenantUserService chama ele.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional

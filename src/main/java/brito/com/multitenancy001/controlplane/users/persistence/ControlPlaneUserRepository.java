@@ -156,4 +156,10 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
           and u.suspendedByAccount = false
     """)
     Optional<ControlPlaneUser> findEnabledById(@Param("id") Long id);
+    
+    /**
+     * Default do domínio (NOT DELETED): igual AccountRepository.
+     */
+    Optional<ControlPlaneUser> findByIdAndDeletedFalse(Long id);
+    
 }

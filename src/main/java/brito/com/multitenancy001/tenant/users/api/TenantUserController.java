@@ -6,7 +6,7 @@ import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUsersListResponse;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
+import brito.com.multitenancy001.tenant.users.app.TenantUserFacade;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -22,27 +22,27 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserController {
 
-    private final TenantUserService tenantUserService;
+    private final TenantUserFacade tenantUserFacade;
 
     // ✅ Lista usuários do tenant (visão rica para TENANT_OWNER)
     @GetMapping
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
     public ResponseEntity<TenantUsersListResponse> listTenantUsers() {
-        return ResponseEntity.ok(tenantUserService.listTenantUsers());
+        return ResponseEntity.ok(tenantUserFacade.listTenantUsers());
     }
 
     // Lista usuários ativos do tenant.
     @GetMapping("/enabled")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
     public ResponseEntity<List<TenantUserSummaryResponse>> listEnabledTenantUsers() {
-        return ResponseEntity.ok(tenantUserService.listEnabledTenantUsers());
+        return ResponseEntity.ok(tenantUserFacade.listEnabledTenantUsers());
     }
 
     // Busca detalhes de um usuário do tenant por id.
     @GetMapping("/{userId}")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
     public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(tenantUserService.getTenantUser(userId));
+        return ResponseEntity.ok(tenantUserFacade.getTenantUser(userId));
     }
 
     // Cria usuário no tenant.
@@ -51,7 +51,7 @@ public class TenantUserController {
     public ResponseEntity<TenantUserDetailsResponse> createTenantUser(
             @Valid @RequestBody TenantUserCreateRequest tenantUserCreateRequest
     ) {
-        TenantUserDetailsResponse response = tenantUserService.createTenantUser(tenantUserCreateRequest);
+        TenantUserDetailsResponse response = tenantUserFacade.createTenantUser(tenantUserCreateRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -59,7 +59,7 @@ public class TenantUserController {
     @PatchMapping("/{userId}/transfer-admin")
     @PreAuthorize("hasAuthority('TEN_ROLE_TRANSFER')")
     public ResponseEntity<Void> transferTenantOwner(@PathVariable Long userId) {
-        tenantUserService.transferTenantOwner(userId);
+        tenantUserFacade.transferTenantOwner(userId);
         return ResponseEntity.noContent().build();
     }
 
@@ -78,7 +78,7 @@ public class TenantUserController {
         boolean finalSuspended = (suspendedByAccount != null) ? suspendedByAccount : !suspendedByAdmin;
 
         TenantUserSummaryResponse response =
-                tenantUserService.setTenantUserSuspendedByAdmin(userId, finalSuspended);
+                tenantUserFacade.setTenantUserSuspendedByAdmin(userId, finalSuspended);
 
         return ResponseEntity.ok(response);
     }
@@ -95,7 +95,7 @@ public class TenantUserController {
             )
             String newPassword
     ) {
-        TenantUserSummaryResponse response = tenantUserService.resetTenantUserPassword(userId, newPassword);
+        TenantUserSummaryResponse response = tenantUserFacade.resetTenantUserPassword(userId, newPassword);
         return ResponseEntity.ok(response);
     }
 
@@ -103,7 +103,7 @@ public class TenantUserController {
     @DeleteMapping("/{userId}")
     @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
     public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
-        tenantUserService.softDeleteTenantUser(userId);
+        tenantUserFacade.softDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
     }
 
@@ -111,7 +111,7 @@ public class TenantUserController {
     @DeleteMapping("/{userId}/hard")
     @PreAuthorize("hasAuthority('TEN_USER_DELETE')")
     public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
-        tenantUserService.hardDeleteTenantUser(userId);
+        tenantUserFacade.hardDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
     }
 
@@ -119,7 +119,7 @@ public class TenantUserController {
     @PatchMapping("/{userId}/restore")
     @PreAuthorize("hasAuthority('TEN_USER_RESTORE')")
     public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
-        TenantUserSummaryResponse response = tenantUserService.restoreTenantUser(userId);
+        TenantUserSummaryResponse response = tenantUserFacade.restoreTenantUser(userId);
         return ResponseEntity.ok(response);
     }
 
@@ -127,13 +127,13 @@ public class TenantUserController {
     @GetMapping("/enabled/{userId}")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
     public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(tenantUserService.getEnabledTenantUser(userId));
+        return ResponseEntity.ok(tenantUserFacade.getEnabledTenantUser(userId));
     }
 
     // Conta usuários habilitados (enabled) do tenant.
     @GetMapping("/enabled/count")
     @PreAuthorize("hasAuthority('TEN_USER_READ')")
     public ResponseEntity<Long> countEnabledTenantUsers() {
-        return ResponseEntity.ok(tenantUserService.countEnabledTenantUsers());
+        return ResponseEntity.ok(tenantUserFacade.countEnabledTenantUsers());
     }
 }

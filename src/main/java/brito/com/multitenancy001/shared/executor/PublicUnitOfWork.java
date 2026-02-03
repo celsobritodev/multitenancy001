@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -11,41 +12,41 @@ import lombok.RequiredArgsConstructor;
 public class PublicUnitOfWork {
 
     private final PublicExecutor publicExecutor;
-    private final TxExecutor txExecutor;
+    private final TransactionExecutor transactionExecutor;
 
     // REQUIRED
     public <T> T tx(Supplier<T> fn) {
-        return publicExecutor.run(() -> txExecutor.publicTx(fn));
+        return publicExecutor.run(() -> transactionExecutor.inPublicTx(fn));
     }
 
     public void tx(Runnable fn) {
-        publicExecutor.run(() -> txExecutor.publicTx(fn));
+        publicExecutor.run(() -> transactionExecutor.inPublicTx(fn));
     }
 
     // REQUIRES_NEW
     public <T> T requiresNew(Supplier<T> fn) {
-        return publicExecutor.run(() -> txExecutor.publicRequiresNew(fn));
+        return publicExecutor.run(() -> transactionExecutor.inPublicRequiresNew(fn));
     }
 
     public void requiresNew(Runnable fn) {
-        publicExecutor.run(() -> txExecutor.publicRequiresNew(fn));
+        publicExecutor.run(() -> transactionExecutor.inPublicRequiresNew(fn));
     }
 
     // READ ONLY
     public <T> T readOnly(Supplier<T> fn) {
-        return publicExecutor.run(() -> txExecutor.publicReadOnlyTx(fn));
+        return publicExecutor.run(() -> transactionExecutor.inPublicReadOnlyTx(fn));
     }
 
     public void readOnly(Runnable fn) {
-        publicExecutor.run(() -> txExecutor.publicReadOnlyTx(fn));
+        publicExecutor.run(() -> transactionExecutor.inPublicReadOnlyTx(fn));
     }
 
     // REQUIRES_NEW READ ONLY
     public <T> T requiresNewReadOnly(Supplier<T> fn) {
-        return publicExecutor.run(() -> txExecutor.publicRequiresNewReadOnly(fn));
+        return publicExecutor.run(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 
     public void requiresNewReadOnly(Runnable fn) {
-        publicExecutor.run(() -> txExecutor.publicRequiresNewReadOnly(fn));
+        publicExecutor.run(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 }
