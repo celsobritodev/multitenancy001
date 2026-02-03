@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.publicschema;
+package brito.com.multitenancy001.shared.persistence.publicschema;
 
 import java.time.LocalDateTime;
 

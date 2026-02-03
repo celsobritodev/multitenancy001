@@ -1,9 +1,5 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
-import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
-import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
-import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityResolver;
-import brito.com.multitenancy001.infrastructure.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.infrastructure.publicschema.auth.TenantLoginChallenge;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
@@ -14,6 +10,10 @@ import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
@@ -31,7 +31,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -54,7 +53,7 @@ public class TenantAuthService {
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final AppClock appClock;
 
-    private LocalDateTime now() { return appClock.now(); }
+
 
     private static String normalizeEmailRequired(String raw) {
         String email = EmailNormalizer.normalizeOrNull(raw);
@@ -224,14 +223,14 @@ public class TenantAuthService {
             }
 
             // grava last_login também no refresh
-            tenantUserRepository.updateLastLogin(user.getId(), now());
+            tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
                     tenantSchema,
-                    now(),
+                    appClock.now(),
                     authorities
             );
 
@@ -308,14 +307,14 @@ public class TenantAuthService {
                     throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
                 }
 
-                tenantUserRepository.updateLastLogin(user.getId(), now());
+                tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
 
                 var authorities = AuthoritiesFactory.forTenant(user);
 
                 AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                         user,
                         tenantSchema,
-                        now(),
+                        appClock.now(),
                         authorities
                 );
 
@@ -378,14 +377,14 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            tenantUserRepository.updateLastLogin(user.getId(), now());
+            tenantUserRepository.updateLastLogin(user.getId(),  appClock.now());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
                     tenantSchema,
-                    now(),
+                    appClock.now(),
                     authorities
             );
 

@@ -1,16 +1,16 @@
 package brito.com.multitenancy001.tenant.users.app;
 
-import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsGuard;
-import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsService;
-import brito.com.multitenancy001.infrastructure.publicschema.AccountEntitlementsSnapshot;
-import brito.com.multitenancy001.infrastructure.publicschema.AccountResolver;
-import brito.com.multitenancy001.infrastructure.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsService;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;

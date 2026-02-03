@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS login_identities (
     user_type VARCHAR(20) NOT NULL, -- 'TENANT' | 'CONTROLPLANE'
     account_id BIGINT,              -- TENANT: obrigatório / CONTROLPLANE: deve ser NULL
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_login_identities_user_type
         CHECK (user_type IN ('TENANT', 'CONTROLPLANE')),

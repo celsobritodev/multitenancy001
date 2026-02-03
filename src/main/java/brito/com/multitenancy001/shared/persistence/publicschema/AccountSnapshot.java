@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.publicschema;
+package brito.com.multitenancy001.shared.persistence.publicschema;
 
 public record AccountSnapshot(
         Long id,

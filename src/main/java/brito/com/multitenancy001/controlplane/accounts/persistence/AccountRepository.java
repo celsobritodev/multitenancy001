@@ -13,7 +13,6 @@ import org.springframework.stereotype.Repository;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
-import brito.com.multitenancy001.controlplane.accounts.domain.AccountType;
 import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 
 @Repository
@@ -27,7 +26,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
     );
 
-    boolean existsByTypeAndDeletedFalse(AccountType type);
 
     boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
 
@@ -54,9 +52,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findByIdAndDeletedFalse(Long id);
 
-    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
-    List<Account> findByStatuses(@Param("statuses") List<AccountStatus> statuses);
-
+   
     // =========================================================
     // DEFAULT DE SEGURANÇA: ENABLED (operacional)
     // enabled = NOT DELETED + status operacional
@@ -81,9 +77,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     // QUERIES OPERACIONAIS (NOT DELETED)
     // =========================================================
 
-    @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status = :status")
-    long countByStatusAndDeletedFalse(@Param("status") AccountStatus status);
-
     @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     long countByStatusesAndDeletedFalse(@Param("statuses") List<AccountStatus> statuses);
 
@@ -91,8 +84,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
         return countByStatusesAndDeletedFalse(List.of(AccountStatus.ACTIVE, AccountStatus.FREE_TRIAL));
     }
 
-    Page<Account> findByDeletedFalseOrderByCreatedAtDesc(Pageable pageable);
-
+   
     Page<Account> findByStatusAndDeletedFalse(AccountStatus status, Pageable pageable);
 
     @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")

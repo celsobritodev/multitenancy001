@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS tenant_login_challenges (
     -- CSV simples de accountIds válidos (ex: "1,2,3")
     candidate_account_ids_csv TEXT NOT NULL,
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    expires_at TIMESTAMPTZ NOT NULL,
-    used_at TIMESTAMPTZ
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_email

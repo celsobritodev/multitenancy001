@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS account_entitlements (
     max_products    INTEGER NOT NULL,
     max_storage_mb  INTEGER NOT NULL DEFAULT 100,
 
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT now()
 );
 
 DO $$

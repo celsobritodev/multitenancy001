@@ -339,7 +339,7 @@ public class TenantUserTxService {
             if (user.isDeleted()) return;
 
             LocalDateTime now = appClock.now();
-            user.softDelete(now, System.currentTimeMillis());
+            user.softDelete(now, appClock.epochMillis());
             tenantUserRepository.save(user);
         });
     }

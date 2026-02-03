@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS payments (
     account_id BIGINT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
 
-    payment_date TIMESTAMPTZ NOT NULL,
-    valid_until TIMESTAMPTZ,
+    payment_date TIMESTAMP NOT NULL,
+    valid_until TIMESTAMP,
 
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
 
@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS payments (
     invoice_url TEXT,
     receipt_url TEXT,
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP,
 
     created_by BIGINT,
     updated_by BIGINT,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_by_email CITEXT,
     deleted_by_email CITEXT,
 
-    refunded_at TIMESTAMPTZ,
+    refunded_at TIMESTAMP,
     refund_amount NUMERIC(10,2),
     refund_reason VARCHAR(500),
 

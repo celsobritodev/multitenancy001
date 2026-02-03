@@ -18,18 +18,18 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
     suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
 
-    last_login TIMESTAMPTZ,
+    last_login TIMESTAMP,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-    locked_until TIMESTAMPTZ,
+    locked_until TIMESTAMP,
     must_change_password BOOLEAN NOT NULL DEFAULT false,
-    password_changed_at TIMESTAMPTZ,
+    password_changed_at TIMESTAMP,
 
     timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
     locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ,
-    deleted_at TIMESTAMPTZ,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
 
     created_by BIGINT,
     updated_by BIGINT,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
 
     password_reset_token VARCHAR(255),
-    password_reset_expires TIMESTAMPTZ,
+    password_reset_expires TIMESTAMP,
 
     phone VARCHAR(20),
     avatar_url VARCHAR(500),

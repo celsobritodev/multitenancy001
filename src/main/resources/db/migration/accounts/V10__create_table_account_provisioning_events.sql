@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS account_provisioning_events (
     failure_code VARCHAR(50),
     message TEXT,
     details_json TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_account_prov_events_account_id
