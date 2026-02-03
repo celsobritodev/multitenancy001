@@ -2,35 +2,38 @@
   PROJECT_DIR="../multitenancy001"
 
   echo "### PROJECT FILE INDEX"
+  
+  # Lista e ordena o índice de arquivos ignorando a pasta target
   find "$PROJECT_DIR" -type f \
     -not -path "$PROJECT_DIR/target/*" \
-    \( -name "*.java" \
-       -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
-       -o -path "$PROJECT_DIR/pom.xml" \
-       -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
-       -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
-    \) \
-    | sed "s|^$PROJECT_DIR/||" \
-    | sort
+    \( \
+      -name "*.java" \
+      -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+      -o -path "$PROJECT_DIR/pom.xml" \
+      -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+      -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+    \) | sed "s|^$PROJECT_DIR/||" | sort
 
   echo
   echo "### FILE CONTENTS"
   echo
 
+  # Itera sobre os arquivos para exibir o conteúdo
   find "$PROJECT_DIR" -type f \
     -not -path "$PROJECT_DIR/target/*" \
-    \( -name "*.java" \
-       -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
-       -o -path "$PROJECT_DIR/pom.xml" \
-       -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
-       -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
-    \) \
-    | sort \
-    | while IFS= read -r f; do
-        echo "============================================================"
-        echo "### FILE: ${f#$PROJECT_DIR/}"
-        echo "============================================================"
-        sed 's/\r$//' "$f"
-        echo
-      done
-} > all_content_with_paths_ideal.txt
+    \( \
+      -name "*.java" \
+      -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+      -o -path "$PROJECT_DIR/pom.xml" \
+      -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+      -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+    \) | sort | while IFS= read -r f; do
+      echo "============================================================"
+      echo "### FILE: ${f#$PROJECT_DIR/}"
+      echo "============================================================"
+      # sed remove finais de linha do Windows (\r) para garantir compatibilidade
+      sed 's/\r$//' "$f"
+      echo
+    done
+
+} > all_content_with_paths_ideal2719.txt
