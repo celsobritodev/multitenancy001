@@ -12,6 +12,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -94,22 +95,29 @@ public class Product implements Auditable, SoftDeletable {
     // =========================
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "supplier_id",
-            foreignKey = @ForeignKey(name = "fk_products_supplier"))
+    @JoinColumn(
+            name = "supplier_id",
+            foreignKey = @ForeignKey(name = "fk_products_supplier")
+    )
     private Supplier supplier;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false,
-            foreignKey = @ForeignKey(name = "fk_products_category"))
+    @JoinColumn(
+            name = "category_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_products_category")
+    )
     private Category category;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "subcategory_id",
-            foreignKey = @ForeignKey(name = "fk_products_subcategory"))
+    @JoinColumn(
+            name = "subcategory_id",
+            foreignKey = @ForeignKey(name = "fk_products_subcategory")
+    )
     private Subcategory subcategory;
 
     // =========================
-    // DOMAIN METHODS
+    // CONTRACTS
     // =========================
 
     @Override
@@ -122,19 +130,84 @@ public class Product implements Auditable, SoftDeletable {
         return Boolean.TRUE.equals(deleted);
     }
 
+    // =========================
+    // DOMAIN METHODS (estoque/preço/delete)
+    // =========================
+
+    public void addToStock(Integer qty) {
+        if (qty == null) return;
+        if (qty <= 0) return;
+
+        if (this.stockQuantity == null) this.stockQuantity = 0;
+        this.stockQuantity = this.stockQuantity + qty;
+    }
+
+    public void removeFromStock(int qty) {
+        if (qty <= 0) return;
+
+        if (this.stockQuantity == null) this.stockQuantity = 0;
+
+        int next = this.stockQuantity - qty;
+        if (next < 0) {
+            throw new IllegalStateException("Stock cannot be negative");
+        }
+        this.stockQuantity = next;
+    }
+
+    public void updatePrice(BigDecimal newPrice) {
+        if (newPrice == null) throw new IllegalArgumentException("newPrice is required");
+        if (newPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("newPrice cannot be negative");
+        }
+        this.price = newPrice;
+        recomputeProfitMargin();
+    }
+
+    public void updateCostPrice(BigDecimal newCostPrice) {
+        // custo pode ser null (sem custo informado)
+        if (newCostPrice != null && newCostPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("costPrice cannot be negative");
+        }
+        this.costPrice = newCostPrice;
+        recomputeProfitMargin();
+    }
+
+    /**
+     * Compat: chamado por código que usa softDelete() sem now.
+     * Auditoria de deletedAt/deletedBy fica com o AuditEntityListener.
+     */
     public void softDelete() {
         if (Boolean.TRUE.equals(this.deleted)) return;
         this.deleted = true;
         this.active = false;
-        // deletedAt/deletedBy serão preenchidos pelo AuditEntityListener (fonte única).
+    }
+
+    /**
+     * ✅ Novo: compat com seu service atual: product.softDelete(appClock.instant()).
+     * - Mantém deleted=true e active=false
+     * - Se quiser registrar deletedAt imediatamente, usa audit.markDeleted(now)
+     *   (seu AuditInfo já tem markDeleted(Instant)).
+     */
+    public void softDelete(Instant now) {
+        if (Boolean.TRUE.equals(this.deleted)) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
+        this.deleted = true;
+        this.active = false;
+
+        if (this.audit != null) {
+            this.audit.markDeleted(now);
+        }
     }
 
     public void restore() {
         if (!Boolean.TRUE.equals(this.deleted)) return;
         this.deleted = false;
         this.active = true;
-        // Política de restore: manter deletedAt (histórico) ou limpar?
-        // Seu listener hoje NÃO limpa. Se quiser "restore limpa", ajuste AuditInfo/AuditEntityListener.
+
+        if (this.audit != null) {
+            this.audit.clearDeleted();
+        }
     }
 
     /**
@@ -151,6 +224,7 @@ public class Product implements Auditable, SoftDeletable {
             this.profitMargin = null;
             return;
         }
+
         BigDecimal diff = price.subtract(costPrice);
         BigDecimal pct = diff
                 .divide(costPrice, 6, RoundingMode.HALF_UP)
@@ -160,4 +234,3 @@ public class Product implements Auditable, SoftDeletable {
         this.profitMargin = pct;
     }
 }
-

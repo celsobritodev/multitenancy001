@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -52,7 +53,8 @@ public class SaleItem implements Auditable, SoftDeletable {
     private BigDecimal unitPrice;
 
     @Column(name = "total_price", nullable = false, precision = 12, scale = 2)
-    private BigDecimal totalPrice;
+    @Builder.Default
+    private BigDecimal totalPrice = BigDecimal.ZERO;
 
     @Column(name = "deleted", nullable = false)
     @Builder.Default
@@ -72,22 +74,22 @@ public class SaleItem implements Auditable, SoftDeletable {
         return deleted;
     }
 
-    @Override
-    public void markDeleted() {
+    // =========================
+    // Soft delete (padrão do projeto)
+    // =========================
+    public void softDelete() {
+        if (this.deleted) return;
         this.deleted = true;
+        // audit.deletedAt será setado pelo listener
     }
 
-    public void softDelete(Instant now) {
-        if (this.deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
-        this.deleted = true;
-        this.audit.markDeleted(now);
+    /** Compat com código antigo que chamava softDelete(Instant). */
+    public void softDelete(Instant ignoredNow) {
+        softDelete();
     }
 
     public void restore() {
         if (!this.deleted) return;
-
         this.deleted = false;
         this.audit.clearDeleted();
     }
@@ -100,4 +102,3 @@ public class SaleItem implements Auditable, SoftDeletable {
         this.totalPrice = unitPrice.multiply(quantity);
     }
 }
-

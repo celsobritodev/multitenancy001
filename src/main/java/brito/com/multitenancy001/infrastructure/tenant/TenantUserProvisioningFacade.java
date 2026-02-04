@@ -185,7 +185,8 @@ public class TenantUserProvisioningFacade {
                             .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
                     user.setPasswordResetToken(token);
-                    user.setPasswordResetExpires(expiresAt);
+                    user.setPasswordResetExpiresAt(expiresAt);
+
                     tenantUserRepository.save(user);
                     return null;
                 })

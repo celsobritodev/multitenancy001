@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.tenant.categories.app;
 
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
 import brito.com.multitenancy001.tenant.categories.persistence.TenantCategoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import java.util.List;
 public class TenantCategoryService {
 
     private final TenantCategoryRepository tenantCategoryRepository;
-    private final AppClock appClock;
 
     // =========================================================
     // READ
@@ -74,7 +72,6 @@ public class TenantCategoryService {
 
         String name = category.getName().trim();
 
-        // uk_categories_name (global) -> valida para evitar 500
         tenantCategoryRepository.findNotDeletedByNameIgnoreCase(name)
                 .ifPresent(existing -> {
                     throw new ApiException("CATEGORY_NAME_ALREADY_EXISTS", "Categoria já existe: " + name, 409);
@@ -102,7 +99,6 @@ public class TenantCategoryService {
         if (StringUtils.hasText(req.getName())) {
             String newName = req.getName().trim();
 
-            // valida unicidade
             tenantCategoryRepository.findNotDeletedByNameIgnoreCase(newName)
                     .ifPresent(other -> {
                         if (!other.getId().equals(id)) {
@@ -113,7 +109,6 @@ public class TenantCategoryService {
             existing.setName(newName);
         }
 
-        // active é boolean primitivo -> melhor controlar via endpoint específico (toggle)
         return tenantCategoryRepository.save(existing);
     }
 
@@ -135,7 +130,8 @@ public class TenantCategoryService {
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
-        category.softDelete(appClock.instant());
+        // ✅ domínio não recebe Instant: auditoria é feita pelo AuditEntityListener + AppClock
+        category.softDelete();
         tenantCategoryRepository.save(category);
     }
 
@@ -148,4 +144,3 @@ public class TenantCategoryService {
         return tenantCategoryRepository.save(category);
     }
 }
-

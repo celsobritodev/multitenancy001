@@ -7,6 +7,7 @@ import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import brito.com.multitenancy001.tenant.products.domain.Product;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -72,7 +73,9 @@ public class Supplier implements Auditable, SoftDeletable {
 
     @Builder.Default
     @Column(name = "deleted", nullable = false)
-    private boolean deleted = false;    @Column(name = "notes", columnDefinition = "TEXT")
+    private boolean deleted = false;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
     @OneToMany(
@@ -81,7 +84,9 @@ public class Supplier implements Auditable, SoftDeletable {
             fetch = FetchType.LAZY
     )
     @Builder.Default
-    private List<Product> products = new ArrayList<>();    @Embedded
+    private List<Product> products = new ArrayList<>();
+
+    @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
@@ -92,29 +97,42 @@ public class Supplier implements Auditable, SoftDeletable {
 
     @Override
     public boolean isDeleted() {
-        return Boolean.TRUE.equals(deleted);
+        return deleted;
     }
-
 
     // =====================
     // Regras de domínio
     // =====================
 
-    public void softDelete(Instant now) {
+    /**
+     * Soft delete padrão do projeto:
+     * - marca deleted=true e desativa active
+     * - audit.deletedAt/deletedBy são setados pelo AuditEntityListener (AppClock)
+     */
+    public void softDelete() {
         if (this.deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
         this.deleted = true;
-        this.deletedAt = now;
         this.active = false;
+    }
+
+    /**
+     * Compat com código antigo que chamava softDelete(Instant).
+     * O tempo é responsabilidade do AuditEntityListener, então o parâmetro é ignorado.
+     */
+    public void softDelete(Instant ignoredNow) {
+        softDelete();
     }
 
     public void restore() {
         if (!this.deleted) return;
 
         this.deleted = false;
-        this.deletedAt = null;
         this.active = true;
+
+        // Política: restore limpa deletedAt/deletedBy
+        // (se você preferir manter histórico, remova esta linha)
+        if (this.audit != null) {
+            this.audit.clearDeleted();
+        }
     }
 }
-

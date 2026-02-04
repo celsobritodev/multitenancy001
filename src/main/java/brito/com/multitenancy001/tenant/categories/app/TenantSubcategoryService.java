@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.tenant.categories.app;
 
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
 import brito.com.multitenancy001.tenant.categories.domain.Subcategory;
 import brito.com.multitenancy001.tenant.categories.persistence.TenantCategoryRepository;
@@ -21,7 +20,7 @@ public class TenantSubcategoryService {
 
     private final TenantSubcategoryRepository tenantSubcategoryRepository;
     private final TenantCategoryRepository tenantCategoryRepository;
-    private final AppClock appClock;
+ 
 
     // =========================================================
     // READ
@@ -148,7 +147,8 @@ public class TenantSubcategoryService {
         Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
-        sub.softDelete(appClock.instant());
+        sub.softDelete();
+
         tenantSubcategoryRepository.save(sub);
     }
 

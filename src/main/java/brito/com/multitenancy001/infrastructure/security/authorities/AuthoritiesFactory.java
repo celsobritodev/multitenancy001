@@ -22,12 +22,10 @@ public final class AuthoritiesFactory {
     public static Set<GrantedAuthority> forControlPlane(ControlPlaneUser user) {
         Set<String> merged = new LinkedHashSet<>();
 
-        // defaults da role (enum -> string)
         for (ControlPlanePermission p : ControlPlaneRolePermissions.permissionsFor(user.getRole())) {
             merged.add(p.name());
         }
 
-        // permissions explícitas do banco (enum -> string)
         if (user.getPermissions() != null) {
             for (ControlPlanePermission p : user.getPermissions()) {
                 if (p == null) continue;
@@ -35,7 +33,6 @@ public final class AuthoritiesFactory {
             }
         }
 
-        // normaliza e bloqueia escopo errado (TEN_ dentro do CP, etc.)
         merged = PermissionScopeValidator.normalizeControlPlaneStrict(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
@@ -56,15 +53,14 @@ public final class AuthoritiesFactory {
             }
         }
 
-        // permissions explícitas do banco (enum -> string)
+        // permissions explícitas do banco (JÁ É String code)
         if (user.getPermissions() != null) {
-            for (TenantPermission p : user.getPermissions()) {
-                if (p == null) continue;
-                merged.add(p.name());
+            for (String code : user.getPermissions()) {
+                if (code == null || code.isBlank()) continue;
+                merged.add(code.trim().toUpperCase(Locale.ROOT));
             }
         }
 
-        // normaliza SEMPRE e bloqueia CP_ dentro do tenant
         merged = PermissionScopeValidator.normalizeTenantStrict(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
@@ -75,4 +71,3 @@ public final class AuthoritiesFactory {
         return authorities;
     }
 }
-

@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -39,12 +40,10 @@ public class TenantUserFacade {
     private final AppClock appClock;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
-    // ✅ NOVO: para buscar entitlements efetivos (somente TENANT_OWNER)
     private final AccountEntitlementsService accountEntitlementsService;
 
     private final TenantExecutor tenantExecutor;
 
-    // ✅ NOVO: trilha append-only de security actions
     private final SecurityAuditService securityAuditService;
 
     // =========================================================
@@ -56,9 +55,10 @@ public class TenantUserFacade {
         String schema = securityUtils.getCurrentSchema();
         Long fromUserId = securityUtils.getCurrentUserId();
 
-        tenantExecutor.run(schema, () ->
-                tenantUserService.transferTenantOwnerRole(accountId, fromUserId, toUserId)
-        );
+        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+            tenantUserService.transferTenantOwnerRole(accountId, fromUserId, toUserId);
+            return null;
+        });
     }
 
     public TenantMeResponse getMyProfile() {
@@ -81,7 +81,6 @@ public class TenantUserFacade {
         String name = (req.name() == null) ? null : req.name().trim();
         String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
 
-        // ✅ NOVO: locale/timezone do request -> trim -> vazio vira null
         String locale = (req.locale() == null) ? null : req.locale().trim();
         if (locale != null && locale.isBlank()) locale = null;
 
@@ -94,12 +93,10 @@ public class TenantUserFacade {
                         : new LinkedHashSet<>(req.permissions());
 
         EntityOrigin origin = (req.origin() != null) ? req.origin() : EntityOrigin.ADMIN;
-
         if (origin == EntityOrigin.BUILT_IN) {
             throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
         }
 
-        // ✅ NOVO: pega mustChangePassword do request (default false)
         Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
 
         long currentUsers = tenantExecutor.run(schema, () ->
@@ -126,7 +123,6 @@ public class TenantUserFacade {
                     mustChangePassword,
                     origin
             );
-
             return tenantUserApiMapper.toDetails(created);
         });
     }
@@ -210,7 +206,10 @@ public class TenantUserFacade {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        tenantExecutor.run(schema, () -> tenantUserService.softDelete(userId, accountId));
+        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+            tenantUserService.softDelete(userId, accountId);
+            return null;
+        });
     }
 
     public TenantUserSummaryResponse restoreTenantUser(Long userId) {
@@ -237,7 +236,10 @@ public class TenantUserFacade {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
 
-        tenantExecutor.run(schema, () -> tenantUserService.hardDelete(userId, accountId));
+        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+            tenantUserService.hardDelete(userId, accountId);
+            return null;
+        });
     }
 
     // =========================================================
@@ -248,7 +250,6 @@ public class TenantUserFacade {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
-        // ✅ trilha append-only: tentativa (antes de resolver conta)
         securityAuditService.record(
                 "PASSWORD_RESET_REQUESTED",
                 "ATTEMPT",
@@ -278,9 +279,11 @@ public class TenantUserFacade {
                 );
 
                 user.setPasswordResetToken(t);
-                user.setPasswordResetExpires(appClock.instant().plusHours(1));
-                tenantUserService.save(user);
 
+                // ✅ Instant não tem plusHours; use Duration
+                user.setPasswordResetExpires(appClock.instant().plus(Duration.ofHours(1)));
+
+                tenantUserService.save(user);
                 return t;
             });
 
@@ -335,9 +338,10 @@ public class TenantUserFacade {
         );
 
         try {
-            tenantExecutor.run(schema, () ->
-                    tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword)
-            );
+            tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+                tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword);
+                return null;
+            });
 
             securityAuditService.record(
                     "PASSWORD_RESET_COMPLETED",
@@ -407,4 +411,3 @@ public class TenantUserFacade {
         return tenantExecutor.run(schema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
     }
 }
-

@@ -1,12 +1,11 @@
 package brito.com.multitenancy001.tenant.sales.domain;
 
-import jakarta.persistence.*;
-import lombok.*;
-
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -41,7 +40,8 @@ public class Sale implements Auditable, SoftDeletable {
     private Instant saleDate;
 
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
-    private BigDecimal totalAmount;
+    @Builder.Default
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @Column(name = "customer_name", length = 200)
     private String customerName;
@@ -86,26 +86,37 @@ public class Sale implements Auditable, SoftDeletable {
         return deleted;
     }
 
-    @Override
-    public void markDeleted() {
+    // =========================
+    // Soft delete (padrão do projeto)
+    // - NÃO passa Instant para domínio
+    // - AuditEntityListener seta audit.deletedAt com AppClock
+    // =========================
+    public void softDelete() {
+        if (this.deleted) return;
         this.deleted = true;
+        // deletedAt/deletedBy serão setados pelo AuditEntityListener ao atualizar
     }
 
-    public void softDelete(Instant now) {
-        if (this.deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
-        this.deleted = true;
-        this.audit.markDeleted(now);
+    /**
+     * Compat com código antigo que chamava softDelete(Instant).
+     * A auditoria é responsabilidade do listener, então o parâmetro é ignorado.
+     */
+    public void softDelete(Instant ignoredNow) {
+        softDelete();
     }
 
     public void restore() {
         if (!this.deleted) return;
-
         this.deleted = false;
+
+        // política: restore limpa deletedAt/deletedBy
+        // (se você preferir manter histórico de deleção, remova essa linha)
         this.audit.clearDeleted();
     }
 
+    // =========================
+    // Itens / total
+    // =========================
     public void addItem(SaleItem item) {
         if (item == null) return;
         item.setSale(this);
@@ -122,9 +133,11 @@ public class Sale implements Auditable, SoftDeletable {
 
     public void recalcTotal() {
         BigDecimal sum = BigDecimal.ZERO;
-        for (SaleItem it : items) {
-            if (it.getTotalPrice() != null) {
-                sum = sum.add(it.getTotalPrice());
+        if (items != null) {
+            for (SaleItem it : items) {
+                if (it != null && it.getTotalPrice() != null) {
+                    sum = sum.add(it.getTotalPrice());
+                }
             }
         }
         this.totalAmount = sum;
@@ -134,4 +147,3 @@ public class Sale implements Auditable, SoftDeletable {
         this.status = SaleStatus.CANCELLED;
     }
 }
-

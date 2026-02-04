@@ -8,35 +8,37 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
-    name  VARCHAR(100) NOT NULL,
-    email CITEXT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL,
     password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50),
 
-    suspended_by_account BOOLEAN NOT NULL DEFAULT false,
-    suspended_by_admin   BOOLEAN NOT NULL DEFAULT false,
+    -- AUTH / SECURITY (Instant <-> TIMESTAMPTZ)
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+    last_login TIMESTAMPTZ NULL,
+    locked_until TIMESTAMPTZ NULL,
+    password_changed_at TIMESTAMPTZ NULL,
+    password_reset_token VARCHAR(200) NULL,
+    password_reset_expires TIMESTAMPTZ NULL,
 
-    -- auditoria (instantes reais)
+    -- STATUS
+    suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
+    suspended_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- AUDIT (fonte única)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-    created_by BIGINT,
-    updated_by BIGINT,
-    deleted_by BIGINT,
-
-    created_by_email CITEXT,
-    updated_by_email CITEXT,
-    deleted_by_email CITEXT,
-
-    deleted    BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMPTZ
+    created_by VARCHAR(120),
+    updated_at TIMESTAMPTZ,
+    updated_by VARCHAR(120),
+    deleted_at TIMESTAMPTZ,
+    deleted_by VARCHAR(120)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_controlplane_users_email_active
-    ON controlplane_users (email)
-    WHERE deleted = false;
+-- email global (dentro do CP costuma ser global por conta; aqui seu repo também busca por account_id)
+CREATE INDEX IF NOT EXISTS idx_cp_users_account_id ON controlplane_users(account_id);
+CREATE INDEX IF NOT EXISTS idx_cp_users_email ON controlplane_users(email);
 
-CREATE INDEX IF NOT EXISTS idx_controlplane_users_account_id ON controlplane_users (account_id);
-CREATE INDEX IF NOT EXISTS idx_controlplane_users_created_at ON controlplane_users (created_at);
-
+-- se quiser garantir unicidade por conta:
+-- CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_account_email ON controlplane_users(account_id, email);
