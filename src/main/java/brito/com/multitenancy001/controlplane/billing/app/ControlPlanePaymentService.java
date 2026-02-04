@@ -184,11 +184,12 @@ public class ControlPlanePaymentService {
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-        return controlPlanePaymentRepository.findByAccountId(accountId)
+        return controlPlanePaymentRepository.findByAccount_Id(accountId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
+
 
     @Transactional(readOnly = true)
     public boolean hasActivePayment(Long accountId) {
@@ -300,8 +301,9 @@ public class ControlPlanePaymentService {
         if (accountId == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         }
-        return controlPlanePaymentRepository.existsByIdAndAccountId(paymentId, accountId);
+        return controlPlanePaymentRepository.existsByIdAndAccount_Id(paymentId, accountId);
     }
+
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
@@ -312,11 +314,12 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         }
 
-        return controlPlanePaymentRepository.findByAccountIdAndStatus(accountId, status)
+        return controlPlanePaymentRepository.findByAccount_IdAndStatus(accountId, status)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
+
 
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentByTransactionId(String transactionId) {

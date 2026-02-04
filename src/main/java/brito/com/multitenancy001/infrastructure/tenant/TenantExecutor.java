@@ -64,7 +64,6 @@ public class TenantExecutor {
             throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
         }
 
-        // ✅ padronizado: nada de bind/clear manual
         try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
             return fn.get();
         }
@@ -88,17 +87,12 @@ public class TenantExecutor {
         return run(tenantSchema, fn);
     }
 
-    /**
-     * Overload conveniente: defaultValue = null
-     * (útil quando o caller aceita null como "não aplicou side-effect").
-     */
+    /** Overload conveniente: defaultValue = null */
     public <T> T runIfReady(String schemaName, String requiredTable, Supplier<T> fn) {
         return runIfReady(schemaName, requiredTable, fn, null);
     }
 
-    /**
-     * Overload para Runnable (quando o caller não precisa retornar nada).
-     */
+    /** Overload para Runnable */
     public void runIfReady(String schemaName, String requiredTable, Runnable fn) {
         runIfReady(schemaName, requiredTable, () -> {
             fn.run();
@@ -126,7 +120,7 @@ public class TenantExecutor {
         return run(schemaName, fn);
     }
 
-    // overload conveniente
+    /** overload conveniente */
     public <T> T runOrThrow(String schemaName, Supplier<T> fn) {
         return runOrThrow(schemaName, null, fn);
     }
@@ -140,4 +134,3 @@ public class TenantExecutor {
         return (s == null || s.isBlank()) ? null : s;
     }
 }
-

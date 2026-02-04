@@ -125,7 +125,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName);
+            ps.setString(1, schemaName.trim());
 
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -172,7 +172,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName);
+            ps.setString(1, schemaName.trim());
             ps.setString(2, t);
 
             try (ResultSet rs = ps.executeQuery()) {
