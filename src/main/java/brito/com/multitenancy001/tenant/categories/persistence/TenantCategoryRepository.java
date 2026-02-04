@@ -42,3 +42,4 @@ public interface TenantCategoryRepository extends JpaRepository<Category, Long> 
     List<Category> findWithFlags(@Param("includeDeleted") boolean includeDeleted,
                                  @Param("includeInactive") boolean includeInactive);
 }
+

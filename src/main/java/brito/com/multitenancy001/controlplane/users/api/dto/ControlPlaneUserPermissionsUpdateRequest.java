@@ -15,3 +15,4 @@ public record ControlPlaneUserPermissionsUpdateRequest(
                         String
                 > permissions
 ) {}
+

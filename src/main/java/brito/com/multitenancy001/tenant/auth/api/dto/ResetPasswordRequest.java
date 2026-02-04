@@ -13,3 +13,4 @@ public record ResetPasswordRequest(
         )
         String newPassword
 ) {}
+

@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.shared.persistence.publicschema;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 
@@ -21,7 +21,7 @@ public class AccountResolver {
 
     public AccountSnapshot resolveActiveAccountBySlug(String slug) {
         return publicExecutor.run(() -> {
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -41,7 +41,7 @@ public class AccountResolver {
 
     private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
         return publicExecutor.run(() -> {
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
@@ -54,7 +54,7 @@ public class AccountResolver {
         });
     }
 
-    private boolean isOperational(AccountResolverProjection p, LocalDateTime now) {
+    private boolean isOperational(AccountResolverProjection p, Instant now) {
         if (p == null) return false;
 
         if ("BUILT_IN".equalsIgnoreCase(p.getOrigin())) return true;
@@ -69,3 +69,4 @@ public class AccountResolver {
         return false;
     }
 }
+

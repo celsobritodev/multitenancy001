@@ -6,3 +6,4 @@ public record SignupResponse(
         AccountResponse account,
         TenantAdminResponse tenantAdmin
 ) {}
+

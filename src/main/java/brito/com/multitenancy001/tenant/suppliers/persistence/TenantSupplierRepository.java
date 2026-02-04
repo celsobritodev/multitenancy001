@@ -65,3 +65,4 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 
 
 }
+

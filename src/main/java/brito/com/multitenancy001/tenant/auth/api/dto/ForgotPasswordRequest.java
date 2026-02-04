@@ -7,3 +7,4 @@ public record ForgotPasswordRequest(
         @NotBlank String slug,
         @NotBlank @Email String email
 ) {}
+

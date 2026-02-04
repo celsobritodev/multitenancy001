@@ -71,3 +71,4 @@ public class TenantContextMonitor {
         return (msg != null && !msg.isBlank()) ? msg : ex.getClass().getSimpleName();
     }
 }
+

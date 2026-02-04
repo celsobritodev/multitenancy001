@@ -30,3 +30,4 @@ public class AccountEntitlements {
     @Column(name = "max_storage_mb", nullable = false)
     private Integer maxStorageMb;
 }
+

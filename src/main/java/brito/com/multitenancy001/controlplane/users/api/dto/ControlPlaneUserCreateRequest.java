@@ -48,3 +48,4 @@ public record ControlPlaneUserCreateRequest(
         if (email != null) email = email.trim().toLowerCase();
     }
 }
+

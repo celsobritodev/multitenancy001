@@ -1,20 +1,16 @@
 package brito.com.multitenancy001.tenant.products.api.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
-
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ProductResponse(
         UUID id,
-        @NotBlank String name,
+        String name,
         String description,
         String sku,
-        @NotNull @PositiveOrZero BigDecimal price,
-        @PositiveOrZero Integer stockQuantity,
+        BigDecimal price,
+        Integer stockQuantity,
         Integer minStock,
         Integer maxStock,
         BigDecimal costPrice,
@@ -34,13 +30,13 @@ public record ProductResponse(
         UUID supplierId,
         String supplierName,
 
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        // ✅ Instantes reais na borda HTTP (JSON com "Z")
+        Instant createdAt,
+        Instant updatedAt
 ) {
     public ProductResponse {
         if (stockQuantity == null) stockQuantity = 0;
         if (active == null) active = true;
     }
-
-  
 }
+

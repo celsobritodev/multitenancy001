@@ -47,3 +47,4 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
                 || path.startsWith("/favicon.ico");
     }
 }
+

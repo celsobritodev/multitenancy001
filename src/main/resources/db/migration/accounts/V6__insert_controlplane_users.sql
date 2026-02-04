@@ -56,3 +56,4 @@ WHERE NOT EXISTS (
       AND existing.deleted = false
       AND existing.email = u.email
 );
+

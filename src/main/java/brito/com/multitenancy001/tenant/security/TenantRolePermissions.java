@@ -132,3 +132,4 @@ public final class TenantRolePermissions {
         return Collections.unmodifiableSet(set);
     }
 }
+

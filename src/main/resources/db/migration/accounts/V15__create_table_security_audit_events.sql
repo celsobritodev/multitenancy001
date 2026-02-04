@@ -3,7 +3,7 @@ SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS security_audit_events (
     id BIGSERIAL PRIMARY KEY,
-    occurred_at TIMESTAMP NOT NULL DEFAULT now(),
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     request_id UUID,
     method TEXT,
@@ -31,3 +31,4 @@ CREATE INDEX IF NOT EXISTS idx_security_audit_occurred_at ON security_audit_even
 CREATE INDEX IF NOT EXISTS idx_security_audit_request_id ON security_audit_events (request_id);
 CREATE INDEX IF NOT EXISTS idx_security_audit_action_type ON security_audit_events (action_type);
 CREATE INDEX IF NOT EXISTS idx_security_audit_account_id ON security_audit_events (account_id);
+

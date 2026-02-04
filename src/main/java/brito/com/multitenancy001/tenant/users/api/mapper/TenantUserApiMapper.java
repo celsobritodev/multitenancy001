@@ -16,7 +16,7 @@ public class TenantUserApiMapper {
 
     private static SystemRoleName toSystemRoleOrNull(Object tenantRoleEnum) {
         if (tenantRoleEnum == null) return null;
-        // ✅ assume nomes compatíveis (TENANT_*)
+        // assume nomes compatíveis (TENANT_*)
         return SystemRoleName.fromString(tenantRoleEnum.toString());
     }
 
@@ -35,113 +35,59 @@ public class TenantUserApiMapper {
         );
     }
 
-  public TenantUserDetailsResponse toDetails(TenantUser tenantUser) {
-    boolean enabled =
-            !tenantUser.isDeleted()
-                    && !tenantUser.isSuspendedByAccount()
-                    && !tenantUser.isSuspendedByAdmin();
+    public TenantMeResponse toMe(TenantUser u) {
+        boolean enabled = u.isEnabled();
+        SystemRoleName role = toSystemRoleOrNull(u.getRole());
 
-    SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
+        return new TenantMeResponse(
+                u.getId(),
+                u.getAccountId(),
+                u.getName(),
+                u.getEmail(),
+                role,
+                u.getPhone(),
+                u.getAvatarUrl(),
+                u.getTimezone(),
+                u.getLocale(),
+                u.isMustChangePassword(),
+                u.getOrigin(),
+                u.isSuspendedByAccount(),
+                u.isSuspendedByAdmin(),
+                u.isDeleted(),
+                enabled
+        );
+    }
 
-    return new TenantUserDetailsResponse(
-            tenantUser.getId(),
-            tenantUser.getAccountId(),
-            tenantUser.getName(),
-            tenantUser.getEmail(),
-            role,
-            tenantUser.getPhone(),
-            tenantUser.getAvatarUrl(),
-            tenantUser.getTimezone(),
-            tenantUser.getLocale(),
-            tenantUser.isMustChangePassword(),
-            tenantUser.getOrigin(),
-            tenantUser.isSuspendedByAccount(),
-            tenantUser.isSuspendedByAdmin(),
-            tenantUser.isDeleted(),
-            enabled
-    );
-}
+    /**
+     * Para TENANT_OWNER: retorna visão rica.
+     */
+    public TenantUserListItemResponse toListItemRich(TenantUser u) {
+        boolean enabled = u.isEnabled();
 
-public TenantMeResponse toMe(TenantUser tenantUser) {
-    SystemRoleName role = toSystemRoleOrNull(tenantUser.getRole());
+        List<String> perms = (u.getPermissions() == null)
+                ? List.of()
+                : u.getPermissions().stream()
+                .map(Enum::name)
+                .sorted(Comparator.naturalOrder())
+                .toList();
 
-    boolean enabled =
-            !tenantUser.isDeleted()
-                    && !tenantUser.isSuspendedByAccount()
-                    && !tenantUser.isSuspendedByAdmin();
+        TenantActorRef createdBy = mapCreatedBy(u.getAudit());
+        SystemRoleName role = toSystemRoleOrNull(u.getRole());
 
-    return new TenantMeResponse(
-            tenantUser.getId(),
-            tenantUser.getAccountId(),
-            tenantUser.getName(),
-            tenantUser.getEmail(),
-            role,
-            tenantUser.getPhone(),
-            tenantUser.getAvatarUrl(),
-            tenantUser.getTimezone(),
-            tenantUser.getLocale(),
-            tenantUser.isMustChangePassword(),
-            tenantUser.getOrigin(),
-            tenantUser.isSuspendedByAccount(),
-            tenantUser.isSuspendedByAdmin(),
-            tenantUser.isDeleted(),
-            enabled
-    );
-}
-
-/**
- * Para não-owner: retorna somente o básico (sem RBAC/audit).
- */
-public TenantUserListItemResponse toListItemBasic(TenantUser u) {
-    boolean enabled = u.isEnabled();
-
-    return new TenantUserListItemResponse(
-            u.getId(),
-            u.getEmail(),
-            null,
-            null,
-            u.isMustChangePassword(),
-            u.getOrigin(),
-            null,
-            null,
-            u.isSuspendedByAccount(),
-            u.isSuspendedByAdmin(),
-            enabled
-    );
-}
-
-/**
- * Para TENANT_OWNER: retorna visão rica.
- */
-public TenantUserListItemResponse toListItemRich(TenantUser u) {
-    boolean enabled = u.isEnabled();
-
-    List<String> perms = (u.getPermissions() == null)
-            ? List.of()
-            : u.getPermissions().stream()
-            .map(Enum::name)
-            .sorted(Comparator.naturalOrder())
-            .toList();
-
-    TenantActorRef createdBy = mapCreatedBy(u.getAudit());
-
-    SystemRoleName role = toSystemRoleOrNull(u.getRole());
-
-    return new TenantUserListItemResponse(
-            u.getId(),
-            u.getEmail(),
-            role,
-            perms,
-            u.isMustChangePassword(),
-            u.getOrigin(),
-            u.getLastLogin(),
-            createdBy,
-            u.isSuspendedByAccount(),
-            u.isSuspendedByAdmin(),
-            enabled
-    );
-}
-
+        return new TenantUserListItemResponse(
+                u.getId(),
+                u.getEmail(),
+                role,
+                perms,
+                u.isMustChangePassword(),
+                u.getOrigin(),
+                u.getLastLoginAt(),
+                createdBy,
+                u.isSuspendedByAccount(),
+                u.isSuspendedByAdmin(),
+                enabled
+        );
+    }
 
     private TenantActorRef mapCreatedBy(AuditInfo audit) {
         if (audit == null) return null;
@@ -149,3 +95,4 @@ public TenantUserListItemResponse toListItemRich(TenantUser u) {
         return new TenantActorRef(audit.getCreatedBy(), audit.getCreatedByEmail());
     }
 }
+

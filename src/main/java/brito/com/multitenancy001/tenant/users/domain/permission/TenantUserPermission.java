@@ -21,3 +21,4 @@ public record TenantUserPermission(String code) {
         return new TenantUserPermission(permission.name());
     }
 }
+

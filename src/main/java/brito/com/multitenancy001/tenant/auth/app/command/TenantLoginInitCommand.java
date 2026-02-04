@@ -4,3 +4,4 @@ public record TenantLoginInitCommand(
         String email,
         String password
 ) { }
+

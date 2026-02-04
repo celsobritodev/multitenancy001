@@ -10,33 +10,35 @@ public class ProductApiMapper {
 
     public ProductResponse toResponse(Product product) {
         return new ProductResponse(
-            product.getId(),
-            product.getName(),
-            product.getDescription(),
-            product.getSku(),
-            product.getPrice(),
-            product.getStockQuantity(),
-            product.getMinStock(),
-            product.getMaxStock(),
-            product.getCostPrice(),
-            product.getProfitMargin(),
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getSku(),
+                product.getPrice(),
+                product.getStockQuantity(),
+                product.getMinStock(),
+                product.getMaxStock(),
+                product.getCostPrice(),
+                product.getProfitMargin(),
 
-            product.getCategory() != null ? product.getCategory().getId() : null,
-            product.getCategory() != null ? product.getCategory().getName() : null,
-            product.getSubcategory() != null ? product.getSubcategory().getId() : null,
-            product.getSubcategory() != null ? product.getSubcategory().getName() : null,
+                product.getCategory() != null ? product.getCategory().getId() : null,
+                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getSubcategory() != null ? product.getSubcategory().getId() : null,
+                product.getSubcategory() != null ? product.getSubcategory().getName() : null,
 
-            product.getBrand(),
-            product.getWeightKg(),
-            product.getDimensions(),
-            product.getBarcode(),
-            product.getActive(),
+                product.getBrand(),
+                product.getWeightKg(),
+                product.getDimensions(),
+                product.getBarcode(),
+                product.getActive(),
 
-            product.getSupplier() != null ? product.getSupplier().getId() : null,
-            product.getSupplier() != null ? product.getSupplier().getName() : null,
+                product.getSupplier() != null ? product.getSupplier().getId() : null,
+                product.getSupplier() != null ? product.getSupplier().getName() : null,
 
-            product.getCreatedAt(),
-            product.getUpdatedAt()
+                // ✅ Auditoria única: vem do AuditInfo (Instant)
+                product.getAudit() != null ? product.getAudit().getCreatedAt() : null,
+                product.getAudit() != null ? product.getAudit().getUpdatedAt() : null
         );
     }
 }
+

@@ -30,19 +30,19 @@ CREATE TABLE IF NOT EXISTS products (
 
   supplier_id UUID NULL,
 
-  created_at TIMESTAMP NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP,
-
   deleted BOOLEAN NOT NULL DEFAULT false,
-  deleted_at TIMESTAMP,
 
-  -- AUDITORIA
+  -- AUDIT (fonte única)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by BIGINT,
-  updated_by BIGINT,
-  deleted_by BIGINT,
-
   created_by_email CITEXT,
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by BIGINT,
   updated_by_email CITEXT,
+
+  deleted_at TIMESTAMPTZ,
+  deleted_by BIGINT,
   deleted_by_email CITEXT,
 
   CONSTRAINT fk_products_category
@@ -71,14 +71,8 @@ CREATE INDEX IF NOT EXISTS idx_products_brand_lower
 CREATE INDEX IF NOT EXISTS idx_products_active_deleted
   ON products (active, deleted);
 
-CREATE INDEX IF NOT EXISTS idx_products_supplier_id
-  ON products (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_products_category_id ON products (category_id);
+CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products (subcategory_id);
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON products (created_at);
 
-CREATE INDEX IF NOT EXISTS idx_products_category_id
-  ON products (category_id);
-
-CREATE INDEX IF NOT EXISTS idx_products_subcategory_id
-  ON products (subcategory_id);
-
-CREATE INDEX IF NOT EXISTS idx_products_created_at
-  ON products (created_at);

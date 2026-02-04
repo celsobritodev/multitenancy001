@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -150,7 +150,7 @@ public class TenantUserProvisioningFacade {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.now())),
+                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.instant())),
                 0
         );
     }
@@ -178,7 +178,7 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    public void setPasswordResetToken(String schemaName, Long accountId, Long userId, String token, LocalDateTime expiresAt) {
+    public void setPasswordResetToken(String schemaName, Long accountId, Long userId, String token, Instant expiresAt) {
         tenantExecutor.runIfReady(schemaName, REQUIRED_TABLE, () ->
                 transactionExecutor.inTenantTx(() -> {
                     TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
@@ -203,3 +203,4 @@ public class TenantUserProvisioningFacade {
         );
     }
 }
+

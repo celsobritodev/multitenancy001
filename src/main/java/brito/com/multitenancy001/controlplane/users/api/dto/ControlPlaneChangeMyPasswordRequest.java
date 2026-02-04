@@ -16,3 +16,4 @@ public record ControlPlaneChangeMyPasswordRequest(
         @Size(min = 8, max = 72, message = "Confirmar senha deve ter entre 8 e 72 caracteres")
         String confirmPassword
 ) {}
+

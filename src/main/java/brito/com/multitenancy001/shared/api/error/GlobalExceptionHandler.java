@@ -18,7 +18,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -31,8 +31,8 @@ public class GlobalExceptionHandler {
 
     private final AppClock appClock;
 
-    private LocalDateTime now() {
-        return appClock.now();
+    private Instant now() {
+        return appClock.instant();
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -237,3 +237,4 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 }
+

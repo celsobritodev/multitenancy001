@@ -25,3 +25,4 @@ public class TenantSchemaFlywayMigrationService {
         flyway.migrate();
     }
 }
+

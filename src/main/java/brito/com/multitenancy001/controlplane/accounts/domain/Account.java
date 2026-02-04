@@ -1,13 +1,11 @@
 package brito.com.multitenancy001.controlplane.accounts.domain;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.shared.domain.DomainException;
@@ -41,7 +39,7 @@ public class Account implements Auditable, SoftDeletable {
     @Enumerated(EnumType.STRING)
     @Column(name = "account_origin", nullable = false, length = 20)
     @Builder.Default
-    private EntityOrigin  origin = EntityOrigin.ADMIN;
+    private EntityOrigin origin = EntityOrigin.ADMIN;
 
     @Column(name = "display_name", nullable = false, length = 150)
     private String displayName;
@@ -60,267 +58,193 @@ public class Account implements Auditable, SoftDeletable {
     @Column(name = "slug", nullable = false, unique = true, length = 80)
     private String slug;
 
+    // ✅ Campo que sua Factory está tentando setar
+    @Column(name = "tax_country_code", length = 2)
+    private String taxCountryCode;
+
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
+    @Column(name = "tax_id_type", length = 20)
+    private TaxIdType taxIdType;
+
+    @Column(name = "tax_id_number", length = 30)
+    private String taxIdNumber;
+
+    @Column(name = "login_email", nullable = false, length = 150)
+    private String loginEmail;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
-    private AccountStatus status = AccountStatus.FREE_TRIAL;
+    private AccountStatus status = AccountStatus.PROVISIONING;
 
-    // ===== AUDIT (tempo)
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_plan", nullable = false, length = 30)
+    @Builder.Default
+    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    /**
+     * Instante real (ex.: fim do trial como momento absoluto).
+     * Instant <-> TIMESTAMPTZ
+     */
+    @Column(name = "trial_end_date", columnDefinition = "timestamptz")
+    private Instant trialEndAt;
 
-    // ===== AUDIT (ator)
+    /**
+     * Data civil (vencimento no dia X, sem horário).
+     * LocalDate <-> DATE
+     */
+    @Column(name = "payment_due_date", columnDefinition = "date")
+    private LocalDate paymentDueDate;
+
+    /**
+     * Data civil (próxima cobrança no dia X).
+     * LocalDate <-> DATE
+     */
+    @Column(name = "next_billing_date", columnDefinition = "date")
+    private LocalDate nextBillingDate;
+
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
+
+    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
+
+    // =========================
+    // Auditable / SoftDeletable
+    // =========================
 
     @Override
     public AuditInfo getAudit() {
         return audit;
     }
 
-    // ===== BUSINESS DATES
-    @Column(name = "trial_end_date")
-    private LocalDateTime trialEndDate;
-
-    @Column(name = "payment_due_date")
-    private LocalDateTime paymentDueDate;
-
-    @Column(name = "next_billing_date")
-    private LocalDateTime nextBillingDate;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "subscription_plan", nullable = false, length = 50)
-    @Builder.Default
-    private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
-
-    @Column(name = "login_email", nullable = false, length = 150)
-    private String loginEmail;
-
-    @Column(name = "billing_email", length = 150)
-    private String billingEmail;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "tax_id_type", length = 20)
-    private TaxIdType taxIdType;
-
-    @Column(name = "tax_id_number", length = 40)
-    private String taxIdNumber;
-
-    @Column(name = "tax_country_code", length = 2, nullable = false)
-    @Builder.Default
-    private String taxCountryCode = "BR";
-
-    @Column(name = "phone", length = 20)
-    private String phone;
-
-    @Column(name = "address", length = 500)
-    private String address;
-
-    @Column(name = "city", length = 100)
-    private String city;
-
-    @Column(name = "state", length = 50)
-    private String state;
-
-    @Column(name = "country", length = 60, nullable = false)
-    @Builder.Default
-    private String country = "Brasil";
-
-    @Column(name = "timezone", length = 60, nullable = false)
-    @Builder.Default
-    private String timezone = "America/Sao_Paulo";
-
-    @Column(name = "locale", length = 20, nullable = false)
-    @Builder.Default
-    private String locale = "pt_BR";
-
-    @Column(name = "currency", length = 3, nullable = false)
-    @Builder.Default
-    private String currency = "BRL";
-
-    @OneToMany(mappedBy = "account", fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
-    @Builder.Default
-    @ToString.Exclude
-    private List<ControlPlaneUser> controlPlaneUsers = new ArrayList<>();
-
-    @Column(name = "settings_json", columnDefinition = "TEXT")
-    private String settingsJson;
-
-    @Column(name = "metadata_json", columnDefinition = "TEXT")
-    private String metadataJson;
-
-    // ===== SOFT DELETE
-    @Column(name = "deleted", nullable = false)
-    @Builder.Default
-    private boolean deleted = false;
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
     @Override
     public boolean isDeleted() {
-        return deleted || deletedAt != null;
+        return deleted;
     }
 
-    @PrePersist
-    protected void onCreate() {
+    // =========================
+    // Semântica de sistema
+    // =========================
 
-        if (origin == null) origin = EntityOrigin.ADMIN;
-
-        if (country == null || country.isBlank()) country = "Brasil";
-        if (timezone == null || timezone.isBlank()) timezone = "America/Sao_Paulo";
-        if (locale == null || locale.isBlank()) locale = "pt_BR";
-        if (currency == null || currency.isBlank()) currency = "BRL";
-        if (taxCountryCode == null || taxCountryCode.isBlank()) taxCountryCode = "BR";
-
-        if (displayName == null || displayName.isBlank()) {
-            throw new DomainException("displayName is required");
-        }
-
-        if (slug == null || slug.isBlank()) {
-            slug = displayName.toLowerCase()
-                    .replaceAll("[^a-z0-9]+", "-")
-                    .replaceAll("(^-|-$)", "");
-        }
-
-        if (schemaName == null || schemaName.isBlank()) {
-            schemaName = "tenant_" + slug.replace("-", "_") + "_"
-                    + UUID.randomUUID().toString().substring(0, 8);
-        }
-
-        if (loginEmail != null) loginEmail = loginEmail.trim().toLowerCase();
-        if (billingEmail != null && !billingEmail.isBlank()) billingEmail = billingEmail.trim().toLowerCase();
-        if (billingEmail != null && billingEmail.isBlank()) billingEmail = null;
-
-        if (taxIdNumber != null) {
-            taxIdNumber = taxIdNumber.replaceAll("\\D+", "");
-            if (taxIdNumber.isBlank()) taxIdNumber = null;
-        }
-
-        if ((taxIdType == null) != (taxIdNumber == null)) {
-            throw new DomainException("taxIdType and taxIdNumber must be provided together");
-        }
-
-        if (isBuiltInAccount()) {
-            applyBuiltInDefaults();
-        }
+    /**
+     * Conta do sistema (BUILT_IN / PLATFORM) não deve sofrer operações destrutivas.
+     * Regra centralizada aqui para não vazar lógica para serviços.
+     */
+    public boolean isBuiltInAccount() {
+        // Ajuste se seu enum for diferente (mas a ideia é: ORIGEM ou TIPO do sistema)
+        return origin == EntityOrigin.BUILT_IN || type == AccountType.PLATFORM;
     }
 
-    public boolean isTenantAccount() { return type == AccountType.TENANT; }
-    public boolean isPlatformAccount() { return type == AccountType.PLATFORM; }
-    public boolean isBuiltInAccount() { return origin == EntityOrigin.BUILT_IN; }
+    // =========================
+    // Soft delete / Restore
+    // =========================
 
-    public boolean isTrialActive(LocalDateTime now) {
-        return status == AccountStatus.FREE_TRIAL
-                && trialEndDate != null
-                && now != null
-                && trialEndDate.isAfter(now);
-    }
+    /**
+     * Soft delete investigável: marca deleted=true e registra deletedAt no AuditInfo.
+     * O listener também pode preencher deletedAt, mas aqui garantimos semântica imediata e consistente.
+     */
+    public void softDelete(Instant now) {
+        if (now == null) throw new DomainException("now é obrigatório");
+        if (this.deleted) return;
 
-    public boolean isOperational(LocalDateTime now) {
-        if (isDeleted()) return false;
-        if (isBuiltInAccount()) return true;
-        return status == AccountStatus.ACTIVE
-                || (status == AccountStatus.FREE_TRIAL && isTrialActive(now));
-    }
-
-    public boolean isPaymentOverdue(LocalDateTime now) {
-        return paymentDueDate != null && now != null && paymentDueDate.isBefore(now);
-    }
-
-    public long getDaysRemainingInTrial(LocalDateTime now) {
-        if (now == null) return 0;
-        if (!isTrialActive(now)) return 0;
-        return ChronoUnit.DAYS.between(now.toLocalDate(), trialEndDate.toLocalDate());
-    }
-
-    public void softDelete(LocalDateTime now) {
-        if (deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
-        if (isBuiltInAccount()) {
-            throw new DomainException("BUILT_IN account cannot be deleted");
+        this.deleted = true;
+        if (this.audit != null) {
+            this.audit.setDeletedAt(now);
         }
-
-        deleted = true;
-        deletedAt = now;
-        status = AccountStatus.CANCELLED;
     }
 
     public void restore() {
-        if (!deleted) return;
+        if (!this.deleted) return;
 
-        deleted = false;
-        deletedAt = null;
-        status = AccountStatus.ACTIVE;
-
-        if (isBuiltInAccount()) {
-            applyBuiltInDefaults();
+        this.deleted = false;
+        // Política: restaurar limpa deletedAt para “reaparece como ativo”.
+        if (this.audit != null) {
+            this.audit.setDeletedAt(null);
         }
     }
 
-    public void setSubscriptionPlan(SubscriptionPlan plan) {
-        if (plan == null) throw new DomainException("subscriptionPlan is required");
-        if (isBuiltInAccount() && plan != SubscriptionPlan.BUILT_IN_PLAN) {
-            throw new DomainException("BUILT_IN account must use BUILT_IN_PLAN");
+    /**
+     * Compatibilidade: alguns serviços antigos chamavam setDeletedAt().
+     * Mantém sem quebrar, mas direciona para AuditInfo (fonte única).
+     */
+    public void setDeletedAt(Instant deletedAt) {
+        if (this.audit != null) {
+            this.audit.setDeletedAt(deletedAt);
         }
-        subscriptionPlan = plan;
+        this.deleted = deletedAt != null;
     }
 
-    public void setStatus(AccountStatus newStatus) {
-        if (newStatus == null) throw new DomainException("status is required");
-        if (isBuiltInAccount() && newStatus != AccountStatus.ACTIVE) {
-            throw new DomainException("BUILT_IN account must be ACTIVE");
-        }
-        status = newStatus;
+    // =========================
+    // Regras de domínio
+    // =========================
+
+    public boolean isOperational() {
+        return !deleted && status != null && status.isOperational();
     }
 
-    public void setTrialEndDate(LocalDateTime newTrialEndDate) {
-        if (isBuiltInAccount() && newTrialEndDate != null) {
-            throw new DomainException("BUILT_IN account must not have trialEndDate");
-        }
-        trialEndDate = newTrialEndDate;
-    }
-
-    public void setPaymentDueDate(LocalDateTime newPaymentDueDate) {
-        if (isBuiltInAccount() && newPaymentDueDate != null) {
-            throw new DomainException("BUILT_IN account must not have paymentDueDate");
-        }
-        paymentDueDate = newPaymentDueDate;
-    }
-
-    public void setType(AccountType newType) {
-        if (newType == null) throw new DomainException("accountType is required");
-        type = newType;
-
-        if (origin == EntityOrigin.BUILT_IN && type != AccountType.PLATFORM) {
-            throw new DomainException("BUILT_IN account must be PLATFORM");
+    public void requireOperational() {
+        if (!isOperational()) {
+            throw new DomainException("Conta não está operacional");
         }
     }
 
-    public void setOrigin(EntityOrigin  newOrigin) {
-        if (newOrigin == null) throw new DomainException("accountOrigin is required");
-        origin = newOrigin;
+    public void setDisplayNameSafe(String value) {
+        if (value == null || value.isBlank()) throw new DomainException("displayName é obrigatório");
+        this.displayName = value.trim();
+    }
 
-        if (origin == EntityOrigin.BUILT_IN) {
-            type = AccountType.PLATFORM;
-            applyBuiltInDefaults();
+    public void setSlugSafe(String value) {
+        if (value == null || value.isBlank()) throw new DomainException("slug é obrigatório");
+        this.slug = normalizeSlug(value);
+    }
+
+    public void ensureSchemaName() {
+        if (this.schemaName == null || this.schemaName.isBlank()) {
+            this.schemaName = generateSchemaNameFromSlug(this.slug);
         }
     }
 
-    private void applyBuiltInDefaults() {
-        subscriptionPlan = SubscriptionPlan.BUILT_IN_PLAN;
-        status = AccountStatus.ACTIVE;
-        trialEndDate = null;
-        paymentDueDate = null;
-        nextBillingDate = null;
-        deleted = false;
-        deletedAt = null;
+    public void startFreeTrial(Instant now, int days) {
+        if (now == null) throw new DomainException("now é obrigatório");
+        if (days <= 0) throw new DomainException("days inválido");
+
+        this.status = AccountStatus.FREE_TRIAL;
+        this.subscriptionPlan = SubscriptionPlan.FREE;
+        this.trialEndAt = now.plus(days, ChronoUnit.DAYS);
+    }
+
+    public void activatePaidPlan(SubscriptionPlan plan, LocalDate paymentDueDate, LocalDate nextBillingDate) {
+        if (plan == null) throw new DomainException("plan é obrigatório");
+        if (plan == SubscriptionPlan.FREE) throw new DomainException("plan inválido");
+        if (paymentDueDate == null) throw new DomainException("paymentDueDate é obrigatório");
+        if (nextBillingDate == null) throw new DomainException("nextBillingDate é obrigatório");
+
+        this.status = AccountStatus.ACTIVE;
+        this.subscriptionPlan = plan;
+        this.paymentDueDate = paymentDueDate;
+        this.nextBillingDate = nextBillingDate;
+    }
+
+    private static String normalizeSlug(String raw) {
+        String v = raw.trim().toLowerCase();
+        v = v.replaceAll("[^a-z0-9\\-]", "-");
+        v = v.replaceAll("-{2,}", "-");
+        v = v.replaceAll("(^-|-$)", "");
+        if (v.length() < 3) throw new DomainException("slug muito curto");
+        return v;
+    }
+
+    private static String generateSchemaNameFromSlug(String slug) {
+        String base = (slug == null ? "tenant" : slug.replace("-", "_"));
+        base = base.replaceAll("[^a-z0-9_]", "");
+        if (base.length() > 40) base = base.substring(0, 40);
+        return "t_" + base + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 }

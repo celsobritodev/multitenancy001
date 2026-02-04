@@ -28,7 +28,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
     ) throws IOException {
 
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
-                .timestamp(appClock.now())
+                .timestamp(appClock.instant())
                 .error("UNAUTHORIZED")
                 .message("Não autenticado ou token inválido")
                 .details(null)
@@ -41,3 +41,4 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }
+

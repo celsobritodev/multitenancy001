@@ -106,3 +106,4 @@ public class TenantAuthController {
         return ResponseEntity.ok(toHttp(jwt));
     }
 }
+

@@ -11,7 +11,7 @@ import brito.com.multitenancy001.controlplane.billing.domain.Payment;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,9 +48,9 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
 
     List<Payment> findByStatus(PaymentStatus status);
 
-    List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, LocalDateTime date);
+    List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, Instant date);
 
-    List<Payment> findByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status);
+    List<Payment> findByValidUntilBeforeAndStatus(Instant date, PaymentStatus status);
 
     @Query("SELECT p FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' ORDER BY p.paymentDate DESC")
     List<Payment> findCompletedPaymentsByAccount(@Param("accountId") Long accountId);
@@ -58,19 +58,19 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
   
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate")
     BigDecimal getTotalPaidInPeriod(@Param("accountId") Long accountId,
-                                   @Param("startDate") LocalDateTime startDate,
-                                   @Param("endDate") LocalDateTime endDate);
+                                   @Param("startDate") Instant startDate,
+                                   @Param("endDate") Instant endDate);
 
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.account.id = :accountId AND p.status = 'COMPLETED'")
     Long countCompletedPayments(@Param("accountId") Long accountId);
 
     @Query("SELECT p FROM Payment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
-    List<Payment> findPaymentsInPeriod(@Param("startDate") LocalDateTime startDate,
-                                       @Param("endDate") LocalDateTime endDate);
+    List<Payment> findPaymentsInPeriod(@Param("startDate") Instant startDate,
+                                       @Param("endDate") Instant endDate);
 
     @Query("SELECT p.account.id, SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED' AND p.paymentDate BETWEEN :startDate AND :endDate GROUP BY p.account.id")
-    List<Object[]> getRevenueByAccount(@Param("startDate") LocalDateTime startDate,
-                                       @Param("endDate") LocalDateTime endDate);
+    List<Object[]> getRevenueByAccount(@Param("startDate") Instant startDate,
+                                       @Param("endDate") Instant endDate);
 
     boolean existsByTransactionId(String transactionId);
     
@@ -88,6 +88,7 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
     	      and p.validUntil is not null
     	      and p.validUntil >= :now
     	""")
-    	boolean existsActivePayment(@Param("accountId") Long accountId, @Param("now") LocalDateTime now);
+    	boolean existsActivePayment(@Param("accountId") Long accountId, @Param("now") Instant now);
 
 }
+

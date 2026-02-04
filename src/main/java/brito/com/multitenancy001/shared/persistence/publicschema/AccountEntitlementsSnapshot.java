@@ -20,3 +20,4 @@ public record AccountEntitlementsSnapshot(
         return new AccountEntitlementsSnapshot(maxUsers, maxProducts, maxStorageMb, false);
     }
 }
+

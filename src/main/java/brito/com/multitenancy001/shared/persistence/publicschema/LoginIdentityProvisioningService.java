@@ -24,3 +24,4 @@ public class LoginIdentityProvisioningService {
         """, emailNorm, accountId);
     }
 }
+

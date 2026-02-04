@@ -1,51 +1,84 @@
 {
-    # Define o diretório base do projeto
-    PROJECT_DIR="../multitenancy001"
+  # Diretório base do projeto que queremos analisar
+  # Estamos em: ConteudoAnaliseIA
+  # Queremos: ../multitenancy001
+  PROJECT_DIR="../multitenancy001"
 
-    echo "### PROJECT FILE INDEX"
+  # ===============================
+  # 1) ÍNDICE DE ARQUIVOS
+  # ===============================
+  # Lista todos os arquivos relevantes do projeto
+  # (sem imprimir o conteúdo ainda)
+  echo "### PROJECT FILE INDEX"
 
-    # --- FASE 1: GERAÇÃO DO ÍNDICE ---
-    # Busca arquivos ignorando a pasta 'target' e filtrando extensões específicas
-    find "$PROJECT_DIR" -type f \
-        -not -path "$PROJECT_DIR/target/*" \
-        \( \
-            -name "*.java" \
-            -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
-            -o -path "$PROJECT_DIR/pom.xml" \
-            -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
-            -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
-        \) \
-        | sed "s|^$PROJECT_DIR/||" \
-        | sort
+  find "$PROJECT_DIR" -type f \
+    \
+    # Exclui tudo que estiver dentro de /target
+    -not -path "$PROJECT_DIR/target/*" \
+    \
+    # Define quais arquivos entram no índice
+    \( \
+      # Todos os arquivos Java
+      -name "*.java" \
+      \
+      # Migrations Flyway (V1__*, V2__*, etc)
+      -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+      \
+      # pom.xml do projeto
+      -o -path "$PROJECT_DIR/pom.xml" \
+      \
+      # application.properties padrão
+      -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+      \
+      # application-*.properties (profiles)
+      -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+    \) \
+    \
+    # Remove o prefixo do path para deixar o output limpo
+    | sed "s|^$PROJECT_DIR/||" \
+    \
+    # Ordena para garantir estabilidade do resultado
+    | sort
 
-    echo
-    echo "### FILE CONTENTS"
-    echo
+  echo
+  echo "### FILE CONTENTS"
+  echo
 
-    # --- FASE 2: EXIBIÇÃO DO CONTEÚDO DOS ARQUIVOS ---
-    # Repete a busca para processar o conteúdo de cada arquivo encontrado
-    find "$PROJECT_DIR" -type f \
-        -not -path "$PROJECT_DIR/target/*" \
-        \( \
-            -name "*.java" \
-            -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
-            -o -path "$PROJECT_DIR/pom.xml" \
-            -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
-            -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
-        \) \
-        | sort \
-        | while IFS= read -r f; do
-            # Cabeçalho visual para cada arquivo no log
-            echo "============================================================"
-            echo "### FILE: ${f#$PROJECT_DIR/}"
-            echo "============================================================"
-            
-            # Remove caracteres de fim de linha do Windows (\r) para evitar problemas de formatação
-            sed 's/\r$//' "$f"
-            
-            # Adiciona uma linha em branco após o conteúdo do arquivo
-            echo
-        done
+  # ===============================
+  # 2) CONTEÚDO DOS ARQUIVOS
+  # ===============================
+  # Agora percorre os MESMOS arquivos
+  # e imprime o conteúdo de cada um
+  find "$PROJECT_DIR" -type f \
+    -not -path "$PROJECT_DIR/target/*" \
+    \( \
+      -name "*.java" \
+      -o -path "$PROJECT_DIR/src/main/resources/db/migration/*/V*.sql" \
+      -o -path "$PROJECT_DIR/pom.xml" \
+      -o -path "$PROJECT_DIR/src/main/resources/application.properties" \
+      -o -path "$PROJECT_DIR/src/main/resources/application-*.properties" \
+    \) \
+    \
+    # Ordena para garantir mesma ordem do índice
+    | sort \
+    \
+    # Loop arquivo por arquivo
+    | while IFS= read -r f; do
+        # Separador visual
+        echo "============================================================"
+        \
+        # Cabeçalho com caminho relativo do arquivo
+        echo "### FILE: ${f#$PROJECT_DIR/}"
+        \
+        echo "============================================================"
+        \
+        # Imprime o conteúdo do arquivo
+        # Remove \r para evitar problemas de quebra de linha
+        sed 's/\r$//' "$f"
+        \
+        # Linha em branco entre arquivos
+        echo
+      done
 
-# Redireciona toda a saída do bloco acima para o arquivo de texto especificado
-} > all_content_with_paths_ideal5555.txt
+# Redireciona TODA a saída para um único arquivo final
+} > multitenancy001_all_content.txt

@@ -4,7 +4,7 @@ import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -19,7 +19,7 @@ public interface PaymentQueryFacade {
 
     List<PaymentResponse> findByStatus(PaymentStatus status);
 
-    BigDecimal getTotalPaidInPeriod(Long accountId, LocalDateTime startDate, LocalDateTime endDate);
+    BigDecimal getTotalPaidInPeriod(Long accountId, Instant startDate, Instant endDate);
 
     long countCompletedPayments(Long accountId);
 
@@ -29,3 +29,4 @@ public interface PaymentQueryFacade {
 
     boolean hasActivePayment(Long accountId);
 }
+

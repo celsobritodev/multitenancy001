@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.accounts.domain;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import jakarta.persistence.*;
 
@@ -28,8 +28,8 @@ public class AccountProvisioningEvent {
     @Column(name = "details_json", columnDefinition = "text")
     private String detailsJson;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_at", nullable = false, columnDefinition = "timestamptz")
+    private Instant createdAt;
 
     protected AccountProvisioningEvent() { }
 
@@ -38,14 +38,15 @@ public class AccountProvisioningEvent {
             ProvisioningStatus status,
             ProvisioningFailureCode failureCode,
             String message,
-            String detailsJson
+            String detailsJson,
+            Instant createdAt
     ) {
         this.accountId = accountId;
         this.status = status;
         this.failureCode = (failureCode == null ? null : failureCode.name());
         this.message = message;
         this.detailsJson = detailsJson;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = createdAt;
     }
 
     public Long getId() { return id; }
@@ -54,5 +55,6 @@ public class AccountProvisioningEvent {
     public String getFailureCode() { return failureCode; }
     public String getMessage() { return message; }
     public String getDetailsJson() { return detailsJson; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public Instant getCreatedAt() { return createdAt; }
 }
+

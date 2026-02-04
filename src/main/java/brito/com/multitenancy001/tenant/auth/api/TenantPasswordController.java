@@ -30,3 +30,4 @@ public class TenantPasswordController {
         return ResponseEntity.ok("Senha redefinida com sucesso");
     }
 }
+

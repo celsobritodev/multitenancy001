@@ -43,3 +43,4 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
             @Param("maxStorageMb") Integer maxStorageMb
     );
 }
+

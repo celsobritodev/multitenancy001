@@ -17,7 +17,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +27,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     private final TenantUserRepository tenantUserRepository;
     private final AppClock appClock;
 
-    private LocalDateTime now() { return appClock.now(); }
+    private Instant now() {
+        return appClock.instant();
+    }
 
     private static String normalizeEmailOrThrow(String raw) {
         String normalized = EmailNormalizer.normalizeOrNull(raw);
@@ -55,7 +57,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
 
         // TENANT: dentro do schema do tenant
-        LocalDateTime now = now();
+        Instant now = now();
 
         TenantUser user = tenantUserRepository
                 .findByEmailAndDeletedFalse(loginEmail)
@@ -66,7 +68,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
-        LocalDateTime now = now();
+        Instant now = now();
 
         if (accountId == null) {
             throw new ApiException(
@@ -87,7 +89,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     public UserDetails loadControlPlaneUserByEmail(String email) {
-        LocalDateTime now = now();
+        Instant now = now();
 
         String loginEmail = normalizeEmailOrThrow(email);
 
@@ -116,7 +118,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             );
         }
 
-        LocalDateTime now = now();
+        Instant now = now();
 
         String loginEmail = normalizeEmailOrThrow(email);
 
@@ -128,3 +130,4 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 }
+

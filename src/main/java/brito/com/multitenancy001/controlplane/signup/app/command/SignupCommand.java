@@ -10,3 +10,4 @@ public record SignupCommand(
         String password,
         String confirmPassword
 ) {}
+

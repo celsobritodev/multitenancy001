@@ -18,3 +18,4 @@ public record AccountTenantUserSummaryResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+

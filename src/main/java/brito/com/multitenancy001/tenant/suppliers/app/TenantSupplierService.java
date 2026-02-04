@@ -228,7 +228,7 @@ public class TenantSupplierService {
                 .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
                         "Fornecedor não encontrado com ID: " + id, 404));
 
-        supplier.softDelete(appClock.now());
+        supplier.softDelete(appClock.instant());
         tenantSupplierRepository.save(supplier);
     }
 
@@ -309,3 +309,4 @@ public class TenantSupplierService {
 
     
 }
+

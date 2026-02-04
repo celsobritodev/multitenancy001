@@ -42,7 +42,7 @@ Principais Dependências Explicadas:
 
     commons-lang3 → Utilitários do Apache
 
-    jackson-datatype-jsr310 → Suporte a LocalDate, LocalDateTime no Jackson
+  
 
 5. Documentação:
 

@@ -21,3 +21,4 @@ WHERE a.deleted = false
   AND a.account_type = 'TENANT'
   AND a.account_origin <> 'BUILT_IN'
 ON CONFLICT (account_id) DO NOTHING;
+

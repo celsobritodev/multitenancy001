@@ -12,3 +12,4 @@ CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
         REFERENCES controlplane_users(id)
         ON DELETE CASCADE
 );
+

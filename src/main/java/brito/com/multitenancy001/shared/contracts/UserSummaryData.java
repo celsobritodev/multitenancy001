@@ -16,3 +16,4 @@ public record UserSummaryData(
         boolean suspendedByAdmin,
         boolean deleted
 ) {}
+

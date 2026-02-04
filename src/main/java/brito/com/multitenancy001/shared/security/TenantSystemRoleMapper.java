@@ -14,3 +14,4 @@ public final class TenantSystemRoleMapper {
         return SystemRoleName.valueOf(role.name());
     }
 }
+

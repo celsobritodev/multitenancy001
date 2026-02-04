@@ -22,7 +22,7 @@ public class ControlPlaneUserExplicitPermissionsService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
     /**
-     * Define permissions explícitas (override) a partir de strings.
+     * Define permissões explícitas (override) a partir de strings.
      *
      * Regras:
      * - Só aceita "CP_*" (STRICT).
@@ -31,7 +31,8 @@ public class ControlPlaneUserExplicitPermissionsService {
      */
     public void setExplicitPermissionsFromCodes(Long userId, Collection<String> permissionCodes) {
 
-        LinkedHashSet<String> normalized = PermissionScopeValidator.normalizeControlPlaneStrict(permissionCodes);
+        LinkedHashSet<String> normalized =
+                PermissionScopeValidator.normalizeControlPlaneStrict(permissionCodes);
 
         Set<ControlPlanePermission> perms = normalized.stream()
                 .map(code -> {
@@ -51,7 +52,7 @@ public class ControlPlaneUserExplicitPermissionsService {
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            user.setPermissions(perms);
+            user.replaceExplicitPermissions(perms);
             controlPlaneUserRepository.save(user);
             return null;
         });

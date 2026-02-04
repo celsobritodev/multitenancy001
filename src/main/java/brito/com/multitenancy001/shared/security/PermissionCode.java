@@ -14,3 +14,4 @@ package brito.com.multitenancy001.shared.security;
 public interface PermissionCode extends PermissionAuthority {
     // marker + compatibilidade (herda asAuthority())
 }
+

@@ -278,7 +278,7 @@ public class TenantUserFacade {
                 );
 
                 user.setPasswordResetToken(t);
-                user.setPasswordResetExpires(appClock.now().plusHours(1));
+                user.setPasswordResetExpires(appClock.instant().plusHours(1));
                 tenantUserService.save(user);
 
                 return t;
@@ -384,7 +384,7 @@ public class TenantUserFacade {
                     req.avatarUrl(),
                     req.locale(),
                     req.timezone(),
-                    appClock.now()
+                    appClock.instant()
             );
             return tenantUserApiMapper.toMe(updated);
         });
@@ -407,3 +407,4 @@ public class TenantUserFacade {
         return tenantExecutor.run(schema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
     }
 }
+

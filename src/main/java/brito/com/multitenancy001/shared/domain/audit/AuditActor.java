@@ -5,3 +5,4 @@ public record AuditActor(Long userId, String email) {
         return new AuditActor(null, "system@local");
     }
 }
+

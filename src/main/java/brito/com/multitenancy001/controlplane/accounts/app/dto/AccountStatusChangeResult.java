@@ -1,14 +1,15 @@
 package brito.com.multitenancy001.controlplane.accounts.app.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record AccountStatusChangeResult(
         Long accountId,
         String newStatus,
         String previousStatus,
-        LocalDateTime changedAt,
+        Instant changedAt,
         String tenantSchema,
         boolean tenantUsersUpdated,
         String action,
         int affectedUsers
 ) {}
+

@@ -4,27 +4,24 @@ SET search_path TO public;
 CREATE TABLE IF NOT EXISTS payments (
     id BIGSERIAL PRIMARY KEY,
 
-    account_id BIGINT NOT NULL,
-    amount NUMERIC(10,2) NOT NULL,
+    account_id BIGINT NOT NULL REFERENCES accounts(id),
 
-    payment_date TIMESTAMP NOT NULL,
-    valid_until TIMESTAMP,
+    amount NUMERIC(14,2) NOT NULL,
 
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-
-    transaction_id VARCHAR(100) UNIQUE,
-    payment_method VARCHAR(50) NOT NULL,
-    payment_gateway VARCHAR(50) NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
+    payment_method  VARCHAR(30) NOT NULL,
+    payment_gateway VARCHAR(30) NOT NULL,
+    payment_status  VARCHAR(30) NOT NULL,
 
     description VARCHAR(500),
-    metadata_json TEXT,
 
-    invoice_url TEXT,
-    receipt_url TEXT,
+    -- instantes reais
+    paid_at      TIMESTAMPTZ,
+    valid_until  TIMESTAMPTZ,
+    refunded_at  TIMESTAMPTZ,
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP,
+    -- auditoria
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     created_by BIGINT,
     updated_by BIGINT,
@@ -34,14 +31,11 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_by_email CITEXT,
     deleted_by_email CITEXT,
 
-    refunded_at TIMESTAMP,
-    refund_amount NUMERIC(10,2),
-    refund_reason VARCHAR(500),
-
-    CONSTRAINT fk_payments_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    deleted    BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_payment_account ON payments(account_id);
-CREATE INDEX IF NOT EXISTS idx_payment_status  ON payments(status);
-CREATE INDEX IF NOT EXISTS idx_payment_date    ON payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_payments_account_id ON payments (account_id);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments (created_at);
+CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments (paid_at);
+

@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.accounts.app.query;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -43,9 +43,10 @@ public class ControlPlaneAccountQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<Account> findPaymentDueBeforeNotDeleted(LocalDateTime date) {
+    public List<Account> findPaymentDueBeforeNotDeleted(LocalDate date) {
         if (date == null) throw new ApiException("DATE_REQUIRED", "date é obrigatório", 400);
 
         return accountRepository.findByPaymentDueDateBeforeAndDeletedFalse(date);
     }
 }
+

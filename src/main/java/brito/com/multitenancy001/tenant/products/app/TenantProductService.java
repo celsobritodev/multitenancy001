@@ -213,7 +213,7 @@ public class TenantProductService {
     @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
-        product.softDelete(appClock.now());
+        product.softDelete(appClock.instant());
         tenantProductRepository.save(product);
     }
 
@@ -427,3 +427,4 @@ public class TenantProductService {
  
     
 }
+

@@ -11,3 +11,4 @@ public record AccountStatusChangeRequest(
         @Size(max = 255, message = "reason deve ter no máximo 255 caracteres")
         String reason
 ) {}
+

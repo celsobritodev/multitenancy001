@@ -163,3 +163,4 @@ public interface ControlPlaneUserRepository extends JpaRepository<ControlPlaneUs
     Optional<ControlPlaneUser> findByIdAndDeletedFalse(Long id);
     
 }
+

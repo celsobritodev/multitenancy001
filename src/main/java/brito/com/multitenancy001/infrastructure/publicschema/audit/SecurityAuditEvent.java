@@ -62,3 +62,4 @@ public class SecurityAuditEvent {
     @Column(name = "details", columnDefinition = "jsonb")
     private String detailsJson;
 }
+

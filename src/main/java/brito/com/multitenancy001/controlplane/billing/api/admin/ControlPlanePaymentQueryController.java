@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controlplane.billing.api.admin;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -36,8 +36,8 @@ public class ControlPlanePaymentQueryController {
     )
     public ResponseEntity<BigDecimal> totalPaid(
             @PathVariable Long accountId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate
     ) {
         return ResponseEntity.ok(controlPlanePaymentQueryService.getTotalPaidInPeriod(accountId, startDate, endDate));
     }
@@ -52,3 +52,4 @@ public class ControlPlanePaymentQueryController {
         return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }
 }
+

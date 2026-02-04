@@ -5,3 +5,4 @@ import java.io.Serializable;
 public interface RoleAuthority extends Serializable {
     String asAuthority();
 }
+

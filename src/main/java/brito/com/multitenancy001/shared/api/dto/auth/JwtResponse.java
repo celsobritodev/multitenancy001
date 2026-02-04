@@ -60,3 +60,4 @@ public record JwtResponse(
         return new JwtResponse(accessToken, refreshToken, "Bearer", userId, email, role, accountId, tenantSchema);
     }
 }
+

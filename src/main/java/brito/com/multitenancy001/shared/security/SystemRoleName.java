@@ -29,3 +29,4 @@ public enum SystemRoleName {
         return SystemRoleName.valueOf(value.trim().toUpperCase());
     }
 }
+

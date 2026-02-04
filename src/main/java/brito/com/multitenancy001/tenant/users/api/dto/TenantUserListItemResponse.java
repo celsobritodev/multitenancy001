@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.users.api.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
@@ -19,7 +19,7 @@ public record TenantUserListItemResponse(
         EntityOrigin origin,
 
         // Audit/meta (somente para TENANT_OWNER)
-        LocalDateTime lastLoginAt,
+        Instant lastLoginAt,
         TenantActorRef createdBy,
 
         // Status
@@ -27,3 +27,4 @@ public record TenantUserListItemResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+

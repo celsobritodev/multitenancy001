@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -200,7 +200,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int softDeleteAllByAccount(
             @Param("accountId") Long accountId,
-            @Param("deletedAt") LocalDateTime deletedAt
+            @Param("deletedAt") Instant deletedAt
     );
 
     /**
@@ -229,7 +229,8 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int updateLastLogin(
             @Param("userId") Long userId,
-            @Param("lastLogin") LocalDateTime lastLogin
+            @Param("lastLogin") Instant lastLogin
     );
     
 }
+

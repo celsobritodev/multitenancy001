@@ -6,3 +6,4 @@ public record TenantRefreshRequest(
         @NotBlank(message = "refreshToken é obrigatório")
         String refreshToken
 ) {}
+

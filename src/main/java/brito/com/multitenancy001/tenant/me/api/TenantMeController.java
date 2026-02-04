@@ -27,3 +27,4 @@ public class TenantMeController {
         return ResponseEntity.ok(tenantUserFacade.updateMyProfile(req));
     }
 }
+

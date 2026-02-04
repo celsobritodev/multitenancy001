@@ -67,3 +67,4 @@ public class TenantSchemaHibernateConfig {
         return new JpaTransactionManager(emf);
     }
 }
+

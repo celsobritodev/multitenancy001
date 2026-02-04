@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,8 +22,8 @@ public class TenantLoginChallengeService {
     private final TenantLoginChallengeRepository tenantLoginChallengeRepository;
     private final AppClock appClock;
 
-    private LocalDateTime now() {
-        return appClock.now();
+    private Instant now() {
+        return appClock.instant();
     }
 
     public UUID createChallenge(String email, Set<Long> candidateAccountIds) {
@@ -36,8 +36,8 @@ public class TenantLoginChallengeService {
             throw new ApiException("INVALID_CHALLENGE", "candidateAccountIds é obrigatório", 400);
         }
 
-        LocalDateTime createdAt = now();
-        LocalDateTime expiresAt = createdAt.plus(DEFAULT_EXPIRES_IN);
+        Instant createdAt = now();
+        Instant expiresAt = createdAt.plus(DEFAULT_EXPIRES_IN);
 
         TenantLoginChallenge challenge = new TenantLoginChallenge();
         challenge.setId(UUID.randomUUID());
@@ -80,3 +80,4 @@ public class TenantLoginChallengeService {
         tenantLoginChallengeRepository.save(challenge);
     }
 }
+

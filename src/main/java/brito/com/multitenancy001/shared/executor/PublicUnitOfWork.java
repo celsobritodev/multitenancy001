@@ -50,3 +50,4 @@ public class PublicUnitOfWork {
         publicExecutor.run(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 }
+

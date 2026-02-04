@@ -39,3 +39,4 @@ public record SignupRequest(
         return password.equals(confirmPassword);
     }
 }
+

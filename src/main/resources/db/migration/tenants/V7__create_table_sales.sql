@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  sale_date TIMESTAMP NOT NULL,
+  sale_date TIMESTAMPTZ NOT NULL,
   total_amount NUMERIC(12,2) NOT NULL,
 
   customer_name VARCHAR(200),
@@ -13,18 +13,23 @@ CREATE TABLE IF NOT EXISTS sales (
 
   status VARCHAR(20) NOT NULL,
 
-  created_at TIMESTAMP NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP,
+  deleted BOOLEAN NOT NULL DEFAULT false,
 
-  -- AUDITORIA (compatível com AuditInfo)
+  -- AUDIT (fonte única)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by BIGINT,
-  updated_by BIGINT,
-  deleted_by BIGINT,
-
   created_by_email CITEXT,
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by BIGINT,
   updated_by_email CITEXT,
+
+  deleted_at TIMESTAMPTZ,
+  deleted_by BIGINT,
   deleted_by_email CITEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
+CREATE INDEX IF NOT EXISTS idx_sales_deleted ON sales(deleted) WHERE deleted = false;
+

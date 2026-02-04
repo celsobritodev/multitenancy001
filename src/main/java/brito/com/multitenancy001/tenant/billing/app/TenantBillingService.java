@@ -29,3 +29,4 @@ public class TenantBillingService {
         return paymentQueryFacade.hasActivePayment(accountId);
     }
 }
+

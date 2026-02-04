@@ -3,3 +3,4 @@ SET search_path TO public;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS citext;
+

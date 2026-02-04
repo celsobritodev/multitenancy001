@@ -31,7 +31,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
         String message = resolveMessage(accessDeniedException);
 
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
-                .timestamp(appClock.now())
+                .timestamp(appClock.instant())
                 .error("FORBIDDEN")
                 .message(message)     // ✅ agora devolve a mensagem real quando existir
                 .details(null)
@@ -52,3 +52,4 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
         return msg.isEmpty() ? "Acesso negado" : msg;
     }
 }
+

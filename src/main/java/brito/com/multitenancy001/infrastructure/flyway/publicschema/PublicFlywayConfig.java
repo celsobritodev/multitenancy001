@@ -24,3 +24,4 @@ public class PublicFlywayConfig {
         return flyway;
     }
 }
+

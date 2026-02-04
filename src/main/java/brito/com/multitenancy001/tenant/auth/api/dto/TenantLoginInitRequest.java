@@ -6,3 +6,4 @@ public record TenantLoginInitRequest(
         @NotBlank String email,
         @NotBlank String password
 ) {}
+

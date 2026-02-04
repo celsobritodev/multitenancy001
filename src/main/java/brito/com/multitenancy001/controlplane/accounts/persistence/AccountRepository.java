@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.controlplane.accounts.persistence;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,23 +19,11 @@ import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
-    // =========================================================
-    // EXISTS / UNIQUE (padrão: NOT DELETED)
-    // =========================================================
-
     boolean existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
             String taxCountryCode, TaxIdType taxIdType, String taxIdNumber
     );
 
-
     boolean existsByLoginEmailAndDeletedFalse(String loginEmail);
-
-    // ❌ REMOVIDO: existsByTaxIdTypeAndTaxIdNumberAndDeletedFalse(...)
-    // Motivo: a regra correta agora é única por (taxCountryCode, taxIdType, taxIdNumber).
-
-    // =========================================================
-    // DEFAULT DE DOMÍNIO: NOT DELETED (deleted=false)
-    // =========================================================
 
     List<Account> findAllByDeletedFalse();
 
@@ -42,21 +31,11 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
 
-    // =========================================================
-    // PROJECTIONS (para evitar expor entidade fora do CP)
-    // =========================================================
-
     Optional<AccountResolverProjection> findProjectionByIdAndDeletedFalse(Long id);
 
     Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
 
     Optional<Account> findByIdAndDeletedFalse(Long id);
-
-   
-    // =========================================================
-    // DEFAULT DE SEGURANÇA: ENABLED (operacional)
-    // enabled = NOT DELETED + status operacional
-    // =========================================================
 
     @Query("""
             SELECT a
@@ -67,15 +46,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
            """)
     Optional<Account> findEnabledById(@Param("id") Long id);
 
-    // =========================================================
-    // BYPASS CONSCIENTE: ANY (inclui deleted)
-    // =========================================================
-
     Optional<Account> findAnyById(Long id);
-
-    // =========================================================
-    // QUERIES OPERACIONAIS (NOT DELETED)
-    // =========================================================
 
     @Query("SELECT COUNT(a) FROM Account a WHERE a.deleted = false AND a.status IN :statuses")
     long countByStatusesAndDeletedFalse(@Param("statuses") List<AccountStatus> statuses);
@@ -84,13 +55,19 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
         return countByStatusesAndDeletedFalse(List.of(AccountStatus.ACTIVE, AccountStatus.FREE_TRIAL));
     }
 
-   
     Page<Account> findByStatusAndDeletedFalse(AccountStatus status, Pageable pageable);
 
-    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.createdAt BETWEEN :start AND :end")
-    Page<Account> findAccountsCreatedBetween(@Param("start") LocalDateTime start,
-                                             @Param("end") LocalDateTime end,
-                                             Pageable pageable);
+    @Query("""
+            SELECT a
+              FROM Account a
+             WHERE a.deleted = false
+               AND a.audit.createdAt BETWEEN :start AND :end
+           """)
+    Page<Account> findAccountsCreatedBetween(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            Pageable pageable
+    );
 
     @Query("""
         SELECT a FROM Account a
@@ -102,17 +79,34 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     """)
     Page<Account> searchByDisplayName(@Param("term") String term, Pageable pageable);
 
-    // =========================================================
-    // QUERIES "ANTIGAS" -> manter por compatibilidade
-    // =========================================================
-
     List<Account> findByStatusAndDeletedFalse(AccountStatus status);
 
-    List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDateTime date);
+    List<Account> findByPaymentDueDateBeforeAndDeletedFalse(LocalDate date);
 
-    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.trialEndDate <= :date AND a.status = :status")
-    List<Account> findExpiredTrialsNotDeleted(@Param("date") LocalDateTime date, @Param("status") AccountStatus status);
+    @Query("""
+        SELECT a FROM Account a
+        WHERE a.deleted = false
+          AND a.trialEndAt <= :date
+          AND a.status = :status
+    """)
+    List<Account> findExpiredTrialsNotDeleted(@Param("date") Instant date, @Param("status") AccountStatus status);
 
-    @Query("SELECT a FROM Account a WHERE a.deleted = false AND a.status = :status AND a.paymentDueDate < :today")
-    List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDateTime today);
+    @Query("""
+        SELECT a FROM Account a
+        WHERE a.deleted = false
+          AND a.status = :status
+          AND a.paymentDueDate < :today
+    """)
+    List<Account> findOverdueAccountsNotDeleted(@Param("status") AccountStatus status, @Param("today") LocalDate today);
+
+    /**
+     * ✅ Conta do CONTROL PLANE (public schema).
+     * Ajuste o literal do enum se seu AccountType tiver outro nome.
+     */
+    @Query("""
+        SELECT a FROM Account a
+        WHERE a.deleted = false
+          AND a.type = 'CONTROLPLANE'
+    """)
+    Optional<Account> findControlPlaneAccount();
 }

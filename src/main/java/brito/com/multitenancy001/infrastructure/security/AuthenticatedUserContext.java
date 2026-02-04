@@ -9,7 +9,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collection;
 
 /**
@@ -153,7 +153,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
     public static AuthenticatedUserContext fromTenantUser(
             TenantUser user,
             String tenantSchema,
-            LocalDateTime now,
+            Instant now,
             Collection<? extends GrantedAuthority> authorities
     ) {
         String email = user.getEmail();
@@ -184,7 +184,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
     public static AuthenticatedUserContext fromControlPlaneUser(
             ControlPlaneUser user,
             String tenantSchema,
-            LocalDateTime now,
+            Instant now,
             Collection<? extends GrantedAuthority> authorities
     ) {
         String email = user.getEmail();
@@ -250,3 +250,4 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return enabled;
     }
 }
+

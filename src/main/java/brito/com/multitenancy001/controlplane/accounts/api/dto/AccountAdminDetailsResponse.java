@@ -6,8 +6,9 @@ import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneAdminUserSummaryResponse;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
+import java.time.LocalDate;
 public record AccountAdminDetailsResponse(
 
         // Identificação
@@ -24,10 +25,10 @@ public record AccountAdminDetailsResponse(
         String taxIdNumber,
 
         // Datas
-        LocalDateTime createdAt,
-        LocalDateTime trialEndDate,
-        LocalDateTime paymentDueDate,
-        LocalDateTime deletedAt,
+        Instant createdAt,
+        Instant trialEndDate,
+        LocalDate paymentDueDate,
+        Instant deletedAt,
 
         // Flags calculadas
         boolean inTrial,
@@ -41,3 +42,4 @@ public record AccountAdminDetailsResponse(
         long totalControlPlaneUsers,
         boolean operational
 ) {}
+

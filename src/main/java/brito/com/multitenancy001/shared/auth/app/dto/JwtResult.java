@@ -28,3 +28,4 @@ public record JwtResult(
         this(accessToken, refreshToken, "Bearer", userId, email, role, accountId, tenantSchema);
     }
 }
+

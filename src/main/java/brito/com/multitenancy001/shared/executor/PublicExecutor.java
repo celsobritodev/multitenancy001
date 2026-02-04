@@ -45,3 +45,4 @@ public class PublicExecutor {
     public <T> T inPublic(Supplier<T> supplier) { return runInPublicSchema(supplier); }
     public void inPublic(Runnable runnable) { runInPublicSchema(runnable); }
 }
+

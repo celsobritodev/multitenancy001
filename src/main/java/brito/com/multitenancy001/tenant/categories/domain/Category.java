@@ -7,10 +7,6 @@ import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -38,17 +34,6 @@ public class Category implements Auditable, SoftDeletable {
     @Column(nullable = false)
     private boolean deleted = false;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
     @Embedded
     private AuditInfo audit = new AuditInfo();
 
@@ -62,20 +47,19 @@ public class Category implements Auditable, SoftDeletable {
         return deleted;
     }
 
-    public void softDelete(LocalDateTime now) {
+    public void softDelete() {
         if (this.deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
         this.deleted = true;
-        this.deletedAt = now;
         this.active = false;
+        // deletedAt será setado pelo AuditEntityListener (audit.deletedAt)
     }
 
     public void restore() {
         if (!this.deleted) return;
-
         this.deleted = false;
-        this.deletedAt = null;
         this.active = true;
+        // deletedAt será limpo pelo AuditEntityListener se você quiser (opcional).
+        // Se sua política for manter histórico, NÃO limpe. Se for "restore limpa", ajuste listener.
     }
 }
+

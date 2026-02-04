@@ -7,3 +7,4 @@ public record TenantUserSummaryResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+

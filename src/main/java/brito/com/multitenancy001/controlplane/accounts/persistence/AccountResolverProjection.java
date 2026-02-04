@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.accounts.persistence;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public interface AccountResolverProjection {
     Long getId();
@@ -11,6 +11,7 @@ public interface AccountResolverProjection {
     String getDisplayName();
 
     String getStatus();
-    LocalDateTime getTrialEndDate();
+    Instant getTrialEndDate();
     String getOrigin();
 }
+

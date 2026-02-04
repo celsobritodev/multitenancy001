@@ -6,3 +6,4 @@ public record ControlPlaneAdminLoginRequest(
         @NotBlank String email,
         @NotBlank String password
 ) {}
+

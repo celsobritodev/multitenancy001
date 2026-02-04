@@ -9,3 +9,4 @@ public record LoginIdentityRow(
         String displayName,
         String slug
 ) {}
+

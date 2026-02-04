@@ -137,3 +137,4 @@ public class TenantUserController {
         return ResponseEntity.ok(tenantUserFacade.countEnabledTenantUsers());
     }
 }
+

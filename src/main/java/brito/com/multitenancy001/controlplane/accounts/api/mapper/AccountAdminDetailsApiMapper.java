@@ -7,8 +7,9 @@ import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.shared.time.AppClock;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 @Component
@@ -23,16 +24,21 @@ public class AccountAdminDetailsApiMapper {
     }
 
     public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
-        LocalDateTime now = appClock.now();
-        LocalDate today = now.toLocalDate();
-        LocalDate end = account.getTrialEndDate() != null ? account.getTrialEndDate().toLocalDate() : null;
+        Instant now = appClock.instant();
 
-        boolean inTrial = account.getTrialEndDate() != null && now.isBefore(account.getTrialEndDate());
-        boolean trialExpired = account.getTrialEndDate() != null && now.isAfter(account.getTrialEndDate());
+        // Trial é instante real (Instant). Para "dias restantes", convertemos para data civil em UTC explicitamente.
+        LocalDate todayUtc = LocalDate.ofInstant(now, ZoneOffset.UTC);
+
+        Instant trialEndAt = account.getTrialEndAt();
+        LocalDate trialEndDateUtc = trialEndAt != null ? LocalDate.ofInstant(trialEndAt, ZoneOffset.UTC) : null;
+
+        boolean inTrial = trialEndAt != null && now.isBefore(trialEndAt);
+        boolean trialExpired = trialEndAt != null && now.isAfter(trialEndAt);
 
         long trialDaysRemaining = 0;
-        if (inTrial && end != null) {
-            trialDaysRemaining = ChronoUnit.DAYS.between(today, end);
+        if (inTrial && trialEndDateUtc != null) {
+            trialDaysRemaining = ChronoUnit.DAYS.between(todayUtc, trialEndDateUtc);
+            if (trialDaysRemaining < 0) trialDaysRemaining = 0;
         }
 
         return new AccountAdminDetailsResponse(
@@ -42,18 +48,18 @@ public class AccountAdminDetailsApiMapper {
                 account.getSlug(),
                 account.getSchemaName(),
                 account.getStatus(),
-                account.getType(),               // ✅ NOVO (AccountType)
-                account.getSubscriptionPlan(),    // ✅ NOVO (SubscriptionPlan)
+                account.getType(),
+                account.getSubscriptionPlan(),
 
                 // Dados legais
                 account.getTaxIdType(),
                 account.getTaxIdNumber(),
 
-                // Datas
-                account.getCreatedAt(),
-                account.getTrialEndDate(),
+                // Datas (semântica correta)
+                account.getAudit() != null ? account.getAudit().getCreatedAt() : null,
+                account.getTrialEndAt(),
                 account.getPaymentDueDate(),
-                account.getDeletedAt(),
+                account.getAudit() != null ? account.getAudit().getDeletedAt() : null,
 
                 // Flags calculadas
                 inTrial,
@@ -65,7 +71,7 @@ public class AccountAdminDetailsApiMapper {
 
                 // Indicadores
                 totalUsers,
-                account.isOperational(now) // ✅ clock-aware
+                account.isOperational() // aqui não precisa de "now" porque seu domínio já tem isOperational()
         );
     }
 }

@@ -1,7 +1,9 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -45,7 +47,7 @@ public class AccountLifecycleService {
 
     // 2) CONSULTAS
     public List<Account> listAccounts() {
-        return publicUnitOfWork.readOnly(() -> accountRepository.findAllByDeletedFalse());
+        return publicUnitOfWork.readOnly(accountRepository::findAllByDeletedFalse);
     }
 
     public Account getAccount(Long accountId) {
@@ -62,7 +64,6 @@ public class AccountLifecycleService {
 
             long totalUsers = controlPlaneUserRepository.countByAccount_IdAndDeletedFalse(accountId);
 
-            // admin: pegue seu critério atual (se já existia). Se não, devolve null.
             ControlPlaneUser admin = controlPlaneUserRepository.findFirstAdminByAccountId(accountId).orElse(null);
 
             return new AccountAdminDetailsProjection(account, admin, totalUsers);
@@ -75,6 +76,7 @@ public class AccountLifecycleService {
     }
 
     public void softDeleteAccount(Long accountId) { accountStatusService.softDeleteAccount(accountId); }
+
     public void restoreAccount(Long accountId) { accountStatusService.restoreAccount(accountId); }
 
     public List<AccountTenantUserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
@@ -98,7 +100,7 @@ public class AccountLifecycleService {
         return PageRequest.of(pageable.getPageNumber(), size, pageable.getSort());
     }
 
-    private void assertValidCreatedBetweenRange(LocalDateTime start, LocalDateTime end) {
+    private void assertValidCreatedBetweenRange(Instant start, Instant end) {
         if (start == null || end == null) throw new ApiException("INVALID_RANGE", "start/end são obrigatórios", 400);
         if (end.isBefore(start)) throw new ApiException("INVALID_RANGE", "end deve ser >= start", 400);
         Duration d = Duration.between(start, end);
@@ -121,7 +123,7 @@ public class AccountLifecycleService {
         return publicUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
     }
 
-    public Page<Account> listAccountsCreatedBetween(LocalDateTime start, LocalDateTime end, Pageable pageable) {
+    public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
         assertValidCreatedBetweenRange(start, end);
         Pageable p = normalizePageable(pageable);
         return publicUnitOfWork.readOnly(() -> accountRepository.findAccountsCreatedBetween(start, end, p));
@@ -133,10 +135,20 @@ public class AccountLifecycleService {
         return publicUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(term, p));
     }
 
-    public List<Account> listOverdueAccounts(LocalDateTime today, AccountStatus status) {
-        LocalDateTime t = (today != null ? today : appClock.now());
+    /**
+     * Overdue é DATA CIVIL (paymentDueDate é LocalDate/DATE).
+     * Mantemos compatibilidade aceitando Instant e convertendo explicitamente para LocalDate em UTC
+     * (sem timezone implícito do servidor).
+     */
+    public List<Account> listOverdueAccounts(Instant today, AccountStatus status) {
+        Instant baseInstant = (today != null ? today : appClock.instant());
+        LocalDate baseDateUtc = LocalDate.ofInstant(baseInstant, ZoneOffset.UTC);
+
         AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
-        return publicUnitOfWork.readOnly(() -> accountRepository.findOverdueAccountsNotDeleted(st, t));
+
+        return publicUnitOfWork.readOnly(() ->
+                accountRepository.findOverdueAccountsNotDeleted(st, baseDateUtc)
+        );
     }
 
     public long countOperationalAccounts() {

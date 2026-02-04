@@ -21,7 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,9 +41,9 @@ public class ControlPlanePaymentService {
     @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
     public void checkPayments() {
         log.info("Iniciando verificação de pagamentos...");
-        LocalDateTime now = appClock.now();
+        Instant now = appClock.instant();
 
-        // Trials expirados
+        // Trials expirados: trialEndAt é Instant (timestamptz)
         List<Account> expiredTrials = accountRepository.findExpiredTrialsNotDeleted(now, AccountStatus.FREE_TRIAL);
 
         for (Account account : expiredTrials) {
@@ -50,8 +52,9 @@ public class ControlPlanePaymentService {
             }
         }
 
-        // Pagamentos vencidos
-        List<Account> overdueAccounts = accountRepository.findOverdueAccountsNotDeleted(AccountStatus.ACTIVE, now);
+        // Pagamentos vencidos: paymentDueDate é LocalDate (DATE) => hoje é LocalDate em UTC (sem timezone implícito)
+        LocalDate todayUtc = LocalDate.ofInstant(now, ZoneOffset.UTC);
+        List<Account> overdueAccounts = accountRepository.findOverdueAccountsNotDeleted(AccountStatus.ACTIVE, todayUtc);
 
         for (Account account : overdueAccounts) {
             if (account.getStatus() != AccountStatus.SUSPENDED) {
@@ -63,7 +66,6 @@ public class ControlPlanePaymentService {
     }
 
     private void suspendAccount(Account account, String reason) {
-        // garante side effects (suspender tenant users)
         accountStatusService.changeAccountStatus(
                 account.getId(),
                 new AccountStatusChangeCommand(AccountStatus.SUSPENDED)
@@ -72,8 +74,8 @@ public class ControlPlanePaymentService {
         sendSuspensionEmail(account, reason);
     }
 
-    private void checkExpiredPendingPayments(LocalDateTime now) {
-        LocalDateTime thirtyMinutesAgo = now.minusMinutes(30);
+    private void checkExpiredPendingPayments(Instant now) {
+        Instant thirtyMinutesAgo = now.minusSeconds(30 * 60);
 
         List<Payment> expiredPayments = controlPlanePaymentRepository
                 .findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, thirtyMinutesAgo);
@@ -94,7 +96,7 @@ public class ControlPlanePaymentService {
         Account account = accountRepository.findById(adminPaymentRequest.accountId())
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
-        LocalDateTime now = appClock.now();
+        Instant now = appClock.instant();
         validatePayment(account, adminPaymentRequest.amount(), now);
 
         Payment payment = Payment.builder()
@@ -132,7 +134,7 @@ public class ControlPlanePaymentService {
         Long accountId = securityUtils.getCurrentAccountId();
         Account account = findAccountOrThrow(accountId);
 
-        LocalDateTime now = appClock.now();
+        Instant now = appClock.instant();
         validatePayment(account, paymentRequest.amount(), now);
 
         Payment payment = Payment.builder()
@@ -190,7 +192,7 @@ public class ControlPlanePaymentService {
 
     @Transactional(readOnly = true)
     public boolean hasActivePayment(Long accountId) {
-        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
+        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.instant());
     }
 
     @Transactional(readOnly = true)
@@ -210,7 +212,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_PAYMENT_STATUS", "Pagamento não está pendente", 409);
         }
 
-        LocalDateTime now = appClock.now();
+        Instant now = appClock.instant();
         completePayment(payment, payment.getAccount(), now);
         return mapToResponse(payment);
     }
@@ -221,7 +223,7 @@ public class ControlPlanePaymentService {
         Payment payment = controlPlanePaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
-        LocalDateTime now = appClock.now();
+        Instant now = appClock.instant();
 
         if (!payment.canBeRefunded(now)) {
             throw new ApiException("PAYMENT_NOT_REFUNDABLE", "Pagamento não pode ser reembolsado", 409);
@@ -238,7 +240,7 @@ public class ControlPlanePaymentService {
     }
 
     @Transactional(readOnly = true)
-    public BigDecimal getTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
+    public BigDecimal getTotalRevenue(Instant startDate, Instant endDate) {
         List<Object[]> revenueByAccount = controlPlanePaymentRepository.getRevenueByAccount(startDate, endDate);
 
         return revenueByAccount.stream()
@@ -246,21 +248,18 @@ public class ControlPlanePaymentService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /*
-     * ========================================================= PRIVATE HELPERS
-     * =========================================================
-     */
-
     private Account findAccountOrThrow(Long accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
     }
 
-    private void completePayment(Payment payment, Account account, LocalDateTime now) {
+    private void completePayment(Payment payment, Account account, Instant now) {
         payment.markAsCompleted(now);
         controlPlanePaymentRepository.save(payment);
 
         account.setStatus(AccountStatus.ACTIVE);
+
+        // ✅ paymentDueDate é LocalDate (civil)
         account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
         accountRepository.save(account);
 
@@ -272,7 +271,7 @@ public class ControlPlanePaymentService {
         controlPlanePaymentRepository.save(payment);
     }
 
-    private void validatePayment(Account account, BigDecimal amount, LocalDateTime now) {
+    private void validatePayment(Account account, BigDecimal amount, Instant now) {
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ApiException("INVALID_AMOUNT", "Valor do pagamento inválido", 400);
@@ -292,10 +291,6 @@ public class ControlPlanePaymentService {
             throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
         }
     }
-
-    // =========================================================
-    // ✅ QUERIES / HELPERS para usar métodos do PaymentRepository
-    // =========================================================
 
     @Transactional(readOnly = true)
     public boolean paymentExistsForAccount(Long paymentId, Long accountId) {
@@ -344,7 +339,7 @@ public class ControlPlanePaymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(LocalDateTime date, PaymentStatus status) {
+    public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(Instant date, PaymentStatus status) {
         if (date == null) {
             throw new ApiException("INVALID_DATE", "date é obrigatório", 400);
         }
@@ -371,7 +366,7 @@ public class ControlPlanePaymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getPaymentsInPeriod(LocalDateTime startDate, LocalDateTime endDate) {
+    public List<PaymentResponse> getPaymentsInPeriod(Instant startDate, Instant endDate) {
         if (startDate == null || endDate == null) {
             throw new ApiException("INVALID_DATE_RANGE", "startDate e endDate são obrigatórios", 400);
         }
@@ -393,8 +388,9 @@ public class ControlPlanePaymentService {
         log.info("Enviando confirmação de pagamento para: {}", account.getLoginEmail());
     }
 
-    private LocalDateTime calculateNextDueDate(LocalDateTime validUntil, LocalDateTime now) {
-        return validUntil != null ? validUntil : now.plusMonths(1);
+    private LocalDate calculateNextDueDate(Instant validUntil, Instant now) {
+        Instant base = (validUntil != null ? validUntil : now.plusSeconds(30L * 24 * 3600));
+        return LocalDate.ofInstant(base, ZoneOffset.UTC);
     }
 
     private boolean processWithPaymentGateway(Payment payment, PaymentRequest paymentRequest) {
@@ -412,20 +408,30 @@ public class ControlPlanePaymentService {
         }
     }
 
+    /**
+     * ✅ PaymentResponse record (ordem e semântica):
+     * (id, accountId, amount, paymentMethod, paymentGateway, paymentStatus, description, paidAt, validUntil, refundedAt, createdAt, updatedAt)
+     */
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
                 payment.getAccount().getId(),
+
                 payment.getAmount(),
-                payment.getPaymentDate(),
-                payment.getValidUntil(),
-                payment.getStatus(),
-                payment.getTransactionId(),
                 payment.getPaymentMethod(),
                 payment.getPaymentGateway(),
+                payment.getStatus(),
+
                 payment.getDescription(),
-                payment.getCreatedAt(),
-                payment.getUpdatedAt()
+
+                // paidAt: no seu domínio é paymentDate
+                payment.getPaymentDate(),
+                payment.getValidUntil(),
+                payment.getRefundedAt(),
+
+                // auditoria única
+                payment.getAudit() != null ? payment.getAudit().getCreatedAt() : null,
+                payment.getAudit() != null ? payment.getAudit().getUpdatedAt() : null
         );
     }
 }

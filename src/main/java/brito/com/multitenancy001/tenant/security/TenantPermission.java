@@ -46,3 +46,4 @@ public enum TenantPermission implements PermissionCode {
         return name();
     }
 }
+

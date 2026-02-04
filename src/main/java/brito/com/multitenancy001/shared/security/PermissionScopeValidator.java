@@ -207,4 +207,67 @@ public final class PermissionScopeValidator {
         if (c == null) return List.of();
         return c.stream().filter(Objects::nonNull).toList();
     }
+    
+    
+ // =========================================================
+ // REQUIRE (fail-fast) - helpers para domínio tipado
+ // =========================================================
+
+ /**
+  * Fail-fast: exige permissão TEN_*
+  * (shared não importa enum do Tenant; usa PermissionCode/Enum/String)
+  */
+ public static void requireTenantPermission(Object permission) {
+     requireScopedPermission(permission, "TEN_", "CP_", "Tenant", "Control Plane");
+ }
+
+ /**
+  * Fail-fast: exige permissão CP_*
+  * (shared não importa enum do ControlPlane; usa PermissionCode/Enum/String)
+  */
+ public static void requireControlPlanePermission(Object permission) {
+     requireScopedPermission(permission, "CP_", "TEN_", "Control Plane", "Tenant");
+ }
+
+ private static void requireScopedPermission(
+         Object permission,
+         String expectedPrefix,
+         String forbiddenPrefix,
+         String expectedContextLabel,
+         String forbiddenContextLabel
+ ) {
+     if (permission == null) {
+         throw new DomainException("Permission é obrigatória no contexto " + expectedContextLabel);
+     }
+
+     final String code;
+     if (permission instanceof PermissionCode pc) {
+         code = pc.asAuthority(); // contrato shared
+     } else if (permission instanceof Enum<?> e) {
+         code = e.name(); // fallback (nome do enum)
+     } else if (permission instanceof String s) {
+         code = s;
+     } else {
+         throw new DomainException("Tipo inválido de permission (" + permission.getClass().getName()
+                 + ") no contexto " + expectedContextLabel);
+     }
+
+     if (code == null || code.trim().isEmpty()) {
+         throw new DomainException("Permission inválida/vazia no contexto " + expectedContextLabel);
+     }
+
+     String x = code.trim();
+
+     if (x.startsWith(forbiddenPrefix)) {
+         throw new DomainException("Permission de " + forbiddenContextLabel
+                 + " não é permitida no " + expectedContextLabel + ": " + x);
+     }
+
+     if (!x.startsWith(expectedPrefix)) {
+         throw new DomainException("Permission inválida (esperado prefixo " + expectedPrefix
+                 + ") no " + expectedContextLabel + ": " + x);
+     }
+ }
+
 }
+

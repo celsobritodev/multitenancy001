@@ -4,3 +4,4 @@ public enum LegalEntityType {
     INDIVIDUAL,   // pessoa física
     COMPANY       // pessoa jurídica
 }
+

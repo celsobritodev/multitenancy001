@@ -6,3 +6,4 @@ public record ControlPlaneAdminLoginCommand(
         String email,
         String password
 ) { }
+

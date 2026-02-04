@@ -2,7 +2,6 @@ package brito.com.multitenancy001.controlplane.accounts.api.mapper;
 
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -17,8 +16,12 @@ public class AccountApiMapper {
                 account.getStatus(),            // enum direto
                 account.getType(),              // enum direto
                 account.getSubscriptionPlan(),  // enum direto
-                account.getCreatedAt(),
-                account.getTrialEndDate()
+
+                // ✅ Auditoria única: AuditInfo (Instant)
+                account.getAudit() != null ? account.getAudit().getCreatedAt() : null,
+
+                // ✅ Trial como instante real (Instant)
+                account.getTrialEndAt()
         );
     }
 }

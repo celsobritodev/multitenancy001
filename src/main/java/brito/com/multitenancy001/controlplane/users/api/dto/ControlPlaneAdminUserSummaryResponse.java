@@ -7,3 +7,4 @@ public record ControlPlaneAdminUserSummaryResponse(
         boolean suspendedByAccount,
         boolean suspendedByAdmin
 ) {}
+

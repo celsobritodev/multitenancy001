@@ -21,28 +21,29 @@ CREATE TABLE IF NOT EXISTS suppliers (
 
   active  BOOLEAN NOT NULL DEFAULT true,
   deleted BOOLEAN NOT NULL DEFAULT false,
-  deleted_at TIMESTAMP,
 
   notes TEXT,
 
-  created_at TIMESTAMP NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP,
-
-  -- AUDITORIA
+  -- AUDIT (fonte única)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by BIGINT,
-  updated_by BIGINT,
-  deleted_by BIGINT,
-
   created_by_email CITEXT,
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by BIGINT,
   updated_by_email CITEXT,
+
+  deleted_at TIMESTAMPTZ,
+  deleted_by BIGINT,
   deleted_by_email CITEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_document_active
-ON suppliers(document)
-WHERE document IS NOT NULL AND deleted = false;
+  ON suppliers(document)
+  WHERE document IS NOT NULL AND deleted = false;
 
 CREATE INDEX IF NOT EXISTS idx_supplier_name    ON suppliers(name);
 CREATE INDEX IF NOT EXISTS idx_supplier_email   ON suppliers(email);
 CREATE INDEX IF NOT EXISTS idx_supplier_active  ON suppliers(active);
 CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;
+

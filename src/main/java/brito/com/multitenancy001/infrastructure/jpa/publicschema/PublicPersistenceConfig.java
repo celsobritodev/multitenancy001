@@ -53,3 +53,4 @@ public class PublicPersistenceConfig {
         return new JpaTransactionManager(emf);
     }
 }
+

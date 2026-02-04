@@ -36,8 +36,9 @@ public class AccountStatusService {
             AccountStatus newStatus = cmd.status();
             account.setStatus(newStatus);
 
-            if (newStatus == AccountStatus.ACTIVE) {
-                account.setDeletedAt(null);
+            // Se reativou, garante que não está deletado
+            if (newStatus == AccountStatus.ACTIVE && account.isDeleted()) {
+                account.restore();
             }
 
             accountRepository.save(account);
@@ -64,7 +65,7 @@ public class AccountStatusService {
                     account.getId(),
                     account.getStatus().name(),
                     previous == null ? null : previous.name(),
-                    appClock.now(),
+                    appClock.instant(),
                     account.getSchemaName(),
                     applied,
                     action.name(),
@@ -84,7 +85,7 @@ public class AccountStatusService {
                 throw new ApiException("BUILTIN_ACCOUNT_PROTECTED", "Não é permitido excluir contas do sistema", 403);
             }
 
-            account.softDelete(appClock.now());
+            account.softDelete(appClock.instant());
             accountRepository.save(account);
 
             tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
@@ -111,7 +112,10 @@ public class AccountStatusService {
 
     private int cancelAccount(Account account) {
         publicUnitOfWork.requiresNew(() -> {
-            account.setDeletedAt(appClock.now());
+            if (!account.isDeleted()) {
+                account.softDelete(appClock.instant());
+            }
+            account.setStatus(AccountStatus.CANCELLED);
             accountRepository.save(account);
         });
 

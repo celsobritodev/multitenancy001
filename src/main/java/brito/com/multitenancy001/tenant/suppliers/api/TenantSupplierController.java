@@ -106,3 +106,4 @@ public class TenantSupplierController {
         return ResponseEntity.ok(tenantSupplierService.findAnyByEmail(email));
     }
 }
+

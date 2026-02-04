@@ -7,10 +7,6 @@ import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -46,40 +42,29 @@ public class Subcategory implements Auditable, SoftDeletable {
     @Column(nullable = false)
     private boolean deleted = false;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
     @Embedded
     private AuditInfo audit = new AuditInfo();
 
     @Override
-    public AuditInfo getAudit() { return audit; }
+    public AuditInfo getAudit() {
+        return audit;
+    }
 
     @Override
-    public boolean isDeleted() { return deleted; }
+    public boolean isDeleted() {
+        return deleted;
+    }
 
-    public void softDelete(LocalDateTime now) {
+    public void softDelete() {
         if (this.deleted) return;
-        if (now == null) throw new IllegalArgumentException("now is required");
-
         this.deleted = true;
-        this.deletedAt = now;
         this.active = false;
     }
 
     public void restore() {
         if (!this.deleted) return;
-
         this.deleted = false;
-        this.deletedAt = null;
         this.active = true;
     }
 }
+

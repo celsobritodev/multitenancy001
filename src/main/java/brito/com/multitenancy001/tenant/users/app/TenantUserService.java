@@ -17,7 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -234,7 +234,7 @@ public class TenantUserService {
             String avatarUrl,
             String locale,
             String timezone,
-            LocalDateTime now
+            Instant now
     ) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
@@ -274,7 +274,7 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
 
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setMustChangePassword(false);
@@ -299,7 +299,7 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
                     .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400));
 
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
 
             if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
                 throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
@@ -338,7 +338,7 @@ public class TenantUserService {
 
             if (user.isDeleted()) return;
 
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
             user.softDelete(now, appClock.epochMillis());
             tenantUserRepository.save(user);
         });
@@ -410,3 +410,4 @@ public class TenantUserService {
         });
     }
 }
+

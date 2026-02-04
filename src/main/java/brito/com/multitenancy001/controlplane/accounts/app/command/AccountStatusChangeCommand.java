@@ -5,3 +5,4 @@ import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 public record AccountStatusChangeCommand(
         AccountStatus status
 ) {}
+

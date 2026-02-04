@@ -33,3 +33,4 @@ public record ProductUpsertRequest(
         if (active == null) active = true;
     }
 }
+

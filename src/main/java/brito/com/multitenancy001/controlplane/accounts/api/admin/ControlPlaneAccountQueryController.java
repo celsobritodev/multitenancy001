@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.accounts.api.admin;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
@@ -37,12 +37,22 @@ public class ControlPlaneAccountQueryController {
         return ResponseEntity.ok(queryService.countByStatusesNotDeleted(statuses));
     }
 
+    /**
+     * Semântica: paymentDueDate é DATA CIVIL (LocalDate <-> DATE).
+     * Endpoint aceita yyyy-MM-dd.
+     *
+     * Ex: /payment-due-before?date=2026-02-10
+     */
     @GetMapping("/payment-due-before")
-    public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(@RequestParam("date") String isoDateTime) {
-        LocalDateTime date = LocalDateTime.parse(isoDateTime);
+    public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(
+            @RequestParam("date") String isoDate
+    ) {
+        LocalDate date = LocalDate.parse(isoDate);
         return ResponseEntity.ok(
                 queryService.findPaymentDueBeforeNotDeleted(date)
-                        .stream().map(accountApiMapper::toResponse).toList()
+                        .stream()
+                        .map(accountApiMapper::toResponse)
+                        .toList()
         );
     }
 }

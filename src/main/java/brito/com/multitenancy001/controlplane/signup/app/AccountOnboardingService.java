@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.controlplane.signup.app;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import org.flywaydb.core.api.FlywayException;
 import org.springframework.dao.DataAccessException;
@@ -75,16 +76,17 @@ public class AccountOnboardingService {
             throw ex;
         }
 
-        // 2) Auditoria STARTED (REQUIRES_NEW)
-        provisioningAuditService.logStarted(
+        // 2) Auditoria STARTED
+        provisioningAuditService.started(
                 account.getId(),
+                "Provisioning started",
                 buildDetailsJson(account, data, "STARTED", null, null)
         );
 
         UserSummaryData tenantOwner = null;
 
         try {
-            // 3) Provisionamento fora do TX do CP, porque envolve infra/DDL/migrations
+            // 3) Provisionamento fora do TX do CP (envolve infra/DDL/migrations)
             try {
                 tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
             } catch (FlywayException ex) {
@@ -111,7 +113,7 @@ public class AccountOnboardingService {
                 throw provisioningFailed(ProvisioningFailureCode.TENANT_ADMIN_CREATION_ERROR, ex);
             }
 
-            // 5) CRÍTICO: registrar identidade de login no PUBLIC para que /api/tenant/auth/login funcione
+            // 5) Registrar identidade de login no PUBLIC (para /api/tenant/auth/login)
             try {
                 publicUnitOfWork.tx(() -> {
                     loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
@@ -129,18 +131,19 @@ public class AccountOnboardingService {
                 throw provisioningFailed(ProvisioningFailureCode.PUBLIC_PERSISTENCE_ERROR, ex);
             }
 
-            // 7) Auditoria SUCCESS (REQUIRES_NEW)
-            provisioningAuditService.logSuccess(
+            // 7) Auditoria SUCCESS
+            provisioningAuditService.success(
                     finalized.getId(),
+                    "Provisioning success",
                     buildDetailsJson(finalized, data, "SUCCESS", null, null)
             );
 
-            log.info("✅ Account criada | accountId={} | schemaName={} | slug={} | status={} | trialEndDate={}",
+            log.info("✅ Account criada | accountId={} | schemaName={} | slug={} | status={} | trialEndAt={}",
                     finalized.getId(),
                     finalized.getSchemaName(),
                     finalized.getSlug(),
                     finalized.getStatus(),
-                    finalized.getTrialEndDate()
+                    finalized.getTrialEndAt()
             );
 
             TenantAdminResult tenantAdminResult = new TenantAdminResult(
@@ -155,7 +158,7 @@ public class AccountOnboardingService {
             ProvisioningFailureCode code = wrapped.code();
 
             String message = safeMessage(wrapped.getCause());
-            provisioningAuditService.logFailure(
+            provisioningAuditService.failed(
                     account.getId(),
                     code,
                     message,
@@ -171,7 +174,7 @@ public class AccountOnboardingService {
             throw wrapped;
 
         } catch (RuntimeException ex) {
-            provisioningAuditService.logFailure(
+            provisioningAuditService.failed(
                     account.getId(),
                     ProvisioningFailureCode.UNKNOWN,
                     safeMessage(ex),
@@ -190,16 +193,15 @@ public class AccountOnboardingService {
             Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
 
-            LocalDateTime now = appClock.now();
+            Instant now = appClock.instant();
 
-            // Se ainda está provisionando, entra em FREE_TRIAL
             if (managed.getStatus() == AccountStatus.PROVISIONING) {
                 managed.setStatus(AccountStatus.FREE_TRIAL);
             }
 
-            // Garantia de consistência: FREE_TRIAL precisa de trialEndDate
-            if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndDate() == null) {
-                managed.setTrialEndDate(now.plusDays(DEFAULT_TRIAL_DAYS));
+            // FREE_TRIAL precisa de trialEndAt (Instant)
+            if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndAt() == null) {
+                managed.setTrialEndAt(now.plus(DEFAULT_TRIAL_DAYS, ChronoUnit.DAYS));
             }
 
             return accountRepository.save(managed);
@@ -275,10 +277,6 @@ public class AccountOnboardingService {
         return true;
     }
 
-    /**
-     * Detalhes para auditoria: sem senha, sem dados sensíveis em excesso.
-     * Mantém JSON simples para não depender de ObjectMapper aqui.
-     */
     private String buildDetailsJson(
             Account account,
             SignupData data,

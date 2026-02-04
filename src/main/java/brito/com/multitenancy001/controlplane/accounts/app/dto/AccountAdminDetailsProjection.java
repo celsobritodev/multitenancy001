@@ -8,3 +8,4 @@ public record AccountAdminDetailsProjection(
         ControlPlaneUser admin,
         long totalUsers
 ) {}
+

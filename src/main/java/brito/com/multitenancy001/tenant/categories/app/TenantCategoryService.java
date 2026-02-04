@@ -135,7 +135,7 @@ public class TenantCategoryService {
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
-        category.softDelete(appClock.now());
+        category.softDelete(appClock.instant());
         tenantCategoryRepository.save(category);
     }
 
@@ -148,3 +148,4 @@ public class TenantCategoryService {
         return tenantCategoryRepository.save(category);
     }
 }
+

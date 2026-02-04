@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controlplane.billing.app.query;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -35,7 +35,7 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
 
     @Transactional(readOnly = true)
     @Override
-    public BigDecimal getTotalPaidInPeriod(Long accountId, LocalDateTime startDate, LocalDateTime endDate) {
+    public BigDecimal getTotalPaidInPeriod(Long accountId, Instant startDate, Instant endDate) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (startDate == null || endDate == null) throw new ApiException("DATE_RANGE_REQUIRED", "startDate/endDate são obrigatórios", 400);
 
@@ -75,33 +75,42 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
         return mapToResponse(payment);
     }
 
-    /**
-     * "Active payment" no seu domínio: assume que significa
-     * existir pagamento com status COMPLETED e validUntil >= now.
-     * Ajuste aqui se sua regra for diferente (ex.: status=ACTIVE).
-     */
     @Transactional(readOnly = true)
     @Override
     public boolean hasActivePayment(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.now());
+        return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.instant());
     }
 
+    /**
+     * ✅ PaymentResponse record (ordem e semântica):
+     * (id, accountId, amount,
+     *  paymentMethod, paymentGateway, paymentStatus,
+     *  description,
+     *  paidAt, validUntil, refundedAt,
+     *  createdAt, updatedAt)
+     */
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
                 payment.getAccount().getId(),
+
                 payment.getAmount(),
-                payment.getPaymentDate(),
-                payment.getValidUntil(),
-                payment.getStatus(),
-                payment.getTransactionId(),
                 payment.getPaymentMethod(),
                 payment.getPaymentGateway(),
+                payment.getStatus(),
+
                 payment.getDescription(),
-                payment.getCreatedAt(),
-                payment.getUpdatedAt()
+
+                // paidAt (no seu domínio: paymentDate)
+                payment.getPaymentDate(),
+                payment.getValidUntil(),
+                payment.getRefundedAt(),
+
+                // auditoria única
+                payment.getAudit() != null ? payment.getAudit().getCreatedAt() : null,
+                payment.getAudit() != null ? payment.getAudit().getUpdatedAt() : null
         );
     }
 }

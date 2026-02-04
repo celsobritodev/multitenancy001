@@ -11,13 +11,19 @@ CREATE TABLE IF NOT EXISTS sale_items (
   unit_price NUMERIC(12,2) NOT NULL,
   total_price NUMERIC(12,2) NOT NULL,
 
-  -- AUDITORIA (compatível com AuditInfo)
-  created_by BIGINT,
-  updated_by BIGINT,
-  deleted_by BIGINT,
+  deleted BOOLEAN NOT NULL DEFAULT false,
 
+  -- AUDIT (fonte única)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by BIGINT,
   created_by_email CITEXT,
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by BIGINT,
   updated_by_email CITEXT,
+
+  deleted_at TIMESTAMPTZ,
+  deleted_by BIGINT,
   deleted_by_email CITEXT,
 
   CONSTRAINT fk_sale_items_sale
@@ -26,3 +32,5 @@ CREATE TABLE IF NOT EXISTS sale_items (
 
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_deleted ON sale_items(deleted) WHERE deleted = false;
+

@@ -9,3 +9,4 @@ public record CreateAccountCommand(
         TaxIdType taxIdType,
         String taxIdNumber
 ) {}
+

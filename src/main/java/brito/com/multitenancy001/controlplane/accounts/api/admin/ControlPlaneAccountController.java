@@ -27,7 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -156,8 +156,8 @@ public class ControlPlaneAccountController {
             @RequestParam("end") String endIso,
             Pageable pageable
     ) {
-        LocalDateTime start = LocalDateTime.parse(startIso);
-        LocalDateTime end = LocalDateTime.parse(endIso);
+        Instant start = Instant.parse(startIso);
+        Instant end = Instant.parse(endIso);
         return ResponseEntity.ok(accountLifecycleService.listAccountsCreatedBetween(start, end, pageable).map(accountApiMapper::toResponse));
     }
 
@@ -176,3 +176,4 @@ public class ControlPlaneAccountController {
         );
     }
 }
+

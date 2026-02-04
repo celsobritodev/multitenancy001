@@ -1,12 +1,12 @@
 package brito.com.multitenancy001.controlplane.accounts.api.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record AccountStatusChangeResponse(
         Long id,
         String status,
         String previousStatus,
-        LocalDateTime effectiveAt,
+        Instant effectiveAt,
         String schemaName,
         SideEffects sideEffects
 ) {
@@ -16,3 +16,4 @@ public record AccountStatusChangeResponse(
             int tenantUsersCount
     ) {}
 }
+

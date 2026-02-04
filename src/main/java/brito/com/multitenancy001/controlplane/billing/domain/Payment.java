@@ -2,9 +2,6 @@ package brito.com.multitenancy001.controlplane.billing.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
@@ -14,7 +11,8 @@ import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -42,11 +40,11 @@ public class Payment implements Auditable {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "payment_date", nullable = false)
-    private LocalDateTime paymentDate;
+    @Column(name = "payment_date", nullable = false, columnDefinition = "timestamptz")
+    private Instant paymentDate;
 
-    @Column(name = "valid_until")
-    private LocalDateTime validUntil;
+    @Column(name = "valid_until", columnDefinition = "timestamptz")
+    private Instant validUntil;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -80,14 +78,6 @@ public class Payment implements Auditable {
     @Column(name = "receipt_url", columnDefinition = "TEXT")
     private String receiptUrl;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
     // ===== AUDIT (ator)
     @Embedded
     @Builder.Default
@@ -98,8 +88,8 @@ public class Payment implements Auditable {
         return audit;
     }
 
-    @Column(name = "refunded_at")
-    private LocalDateTime refundedAt;
+    @Column(name = "refunded_at", columnDefinition = "timestamptz")
+    private Instant refundedAt;
 
     @Column(name = "refund_amount", precision = 10, scale = 2)
     private BigDecimal refundAmount;
@@ -125,11 +115,11 @@ public class Payment implements Auditable {
         }
     }
 
-    private LocalDateTime calculateDefaultValidUntil(LocalDateTime baseDate) {
-        return baseDate.plusDays(30);
+    private Instant calculateDefaultValidUntil(Instant baseDate) {
+        return baseDate.plus(30, ChronoUnit.DAYS);
     }
 
-    public void markAsCompleted(LocalDateTime now) {
+    public void markAsCompleted(Instant now) {
         this.status = PaymentStatus.COMPLETED;
         if (this.paymentDate == null) this.paymentDate = now;
         if (this.validUntil == null) this.validUntil = calculateDefaultValidUntil(this.paymentDate);
@@ -141,18 +131,18 @@ public class Payment implements Auditable {
             this.metadataJson = "{\"failure_reason\":\"" + reason + "\"}";
         }
     }
-    
-    public boolean canBeRefunded(LocalDateTime now) {
+
+    public boolean canBeRefunded(Instant now) {
         if (this.status != PaymentStatus.COMPLETED) return false;
         if (this.refundedAt != null) return false;
         if (this.paymentDate == null) return false;
 
-        // Exemplo original: até 90 dias após paymentDate (regra determinística)
-        // (equivalente a: paymentDate.isAfter(now.minusDays(90)))
-        return this.paymentDate.isAfter(now.minusDays(90));
+        // até 90 dias após paymentDate
+        Instant limit = now.minus(90, ChronoUnit.DAYS);
+        return this.paymentDate.isAfter(limit);
     }
-    
-    public void refundPartially(LocalDateTime now, BigDecimal amount, String reason) {
+
+    public void refundPartially(Instant now, BigDecimal amount, String reason) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(this.amount) > 0) {
             throw new IllegalArgumentException("Valor de reembolso inválido");
         }
@@ -166,7 +156,7 @@ public class Payment implements Auditable {
         this.status = PaymentStatus.REFUNDED;
     }
 
-    public void refundFully(LocalDateTime now, String reason) {
+    public void refundFully(Instant now, String reason) {
         if (!canBeRefunded(now)) {
             throw new IllegalStateException("Pagamento não pode ser reembolsado");
         }

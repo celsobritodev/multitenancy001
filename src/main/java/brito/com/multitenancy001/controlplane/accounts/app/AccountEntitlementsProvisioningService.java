@@ -31,7 +31,6 @@ public class AccountEntitlementsProvisioningService {
             return null;
         }
 
-        // Defaults (pode virar config depois)
         int inserted = accountEntitlementsRepository.insertDefaultIfMissing(
                 account.getId(),
                 5,
@@ -39,7 +38,6 @@ public class AccountEntitlementsProvisioningService {
                 100
         );
 
-        // Sempre lê de volta (se inseriu ou já existia)
         return accountEntitlementsRepository.findByAccount_Id(account.getId())
                 .orElseThrow(() -> new ApiException(
                         "ENTITLEMENTS_NOT_FOUND",

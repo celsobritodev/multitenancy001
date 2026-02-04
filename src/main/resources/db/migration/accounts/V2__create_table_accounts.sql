@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     status            VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
     subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
 
-    -- ✅ emails case-insensitive
+    -- emails case-insensitive
     login_email   CITEXT NOT NULL,
     billing_email CITEXT,
 
@@ -35,8 +35,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     locale   VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
     currency VARCHAR(3)  NOT NULL DEFAULT 'BRL',
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP,
+    -- auditoria (instantes reais)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     created_by BIGINT,
     updated_by BIGINT,
@@ -46,15 +47,16 @@ CREATE TABLE IF NOT EXISTS accounts (
     updated_by_email CITEXT,
     deleted_by_email CITEXT,
 
-    trial_end_date    TIMESTAMP,
-    payment_due_date  TIMESTAMP,
-    next_billing_date TIMESTAMP,
+    -- domínio: misto (instante real x data civil)
+    trial_end_date    TIMESTAMPTZ, -- instante real
+    payment_due_date  DATE,        -- data civil
+    next_billing_date DATE,        -- data civil
 
     settings_json TEXT,
     metadata_json TEXT,
 
     deleted    BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMP
+    deleted_at TIMESTAMPTZ
 );
 
 -- =========================
@@ -91,34 +93,28 @@ BEGIN
             ADD CONSTRAINT chk_accounts_legal_entity_type
             CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
     END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_tax_id_type') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_tax_id_type
-            CHECK (tax_id_type IS NULL OR tax_id_type IN ('CPF', 'CNPJ'));
-    END IF;
 END $$;
 
 -- =========================
--- UNIQUE / INDEXES
+-- Índices/Uniqueness (soft-delete aware)
 -- =========================
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_schema_name_active
+    ON accounts (schema_name)
+    WHERE deleted = false;
 
--- login_email único (case-insensitive por ser CITEXT) respeitando soft-delete
-CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_login_email_not_deleted
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_slug_active
+    ON accounts (slug)
+    WHERE deleted = false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_login_email_active
     ON accounts (login_email)
     WHERE deleted = false;
 
--- schema/slug globais
-CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_schema_name
-    ON accounts (schema_name);
+-- tax_id pode ser nulo (permitir múltiplos nulos)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
+    ON accounts (tax_id_type, tax_id_number, tax_country_code)
+    WHERE deleted = false AND tax_id_number IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_accounts_slug
-    ON accounts (slug);
+CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts (status);
+CREATE INDEX IF NOT EXISTS idx_accounts_created_at ON accounts (created_at);
 
--- billing_email único quando preenchido (case-insensitive)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_billing_email_active
-    ON accounts (billing_email)
-    WHERE deleted = false AND billing_email IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_accounts_display_name
-    ON accounts (display_name);

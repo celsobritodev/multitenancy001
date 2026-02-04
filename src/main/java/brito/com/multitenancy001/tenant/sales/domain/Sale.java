@@ -2,15 +2,14 @@ package brito.com.multitenancy001.tenant.sales.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,22 +20,25 @@ import java.util.UUID;
         @Index(name = "idx_sales_status", columnList = "status")
 })
 @EntityListeners(AuditEntityListener.class)
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "items")
-public class Sale implements Auditable {
+public class Sale implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "sale_date", nullable = false)
-    private LocalDateTime saleDate;
+    /**
+     * Instante real: quando a venda ocorreu.
+     * (DB: TIMESTAMPTZ)
+     */
+    @Column(name = "sale_date", nullable = false, columnDefinition = "timestamptz")
+    private Instant saleDate;
 
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
@@ -66,14 +68,10 @@ public class Sale implements Auditable {
     @Builder.Default
     private List<SaleItem> items = new ArrayList<>();
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
@@ -83,8 +81,30 @@ public class Sale implements Auditable {
         return audit;
     }
 
- 
+    @Override
+    public boolean isDeleted() {
+        return deleted;
+    }
 
+    @Override
+    public void markDeleted() {
+        this.deleted = true;
+    }
+
+    public void softDelete(Instant now) {
+        if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
+        this.deleted = true;
+        this.audit.markDeleted(now);
+    }
+
+    public void restore() {
+        if (!this.deleted) return;
+
+        this.deleted = false;
+        this.audit.clearDeleted();
+    }
 
     public void addItem(SaleItem item) {
         if (item == null) return;
@@ -114,3 +134,4 @@ public class Sale implements Auditable {
         this.status = SaleStatus.CANCELLED;
     }
 }
+

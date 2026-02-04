@@ -7,3 +7,4 @@ public record TenantLoginConfirmRequest(
         Long accountId,
         String slug
 ) { }
+

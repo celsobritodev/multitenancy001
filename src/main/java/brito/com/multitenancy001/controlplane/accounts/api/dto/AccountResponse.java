@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.accounts.api.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountType;
@@ -14,6 +14,7 @@ public record AccountResponse(
         AccountStatus status,
         AccountType accountType,
         SubscriptionPlan subscriptionPlan,
-        LocalDateTime createdAt,
-        LocalDateTime trialEndDate
+        Instant createdAt,
+        Instant trialEndDate
 ) {}
+

@@ -72,3 +72,4 @@ public interface TenantSubcategoryRepository extends JpaRepository<Subcategory, 
                                               @Param("includeDeleted") boolean includeDeleted,
                                               @Param("includeInactive") boolean includeInactive);
 }
+

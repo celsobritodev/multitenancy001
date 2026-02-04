@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.sales.domain;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
+import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.*;
@@ -21,7 +22,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "sale")
-public class SaleItem implements Auditable {
+public class SaleItem implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -53,6 +54,10 @@ public class SaleItem implements Auditable {
     @Column(name = "total_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalPrice;
 
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
@@ -60,6 +65,31 @@ public class SaleItem implements Auditable {
     @Override
     public AuditInfo getAudit() {
         return audit;
+    }
+
+    @Override
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    @Override
+    public void markDeleted() {
+        this.deleted = true;
+    }
+
+    public void softDelete(Instant now) {
+        if (this.deleted) return;
+        if (now == null) throw new IllegalArgumentException("now is required");
+
+        this.deleted = true;
+        this.audit.markDeleted(now);
+    }
+
+    public void restore() {
+        if (!this.deleted) return;
+
+        this.deleted = false;
+        this.audit.clearDeleted();
     }
 
     public void recalcTotal() {
@@ -70,3 +100,4 @@ public class SaleItem implements Auditable {
         this.totalPrice = unitPrice.multiply(quantity);
     }
 }
+

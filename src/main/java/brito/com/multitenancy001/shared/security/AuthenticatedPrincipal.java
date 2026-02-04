@@ -9,3 +9,4 @@ public interface AuthenticatedPrincipal {
     Long getUserId();
     String getEmail();
 }
+

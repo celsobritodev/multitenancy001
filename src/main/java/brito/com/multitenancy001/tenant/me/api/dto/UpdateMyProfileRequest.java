@@ -20,3 +20,4 @@ public record UpdateMyProfileRequest(
         @Size(max = 60, message = "timezone deve ter no máximo 60 caracteres")
         String timezone
 ) {}
+

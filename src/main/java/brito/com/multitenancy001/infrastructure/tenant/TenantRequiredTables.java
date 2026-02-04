@@ -7,3 +7,4 @@ public final class TenantRequiredTables {
     public static final String PRODUCTS = "products";
     // ...
 }
+

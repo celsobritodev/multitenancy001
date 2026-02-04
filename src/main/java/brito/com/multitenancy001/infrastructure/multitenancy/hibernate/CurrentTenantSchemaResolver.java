@@ -129,3 +129,4 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
         return DEFAULT_SCHEMA.equals(tenantIdentifier);
     }
 }
+

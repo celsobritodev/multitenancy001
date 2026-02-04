@@ -16,3 +16,4 @@ public sealed interface TenantLoginResult
             java.util.List<AccountSelectionOptionData> candidates
     ) implements TenantLoginResult { }
 }
+

@@ -5,3 +5,4 @@ public record AccountSelectionOptionData(
         String displayName,
         String slug
 ) { }
+

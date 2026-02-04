@@ -5,3 +5,4 @@ public record TenantLoginConfirmCommand(
         Long accountId,
         String slug
 ) { }
+

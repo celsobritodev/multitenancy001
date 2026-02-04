@@ -24,3 +24,4 @@ public enum ControlPlaneRole implements RoleAuthority {
         return this == CONTROLPLANE_BILLING_MANAGER;
     }
 }
+

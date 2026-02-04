@@ -4,3 +4,4 @@ public enum AccountType {
     TENANT,
     PLATFORM
 }
+

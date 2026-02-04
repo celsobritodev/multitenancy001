@@ -244,3 +244,4 @@ public class JwtTokenProvider {
         return "TENANT".equals(getAuthDomain(token));
     }
 }
+

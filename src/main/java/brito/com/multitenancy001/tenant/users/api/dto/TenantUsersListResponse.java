@@ -8,3 +8,4 @@ public record TenantUsersListResponse(
         AccountEntitlementsSnapshot entitlements, // somente para TENANT_OWNER
         List<TenantUserListItemResponse> users
 ) {}
+

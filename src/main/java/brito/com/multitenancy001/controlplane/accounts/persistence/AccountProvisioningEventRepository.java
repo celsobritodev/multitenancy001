@@ -20,3 +20,4 @@ public interface AccountProvisioningEventRepository extends JpaRepository<Accoun
             ProvisioningStatus status
     );
 }
+

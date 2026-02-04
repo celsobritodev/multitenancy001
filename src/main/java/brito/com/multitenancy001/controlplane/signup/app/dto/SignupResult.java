@@ -6,3 +6,4 @@ public record SignupResult(
         Account account,
         TenantAdminResult tenantAdmin
 ) {}
+

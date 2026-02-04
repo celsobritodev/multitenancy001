@@ -20,3 +20,4 @@ public final class TenantRoleMapper {
         return TenantRoleName.valueOf(role.name());
     }
 }
+

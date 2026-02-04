@@ -7,11 +7,8 @@ import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import brito.com.multitenancy001.tenant.products.domain.Product;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -75,12 +72,7 @@ public class Supplier implements Auditable, SoftDeletable {
 
     @Builder.Default
     @Column(name = "deleted", nullable = false)
-    private boolean deleted = false;
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @Column(name = "notes", columnDefinition = "TEXT")
+    private boolean deleted = false;    @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
     @OneToMany(
@@ -89,17 +81,7 @@ public class Supplier implements Auditable, SoftDeletable {
             fetch = FetchType.LAZY
     )
     @Builder.Default
-    private List<Product> products = new ArrayList<>();
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    
-    @Embedded
+    private List<Product> products = new ArrayList<>();    @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
@@ -118,7 +100,7 @@ public class Supplier implements Auditable, SoftDeletable {
     // Regras de domínio
     // =====================
 
-    public void softDelete(LocalDateTime now) {
+    public void softDelete(Instant now) {
         if (this.deleted) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
@@ -135,3 +117,4 @@ public class Supplier implements Auditable, SoftDeletable {
         this.active = true;
     }
 }
+

@@ -7,3 +7,4 @@ public record TenantAdminResult(
         String email,
         TenantRoleName role
 ) {}
+

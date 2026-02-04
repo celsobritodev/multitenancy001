@@ -5,19 +5,24 @@ import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record PaymentResponse(
         Long id,
         Long accountId,
+
         BigDecimal amount,
-        LocalDateTime paymentDate,
-        LocalDateTime validUntil,
-        PaymentStatus status,
-        String transactionId,
         PaymentMethod paymentMethod,
         PaymentGateway paymentGateway,
+        PaymentStatus paymentStatus,
+
         String description,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+
+        Instant paidAt,
+        Instant validUntil,
+        Instant refundedAt,
+
+        Instant createdAt,
+        Instant updatedAt
 ) {}
+

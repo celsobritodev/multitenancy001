@@ -25,3 +25,4 @@ public enum TenantRoleName {
         return TenantRoleName.valueOf(value.trim().toUpperCase());
     }
 }
+

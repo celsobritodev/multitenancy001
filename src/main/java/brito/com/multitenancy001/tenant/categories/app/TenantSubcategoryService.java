@@ -148,7 +148,7 @@ public class TenantSubcategoryService {
         Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 
-        sub.softDelete(appClock.now());
+        sub.softDelete(appClock.instant());
         tenantSubcategoryRepository.save(sub);
     }
 
@@ -168,3 +168,4 @@ public class TenantSubcategoryService {
     }
 
 }
+

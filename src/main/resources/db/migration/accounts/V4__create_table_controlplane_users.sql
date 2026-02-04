@@ -4,32 +4,22 @@ SET search_path TO public;
 CREATE TABLE IF NOT EXISTS controlplane_users (
     id BIGSERIAL PRIMARY KEY,
 
-    name VARCHAR(100) NOT NULL,
-
-    -- ✅ email case-insensitive
-    email CITEXT NOT NULL,
-    password VARCHAR(255) NOT NULL,
-
-    role VARCHAR(50) NOT NULL,
-    account_id BIGINT NOT NULL,
+    account_id BIGINT NOT NULL REFERENCES accounts(id),
 
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
-    suspended_by_account BOOLEAN NOT NULL DEFAULT FALSE,
-    suspended_by_admin  BOOLEAN NOT NULL DEFAULT FALSE,
+    name  VARCHAR(100) NOT NULL,
+    email CITEXT NOT NULL,
+    password VARCHAR(255) NOT NULL,
 
-    last_login TIMESTAMP,
-    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-    locked_until TIMESTAMP,
-    must_change_password BOOLEAN NOT NULL DEFAULT false,
-    password_changed_at TIMESTAMP,
+    role VARCHAR(50),
 
-    timezone VARCHAR(60) NOT NULL DEFAULT 'America/Sao_Paulo',
-    locale VARCHAR(20) NOT NULL DEFAULT 'pt_BR',
+    suspended_by_account BOOLEAN NOT NULL DEFAULT false,
+    suspended_by_admin   BOOLEAN NOT NULL DEFAULT false,
 
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP,
-    deleted_at TIMESTAMP,
+    -- auditoria (instantes reais)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     created_by BIGINT,
     updated_by BIGINT,
@@ -39,22 +29,14 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     updated_by_email CITEXT,
     deleted_by_email CITEXT,
 
-    deleted BOOLEAN NOT NULL DEFAULT false,
-
-    password_reset_token VARCHAR(255),
-    password_reset_expires TIMESTAMP,
-
-    phone VARCHAR(20),
-    avatar_url VARCHAR(500),
-
-    CONSTRAINT fk_controlplane_users_account
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-
-    CONSTRAINT chk_cp_user_origin
-        CHECK (user_origin IN ('BUILT_IN', 'ADMIN', 'API'))
+    deleted    BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMPTZ
 );
 
--- ✅ dentro de 1 conta, email único (CITEXT já resolve case-insensitive)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_email_active
-    ON controlplane_users (account_id, email)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_controlplane_users_email_active
+    ON controlplane_users (email)
     WHERE deleted = false;
+
+CREATE INDEX IF NOT EXISTS idx_controlplane_users_account_id ON controlplane_users (account_id);
+CREATE INDEX IF NOT EXISTS idx_controlplane_users_created_at ON controlplane_users (created_at);
+

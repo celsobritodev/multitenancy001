@@ -290,14 +290,14 @@ public class TenantAuthService {
             }
 
             // grava last_login também no refresh
-            tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
                     tenantSchema,
-                    appClock.now(),
+                    appClock.instant(),
                     authorities
             );
 
@@ -379,14 +379,14 @@ public class TenantAuthService {
                     throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
                 }
 
-                tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
+                tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
                 var authorities = AuthoritiesFactory.forTenant(user);
 
                 AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                         user,
                         tenantSchema,
-                        appClock.now(),
+                        appClock.instant(),
                         authorities
                 );
 
@@ -461,14 +461,14 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            tenantUserRepository.updateLastLogin(user.getId(), appClock.now());
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
             var authorities = AuthoritiesFactory.forTenant(user);
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
                     tenantSchema,
-                    appClock.now(),
+                    appClock.instant(),
                     authorities
             );
 
@@ -500,3 +500,4 @@ public class TenantAuthService {
         });
     }
 }
+

@@ -12,3 +12,4 @@ public record AccountTenantUserSummaryData(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+

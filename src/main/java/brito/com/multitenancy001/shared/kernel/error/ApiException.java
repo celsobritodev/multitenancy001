@@ -44,3 +44,4 @@ public class ApiException extends RuntimeException {
         this.details = details;
     }
 }
+

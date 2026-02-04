@@ -11,3 +11,4 @@ public enum SubscriptionPlan {
      */
     BUILT_IN_PLAN
 }
+

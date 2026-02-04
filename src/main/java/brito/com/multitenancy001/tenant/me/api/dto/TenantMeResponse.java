@@ -20,3 +20,4 @@ public record TenantMeResponse(
         boolean deleted,
         boolean enabled
 ) {}
+
