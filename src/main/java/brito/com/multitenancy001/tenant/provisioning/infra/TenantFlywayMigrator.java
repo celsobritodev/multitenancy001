@@ -8,15 +8,14 @@ import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Flyway para TENANT schemas (Opção A).
+ * Flyway para TENANT schemas.
  *
  * ✅ NÃO se chama "flyway" -> não roda no bootstrap
  * ✅ você chama migrate(schema) quando provisionar o tenant
- * ✅ cada tenant tem seu flyway_schema_history NO PRÓPRIO schema
+ * ✅ cada tenant tem seu schema history dentro do schema do tenant
  *
- * Importante:
- * - defaultSchema = schemaName garante history e migrations “dentro” do tenant
- * - locations aponta para db/migration/tenants (como no seu projeto)
+ * BLINDAGEM EXTRA (recomendado):
+ * - table("tenant_flyway_schema_history") separa o histórico do PUBLIC
  */
 @Component
 @RequiredArgsConstructor
@@ -28,40 +27,22 @@ public class TenantFlywayMigrator {
         migrate(this.dataSource, schemaName);
     }
 
-    /**
-     * Permite passar um DataSource custom (ex: SingleConnectionDataSource)
-     * para manter advisory lock e flyway na MESMA connection.
-     */
     public void migrate(DataSource customDataSource, String schemaName) {
-        validateSchemaName(schemaName);
-
         Flyway.configure()
                 .dataSource(customDataSource)
                 .schemas(schemaName)
                 .defaultSchema(schemaName)
+
+                // ✅ sua pasta real (pela sua lista)
                 .locations("classpath:db/migration/tenants")
+
+                // ✅ blindagem (opcional mas recomendado)
+                .table("tenant_flyway_schema_history")
+
                 .baselineOnMigrate(false)
                 .validateOnMigrate(true)
                 .cleanDisabled(true)
-                // ✅ garante que Flyway use o schema do tenant como alvo principal
-                .createSchemas(false) // schema é criado pelo provisioning service (idempotente)
                 .load()
                 .migrate();
-    }
-
-    private static void validateSchemaName(String schemaName) {
-        if (schemaName == null || schemaName.isBlank()) {
-            throw new IllegalArgumentException("schemaName é obrigatório");
-        }
-        String s = schemaName.trim();
-        if (s.length() > 63) {
-            throw new IllegalArgumentException("schemaName excede 63 caracteres");
-        }
-        // seu padrão: t_<slug>_<shortId> (lowercase + underscore)
-        if (!s.matches("^[a-z][a-z0-9_]*$")) {
-            throw new IllegalArgumentException(
-                    "schemaName inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef"
-            );
-        }
     }
 }

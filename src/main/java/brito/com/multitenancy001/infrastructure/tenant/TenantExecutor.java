@@ -76,7 +76,7 @@ public class TenantExecutor {
         });
     }
 
-    /** Retorna defaultValue se tenantSchema/tabela não existir (bom p/ side-effects). */
+    /** Retorna defaultValue se tenantSchema/tabela não existir. */
     public <T> T runIfReady(String schemaName, String requiredTable, Supplier<T> fn, T defaultValue) {
         String tenantSchema = normalizeTenantSchemaOrNull(schemaName);
 
@@ -87,12 +87,10 @@ public class TenantExecutor {
         return run(tenantSchema, fn);
     }
 
-    /** Overload conveniente: defaultValue = null */
     public <T> T runIfReady(String schemaName, String requiredTable, Supplier<T> fn) {
         return runIfReady(schemaName, requiredTable, fn, null);
     }
 
-    /** Overload para Runnable */
     public void runIfReady(String schemaName, String requiredTable, Runnable fn) {
         runIfReady(schemaName, requiredTable, () -> {
             fn.run();
@@ -100,7 +98,7 @@ public class TenantExecutor {
         }, null);
     }
 
-    /** Lança ApiException se tenantSchema/tabela não existir (bom p/ endpoints admin). */
+    /** Lança ApiException se tenantSchema/tabela não existir. */
     public void assertReadyOrThrow(String schemaName, String requiredTable) {
         String tenantSchema = normalizeTenantSchemaOrNull(schemaName);
 
@@ -120,14 +118,9 @@ public class TenantExecutor {
         return run(schemaName, fn);
     }
 
-    /** overload conveniente */
     public <T> T runOrThrow(String schemaName, Supplier<T> fn) {
         return runOrThrow(schemaName, null, fn);
     }
-
-    // ---------------------------------------------------------------------
-    // Internals
-    // ---------------------------------------------------------------------
 
     private static String normalizeTenantSchemaOrNull(String schemaName) {
         String s = (schemaName == null ? null : schemaName.trim());

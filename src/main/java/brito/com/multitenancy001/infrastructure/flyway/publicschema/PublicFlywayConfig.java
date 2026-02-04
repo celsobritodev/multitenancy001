@@ -14,11 +14,10 @@ import brito.com.multitenancy001.shared.db.Schemas;
  * Flyway do schema PUBLIC (Control Plane).
  *
  * ✅ Migra no bootstrap
- * ✅ Evita race com @Scheduled
- * ✅ Compatível com @DependsOn("flywayInitializer")
+ * ✅ Evita race com @Scheduled (use @DependsOn("flywayInitializer"))
  *
  * IMPORTANTE:
- * - bean "flyway" → usado pelo Spring Boot initializer
+ * - bean "flyway" → usado pelo Spring Boot
  * - bean "flywayInitializer" → gatilho oficial de migração
  */
 @Configuration
@@ -28,7 +27,7 @@ public class PublicFlywayConfig {
     public Flyway flyway(DataSource dataSource) {
         return Flyway.configure()
                 .dataSource(dataSource)
-                .schemas(Schemas.CONTROL_PLANE) // "public"
+                .schemas(Schemas.CONTROL_PLANE)       // "public"
                 .defaultSchema(Schemas.CONTROL_PLANE)
                 .locations("classpath:db/migration/accounts")
                 .baselineOnMigrate(false)
@@ -38,9 +37,7 @@ public class PublicFlywayConfig {
     }
 
     @Bean(name = "flywayInitializer")
-    public FlywayMigrationInitializer flywayInitializer(
-            @Qualifier("flyway") Flyway flyway
-    ) {
+    public FlywayMigrationInitializer flywayInitializer(@Qualifier("flyway") Flyway flyway) {
         return new FlywayMigrationInitializer(flyway, null);
     }
 }

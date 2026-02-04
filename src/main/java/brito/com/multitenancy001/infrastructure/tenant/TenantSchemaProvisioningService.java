@@ -39,9 +39,6 @@ public class TenantSchemaProvisioningService {
     // Provisioning
     // =========================================================
 
-    /**
-     * @return true se schema existe (criado agora ou já existia) e migração rodou com sucesso
-     */
     public boolean ensureSchemaExistsAndMigrate(String schemaName) {
         validateSchemaName(schemaName);
 
@@ -125,7 +122,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName.trim());
+            ps.setString(1, schemaName);
 
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -141,9 +138,6 @@ public class TenantSchemaProvisioningService {
         }
     }
 
-    /**
-     * requiredTable: nome "cru" da tabela (sem schema), ex: "products"
-     */
     public boolean tableExists(String schemaName, String tableName) {
         validateSchemaName(schemaName);
 
@@ -153,13 +147,8 @@ public class TenantSchemaProvisioningService {
 
         String t = tableName.trim();
 
-        // tabela geralmente é snake_case; liberamos underscore e números.
         if (!t.matches("^[a-z][a-z0-9_]*$")) {
-            throw new ApiException(
-                    "TABLE_INVALID",
-                    "Nome de tabela inválido: " + t,
-                    400
-            );
+            throw new ApiException("TABLE_INVALID", "Nome de tabela inválido: " + t, 400);
         }
 
         try (Connection conn = dataSource.getConnection();
@@ -172,7 +161,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName.trim());
+            ps.setString(1, schemaName);
             ps.setString(2, t);
 
             try (ResultSet rs = ps.executeQuery()) {
