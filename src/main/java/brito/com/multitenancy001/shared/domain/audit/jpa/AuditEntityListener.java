@@ -9,26 +9,18 @@ import brito.com.multitenancy001.shared.domain.audit.AuditActor;
 import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 
-/**
- * Listener de auditoria (JPA/Hibernate).
- *
- * Regras:
- * - NÃO use @Component/@Autowired aqui.
- * - Tempo SEMPRE via AppClock, acessado por AuditClockProviders.
- * - Ator via AuditActorProviders.
- */
 public class AuditEntityListener {
 
     @PrePersist
     public void prePersist(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        AuditActor actor = AuditActorProviders.currentOrSystem();
-        Instant now = AuditClockProviders.nowOrSystem();
+        // FAIL-FAST se wiring quebrou (provider ausente)
+        AuditActor actor = AuditActorProviders.currentOrFail();
+        Instant now = AuditClockProviders.nowOrFail();
 
         auditable.getAudit().onCreate(actor, now);
 
-        // Se já vier "deleted=true" no INSERT, grava deleção também
         if (entity instanceof SoftDeletable softDeletable
                 && softDeletable.isDeleted()
                 && auditable.getAudit().getDeletedAt() == null) {
@@ -40,8 +32,8 @@ public class AuditEntityListener {
     public void preUpdate(Object entity) {
         if (!(entity instanceof Auditable auditable)) return;
 
-        AuditActor actor = AuditActorProviders.currentOrSystem();
-        Instant now = AuditClockProviders.nowOrSystem();
+        AuditActor actor = AuditActorProviders.currentOrFail();
+        Instant now = AuditClockProviders.nowOrFail();
 
         auditable.getAudit().onUpdate(actor, now);
 
@@ -52,4 +44,3 @@ public class AuditEntityListener {
         }
     }
 }
-

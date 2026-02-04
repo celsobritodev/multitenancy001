@@ -72,14 +72,7 @@ public class TenantContext {
         }
     }
 
-    /**
-     * @deprecated use {@link #bindTenantSchema(String)}.
-     * Mantido por compatibilidade: no código antigo "tenantId" na prática é "tenantSchema".
-     */
-    @Deprecated
-    public static void bind(String tenantId) {
-        bindTenantSchema(tenantId);
-    }
+    
 
     /**
      * Remove qualquer tenantSchema (equivalente a PUBLIC).

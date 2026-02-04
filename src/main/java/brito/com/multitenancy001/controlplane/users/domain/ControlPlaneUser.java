@@ -49,8 +49,9 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     private String password;
 
     @Setter(AccessLevel.NONE)
-    @Column(name = "email", nullable = false, length = 150)
+    @Column(name = "email", nullable = false, columnDefinition = "citext")
     private String email;
+
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
@@ -116,7 +117,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
             joinColumns = @JoinColumn(name = "user_id")
     )
     @Enumerated(EnumType.STRING)
-    @Column(name = "permission", length = 80, nullable = false)
+    @Column(name = "permission", length = 120, nullable = false)
     @Builder.Default
     private Set<ControlPlanePermission> explicitPermissions = new LinkedHashSet<>();
 

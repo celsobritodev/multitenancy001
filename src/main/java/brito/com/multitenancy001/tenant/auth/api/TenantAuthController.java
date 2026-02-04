@@ -86,8 +86,10 @@ public class TenantAuthController {
      */
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
+
+        // ✅ AJUSTE: UUID -> String, para bater com TenantLoginConfirmCommand(String, Long, String)
         TenantLoginConfirmCommand cmd = new TenantLoginConfirmCommand(
-                req.challengeId(),
+                req.challengeId().toString(),
                 req.accountId(),
                 req.slug()
         );
@@ -106,4 +108,3 @@ public class TenantAuthController {
         return ResponseEntity.ok(toHttp(jwt));
     }
 }
-

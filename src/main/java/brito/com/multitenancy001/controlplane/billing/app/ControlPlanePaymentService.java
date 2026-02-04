@@ -78,7 +78,7 @@ public class ControlPlanePaymentService {
         Instant thirtyMinutesAgo = now.minusSeconds(30 * 60);
 
         List<Payment> expiredPayments = controlPlanePaymentRepository
-                .findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, thirtyMinutesAgo);
+                .findByStatusAndAudit_CreatedAtBefore(PaymentStatus.PENDING, thirtyMinutesAgo);
 
         for (Payment payment : expiredPayments) {
             payment.setStatus(PaymentStatus.EXPIRED);

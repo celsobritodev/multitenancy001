@@ -4,5 +4,4 @@ public record TenantSelectionOptionData(
         Long accountId,
         String displayName,
         String slug
-) { }
-
+) {}

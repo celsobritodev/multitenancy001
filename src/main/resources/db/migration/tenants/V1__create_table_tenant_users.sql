@@ -33,15 +33,15 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     -- AUDIT (fonte única)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by BIGINT NULL,
-    created_by_email VARCHAR(150) NULL,
+    created_by_email CITEXT  NULL,
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_by BIGINT NULL,
-    updated_by_email VARCHAR(150) NULL,
+    updated_by_email CITEXT  NULL,
 
     deleted_at TIMESTAMPTZ NULL,
     deleted_by BIGINT NULL,
-    deleted_by_email VARCHAR(150) NULL
+    deleted_by_email CITEXT  NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_tenant_users_email_not_deleted

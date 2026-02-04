@@ -33,7 +33,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
 
     private static final long serialVersionUID = 1L;
 
-	@Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -46,7 +46,8 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 150)
+    // ✅ Alinhado com migration: email CITEXT NOT NULL
+    @Column(nullable = false, columnDefinition = "citext")
     private String email;
 
     // ==========
@@ -57,12 +58,19 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     private TenantRole role;
 
     /**
-     * Persistência: codes (String) - compatível com ElementCollection.
-     * Domínio: expõe como TenantUserPermission quando necessário.
+     * Persistência: codes (String) via ElementCollection.
+     *
+     * Migration (Flyway) criou:
+     * - tabela: tenant_user_permissions
+     * - FK: tenant_user_id
+     * - coluna: permission VARCHAR(120)
      */
     @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "tenant_users_permissions", joinColumns = @JoinColumn(name = "user_id"))
-    @Column(name = "permission", nullable = false, length = 80)
+    @CollectionTable(
+            name = "tenant_user_permissions",
+            joinColumns = @JoinColumn(name = "tenant_user_id")
+    )
+    @Column(name = "permission", nullable = false, length = 120)
     @Builder.Default
     private Set<String> permissionCodes = new LinkedHashSet<>();
 
@@ -192,10 +200,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         return getPermissionCodes();
     }
 
-    /**
-     * ✅ COMPAT: código antigo chamava setPermissions(Set<TenantPermission>).
-     * Agora persistimos como codes (String), então converte.
-     */
+    /** ✅ COMPAT: converte enum -> codes */
     public void setPermissions(Set<TenantPermission> permissions) {
         this.permissionCodes.clear();
         if (permissions == null || permissions.isEmpty()) return;
@@ -205,9 +210,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         }
     }
 
-    /**
-     * ✅ Novo: set direto por codes (já normaliza para UPPER).
-     */
     public void setPermissionsFromCodes(Set<String> codes) {
         this.permissionCodes.clear();
         if (codes == null || codes.isEmpty()) return;
@@ -279,20 +281,12 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         this.deleted = true;
     }
 
-    /**
-     * ✅ COMPAT com seu service atual: softDelete(now, epochMillis)
-     * - epochMillis está aqui só por compat; o projeto audita por Instant.
-     * - marcamos deleted=true e gravamos deletedAt via AuditInfo.
-     */
     public void softDelete(Instant now, long epochMillis) {
         if (this.deleted) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
         this.deleted = true;
-
-        if (this.audit != null) {
-            this.audit.markDeleted(now);
-        }
+        if (this.audit != null) this.audit.markDeleted(now);
     }
 
     public void restore() {

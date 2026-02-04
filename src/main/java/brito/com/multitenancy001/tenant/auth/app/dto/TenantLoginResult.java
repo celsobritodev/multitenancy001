@@ -2,18 +2,18 @@ package brito.com.multitenancy001.tenant.auth.app.dto;
 
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 
-public sealed interface TenantLoginResult
-        permits TenantLoginResult.LoginSuccess, TenantLoginResult.AccountSelectionRequired {
+import java.util.List;
 
-    record LoginSuccess(JwtResult jwt) implements TenantLoginResult { }
+public sealed interface TenantLoginResult {
+
+    record LoginSuccess(JwtResult jwt) implements TenantLoginResult {}
 
     /**
-     * Retornado quando o email existe em mais de uma conta (account/tenant).
-     * A seleção é de "Account", mesmo que a autenticação final seja no contexto Tenant.
+     * Quando o mesmo email existe em mais de uma conta/empresa.
+     * challengeId: String (UUID em texto) para simplificar tráfego no app layer e no controller.
      */
     record AccountSelectionRequired(
             String challengeId,
-            java.util.List<AccountSelectionOptionData> candidates
-    ) implements TenantLoginResult { }
+            List<AccountSelectionOptionData> candidates
+    ) implements TenantLoginResult {}
 }
-

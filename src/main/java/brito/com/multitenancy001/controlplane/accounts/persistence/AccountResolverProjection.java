@@ -6,12 +6,14 @@ public interface AccountResolverProjection {
     Long getId();
     String getSchemaName();
 
-    // ✅ necessários para seleção no frontend
+    // necessários para seleção no frontend
     String getSlug();
     String getDisplayName();
 
     String getStatus();
-    Instant getTrialEndDate();
+
+    // ✅ FIX: o campo no domínio é trialEndAt (não trialEndDate)
+    Instant getTrialEndAt();
+
     String getOrigin();
 }
-

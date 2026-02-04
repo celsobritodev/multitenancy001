@@ -4,5 +4,4 @@ public record TenantLoginConfirmCommand(
         String challengeId,
         Long accountId,
         String slug
-) { }
-
+) {}

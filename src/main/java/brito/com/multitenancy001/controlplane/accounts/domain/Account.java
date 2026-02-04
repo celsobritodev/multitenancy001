@@ -58,27 +58,32 @@ public class Account implements Auditable, SoftDeletable {
     @Column(name = "slug", nullable = false, unique = true, length = 80)
     private String slug;
 
-    // ✅ Campo que sua Factory está tentando setar
-    @Column(name = "tax_country_code", length = 2)
-    private String taxCountryCode;
+    // ✅ Alinhado com migration: VARCHAR(2) NOT NULL DEFAULT 'BR'
+    @Column(name = "tax_country_code", nullable = false, length = 2)
+    @Builder.Default
+    private String taxCountryCode = "BR";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tax_id_type", length = 20)
     private TaxIdType taxIdType;
 
-    @Column(name = "tax_id_number", length = 30)
+    // ✅ Alinhado com migration: VARCHAR(40)
+    @Column(name = "tax_id_number", length = 40)
     private String taxIdNumber;
 
-    @Column(name = "login_email", nullable = false, length = 150)
+    // ✅ Alinhado com migration: CITEXT NOT NULL
+    @Column(name = "login_email", nullable = false, columnDefinition = "citext")
     private String loginEmail;
 
+    // ✅ Alinhado com migration: VARCHAR(50)
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 30)
+    @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
     private AccountStatus status = AccountStatus.PROVISIONING;
 
+    // ✅ Alinhado com migration: VARCHAR(50)
     @Enumerated(EnumType.STRING)
-    @Column(name = "subscription_plan", nullable = false, length = 30)
+    @Column(name = "subscription_plan", nullable = false, length = 50)
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
@@ -133,12 +138,7 @@ public class Account implements Auditable, SoftDeletable {
     // Semântica de sistema
     // =========================
 
-    /**
-     * Conta do sistema (BUILT_IN / PLATFORM) não deve sofrer operações destrutivas.
-     * Regra centralizada aqui para não vazar lógica para serviços.
-     */
     public boolean isBuiltInAccount() {
-        // Ajuste se seu enum for diferente (mas a ideia é: ORIGEM ou TIPO do sistema)
         return origin == EntityOrigin.BUILT_IN || type == AccountType.PLATFORM;
     }
 
@@ -146,10 +146,6 @@ public class Account implements Auditable, SoftDeletable {
     // Soft delete / Restore
     // =========================
 
-    /**
-     * Soft delete investigável: marca deleted=true e registra deletedAt no AuditInfo.
-     * O listener também pode preencher deletedAt, mas aqui garantimos semântica imediata e consistente.
-     */
     public void softDelete(Instant now) {
         if (now == null) throw new DomainException("now é obrigatório");
         if (this.deleted) return;
@@ -164,16 +160,11 @@ public class Account implements Auditable, SoftDeletable {
         if (!this.deleted) return;
 
         this.deleted = false;
-        // Política: restaurar limpa deletedAt para “reaparece como ativo”.
         if (this.audit != null) {
             this.audit.setDeletedAt(null);
         }
     }
 
-    /**
-     * Compatibilidade: alguns serviços antigos chamavam setDeletedAt().
-     * Mantém sem quebrar, mas direciona para AuditInfo (fonte única).
-     */
     public void setDeletedAt(Instant deletedAt) {
         if (this.audit != null) {
             this.audit.setDeletedAt(deletedAt);

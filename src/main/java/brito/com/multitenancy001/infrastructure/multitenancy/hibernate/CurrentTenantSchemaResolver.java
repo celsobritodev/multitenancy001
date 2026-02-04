@@ -39,69 +39,14 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
     // ⚠️ COMPATIBILIDADE (NÃO USAR EM CÓDIGO NOVO)
     // ---------------------------------------------------------------------
 
-    /**
-     * @deprecated use {@link #bindSchemaToCurrentThread(String)}.
-     */
-    @Deprecated
-    public static void bindTenantSchemaToCurrentThread(String tenantSchema) {
-        bindSchemaToCurrentThread(tenantSchema);
-    }
+  
 
-    /**
-     * @deprecated use {@link #bindSchemaToCurrentThread(String)}.
-     */
-    @Deprecated
-    public static void bindTenantToCurrentThread(String tenantId) {
-        bindSchemaToCurrentThread(tenantId);
-    }
+ 
 
-    /**
-     * @deprecated use {@link #resolveBoundSchemaOrNull()}.
-     */
-    @Deprecated
-    public static String resolveBoundTenantSchemaOrNull() {
-        return resolveBoundSchemaOrNull();
-    }
 
-    /**
-     * @deprecated use {@link #resolveBoundSchemaOrNull()}.
-     */
-    @Deprecated
-    public static String resolveBoundTenantOrNull() {
-        return resolveBoundSchemaOrNull();
-    }
 
-    /**
-     * @deprecated use {@link #resolveBoundSchemaOrDefault()}.
-     */
-    @Deprecated
-    public static String resolveBoundTenantSchemaOrDefault() {
-        return resolveBoundSchemaOrDefault();
-    }
 
-    /**
-     * @deprecated use {@link #resolveBoundSchemaOrDefault()}.
-     */
-    @Deprecated
-    public static String resolveBoundTenantOrDefault() {
-        return resolveBoundSchemaOrDefault();
-    }
 
-    /**
-     * @deprecated use {@link #unbindSchemaFromCurrentThread()}.
-     */
-    @Deprecated
-    public static void unbindTenantSchemaFromCurrentThread() {
-        unbindSchemaFromCurrentThread();
-    }
-
-    /**
-     * @deprecated use {@link #unbindSchemaFromCurrentThread()}.
-     */
-    @Deprecated
-    public static void unbindTenantFromCurrentThread() {
-        unbindSchemaFromCurrentThread();
-    }
 
     // ---------------------------------------------------------------------
     // Hibernate integration

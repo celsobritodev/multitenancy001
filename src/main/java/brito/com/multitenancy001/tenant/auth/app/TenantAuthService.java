@@ -54,7 +54,7 @@ public class TenantAuthService {
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final AppClock appClock;
 
-    // ✅ NOVO (append-only auth_events)
+    // append-only auth_events
     private final AuthEventAuditService authEventAuditService;
 
     private static String normalizeEmailRequired(String raw) {
@@ -73,8 +73,12 @@ public class TenantAuthService {
     /**
      * 1) INIT LOGIN
      * email + password
-     * - se 1 conta: JWT
-     * - se >1 conta: ACCOUNT_SELECTION_REQUIRED
+     * - se 1 conta (e senha ok): JWT
+     * - se >1 conta:
+     *      - valida senha tentando autenticar em cada tenant candidato
+     *      - se validar em 0: BadCredentials
+     *      - se validar em 1: JWT direto
+     *      - se validar em >1: ACCOUNT_SELECTION_REQUIRED (challenge contém SOMENTE allowedAccountIds)
      */
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
 
@@ -85,7 +89,6 @@ public class TenantAuthService {
         final String email = normalizeEmailRequired(cmd.email());
         final String password = cmd.password();
 
-        // ✅ trilha append-only: tentativa (não tem conta ainda)
         authEventAuditService.record(
                 "tenant",
                 "LOGIN_INIT",
@@ -99,18 +102,18 @@ public class TenantAuthService {
 
         try {
             // PUBLIC — descobre quais contas (tenants) têm esse email cadastrado
-            List<LoginIdentityRow> candidates = publicExecutor.run(() ->
+            List<LoginIdentityRow> identities = publicExecutor.run(() ->
                     loginIdentityResolver.findTenantAccountsByEmail(email)
             );
 
-            if (candidates == null || candidates.isEmpty()) {
+            if (identities == null || identities.isEmpty()) {
                 authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
                         "{\"reason\":\"no_candidates\"}");
                 throw new BadCredentialsException(INVALID_USER_MSG);
             }
 
-            // accountIds candidatos (distinct + preserva ordem)
-            LinkedHashSet<Long> candidateAccountIds = candidates.stream()
+            // ids candidatos (distinct + preserva ordem)
+            LinkedHashSet<Long> candidateAccountIds = identities.stream()
                     .map(LoginIdentityRow::accountId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -121,32 +124,65 @@ public class TenantAuthService {
                 throw new BadCredentialsException(INVALID_USER_MSG);
             }
 
-            // Se só tem 1 conta, autentica direto
+            // Se só tem 1 conta, autentica direto (senha validada aqui mesmo)
             if (candidateAccountIds.size() == 1) {
                 Long accountId = candidateAccountIds.iterator().next();
                 AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
 
                 TenantLoginResult result = doTenantAuthentication(account, email, password);
 
-                // sucesso “final” do init
                 authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
                         "{\"mode\":\"single_account\"}");
 
                 return result;
             }
 
-            // Se tem >1 conta, cria challenge e devolve candidatos (account selection)
-            UUID challengeId = tenantLoginChallengeService.createChallenge(email, candidateAccountIds);
+            // ✅ MULTI-CONTA: validar password em cada tenant candidato
+            LinkedHashSet<Long> allowedAccountIds = new LinkedHashSet<>();
 
-            // você não tem findAllByIds; então resolvemos 1 a 1 com fallback seguro
-            List<AccountSelectionOptionData> selection = new ArrayList<>();
-            for (Long id : candidateAccountIds) {
-                AccountSelectionOptionData option = tryResolveOption(id);
-                selection.add(option);
+            for (Long accountId : candidateAccountIds) {
+                AccountSnapshot account;
+                try {
+                    account = accountResolver.resolveActiveAccountById(accountId);
+                } catch (Exception ex) {
+                    continue;
+                }
+
+                boolean ok = verifyPasswordInTenant(account, email, password);
+                if (ok) {
+                    allowedAccountIds.add(accountId);
+                }
             }
 
-            authEventAuditService.record("tenant", "SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
-                    "{\"challengeId\":\"" + challengeId + "\",\"candidates\":" + candidateAccountIds.size() + "}");
+            if (allowedAccountIds.isEmpty()) {
+                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                        "{\"reason\":\"bad_credentials_multi_account\"}");
+                throw new BadCredentialsException(INVALID_USER_MSG);
+            }
+
+            // Se só 1 conta validou senha, entra direto nela
+            if (allowedAccountIds.size() == 1) {
+                Long accountId = allowedAccountIds.iterator().next();
+                AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
+
+                TenantLoginResult result = doTenantAuthentication(account, email, password);
+
+                authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
+                        "{\"mode\":\"multi_account_but_single_match\"}");
+
+                return result;
+            }
+
+            // Se mais de 1 conta validou, cria challenge SOMENTE com allowedAccountIds
+            UUID challengeId = tenantLoginChallengeService.createChallenge(email, allowedAccountIds);
+
+            List<AccountSelectionOptionData> selection = new ArrayList<>();
+            for (Long id : allowedAccountIds) {
+                selection.add(tryResolveOption(id));
+            }
+
+            authEventAuditService.record("tenant", "ACCOUNT_SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
+                    "{\"challengeId\":\"" + challengeId + "\",\"candidates\":" + allowedAccountIds.size() + "}");
 
             return new TenantLoginResult.AccountSelectionRequired(
                     challengeId.toString(),
@@ -171,6 +207,10 @@ public class TenantAuthService {
     /**
      * 2) CONFIRM LOGIN
      * challengeId + (accountId OU slug) => JWT
+     *
+     * ✅ Seguro porque:
+     * - o challenge foi criado somente após validar password
+     * - e contém apenas accountIds onde password foi OK
      */
     public JwtResult loginConfirm(TenantLoginConfirmCommand cmd) {
 
@@ -199,7 +239,6 @@ public class TenantAuthService {
             throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
         }
 
-        // resolve account via seus métodos existentes
         AccountSnapshot account;
         if (accountId != null) {
             account = accountResolver.resolveActiveAccountById(accountId);
@@ -207,14 +246,12 @@ public class TenantAuthService {
             account = accountResolver.resolveActiveAccountBySlug(slug);
         }
 
-        // valida que a conta selecionada estava no challenge
         if (account == null || account.id() == null) {
             authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
                     "{\"reason\":\"account_not_found\"}");
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
 
-        // ✅ seu entity expõe candidateAccountIds()
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
             authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, account.id(), account.schemaName(),
@@ -222,7 +259,6 @@ public class TenantAuthService {
             throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
         }
 
-        // marca challenge como usado (anti replay)
         tenantLoginChallengeService.markUsed(challenge);
 
         JwtResult jwt = issueJwtForAccountAndEmail(account, email);
@@ -279,7 +315,7 @@ public class TenantAuthService {
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
         }
 
-        JwtResult result = tenantExecutor.run(tenantSchema, () -> {
+        return tenantExecutor.run(tenantSchema, () -> {
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
@@ -289,7 +325,6 @@ public class TenantAuthService {
                 throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
             }
 
-            // grava last_login também no refresh
             tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
             var authorities = AuthoritiesFactory.forTenant(user);
@@ -315,8 +350,8 @@ public class TenantAuthService {
 
             SystemRoleName role = toSystemRoleOrNull(user.getRole());
 
-            // reusa o MESMO refreshToken
-            return new JwtResult(
+            // ✅ usa seu construtor curto (tokenType default Bearer)
+            JwtResult result = new JwtResult(
                     newAccessToken,
                     refreshToken,
                     user.getId(),
@@ -325,17 +360,45 @@ public class TenantAuthService {
                     accountId,
                     tenantSchema
             );
+
+            authEventAuditService.record("tenant", "TOKEN_REFRESH", "SUCCESS", result.email(), result.userId(), result.accountId(), result.tenantSchema(),
+                    "{\"stage\":\"completed\"}");
+
+            return result;
         });
-
-        authEventAuditService.record("tenant", "TOKEN_REFRESH", "SUCCESS", result.email(), result.userId(), result.accountId(), result.tenantSchema(),
-                "{\"stage\":\"completed\"}");
-
-        return result;
     }
 
     // =========================================================
-    // Helpers (mantêm a DDD/layered)
+    // Helpers
     // =========================================================
+
+    private boolean verifyPasswordInTenant(AccountSnapshot account, String email, String password) {
+        if (account == null || account.id() == null) return false;
+
+        String tenantSchema = account.schemaName();
+        if (!StringUtils.hasText(tenantSchema)) return false;
+
+        try {
+            return tenantExecutor.run(tenantSchema, () -> {
+                Authentication authRequest = new UsernamePasswordAuthenticationToken(email, password);
+                authenticationManager.authenticate(authRequest);
+
+                tenantUserRepository
+                        .findByEmailAndAccountIdAndDeletedFalse(email, account.id())
+                        .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
+
+                return true;
+            });
+        } catch (BadCredentialsException e) {
+            return false;
+        } catch (UsernameNotFoundException e) {
+            return false;
+        } catch (InternalAuthenticationServiceException e) {
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     private AccountSelectionOptionData tryResolveOption(Long accountId) {
         if (accountId == null) {
@@ -416,7 +479,6 @@ public class TenantAuthService {
                         tenantSchema
                 );
 
-                // ✅ trilha append-only
                 authEventAuditService.record("tenant", "LOGIN_SUCCESS", "SUCCESS", user.getEmail(), user.getId(), account.id(), tenantSchema,
                         "{\"mode\":\"password\"}");
 
@@ -500,4 +562,3 @@ public class TenantAuthService {
         });
     }
 }
-

@@ -22,13 +22,9 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
 
     Optional<TenantUser> findByEmailAndDeletedFalse(String email);
 
-
-
     Optional<TenantUser> findByEmailAndAccountIdAndDeletedFalse(String email, Long accountId);
 
     boolean existsByEmailAndAccountId(String email, Long accountId);
-
-
 
     // =========================================================
     // PASSWORD RESET
@@ -65,7 +61,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     long countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(Long accountId);
 
     default long countEnabledUsersByAccount(Long accountId) {
-       return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
+        return countByAccountIdAndDeletedFalseAndSuspendedByAccountFalseAndSuspendedByAdminFalse(accountId);
     }
 
     // =========================================================
@@ -194,7 +190,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     @Query("""
         update TenantUser u
            set u.deleted = true,
-               u.deletedAt = :deletedAt
+               u.audit.deletedAt = :deletedAt
          where u.accountId = :accountId
            and u.deleted = false
     """)
@@ -212,18 +208,18 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     @Query("""
         update TenantUser u
            set u.deleted = false,
-               u.deletedAt = null
+               u.audit.deletedAt = null
          where u.accountId = :accountId
            and u.deleted = true
     """)
     int restoreAllByAccount(@Param("accountId") Long accountId);
-    
-    // ✅ NOVO: grava last_login no login
+
+    // ✅ grava last_login no login
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
         update TenantUser u
-           set u.lastLogin = :lastLogin
+           set u.lastLoginAt = :lastLogin
          where u.id = :userId
            and u.deleted = false
     """)
@@ -231,6 +227,4 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("userId") Long userId,
             @Param("lastLogin") Instant lastLogin
     );
-    
 }
-

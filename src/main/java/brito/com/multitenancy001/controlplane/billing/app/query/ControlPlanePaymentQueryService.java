@@ -57,7 +57,7 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
     public List<PaymentResponse> listByAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        return controlPlanePaymentRepository.findByAccountIdOrderByCreatedAtDesc(accountId)
+        return controlPlanePaymentRepository.findByAccount_IdOrderByAudit_CreatedAtDesc(accountId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -69,7 +69,7 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
 
-        Payment payment = controlPlanePaymentRepository.findByIdAndAccountId(paymentId, accountId)
+        Payment payment = controlPlanePaymentRepository.findByIdAndAccount_Id(paymentId, accountId)
                 .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
         return mapToResponse(payment);
@@ -83,14 +83,6 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
         return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.instant());
     }
 
-    /**
-     * ✅ PaymentResponse record (ordem e semântica):
-     * (id, accountId, amount,
-     *  paymentMethod, paymentGateway, paymentStatus,
-     *  description,
-     *  paidAt, validUntil, refundedAt,
-     *  createdAt, updatedAt)
-     */
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
@@ -103,12 +95,10 @@ public class ControlPlanePaymentQueryService implements PaymentQueryFacade {
 
                 payment.getDescription(),
 
-                // paidAt (no seu domínio: paymentDate)
                 payment.getPaymentDate(),
                 payment.getValidUntil(),
                 payment.getRefundedAt(),
 
-                // auditoria única
                 payment.getAudit() != null ? payment.getAudit().getCreatedAt() : null,
                 payment.getAudit() != null ? payment.getAudit().getUpdatedAt() : null
         );

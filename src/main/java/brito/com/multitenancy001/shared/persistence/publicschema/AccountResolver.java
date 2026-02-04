@@ -63,10 +63,11 @@ public class AccountResolver {
         if ("ACTIVE".equalsIgnoreCase(status)) return true;
 
         if ("FREE_TRIAL".equalsIgnoreCase(status)) {
-            return p.getTrialEndDate() != null && now != null && p.getTrialEndDate().isAfter(now);
+            return p.getTrialEndAt() != null && now != null && p.getTrialEndAt().isAfter(now);
         }
 
         return false;
     }
+
 }
 

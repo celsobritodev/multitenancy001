@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     user_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
     name VARCHAR(100) NOT NULL,
-    email VARCHAR(150) NOT NULL,
+
+    -- ✅ padronizado: email case-insensitive
+    email CITEXT NOT NULL,
+
     password VARCHAR(255) NOT NULL,
 
     role VARCHAR(50),
@@ -36,9 +39,5 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     deleted_by VARCHAR(120)
 );
 
--- email global (dentro do CP costuma ser global por conta; aqui seu repo também busca por account_id)
 CREATE INDEX IF NOT EXISTS idx_cp_users_account_id ON controlplane_users(account_id);
 CREATE INDEX IF NOT EXISTS idx_cp_users_email ON controlplane_users(email);
-
--- se quiser garantir unicidade por conta:
--- CREATE UNIQUE INDEX IF NOT EXISTS ux_cp_users_account_email ON controlplane_users(account_id, email);

@@ -18,4 +18,3 @@ public class TenantSchemaProvisioningFacade {
         tenantSchemaProvisioningService.tryDropSchema(schemaName);
     }
 }
-
