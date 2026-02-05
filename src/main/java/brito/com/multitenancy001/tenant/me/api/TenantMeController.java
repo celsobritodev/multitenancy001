@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.me.api;
 
+
+import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;
 import brito.com.multitenancy001.tenant.users.app.TenantUserFacade;
@@ -26,5 +28,11 @@ public class TenantMeController {
     public ResponseEntity<TenantMeResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
         return ResponseEntity.ok(tenantUserFacade.updateMyProfile(req));
     }
-}
 
+    // ✅ Troca minha senha (JWT) - destrava mustChangePassword
+    @PatchMapping("/password")
+    public ResponseEntity<Void> changeMyPassword(@Valid @RequestBody TenantChangeMyPasswordRequest req) {
+        tenantUserFacade.changeMyPassword(req);
+        return ResponseEntity.noContent().build();
+    }
+}

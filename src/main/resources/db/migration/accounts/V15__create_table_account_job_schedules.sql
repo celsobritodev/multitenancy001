@@ -1,4 +1,4 @@
--- V16__create_table_account_job_schedules.sql
+-- V15__create_table_account_job_schedules.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS account_job_schedules (

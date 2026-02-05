@@ -63,9 +63,9 @@ public class TenantUserProvisioningFacade {
     /**
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
      *
-     * ✅ Ajuste: permissões NÃO são inseridas manualmente.
-     * - A entidade TenantUser já gerencia permissões via @ElementCollection (tenant_user_permissions)
-     *   no @PrePersist/@PreUpdate (TenantUser.onSave()).
+     * ✅ SIGNUP: como a senha foi criada pelo próprio usuário, não exige troca:
+     * - mustChangePassword = false
+     * - passwordChangedAt = now
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -100,6 +100,8 @@ public class TenantUserProvisioningFacade {
                             ? ownerDisplayName.trim()
                             : OWNER_NAME_FALLBACK;
 
+                    Instant now = appClock.instant(); // ✅ usa AppClock (padronizado)
+
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
                     tenantUser.setName(name);
@@ -110,6 +112,10 @@ public class TenantUserProvisioningFacade {
                     tenantUser.setSuspendedByAdmin(false);
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
+
+                    // ✅ AQUI É O PONTO EXATO DO AJUSTE (SIGNUP)
+                    tenantUser.setMustChangePassword(false);
+                    tenantUser.setPasswordChangedAt(now);
 
                     // ✅ aqui o onSave() da entidade garante as permissões do role.
                     TenantUser saved = tenantUserRepository.save(tenantUser);
@@ -204,4 +210,3 @@ public class TenantUserProvisioningFacade {
         );
     }
 }
-

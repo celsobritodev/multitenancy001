@@ -1,4 +1,4 @@
--- V14__create_table_auth_events.sql
+-- V13__create_table_auth_events.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS auth_events (

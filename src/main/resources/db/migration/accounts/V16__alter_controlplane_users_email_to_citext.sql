@@ -1,8 +1,6 @@
--- V17__alter_controlplane_users_email_to_citext.sql
+-- V16__alter_controlplane_users_email_to_citext.sql
 SET search_path TO public;
 
--- CITEXT já é criado no V1 (accounts), mas manter idempotente não faz mal
-CREATE EXTENSION IF NOT EXISTS citext;
 
 -- email: VARCHAR(150) -> CITEXT (case-insensitive)
 ALTER TABLE public.controlplane_users

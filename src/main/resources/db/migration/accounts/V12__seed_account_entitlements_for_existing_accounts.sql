@@ -1,4 +1,4 @@
--- V13__seed_account_entitlements_for_existing_accounts.sql
+-- V12__seed_account_entitlements_for_existing_accounts.sql
 SET search_path TO public;
 
 INSERT INTO account_entitlements (

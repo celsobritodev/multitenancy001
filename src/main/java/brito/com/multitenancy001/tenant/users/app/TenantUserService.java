@@ -109,6 +109,13 @@ public class TenantUserService {
 
             // ✅ NOVO: grava mustChangePassword (default false)
             user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
+            Instant now = appClock.instant();
+
+           // se NÃO exige troca, registra que a senha já foi “definida”
+           if (!user.isMustChangePassword()) {
+             user.setPasswordChangedAt(now);
+            }
+ 
 
             user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
             user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
@@ -409,5 +416,59 @@ public class TenantUserService {
             tenantUserRepository.save(to);
         });
     }
+    
+    public void changeMyPassword(
+            Long userId,
+            Long accountId,
+            String currentPassword,
+            String newPassword,
+            String confirmNewPassword
+    ) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+
+        if (!StringUtils.hasText(currentPassword)) {
+            throw new ApiException("CURRENT_PASSWORD_REQUIRED", "Senha atual é obrigatória", 400);
+        }
+        if (!StringUtils.hasText(newPassword)) {
+            throw new ApiException("NEW_PASSWORD_REQUIRED", "Nova senha é obrigatória", 400);
+        }
+        if (!StringUtils.hasText(confirmNewPassword)) {
+            throw new ApiException("CONFIRM_PASSWORD_REQUIRED", "Confirmar nova senha é obrigatório", 400);
+        }
+
+        if (!newPassword.equals(confirmNewPassword)) {
+            throw new ApiException("PASSWORD_MISMATCH", "Nova senha e confirmação não conferem", 400);
+        }
+
+        if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+        }
+
+        transactionExecutor.inTenantTx(() -> {
+            TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            // ✅ valida senha atual
+            if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                throw new ApiException("CURRENT_PASSWORD_INVALID", "Senha atual inválida", 400);
+            }
+
+            Instant now = appClock.instant();
+
+            user.setPassword(passwordEncoder.encode(newPassword));
+            user.setMustChangePassword(false);
+            user.setPasswordChangedAt(now);
+
+            // ✅ limpeza compatível com teu fluxo atual
+            user.setPasswordResetToken(null);
+            user.setPasswordResetExpires(null);
+
+            tenantUserRepository.save(user);
+            return null;
+        });
+    }
+
+    
 }
 

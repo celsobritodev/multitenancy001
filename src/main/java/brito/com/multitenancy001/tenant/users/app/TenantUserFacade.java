@@ -13,6 +13,7 @@ import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlem
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -410,4 +411,24 @@ public class TenantUserFacade {
 
         return tenantExecutor.run(schema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
     }
+    
+    public void changeMyPassword(TenantChangeMyPasswordRequest req) {
+        if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+
+        Long accountId = securityUtils.getCurrentAccountId();
+        String schema = securityUtils.getCurrentSchema();
+        Long userId = securityUtils.getCurrentUserId();
+
+        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+            tenantUserService.changeMyPassword(
+                    userId,
+                    accountId,
+                    req.currentPassword(),
+                    req.newPassword(),
+                    req.confirmNewPassword()
+            );
+            return null;
+        });
+    }
+ 
 }

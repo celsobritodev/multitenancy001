@@ -97,7 +97,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
 
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
-    private boolean mustChangePassword = true;
+    private boolean mustChangePassword = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

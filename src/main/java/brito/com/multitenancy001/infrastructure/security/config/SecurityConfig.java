@@ -79,7 +79,6 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(request -> {
                 CorsConfiguration config = new CorsConfiguration();
 
-                // ajuste conforme seu front
                 config.setAllowedOriginPatterns(List.of(
                         "http://localhost:*",
                         "http://127.0.0.1:*"
@@ -87,7 +86,6 @@ public class SecurityConfig {
 
                 config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
-                // ✅ permite o cliente enviar X-Request-Id + X-Tenant
                 config.setAllowedHeaders(List.of(
                         "Authorization",
                         "Content-Type",
@@ -96,7 +94,6 @@ public class SecurityConfig {
                         "X-Tenant"
                 ));
 
-                // ✅ expõe X-Request-Id para leitura no front
                 config.setExposedHeaders(List.of(
                         "Authorization",
                         "X-Request-Id"
@@ -118,17 +115,29 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/swagger-ui/**",
                     "/actuator/health",
-                    "/api/admin/auth/login",
-                    "/api/admin/auth/refresh",
+
+                    // ✅ CONTROL PLANE AUTH
+                    "/api/controlplane/auth/login",
+                    "/api/controlplane/auth/refresh",
+
+                    // ✅ TENANT AUTH
                     "/api/tenant/auth/login",
                     "/api/tenant/auth/login/confirm",
                     "/api/tenant/auth/refresh",
+
+                    // ✅ TENANT: troca de senha (JWT, mas precisa passar pelo filtro 428)
+                    // OBS: Security precisa deixar chegar no controller; o MustChangePasswordFilter decide 428 vs allow.
+                    "/api/tenant/me/password",
+
+                    // ✅ reset por token (público)
                     "/api/tenant/password/forgot",
                     "/api/tenant/password/reset",
+
                     "/api/accounts/auth/checkuser",
                     "/api/signup"
                 ).permitAll()
 
+                // rotas autenticadas
                 .requestMatchers("/api/admin/me/password").authenticated()
                 .requestMatchers("/api/me/**").authenticated()
 
@@ -139,7 +148,7 @@ public class SecurityConfig {
                 .anyRequest().denyAll()
             );
 
-        // ✅ 1) meta primeiro (requestId/ip/ua) + cleanup centralizado
+        // ✅ 1) meta primeiro
         http.addFilterBefore(requestMetaContextFilter(), UsernamePasswordAuthenticationFilter.class);
 
         // ✅ 2) JWT cedo
@@ -154,4 +163,3 @@ public class SecurityConfig {
         return http.build();
     }
 }
-

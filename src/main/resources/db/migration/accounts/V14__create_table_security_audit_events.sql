@@ -1,4 +1,4 @@
--- V15__create_table_security_audit_events.sql
+-- V14__create_table_security_audit_events.sql
 SET search_path TO public;
 
 CREATE TABLE IF NOT EXISTS security_audit_events (

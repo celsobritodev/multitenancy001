@@ -30,13 +30,18 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
     suspended_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
     deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
-    -- AUDIT (fonte única)
+    -- AUDIT (fonte única) - ✅ alinhado com a Entity (inclui *_by_email)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_by VARCHAR(120),
-    updated_at TIMESTAMPTZ,
-    updated_by VARCHAR(120),
-    deleted_at TIMESTAMPTZ,
-    deleted_by VARCHAR(120)
+    created_by BIGINT NULL,
+    created_by_email CITEXT NULL,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by BIGINT NULL,
+    updated_by_email CITEXT NULL,
+
+    deleted_at TIMESTAMPTZ NULL,
+    deleted_by BIGINT NULL,
+    deleted_by_email CITEXT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_cp_users_account_id ON controlplane_users(account_id);

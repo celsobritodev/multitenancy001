@@ -16,12 +16,12 @@ CREATE TABLE IF NOT EXISTS tenant_users (
     timezone VARCHAR(50) NULL,
     locale VARCHAR(10) NULL,
 
-    must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
     origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
 
     last_login TIMESTAMPTZ NULL,
     locked_until TIMESTAMPTZ NULL,
-    password_changed_at TIMESTAMPTZ NULL,
+    password_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     password_reset_token VARCHAR(200) NULL,
     password_reset_expires TIMESTAMPTZ NULL,
 
