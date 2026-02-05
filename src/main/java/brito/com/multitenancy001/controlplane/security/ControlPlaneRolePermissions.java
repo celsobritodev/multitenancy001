@@ -25,9 +25,13 @@ public final class ControlPlaneRolePermissions {
         MAP.put(ControlPlaneRole.CONTROLPLANE_OWNER,
                 unmodifiable(EnumSet.allOf(ControlPlanePermission.class)));
 
-        // ADMIN = tudo (no CP, admin normalmente é "quase owner")
-        MAP.put(ControlPlaneRole.CONTROLPLANE_ADMIN,
-                unmodifiable(EnumSet.allOf(ControlPlanePermission.class)));
+        // ADMIN = forte, mas sem ações mais destrutivas (produção-friendly)
+        // Removemos deletes para evitar "um admin apaga tudo" por erro/ataque.
+        EnumSet<ControlPlanePermission> admin = EnumSet.allOf(ControlPlanePermission.class);
+        admin.remove(ControlPlanePermission.CP_TENANT_DELETE);
+        admin.remove(ControlPlanePermission.CP_USER_DELETE);
+
+        MAP.put(ControlPlaneRole.CONTROLPLANE_ADMIN, unmodifiable(admin));
 
         // BILLING_MANAGER = billing + leitura básica do tenant
         MAP.put(ControlPlaneRole.CONTROLPLANE_BILLING_MANAGER, unmodifiable(EnumSet.of(
@@ -61,30 +65,23 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_USER_READ
         )));
 
-        // FAIL-FAST: garante que todas as roles do enum estão mapeadas.
-        assertAllRolesMapped();
+        // FAIL-FAST: garante que todas as roles do enum estão mapeadas
+        for (ControlPlaneRole role : ControlPlaneRole.values()) {
+            if (!MAP.containsKey(role)) {
+                throw new IllegalStateException("Role do ControlPlane sem mapeamento em ControlPlaneRolePermissions: " + role);
+            }
+        }
     }
 
     public static Set<ControlPlanePermission> permissionsFor(ControlPlaneRole role) {
-        if (role == null) return Set.of();
-
         Set<ControlPlanePermission> perms = MAP.get(role);
         if (perms == null) {
-            throw new IllegalStateException("CONTROLPLANE_ROLE_NOT_MAPPED: " + role);
+            throw new IllegalArgumentException("Role do ControlPlane sem permissões mapeadas: " + role);
         }
         return perms;
-    }
-
-    private static void assertAllRolesMapped() {
-        for (ControlPlaneRole r : ControlPlaneRole.values()) {
-            if (!MAP.containsKey(r)) {
-                throw new IllegalStateException("CONTROLPLANE_ROLE_NOT_MAPPED_IN_MATRIX: " + r);
-            }
-        }
     }
 
     private static Set<ControlPlanePermission> unmodifiable(EnumSet<ControlPlanePermission> set) {
         return Collections.unmodifiableSet(set);
     }
 }
-

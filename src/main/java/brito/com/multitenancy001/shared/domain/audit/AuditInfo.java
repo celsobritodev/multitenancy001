@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * AuditInfo é a fonte única de auditoria do projeto.
@@ -13,8 +14,7 @@ import java.time.Instant;
  * Regras:
  * - Instantes reais => Instant (TIMESTAMPTZ).
  * - Ator vem de AuditActorProviders (via listener).
- * - Deve suportar "create/update/delete" como operações semânticas
- *   para manter rastreabilidade e consistência.
+ * - AppClock deve ser a única fonte de tempo (now nunca pode ser null).
  */
 @Embeddable
 @Getter
@@ -53,7 +53,7 @@ public class AuditInfo {
     // =========================
 
     public void onCreate(AuditActor actor, Instant now) {
-        if (now == null) now = Instant.now();
+        Objects.requireNonNull(now, "AuditInfo.onCreate: now não pode ser null (AppClock é obrigatório)");
 
         if (this.createdAt == null) {
             this.createdAt = now;
@@ -61,68 +61,48 @@ public class AuditInfo {
         this.updatedAt = now;
 
         if (actor != null) {
-            if (this.createdBy == null) this.createdBy = actor.id();
-            if (this.createdByEmail == null) this.createdByEmail = actor.email();
-            this.updatedBy = actor.id();
+            if (this.createdBy == null) {
+                this.createdBy = actor.userId();
+                this.createdByEmail = actor.email();
+            }
+            this.updatedBy = actor.userId();
             this.updatedByEmail = actor.email();
         }
     }
 
     public void onUpdate(AuditActor actor, Instant now) {
-        if (now == null) now = Instant.now();
-
-        // garantia: se por algum motivo não tiver created, cria também
-        if (this.createdAt == null) {
-            onCreate(actor, now);
-            return;
-        }
+        Objects.requireNonNull(now, "AuditInfo.onUpdate: now não pode ser null (AppClock é obrigatório)");
 
         this.updatedAt = now;
+
         if (actor != null) {
-            this.updatedBy = actor.id();
+            this.updatedBy = actor.userId();
             this.updatedByEmail = actor.email();
         }
     }
 
     public void onDelete(AuditActor actor, Instant now) {
-        if (now == null) now = Instant.now();
+        Objects.requireNonNull(now, "AuditInfo.onDelete: now não pode ser null (AppClock é obrigatório)");
 
-        // deleted é idempotente
-        if (this.deletedAt == null) {
-            this.deletedAt = now;
-        }
+        markDeleted(now);
 
         if (actor != null) {
-            this.deletedBy = actor.id();
+            this.deletedBy = actor.userId();
             this.deletedByEmail = actor.email();
         }
-
-        // também atualiza updated para manter consistência de timeline
-        this.updatedAt = now;
-        if (actor != null) {
-            this.updatedBy = actor.id();
-            this.updatedByEmail = actor.email();
-        }
-
-        // garantia: se não tinha createdAt, seta
-        if (this.createdAt == null) {
-            this.createdAt = now;
-            if (actor != null) {
-                this.createdBy = actor.id();
-                this.createdByEmail = actor.email();
-            }
-        }
     }
 
     // =========================
-    // Compat com código antigo
+    // API SEMÂNTICA (compat/domínio)
     // =========================
 
-    /** Compat antigo: deletar só setando deletedAt */
+    /** Marca a entidade como deletada no instante informado (sem mexer em deletedBy). */
     public void markDeleted(Instant now) {
-        onDelete(null, now);
+        Objects.requireNonNull(now, "AuditInfo.markDeleted: now não pode ser null");
+        this.deletedAt = now;
     }
 
+    /** Limpa estado de deleção (restore). */
     public void clearDeleted() {
         this.deletedAt = null;
         this.deletedBy = null;
