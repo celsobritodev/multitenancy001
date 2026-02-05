@@ -21,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantFlywayMigrator {
 
+    private static final String TENANT_HISTORY_TABLE = "tenant_flyway_schema_history";
+
     private final DataSource dataSource;
 
     public void migrate(String schemaName) {
@@ -37,7 +39,7 @@ public class TenantFlywayMigrator {
                 .locations("classpath:db/migration/tenants")
 
                 // ✅ blindagem (opcional mas recomendado)
-                .table("tenant_flyway_schema_history")
+                .table(TENANT_HISTORY_TABLE)
 
                 .baselineOnMigrate(false)
                 .validateOnMigrate(true)
