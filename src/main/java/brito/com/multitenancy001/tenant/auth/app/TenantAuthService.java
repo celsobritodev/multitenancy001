@@ -1,12 +1,12 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventAuditService;
 import brito.com.multitenancy001.infrastructure.publicschema.auth.TenantLoginChallenge;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.audit.AuthEventAuditService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;

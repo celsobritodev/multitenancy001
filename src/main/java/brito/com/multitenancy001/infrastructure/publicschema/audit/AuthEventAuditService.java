@@ -1,7 +1,5 @@
-package brito.com.multitenancy001.shared.audit;
+package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
-import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEvent;
-import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventRepository;
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.context.TenantContext;
@@ -11,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.net.InetAddress;
 import java.time.Instant;
 
 @Service
@@ -36,7 +35,6 @@ public class AuthEventAuditService {
         publicUnitOfWork.requiresNew(() -> {
             AuthEvent ev = new AuthEvent();
 
-            // ✅ Fonte única de tempo: AppClock
             Instant occurredAt = appClock.instant();
             ev.setOccurredAt(occurredAt);
 
@@ -44,7 +42,7 @@ public class AuthEventAuditService {
                 ev.setRequestId(meta.requestId());
                 ev.setMethod(meta.method());
                 ev.setUri(meta.uri());
-                ev.setIp(meta.ip());
+                ev.setIp(parseInetOrNull(meta.ip()));
                 ev.setUserAgent(meta.userAgent());
             }
 
@@ -63,5 +61,13 @@ public class AuthEventAuditService {
             authEventRepository.save(ev);
         });
     }
-}
 
+    private static InetAddress parseInetOrNull(String rawIp) {
+        if (!StringUtils.hasText(rawIp)) return null;
+        try {
+            return InetAddress.getByName(rawIp);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+}

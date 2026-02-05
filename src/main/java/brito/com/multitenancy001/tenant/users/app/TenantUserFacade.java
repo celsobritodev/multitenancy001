@@ -1,10 +1,10 @@
 package brito.com.multitenancy001.tenant.users.app;
 
+import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
-import brito.com.multitenancy001.shared.audit.SecurityAuditService;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;

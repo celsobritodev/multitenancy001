@@ -3,7 +3,10 @@ package brito.com.multitenancy001.infrastructure.publicschema.audit;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -29,8 +32,9 @@ public class SecurityAuditEvent {
     @Column(name = "uri")
     private String uri;
 
-    @Column(name = "ip")
-    private String ip;
+    @JdbcTypeCode(SqlTypes.INET)
+    @Column(name = "ip", columnDefinition = "inet")
+    private InetAddress ip;
 
     @Column(name = "user_agent")
     private String userAgent;
@@ -59,7 +63,7 @@ public class SecurityAuditEvent {
     @Column(name = "tenant_schema")
     private String tenantSchema;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "details", columnDefinition = "jsonb")
     private String detailsJson;
 }
-
