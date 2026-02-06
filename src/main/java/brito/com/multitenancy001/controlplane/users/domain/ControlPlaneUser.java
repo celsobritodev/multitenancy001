@@ -164,16 +164,47 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this.name = newName.trim();
     }
 
-    public void changePasswordHash(String newPasswordHash) {
+    public void changePasswordHash(String newPasswordHash, Instant now) {
         if (newPasswordHash == null || newPasswordHash.isBlank()) {
             throw new IllegalArgumentException("password hash é obrigatório");
         }
+        if (now == null) {
+            throw new IllegalArgumentException("now é obrigatório");
+        }
+
         this.password = newPasswordHash;
+        this.mustChangePassword = false;
+        this.passwordChangedAt = now;
+
+        // por segurança, ao trocar senha, limpa reset token
+        this.passwordResetToken = null;
+        this.passwordResetExpiresAt = null;
     }
+    
+    
+    public void setTemporaryPasswordHash(String newPasswordHash) {
+        if (newPasswordHash == null || newPasswordHash.isBlank()) {
+            throw new IllegalArgumentException("password hash é obrigatório");
+        }
+
+        this.password = newPasswordHash;
+
+        // ✅ senha definida por admin/recuperação => exige troca
+        this.mustChangePassword = true;
+        this.passwordChangedAt = null;
+
+        // por segurança, ao trocar senha, limpa reset token
+        this.passwordResetToken = null;
+        this.passwordResetExpiresAt = null;
+    }
+
+
 
     public void requirePasswordChange() {
         this.mustChangePassword = true;
+        this.passwordChangedAt = null;
     }
+
 
     public void clearMustChangePassword() {
         this.mustChangePassword = false;

@@ -113,7 +113,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(name = "locked_until", columnDefinition = "TIMESTAMPTZ")
     private Instant lockedUntil;
 
-    @Column(name = "password_changed_at", columnDefinition = "TIMESTAMPTZ")
+    @Column(name = "password_changed_at", nullable = false, columnDefinition = "TIMESTAMPTZ")
     private Instant passwordChangedAt;
 
     @Column(name = "password_reset_token", length = 200)
@@ -157,6 +157,10 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         if (this.timezone != null) this.timezone = this.timezone.trim();
         if (this.locale != null) this.locale = this.locale.trim();
 
+        if (this.passwordChangedAt == null) {
+            this.passwordChangedAt = Instant.now(); // ✅ fallback seguro
+        }
+
         if (this.permissionCodes != null && !this.permissionCodes.isEmpty()) {
             LinkedHashSet<String> normalized = new LinkedHashSet<>();
             for (String c : this.permissionCodes) {
@@ -166,6 +170,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
             this.permissionCodes = normalized;
         }
     }
+
 
     // ==========
     // DOMAIN (status)

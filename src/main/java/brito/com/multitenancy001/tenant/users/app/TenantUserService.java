@@ -112,8 +112,10 @@ public class TenantUserService {
             Instant now = appClock.instant();
 
            // se NÃO exige troca, registra que a senha já foi “definida”
-           if (!user.isMustChangePassword()) {
-             user.setPasswordChangedAt(now);
+            if (!user.isMustChangePassword()) {
+                user.setPasswordChangedAt(now);
+            } else {
+                user.setPasswordChangedAt(null);
             }
  
 

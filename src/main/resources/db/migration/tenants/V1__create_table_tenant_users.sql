@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS tenant_users (
 
     last_login TIMESTAMPTZ NULL,
     locked_until TIMESTAMPTZ NULL,
-    password_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    password_changed_at TIMESTAMPTZ NULL,
+
     password_reset_token VARCHAR(200) NULL,
     password_reset_expires TIMESTAMPTZ NULL,
 

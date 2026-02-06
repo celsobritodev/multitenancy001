@@ -16,7 +16,8 @@ INSERT INTO controlplane_users (
     user_origin,
     suspended_by_account,
     suspended_by_admin,
-    must_change_password
+    must_change_password,
+    password_changed_at
 )
 SELECT
     u.name,
@@ -27,7 +28,11 @@ SELECT
     'BUILT_IN',
     false,
     false,
-    u.must_change_password
+    u.must_change_password,
+    CASE
+        WHEN u.must_change_password = false THEN now()
+        ELSE NULL
+    END
 FROM cp_account a
 JOIN (
     VALUES
@@ -56,4 +61,3 @@ WHERE NOT EXISTS (
       AND existing.deleted = false
       AND existing.email = u.email
 );
-
