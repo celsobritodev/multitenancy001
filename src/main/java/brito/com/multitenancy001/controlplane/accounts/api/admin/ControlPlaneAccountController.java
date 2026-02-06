@@ -7,11 +7,11 @@ import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChan
 import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
+import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountUserApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.app.AccountLifecycleService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
-import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountTenantUserSummaryData;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
@@ -39,6 +39,9 @@ public class ControlPlaneAccountController {
 
     private final AccountApiMapper accountApiMapper;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
+
+    // ✅ novo: mapper responsável por "enabled" e por transformar contract -> HTTP
+    private final AccountUserApiMapper accountUserApiMapper;
 
     // signup via admin (se existir)
     @PostMapping("/signup")
@@ -127,8 +130,13 @@ public class ControlPlaneAccountController {
             @PathVariable Long accountId,
             @RequestParam(name = "onlyOperational", defaultValue = "false") boolean onlyOperational
     ) {
-        List<AccountTenantUserSummaryResponse> out = accountLifecycleService.listTenantUsers(accountId, onlyOperational)
-                .stream().map(ControlPlaneAccountController::toHttpTenantUser).toList();
+        // ✅ agora: contract (UserSummaryData) -> HTTP via AccountUserApiMapper
+        List<AccountTenantUserSummaryResponse> out = accountLifecycleService
+                .listTenantUsers(accountId, onlyOperational)
+                .stream()
+                .map(accountUserApiMapper::toAccountUserSummary)
+                .toList();
+
         return ResponseEntity.ok(out);
     }
 
@@ -147,7 +155,9 @@ public class ControlPlaneAccountController {
             @RequestParam AccountStatus status,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(accountLifecycleService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse));
+        return ResponseEntity.ok(
+                accountLifecycleService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse)
+        );
     }
 
     @GetMapping("/created-between")
@@ -158,7 +168,9 @@ public class ControlPlaneAccountController {
     ) {
         Instant start = Instant.parse(startIso);
         Instant end = Instant.parse(endIso);
-        return ResponseEntity.ok(accountLifecycleService.listAccountsCreatedBetween(start, end, pageable).map(accountApiMapper::toResponse));
+        return ResponseEntity.ok(
+                accountLifecycleService.listAccountsCreatedBetween(start, end, pageable).map(accountApiMapper::toResponse)
+        );
     }
 
     @GetMapping("/search")
@@ -166,14 +178,8 @@ public class ControlPlaneAccountController {
             @RequestParam("term") String term,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(accountLifecycleService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse));
-    }
-
-    private static AccountTenantUserSummaryResponse toHttpTenantUser(AccountTenantUserSummaryData d) {
-        return new AccountTenantUserSummaryResponse(
-                d.id(), d.accountId(), d.name(), d.email(), d.role(),
-                d.suspendedByAccount(), d.suspendedByAdmin(), d.enabled()
+        return ResponseEntity.ok(
+                accountLifecycleService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse)
         );
     }
 }
-

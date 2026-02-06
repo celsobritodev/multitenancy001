@@ -113,7 +113,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(name = "locked_until", columnDefinition = "TIMESTAMPTZ")
     private Instant lockedUntil;
 
-    @Column(name = "password_changed_at", nullable = false, columnDefinition = "TIMESTAMPTZ")
+    @Column(name = "password_changed_at", nullable = true, columnDefinition = "TIMESTAMPTZ")
     private Instant passwordChangedAt;
 
     @Column(name = "password_reset_token", length = 200)

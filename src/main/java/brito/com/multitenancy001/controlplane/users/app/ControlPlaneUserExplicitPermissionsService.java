@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
+import brito.com.multitenancy001.controlplane.accounts.domain.Account;
+import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
@@ -19,6 +21,7 @@ import java.util.stream.Collectors;
 public class ControlPlaneUserExplicitPermissionsService {
 
     private final PublicUnitOfWork publicUnitOfWork;
+    private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
     /**
@@ -27,7 +30,8 @@ public class ControlPlaneUserExplicitPermissionsService {
      * Regras:
      * - Só aceita "CP_*" (STRICT).
      * - Converte para enum ControlPlanePermission (explode se não existir).
-     * - Persiste no usuário (public schema).
+     * - Só permite alterar usuários do Control Plane.
+     * - Não permite alterar usuário deleted (deleted=false obrigatório).
      */
     public void setExplicitPermissionsFromCodes(Long userId, Collection<String> permissionCodes) {
 
@@ -48,10 +52,22 @@ public class ControlPlaneUserExplicitPermissionsService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         publicUnitOfWork.tx(() -> {
+            Account cp = accountRepository.findControlPlaneAccount()
+                    .orElseThrow(() -> new ApiException(
+                            "CONTROLPLANE_ACCOUNT_NOT_FOUND",
+                            "Conta controlplane não encontrada",
+                            500
+                    ));
+
+            // ✅ NOT DELETED por contrato (deleted=false)
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // domínio manda (evita setPermissions inexistente / leaking)
+            // ✅ escopo CP garantido
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+            }
+
             user.replaceExplicitPermissions(perms);
 
             controlPlaneUserRepository.save(user);

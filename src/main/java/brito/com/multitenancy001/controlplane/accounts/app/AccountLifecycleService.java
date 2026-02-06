@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
-import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountTenantUserSummaryData;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
@@ -23,6 +22,7 @@ import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
+import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -79,7 +79,7 @@ public class AccountLifecycleService {
 
     public void restoreAccount(Long accountId) { accountStatusService.restoreAccount(accountId); }
 
-    public List<AccountTenantUserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
+    public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
         return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
     }
 

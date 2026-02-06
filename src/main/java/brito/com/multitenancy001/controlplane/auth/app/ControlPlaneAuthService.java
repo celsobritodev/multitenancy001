@@ -10,6 +10,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -17,6 +18,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -29,8 +32,8 @@ public class ControlPlaneAuthService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final PublicExecutor publicExecutor;
 
-    // ✅ NOVO (append-only auth_events)
     private final AuthEventAuditService authEventAuditService;
+    private final AppClock appClock;
 
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
@@ -75,6 +78,11 @@ public class ControlPlaneAuthService {
                         accountId
                 );
 
+                // ✅ grava last_login
+                Instant now = appClock.instant();
+                user.markLastLogin(now);
+                controlPlaneUserRepository.save(user);
+
                 SystemRoleName role = SystemRoleName.fromString(user.getRole().name());
 
                 authEventAuditService.record("controlplane", "LOGIN_SUCCESS", "SUCCESS", user.getEmail(), user.getId(), accountId, DEFAULT_SCHEMA,
@@ -97,4 +105,3 @@ public class ControlPlaneAuthService {
         }
     }
 }
-

@@ -33,18 +33,13 @@ public record ControlPlaneUserCreateRequest(
         @NotNull(message = "Role é obrigatória")
         ControlPlaneRole role,
 
-        List<String> permissions,
+        List<String> permissions
 
-        @Pattern(regexp = ValidationPatterns.PHONE_PATTERN, message = "Telefone inválido")
-        @Size(max = 20, message = "Telefone não pode exceder 20 caracteres")
-        String phone,
-
-        @Size(max = 500, message = "URL do avatar não pode exceder 500 caracteres")
-        String avatarUrl
+ 
+   
 ) {
     public ControlPlaneUserCreateRequest {
-        if (phone != null) phone = phone.trim();
-        if (avatarUrl != null) avatarUrl = avatarUrl.trim();
+    
         if (email != null) email = email.trim().toLowerCase();
     }
 }
