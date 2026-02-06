@@ -20,6 +20,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ControlPlaneUserExplicitPermissionsService {
 
+    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
+    private static final String BUILTIN_IMMUTABLE_MESSAGE =
+            "Usuário BUILT_IN é protegido: não pode ter permissões alteradas; apenas senha pode ser trocada.";
+
     private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
@@ -32,6 +36,7 @@ public class ControlPlaneUserExplicitPermissionsService {
      * - Converte para enum ControlPlanePermission (explode se não existir).
      * - Só permite alterar usuários do Control Plane.
      * - Não permite alterar usuário deleted (deleted=false obrigatório).
+     * - BUILT_IN: 409 USER_BUILT_IN_IMMUTABLE
      */
     public void setExplicitPermissionsFromCodes(Long userId, Collection<String> permissionCodes) {
 
@@ -59,17 +64,20 @@ public class ControlPlaneUserExplicitPermissionsService {
                             500
                     ));
 
-            // ✅ NOT DELETED por contrato (deleted=false)
+            // NOT DELETED por contrato (deleted=false)
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // ✅ escopo CP garantido
+            // escopo CP garantido
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
                 throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
             }
 
-            user.replaceExplicitPermissions(perms);
+            if (user.isBuiltInUser()) {
+                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
 
+            user.replaceExplicitPermissions(perms);
             controlPlaneUserRepository.save(user);
             return null;
         });

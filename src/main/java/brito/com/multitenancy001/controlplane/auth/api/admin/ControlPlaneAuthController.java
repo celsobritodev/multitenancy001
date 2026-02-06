@@ -38,4 +38,3 @@ public class ControlPlaneAuthController {
         return ResponseEntity.ok(toHttp(jwt));
     }
 }
-

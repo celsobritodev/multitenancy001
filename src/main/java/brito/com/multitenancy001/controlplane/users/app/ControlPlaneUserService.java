@@ -1,20 +1,9 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
-import java.util.List;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneChangeMyPasswordRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneMeResponse;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserCreateRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDetailsResponse;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPasswordResetRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPermissionsUpdateRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserUpdateRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.*;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneBuiltInUsers;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
@@ -23,27 +12,34 @@ import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
 
+    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
+    private static final String BUILTIN_IMMUTABLE_MESSAGE =
+            "Usuário BUILT_IN é protegido: não pode ser alterado/deletado/restaurado; apenas senha pode ser trocada.";
+
     private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
-    // ✅ wiring do SecurityContext
     private final SecurityUtils securityUtils;
-
-    // ✅ wiring de overrides de permission (CP_*)
     private final ControlPlaneUserExplicitPermissionsService explicitPermissionsService;
 
-    // ✅ senha + tempo (para alinhar com regra must_change_password/password_changed_at)
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
+
+    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
     // =========================================================
     // ADMIN ENDPOINTS (/api/admin/controlplane-users)
@@ -51,12 +47,8 @@ public class ControlPlaneUserService {
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
         return publicUnitOfWork.tx(() -> {
-            if (request == null) {
-                throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
-            }
-            if (request.role() == null) {
-                throw new ApiException("ROLE_REQUIRED", "role é obrigatório", 400);
-            }
+            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+            if (request.role() == null) throw new ApiException("ROLE_REQUIRED", "role é obrigatório", 400);
             if (request.password() == null || request.password().isBlank()) {
                 throw new ApiException("INVALID_PASSWORD", "senha é obrigatória", 400);
             }
@@ -88,14 +80,18 @@ public class ControlPlaneUserService {
                     .role(role)
                     .build();
 
-            // ✅ criação por admin = senha temporária
+            // Admin cria usuário com senha temporária por padrão
             user.setTemporaryPasswordHash(hash);
 
             ControlPlaneUser saved = controlPlaneUserRepository.save(user);
 
+            // Permissões explícitas (opcional)
             if (request.permissions() != null && !request.permissions().isEmpty()) {
                 explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
             }
+
+            // ✅ garante identity CP para login por email
+            loginIdentityProvisioningService.ensureControlPlaneIdentity(email);
 
             return getControlPlaneUser(saved.getId());
         });
@@ -105,10 +101,7 @@ public class ControlPlaneUserService {
         return publicUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
 
-            return controlPlaneUserRepository.findAll().stream()
-                    .filter(u -> u.getAccount() != null
-                            && u.getAccount().getId() != null
-                            && u.getAccount().getId().equals(cp.getId()))
+            return controlPlaneUserRepository.findNotDeletedByAccountId(cp.getId()).stream()
                     .map(this::mapToResponse)
                     .toList();
         });
@@ -138,21 +131,20 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            if (user.isDeleted()) {
-                throw new ApiException("USER_DELETED", "Usuário está deletado e não pode ser alterado", 409);
-            }
             if (user.isBuiltInUser()) {
-                throw new ApiException("USER_BUILT_IN_IMMUTABLE", "Usuário BUILT_IN não pode ser alterado via admin", 409);
+                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
+            // name
             if (request.name() != null) {
-                String newName = normalizeNameOrThrow(request.name());
-                user.rename(newName);
+                user.rename(normalizeNameOrThrow(request.name()));
             }
 
+            // email
             if (request.email() != null) {
                 String newEmail = normalizeEmailOrThrow(request.email());
 
@@ -162,7 +154,6 @@ public class ControlPlaneUserService {
 
                 String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
                 if (currentEmail == null || !currentEmail.equals(newEmail)) {
-
                     boolean emailExists = controlPlaneUserRepository
                             .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
                             .filter(u -> !u.getId().equals(user.getId()))
@@ -172,17 +163,22 @@ public class ControlPlaneUserService {
                         throw new ApiException("EMAIL_ALREADY_IN_USE", "Já existe um usuário ativo com este email", 409);
                     }
 
-                    // ✅ agora sim: troca via método de domínio
+                    // ✅ você pediu: trocar o EMAIL_MUTATION_NOT_SUPPORTED por:
                     user.changeEmail(newEmail);
+
+                    // ✅ mantém login_identities CP em sincronia
+                    loginIdentityProvisioningService.moveControlPlaneIdentity(currentEmail, newEmail);
                 }
             }
 
+            // role
             if (request.role() != null) {
                 user.changeRole(request.role());
             }
 
             controlPlaneUserRepository.save(user);
 
+            // permissions (opcional)
             if (request.permissions() != null) {
                 explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
             }
@@ -191,10 +187,7 @@ public class ControlPlaneUserService {
         });
     }
 
-    public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
-            Long userId,
-            ControlPlaneUserPermissionsUpdateRequest request
-    ) {
+    public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(Long userId, ControlPlaneUserPermissionsUpdateRequest request) {
         return publicUnitOfWork.tx(() -> {
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
             if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
@@ -221,15 +214,13 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
-
-            if (user.isDeleted()) {
-                throw new ApiException("USER_DELETED", "Usuário está deletado e não pode ter senha resetada", 409);
-            }
 
             String hash = passwordEncoder.encode(request.newPassword());
 
+            // padrão admin reset = temporária
             user.setTemporaryPasswordHash(hash);
 
             controlPlaneUserRepository.save(user);
@@ -243,12 +234,20 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            user.softDelete();
+            if (user.isBuiltInUser()) {
+                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
 
+            user.softDelete();
             controlPlaneUserRepository.save(user);
+
+            // opcional: pode remover a identity ao deletar (aqui eu NÃO removi para evitar lock-out acidental)
+            // loginIdentityProvisioningService.deleteControlPlaneIdentity(user.getEmail());
+
             return null;
         });
     }
@@ -259,24 +258,38 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            user.restore();
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+            }
 
+            if (user.isBuiltInUser()) {
+                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
+
+            user.restore();
             controlPlaneUserRepository.save(user);
+
+            // garante identity ao restaurar
+            loginIdentityProvisioningService.ensureControlPlaneIdentity(user.getEmail());
+
             return mapToResponse(user);
         });
     }
 
+    // =========================================================
+    // ENABLED ENDPOINTS
+    // =========================================================
+
     public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
         return publicUnitOfWork.readOnly(() -> {
             Account controlPlaneAccount = getControlPlaneAccount();
-
-            List<ControlPlaneUser> users =
-                    controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId());
-
-            return users.stream().map(this::mapToResponse).toList();
+            return controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId())
+                    .stream()
+                    .map(this::mapToResponse)
+                    .toList();
         });
     }
 
@@ -288,15 +301,15 @@ public class ControlPlaneUserService {
 
             ControlPlaneUser user = controlPlaneUserRepository
                     .findEnabledByIdAndAccountId(userId, controlPlaneAccount.getId())
-                    .orElseThrow(() -> new ApiException(
-                            "USER_NOT_ENABLED",
-                            "Usuário não encontrado ou não habilitado",
-                            404
-                    ));
+                    .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
 
             return mapToResponse(user);
         });
     }
+
+    // =========================================================
+    // ME ENDPOINTS (/api/controlplane/me)
+    // =========================================================
 
     public ControlPlaneMeResponse getMe() {
         return publicUnitOfWork.readOnly(() -> {
@@ -308,8 +321,12 @@ public class ControlPlaneUserService {
                 throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
             }
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+            }
 
             return new ControlPlaneMeResponse(
                     user.getId(),
@@ -327,9 +344,7 @@ public class ControlPlaneUserService {
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
         publicUnitOfWork.tx(() -> {
-            if (request == null) {
-                throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
-            }
+            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
             if (request.currentPassword() == null || request.newPassword() == null || request.confirmPassword() == null) {
                 throw new ApiException("INVALID_PASSWORD", "Senha atual, nova senha e confirmação são obrigatórias", 400);
             }
@@ -345,8 +360,12 @@ public class ControlPlaneUserService {
                 throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
             }
 
-            ControlPlaneUser user = controlPlaneUserRepository.findAnyByIdAndAccountId(userId, cp.getId())
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+            }
 
             if (!user.isEnabled()) {
                 throw new ApiException("USER_NOT_ENABLED", "Usuário não está habilitado para trocar senha", 403);
@@ -358,7 +377,6 @@ public class ControlPlaneUserService {
             }
 
             String newHash = passwordEncoder.encode(request.newPassword());
-
             user.changePasswordHash(newHash, appClock.instant());
 
             controlPlaneUserRepository.save(user);
@@ -366,11 +384,13 @@ public class ControlPlaneUserService {
         });
     }
 
+    // =========================================================
+    // Helpers
+    // =========================================================
+
     private static String normalizeEmailOrThrow(String raw) {
         String email = EmailNormalizer.normalizeOrNull(raw);
-        if (email == null) {
-            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
-        }
+        if (email == null) throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
         return email;
     }
 
@@ -398,10 +418,6 @@ public class ControlPlaneUserService {
 
     private Account getControlPlaneAccount() {
         return accountRepository.findControlPlaneAccount()
-                .orElseThrow(() -> new ApiException(
-                        "CONTROLPLANE_ACCOUNT_NOT_FOUND",
-                        "Conta controlplane não encontrada",
-                        500
-                ));
+                .orElseThrow(() -> new ApiException("CONTROLPLANE_ACCOUNT_NOT_FOUND", "Conta controlplane não encontrada", 500));
     }
 }

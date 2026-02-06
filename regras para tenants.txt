@@ -1,0 +1,11 @@
+citex está aplicado corretamente?
+appClock esta padronizado como unica fonte de tempo?
+
+regras para
+CONTROLPLANE_OWNER
+tem acesso a tudo, pode alterar senhas de outros controlplane users, alterar TENANT_OWNER, mas não pode excluido,
+ mas pode fazer transferencia de TENANT_OWNER dentro do proprio tenant
+
+TENANT_OWNER
+tem acesso a tudo dentro do seu proprio tenant, inclusive pode fazer a transferencia de TENANT_OWNER para outro
+ dentro do seu tenant, pode excluir usuarios, alterar senhas, resetar senhas

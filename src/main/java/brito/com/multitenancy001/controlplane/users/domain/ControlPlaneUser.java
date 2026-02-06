@@ -61,9 +61,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Column(name = "role", length = 50)
     private ControlPlaneRole role;
 
-    // ==========
-    // AUTH / SECURITY (Instant <-> TIMESTAMPTZ)
-    // ==========
     @Column(name = "must_change_password", nullable = false)
     @Builder.Default
     private boolean mustChangePassword = false;
@@ -83,9 +80,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Column(name = "password_reset_expires", columnDefinition = "TIMESTAMPTZ")
     private Instant passwordResetExpiresAt;
 
-    // ==========
-    // STATUS
-    // ==========
     @Column(name = "suspended_by_account", nullable = false)
     @Builder.Default
     private boolean suspendedByAccount = false;
@@ -94,23 +88,14 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Builder.Default
     private boolean suspendedByAdmin = false;
 
-    // ==========
-    // AUDIT (fonte única)
-    // ==========
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
-    // ==========
-    // SOFT DELETE
-    // ==========
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
-    // ==========
-    // Permissões explícitas (override)
-    // ==========
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "controlplane_user_permissions",
@@ -121,23 +106,16 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Builder.Default
     private Set<ControlPlanePermission> explicitPermissions = new LinkedHashSet<>();
 
-    // ==========
-    // NORMALIZATION (igual TenantUser)
-    // ==========
     @PrePersist
     @PreUpdate
     private void normalize() {
         this.email = EmailNormalizer.normalizeOrNull(this.email);
         if (this.name != null) this.name = this.name.trim();
 
-        // segurança: se veio vazia, vira null e o NOT NULL do banco acusa
         if (this.email != null && this.email.isBlank()) this.email = null;
         if (this.name != null && this.name.isBlank()) this.name = null;
     }
 
-    // ==========
-    // Contracts (Auditable / SoftDeletable)
-    // ==========
     @Override
     public AuditInfo getAudit() {
         return audit;
@@ -148,9 +126,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         return deleted;
     }
 
-    // ==========
-    // Rules (status)
-    // ==========
     public boolean isSuspended() {
         return suspendedByAccount || suspendedByAdmin;
     }
@@ -168,26 +143,22 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         return isEnabled() && isAccountNonLocked(now);
     }
 
-    // ==========
-    // Mutations
-    // ==========
-    
     public void markLastLogin(Instant now) {
         if (now == null) throw new IllegalArgumentException("now é obrigatório");
         this.lastLoginAt = now;
     }
 
-    
     public void rename(String newName) {
         if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
         this.name = newName.trim();
     }
 
-    /**
-     * ✅ SENHA DEFINITIVA (usuário trocou por conta própria):
-     * mustChangePassword = false
-     * passwordChangedAt = now
-     */
+    public void changeEmail(String newEmail) {
+        String norm = EmailNormalizer.normalizeOrNull(newEmail);
+        if (norm == null) throw new IllegalArgumentException("email é obrigatório");
+        this.email = norm;
+    }
+
     public void changePasswordHash(String newPasswordHash, Instant now) {
         if (newPasswordHash == null || newPasswordHash.isBlank()) throw new IllegalArgumentException("password hash é obrigatório");
         if (now == null) throw new IllegalArgumentException("now é obrigatório");
@@ -196,16 +167,10 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this.mustChangePassword = false;
         this.passwordChangedAt = now;
 
-        // por segurança: limpando reset token
         this.passwordResetToken = null;
         this.passwordResetExpiresAt = null;
     }
 
-    /**
-     * ✅ SENHA TEMPORÁRIA (admin reset / provisória):
-     * mustChangePassword = true
-     * passwordChangedAt = null
-     */
     public void setTemporaryPasswordHash(String newPasswordHash) {
         if (newPasswordHash == null || newPasswordHash.isBlank()) throw new IllegalArgumentException("password hash é obrigatório");
 
@@ -256,14 +221,10 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this.passwordResetExpiresAt = null;
     }
 
-    // ==========
-    // Explicit permissions API
-    // ==========
     public Set<ControlPlanePermission> getExplicitPermissions() {
         return Set.copyOf(explicitPermissions);
     }
 
-    /** Alias compat (AuthoritiesFactory usa getPermissions()) */
     public Set<ControlPlanePermission> getPermissions() {
         return getExplicitPermissions();
     }
@@ -286,10 +247,4 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
             this.explicitPermissions.add(p);
         }
     }
-    
-    public void changeEmail(String newEmail) {
-        if (newEmail == null || newEmail.isBlank()) throw new IllegalArgumentException("email é obrigatório");
-        this.email = newEmail;
-    }
-
 }

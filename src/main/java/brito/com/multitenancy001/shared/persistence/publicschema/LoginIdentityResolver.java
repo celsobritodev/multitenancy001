@@ -18,7 +18,6 @@ public class LoginIdentityResolver {
         String normalized = EmailNormalizer.normalizeOrNull(email);
         if (normalized == null) return List.of();
 
-        // email é CITEXT em public.login_identities => comparação pode ser direta
         String sql = """
             select li.account_id,
                    a.display_name,
@@ -38,5 +37,26 @@ public class LoginIdentityResolver {
                 rs.getString("slug")
         ));
     }
-}
 
+    /**
+     * CP identity existe?
+     * Regra: user_type='CONTROLPLANE' e account_id IS NULL.
+     */
+    public boolean existsControlPlaneIdentity(String email) {
+        String normalized = EmailNormalizer.normalizeOrNull(email);
+        if (normalized == null) return false;
+
+        String sql = """
+            select count(1)
+              from public.login_identities li
+             where li.email = :email
+               and li.user_type = 'CONTROLPLANE'
+               and li.account_id is null
+        """;
+
+        var params = new MapSqlParameterSource("email", normalized);
+
+        Integer count = jdbcTemplate.queryForObject(sql, params, Integer.class);
+        return count != null && count > 0;
+    }
+}
