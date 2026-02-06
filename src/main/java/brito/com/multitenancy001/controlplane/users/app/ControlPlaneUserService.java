@@ -42,7 +42,7 @@ public class ControlPlaneUserService {
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
     // =========================================================
-    // ADMIN ENDPOINTS (/api/admin/controlplane-users)
+    // ADMIN ENDPOINTS
     // =========================================================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
@@ -60,6 +60,8 @@ public class ControlPlaneUserService {
                 throw new ApiException("EMAIL_RESERVED", "Este email é reservado do sistema (BUILT_IN)", 409);
             }
 
+            // (opcional) manter essa validação. A fonte de verdade do login será login_identities,
+            // mas ainda é bom não ter duplicado "ativo" no perfil.
             boolean emailExists = controlPlaneUserRepository
                     .findByEmailAndAccount_IdAndDeletedFalse(email, cp.getId())
                     .isPresent();
@@ -85,13 +87,12 @@ public class ControlPlaneUserService {
 
             ControlPlaneUser saved = controlPlaneUserRepository.save(user);
 
-            // Permissões explícitas (opcional)
             if (request.permissions() != null && !request.permissions().isEmpty()) {
                 explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
             }
 
-            // ✅ garante identity CP para login por email
-            loginIdentityProvisioningService.ensureControlPlaneIdentity(email);
+            // ✅ SaaS top: identity aponta para subject_id (userId)
+            loginIdentityProvisioningService.ensureControlPlaneIdentity(email, saved.getId());
 
             return getControlPlaneUser(saved.getId());
         });
@@ -100,7 +101,6 @@ public class ControlPlaneUserService {
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
         return publicUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
-
             return controlPlaneUserRepository.findNotDeletedByAccountId(cp.getId()).stream()
                     .map(this::mapToResponse)
                     .toList();
@@ -144,7 +144,7 @@ public class ControlPlaneUserService {
                 user.rename(normalizeNameOrThrow(request.name()));
             }
 
-            // email
+            // email (perfil/contato) + identity (login)
             if (request.email() != null) {
                 String newEmail = normalizeEmailOrThrow(request.email());
 
@@ -154,6 +154,7 @@ public class ControlPlaneUserService {
 
                 String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
                 if (currentEmail == null || !currentEmail.equals(newEmail)) {
+
                     boolean emailExists = controlPlaneUserRepository
                             .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
                             .filter(u -> !u.getId().equals(user.getId()))
@@ -163,11 +164,11 @@ public class ControlPlaneUserService {
                         throw new ApiException("EMAIL_ALREADY_IN_USE", "Já existe um usuário ativo com este email", 409);
                     }
 
-                    // ✅ você pediu: trocar o EMAIL_MUTATION_NOT_SUPPORTED por:
+                    // ✅ método de domínio (sem setter público)
                     user.changeEmail(newEmail);
 
-                    // ✅ mantém login_identities CP em sincronia
-                    loginIdentityProvisioningService.moveControlPlaneIdentity(currentEmail, newEmail);
+                    // ✅ SaaS top: move identity pelo subject_id (userId)
+                    loginIdentityProvisioningService.moveControlPlaneIdentity(user.getId(), newEmail);
                 }
             }
 
@@ -192,6 +193,7 @@ public class ControlPlaneUserService {
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
             if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
 
+            // garante escopo e existência (read-only)
             getControlPlaneUser(userId);
 
             explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
@@ -220,7 +222,7 @@ public class ControlPlaneUserService {
 
             String hash = passwordEncoder.encode(request.newPassword());
 
-            // padrão admin reset = temporária
+            // admin reset = temporária
             user.setTemporaryPasswordHash(hash);
 
             controlPlaneUserRepository.save(user);
@@ -244,9 +246,6 @@ public class ControlPlaneUserService {
 
             user.softDelete();
             controlPlaneUserRepository.save(user);
-
-            // opcional: pode remover a identity ao deletar (aqui eu NÃO removi para evitar lock-out acidental)
-            // loginIdentityProvisioningService.deleteControlPlaneIdentity(user.getEmail());
 
             return null;
         });
@@ -272,22 +271,24 @@ public class ControlPlaneUserService {
             user.restore();
             controlPlaneUserRepository.save(user);
 
-            // garante identity ao restaurar
-            loginIdentityProvisioningService.ensureControlPlaneIdentity(user.getEmail());
+            // garante identity ao restaurar (subject_id)
+            loginIdentityProvisioningService.ensureControlPlaneIdentity(user.getEmail(), user.getId());
 
             return mapToResponse(user);
         });
     }
 
     // =========================================================
-    // ENABLED ENDPOINTS
+    // ENABLED ENDPOINTS (para casar com o Controller)
     // =========================================================
 
     public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
         return publicUnitOfWork.readOnly(() -> {
-            Account controlPlaneAccount = getControlPlaneAccount();
-            return controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId())
-                    .stream()
+            Account cp = getControlPlaneAccount();
+
+            List<ControlPlaneUser> users = controlPlaneUserRepository.findEnabledByAccountId(cp.getId());
+
+            return users.stream()
                     .map(this::mapToResponse)
                     .toList();
         });
@@ -297,10 +298,10 @@ public class ControlPlaneUserService {
         return publicUnitOfWork.readOnly(() -> {
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
 
-            Account controlPlaneAccount = getControlPlaneAccount();
+            Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository
-                    .findEnabledByIdAndAccountId(userId, controlPlaneAccount.getId())
+                    .findEnabledByIdAndAccountId(userId, cp.getId())
                     .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
 
             return mapToResponse(user);
@@ -308,7 +309,7 @@ public class ControlPlaneUserService {
     }
 
     // =========================================================
-    // ME ENDPOINTS (/api/controlplane/me)
+    // ME
     // =========================================================
 
     public ControlPlaneMeResponse getMe() {

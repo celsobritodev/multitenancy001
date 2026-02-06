@@ -12,7 +12,7 @@ public class LoginIdentityProvisioningService {
     private final JdbcTemplate jdbcTemplate;
 
     // =========================================================
-    // TENANT
+    // TENANT (mantém seu modelo atual: email -> conta)
     // =========================================================
 
     public void ensureTenantIdentity(String email, Long accountId) {
@@ -22,69 +22,61 @@ public class LoginIdentityProvisioningService {
         if (emailNorm == null) return;
 
         jdbcTemplate.update("""
-            INSERT INTO public.login_identities (email, user_type, account_id)
-            VALUES (?, 'TENANT', ?)
+            INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)
+            VALUES (?, 'TENANT_ACCOUNT', ?, ?)
             ON CONFLICT DO NOTHING
-        """, emailNorm, accountId);
-    }
-
-    public void deleteTenantIdentity(String email, Long accountId) {
-        if (accountId == null) return;
-
-        String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (emailNorm == null) return;
-
-        jdbcTemplate.update("""
-            DELETE FROM public.login_identities
-             WHERE email = ?
-               AND user_type = 'TENANT'
-               AND account_id = ?
-        """, emailNorm, accountId);
+        """, emailNorm, accountId, accountId);
     }
 
     // =========================================================
-    // CONTROL PLANE
+    // CONTROL PLANE (SaaS top: email -> subject_id(userId))
     // =========================================================
 
-    /**
-     * CP identities são "globais" (account_id NULL).
-     */
-    public void ensureControlPlaneIdentity(String email) {
+    public void ensureControlPlaneIdentity(String email, Long controlPlaneUserId) {
+        if (controlPlaneUserId == null) return;
+
         String emailNorm = EmailNormalizer.normalizeOrNull(email);
         if (emailNorm == null) return;
 
+        // garante por subject (um CP user -> um identity)
         jdbcTemplate.update("""
-            INSERT INTO public.login_identities (email, user_type, account_id)
-            VALUES (?, 'CONTROLPLANE', NULL)
-            ON CONFLICT DO NOTHING
-        """, emailNorm);
+            INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)
+            VALUES (?, 'CONTROLPLANE_USER', ?, NULL)
+            ON CONFLICT (subject_type, subject_id)
+            DO UPDATE SET email = EXCLUDED.email
+        """, emailNorm, controlPlaneUserId);
     }
 
-    public void deleteControlPlaneIdentity(String email) {
-        String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (emailNorm == null) return;
+    public void deleteControlPlaneIdentityByUserId(Long controlPlaneUserId) {
+        if (controlPlaneUserId == null) return;
 
         jdbcTemplate.update("""
             DELETE FROM public.login_identities
-             WHERE email = ?
-               AND user_type = 'CONTROLPLANE'
-               AND account_id IS NULL
-        """, emailNorm);
+             WHERE subject_type = 'CONTROLPLANE_USER'
+               AND subject_id = ?
+        """, controlPlaneUserId);
     }
 
     /**
-     * Troca de email no CP: remove a identity antiga e cria a nova.
-     * (Executar dentro da mesma TX do update do usuário CP)
+     * Troca de email no CP: atualiza a identity do subject (userId).
+     * Executar dentro da mesma TX do update do usuário CP.
      */
-    public void moveControlPlaneIdentity(String oldEmail, String newEmail) {
-        String oldNorm = EmailNormalizer.normalizeOrNull(oldEmail);
-        String newNorm = EmailNormalizer.normalizeOrNull(newEmail);
+    public void moveControlPlaneIdentity(Long controlPlaneUserId, String newEmail) {
+        if (controlPlaneUserId == null) return;
 
-        if (oldNorm != null && !oldNorm.equals(newNorm)) {
-            deleteControlPlaneIdentity(oldNorm);
-        }
-        if (newNorm != null) {
-            ensureControlPlaneIdentity(newNorm);
+        String emailNorm = EmailNormalizer.normalizeOrNull(newEmail);
+        if (emailNorm == null) return;
+
+        // Atualiza por subject. Se não existir, cria.
+        int updated = jdbcTemplate.update("""
+            UPDATE public.login_identities
+               SET email = ?
+             WHERE subject_type = 'CONTROLPLANE_USER'
+               AND subject_id = ?
+        """, emailNorm, controlPlaneUserId);
+
+        if (updated == 0) {
+            ensureControlPlaneIdentity(emailNorm, controlPlaneUserId);
         }
     }
 }

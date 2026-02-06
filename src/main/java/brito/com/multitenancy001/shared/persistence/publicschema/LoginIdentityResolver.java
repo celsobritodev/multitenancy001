@@ -25,7 +25,7 @@ public class LoginIdentityResolver {
               from public.login_identities li
               join public.accounts a on a.id = li.account_id
              where li.email = :email
-               and li.user_type = 'TENANT'
+               and li.subject_type = 'TENANT_ACCOUNT'
                and a.deleted = false
         """;
 
@@ -39,9 +39,27 @@ public class LoginIdentityResolver {
     }
 
     /**
-     * CP identity existe?
-     * Regra: user_type='CONTROLPLANE' e account_id IS NULL.
+     * "SaaS moderno top": resolve o CP user por subject_id (id do user),
+     * e o resto do login carrega o user por ID.
      */
+    public Long resolveControlPlaneUserIdByEmail(String email) {
+        String normalized = EmailNormalizer.normalizeOrNull(email);
+        if (normalized == null) return null;
+
+        String sql = """
+            select li.subject_id
+              from public.login_identities li
+             where li.email = :email
+               and li.subject_type = 'CONTROLPLANE_USER'
+             limit 1
+        """;
+
+        var params = new MapSqlParameterSource("email", normalized);
+
+        List<Long> rows = jdbcTemplate.query(sql, params, (rs, rowNum) -> rs.getLong("subject_id"));
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     public boolean existsControlPlaneIdentity(String email) {
         String normalized = EmailNormalizer.normalizeOrNull(email);
         if (normalized == null) return false;
@@ -50,8 +68,7 @@ public class LoginIdentityResolver {
             select count(1)
               from public.login_identities li
              where li.email = :email
-               and li.user_type = 'CONTROLPLANE'
-               and li.account_id is null
+               and li.subject_type = 'CONTROLPLANE_USER'
         """;
 
         var params = new MapSqlParameterSource("email", normalized);

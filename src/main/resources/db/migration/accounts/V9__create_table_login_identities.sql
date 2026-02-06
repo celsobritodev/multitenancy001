@@ -6,35 +6,48 @@ CREATE TABLE IF NOT EXISTS login_identities (
 
     email CITEXT NOT NULL,
 
-    user_type VARCHAR(20) NOT NULL, -- 'TENANT' | 'CONTROLPLANE'
-    account_id BIGINT,              -- TENANT: obrigatório / CONTROLPLANE: deve ser NULL
+    -- "SaaS moderno top": identity aponta para um subject (não para email na tabela do user)
+    subject_type VARCHAR(40) NOT NULL,  -- 'CONTROLPLANE_USER' | 'TENANT_ACCOUNT'
+    subject_id   BIGINT NOT NULL,
 
-    -- instante real: TIMESTAMPTZ
+    -- mantém account_id para tenant (seu loginInit lista contas por email)
+    account_id BIGINT,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    CONSTRAINT chk_login_identities_user_type
-        CHECK (user_type IN ('TENANT', 'CONTROLPLANE')),
+    CONSTRAINT chk_login_identities_subject_type
+        CHECK (subject_type IN ('CONTROLPLANE_USER', 'TENANT_ACCOUNT')),
 
-    CONSTRAINT chk_login_identities_user_type_account
+    CONSTRAINT chk_login_identities_shape
         CHECK (
-            (user_type = 'TENANT' AND account_id IS NOT NULL)
+            -- CP: identity global (account_id NULL), subject_id = controlplane_users.id
+            (subject_type = 'CONTROLPLANE_USER' AND account_id IS NULL)
             OR
-            (user_type = 'CONTROLPLANE' AND account_id IS NULL)
+            -- Tenant: identity por conta (account_id NOT NULL), subject_id = account_id (lookup)
+            (subject_type = 'TENANT_ACCOUNT' AND account_id IS NOT NULL AND subject_id = account_id)
         ),
 
     CONSTRAINT fk_login_identities_account
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
+-- Unicidade CP por email (um email -> um CP user)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_login_identity_cp_email
     ON login_identities (email)
-    WHERE user_type = 'CONTROLPLANE';
+    WHERE subject_type = 'CONTROLPLANE_USER';
 
+-- Unicidade CP por subject (um CP user -> um email identity)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_login_identity_cp_subject
+    ON login_identities (subject_type, subject_id)
+    WHERE subject_type = 'CONTROLPLANE_USER';
+
+-- Tenant: mesmo email pode existir em várias contas
 CREATE UNIQUE INDEX IF NOT EXISTS ux_login_identity_tenant_email_account
     ON login_identities (email, account_id)
-    WHERE user_type = 'TENANT';
+    WHERE subject_type = 'TENANT_ACCOUNT';
 
-CREATE INDEX IF NOT EXISTS idx_login_identities_email_tenant
-    ON login_identities (email)
-    WHERE user_type = 'TENANT';
+CREATE INDEX IF NOT EXISTS idx_login_identities_email
+    ON login_identities (email);
 
+CREATE INDEX IF NOT EXISTS idx_login_identities_subject
+    ON login_identities (subject_type, subject_id);
