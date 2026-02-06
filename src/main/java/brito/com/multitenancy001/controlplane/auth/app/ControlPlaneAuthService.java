@@ -65,11 +65,10 @@ public class ControlPlaneAuthService {
             return publicExecutor.runInPublicSchema(() -> {
 
                 // =========================================================
-                // (1) Gate por identity (CP)
+                // (1) Resolve identity -> subject_id (CP user id)
                 // =========================================================
-                // Com o seu schema atual, isso garante que só emails "registrados como identity CP"
-                // podem sequer tentar login.
-                if (!loginIdentityResolver.existsControlPlaneIdentity(emailNorm)) {
+                Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
+                if (cpUserId == null) {
                     authEventAuditService.record(
                             "controlplane",
                             "LOGIN_DENIED",
@@ -85,16 +84,16 @@ public class ControlPlaneAuthService {
                 }
 
                 // =========================================================
-                // (2) Carrega o usuário CP por email normalizado
+                // (2) Carrega o usuário CP por ID (não por email)
                 // =========================================================
                 ControlPlaneUser user = controlPlaneUserRepository
-                        .findByEmailAndDeletedFalse(emailNorm)
+                        .findByIdAndDeletedFalse(cpUserId)
                         .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
 
                 Long accountId = user.getAccount().getId();
 
                 // =========================================================
-                // (3) Status checks (mais semântico)
+                // (3) Status checks (semântico)
                 // =========================================================
                 Instant now = appClock.instant();
 
@@ -127,7 +126,8 @@ public class ControlPlaneAuthService {
                 }
 
                 // =========================================================
-                // (4) Autentica (principal = email normalizado)
+                // (4) Autentica com principal=email, mas UserDetailsService
+                // agora resolve por identity -> userId -> user
                 // =========================================================
                 Authentication authentication = authenticationManager.authenticate(
                         new UsernamePasswordAuthenticationToken(emailNorm, password)
@@ -139,6 +139,7 @@ public class ControlPlaneAuthService {
                         DEFAULT_SCHEMA
                 );
 
+                // refresh token pode seguir usando o email "atual" do perfil
                 String refreshToken = jwtTokenProvider.generateRefreshToken(
                         user.getEmail(),
                         DEFAULT_SCHEMA,
@@ -157,11 +158,11 @@ public class ControlPlaneAuthService {
                         "controlplane",
                         "LOGIN_SUCCESS",
                         "SUCCESS",
-                        user.getEmail(),
+                        emailNorm,
                         user.getId(),
                         accountId,
                         DEFAULT_SCHEMA,
-                        "{\"mode\":\"password\",\"identity\":\"email\"}"
+                        "{\"mode\":\"password\",\"identity\":\"login_identities\",\"subject\":\"CONTROLPLANE_USER\"}"
                 );
 
                 return new JwtResult(

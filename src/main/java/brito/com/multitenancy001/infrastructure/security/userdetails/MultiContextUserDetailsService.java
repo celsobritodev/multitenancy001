@@ -8,6 +8,7 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
@@ -25,6 +26,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final TenantUserRepository tenantUserRepository;
+    private final LoginIdentityResolver loginIdentityResolver;
     private final AppClock appClock;
 
     private Instant now() {
@@ -43,7 +45,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
      * Spring Security exige essa assinatura, mas aqui tratamos o parâmetro como EMAIL.
      *
      * Regras:
-     * - CONTROLPLANE: carrega por email no schema public
+     * - CONTROLPLANE: resolve identity -> CP user id, carrega user por ID
      * - TENANT: carrega por email dentro do schema do tenant (TenantContext já está bindado)
      */
     @Override
@@ -51,12 +53,12 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         String schemaName = TenantContext.getOrNull();
         String loginEmail = normalizeEmailOrThrow(email);
 
-        // CONTROL PLANE: email é único globalmente
+        // CONTROL PLANE
         if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
-            return loadControlPlaneUserByEmail(loginEmail);
+            return loadControlPlaneUserByLoginIdentity(loginEmail);
         }
 
-        // TENANT: dentro do schema do tenant
+        // TENANT
         Instant now = now();
 
         TenantUser user = tenantUserRepository
@@ -66,6 +68,27 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
+
+    /**
+     * ✅ SaaS moderno top: email -> login_identities(subject_id) -> controlplane_users(id)
+     */
+    public UserDetails loadControlPlaneUserByLoginIdentity(String email) {
+        Instant now = now();
+
+        Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(email);
+        if (cpUserId == null) {
+            throw new UsernameNotFoundException("INVALID_USER");
+        }
+
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findByIdAndDeletedFalse(cpUserId)
+                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
+    }
+
+    // Mantém seus métodos utilitários (caso você use em outros fluxos)
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
         Instant now = now();
@@ -82,18 +105,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByEmailAndAccount_IdAndDeletedFalse(loginEmail, accountId)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
-
-        var authorities = AuthoritiesFactory.forControlPlane(user);
-        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
-    }
-
-    public UserDetails loadControlPlaneUserByEmail(String email) {
-        Instant now = now();
-
-        String loginEmail = normalizeEmailOrThrow(email);
-
-        ControlPlaneUser user = controlPlaneUserRepository.findByEmailAndDeletedFalse(loginEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
@@ -130,4 +141,3 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
     }
 }
-
