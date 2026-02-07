@@ -44,29 +44,26 @@ public final class AuthoritiesFactory {
     }
 
     public static Set<GrantedAuthority> forTenant(TenantUser user) {
-        Set<String> merged = new LinkedHashSet<>();
+        // ✅ 100% tipado até o final
+        Set<TenantPermission> merged = new LinkedHashSet<>();
 
         // defaults por role
         if (user.getRole() != null) {
-            for (TenantPermission p : TenantRolePermissions.permissionsFor(user.getRole())) {
-                merged.add(p.name());
-            }
+            merged.addAll(TenantRolePermissions.permissionsFor(user.getRole()));
         }
 
-        // permissions explícitas do banco (JÁ É String code)
+        // permissions explícitas do usuário (tipadas)
         if (user.getPermissions() != null) {
-            for (String code : user.getPermissions()) {
-                if (code == null || code.isBlank()) continue;
-                merged.add(code.trim().toUpperCase(Locale.ROOT));
-            }
+            merged.addAll(user.getPermissions());
         }
 
-        merged = PermissionScopeValidator.normalizeTenantStrict(merged);
+        // ✅ FAIL-FAST tipado (não deixa permissão fora do escopo Tenant)
+        merged = PermissionScopeValidator.validateTenantPermissionsStrict(merged);
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
-        for (String perm : merged) {
-            if (perm == null || perm.isBlank()) continue;
-            authorities.add(new SimpleGrantedAuthority(perm.trim().toUpperCase(Locale.ROOT)));
+        for (TenantPermission p : merged) {
+            if (p == null) continue;
+            authorities.add(new SimpleGrantedAuthority(p.name().trim().toUpperCase(Locale.ROOT)));
         }
         return authorities;
     }

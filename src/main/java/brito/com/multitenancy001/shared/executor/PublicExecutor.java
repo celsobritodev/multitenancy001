@@ -10,39 +10,33 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 public class PublicExecutor {
 
     // ---------------------------------------------------------------------
-    // ✅ NOVO PADRÃO (semântico)
+    // ✅ PADRÃO CANÔNICO (preferido)
     // ---------------------------------------------------------------------
 
-    public <T> T runInPublicSchema(Supplier<T> supplier) {
-        return run(supplier);
+    /**
+     * Executa a função no schema PUBLIC (Control Plane).
+     * Preferir este método em todo código novo.
+     */
+    public <T> T inPublic(Supplier<T> supplier) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            return supplier.get();
+        }
     }
 
-    public void runInPublicSchema(Runnable runnable) {
-        run(runnable);
+    /**
+     * Executa o runnable no schema PUBLIC (Control Plane).
+     * Preferir este método em todo código novo.
+     */
+    public void inPublic(Runnable runnable) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            runnable.run();
+        }
     }
 
     public TenantContext.Scope publicSchemaScope() {
         return TenantContext.publicScope();
     }
 
-    // ---------------------------------------------------------------------
-    // ✅ API ATUAL (mantida)
-    // ---------------------------------------------------------------------
-
-    public <T> T run(Supplier<T> supplier) {
-        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
-            return supplier.get();
-        }
-    }
-
-    public void run(Runnable runnable) {
-        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
-            runnable.run();
-        }
-    }
-
-    // aliases semânticos (opcional, mas ajuda muito leitura)
-    public <T> T inPublic(Supplier<T> supplier) { return runInPublicSchema(supplier); }
-    public void inPublic(Runnable runnable) { runInPublicSchema(runnable); }
+  
+   
 }
-

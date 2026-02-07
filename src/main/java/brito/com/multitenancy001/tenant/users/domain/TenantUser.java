@@ -6,6 +6,7 @@ import brito.com.multitenancy001.shared.domain.audit.Auditable;
 import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.permission.TenantUserPermission;
@@ -18,7 +19,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Set;
 
 @Entity
@@ -46,7 +46,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(nullable = false, length = 100)
     private String name;
 
-    // ✅ Alinhado com migration: email CITEXT NOT NULL
     @Column(nullable = false, columnDefinition = "citext")
     private String email;
 
@@ -57,22 +56,15 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(nullable = false, length = 50)
     private TenantRole role;
 
-    /**
-     * Persistência: codes (String) via ElementCollection.
-     *
-     * Migration (Flyway) criou:
-     * - tabela: tenant_user_permissions
-     * - FK: tenant_user_id
-     * - coluna: permission VARCHAR(120)
-     */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "tenant_user_permissions",
             joinColumns = @JoinColumn(name = "tenant_user_id")
     )
     @Column(name = "permission", nullable = false, length = 120)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private Set<String> permissionCodes = new LinkedHashSet<>();
+    private Set<TenantPermission> permissions = new LinkedHashSet<>();
 
     // ==========
     // PROFILE
@@ -105,7 +97,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     private EntityOrigin origin = EntityOrigin.ADMIN;
 
     // ==========
-    // SECURITY (instantes reais => Instant)
+    // SECURITY
     // ==========
     @Column(name = "last_login", columnDefinition = "TIMESTAMPTZ")
     private Instant lastLoginAt;
@@ -113,7 +105,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Column(name = "locked_until", columnDefinition = "TIMESTAMPTZ")
     private Instant lockedUntil;
 
-    @Column(name = "password_changed_at", nullable = true, columnDefinition = "TIMESTAMPTZ")
+    @Column(name = "password_changed_at", columnDefinition = "TIMESTAMPTZ")
     private Instant passwordChangedAt;
 
     @Column(name = "password_reset_token", length = 200)
@@ -138,36 +130,17 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     private boolean deleted = false;
 
     // ==========
-    // AUDIT (fonte única)
+    // AUDIT
     // ==========
     @Embedded
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
-    // ==========
-    // NORMALIZATION
-    // ==========
-    @PrePersist
-    @PreUpdate
-    private void normalize() {
-        this.email = EmailNormalizer.normalizeOrNull(this.email);
-        if (this.name != null) this.name = this.name.trim();
-        if (this.phone != null) this.phone = this.phone.trim();
-        if (this.avatarUrl != null) this.avatarUrl = this.avatarUrl.trim();
-        if (this.timezone != null) this.timezone = this.timezone.trim();
-        if (this.locale != null) this.locale = this.locale.trim();
-
-        // 🚫 Domínio NÃO define "agora". passwordChangedAt deve ser setado por fluxo de aplicação (AppClock.instant()).
-
-        if (this.permissionCodes != null && !this.permissionCodes.isEmpty()) {
-            LinkedHashSet<String> normalized = new LinkedHashSet<>();
-            for (String c : this.permissionCodes) {
-                if (c == null || c.isBlank()) continue;
-                normalized.add(c.trim().toUpperCase(Locale.ROOT));
-            }
-            this.permissionCodes = normalized;
-        }
-    }
+    // =========================================================
+    // ✅ SEM @PrePersist/@PreUpdate
+    // Normalização deve ocorrer na camada de aplicação (services)
+    // ou via métodos de domínio abaixo (migração gradual).
+    // =========================================================
 
     // ==========
     // DOMAIN (status)
@@ -181,10 +154,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         return lockedUntil == null || !now.isBefore(lockedUntil);
     }
 
-    /**
-     * 🚫 Regra: domínio não pode chamar "agora".
-     * ✅ Use: user.isAccountNonLocked(appClock.instant()) ou AuthenticatedUserContext (que já recebe now).
-     */
     @Override
     public boolean isAccountNonLocked() {
         throw new IllegalStateException("TenantUser.isAccountNonLocked() without 'now' is forbidden. Use isAccountNonLocked(Instant now) with AppClock.instant() in the application layer.");
@@ -195,82 +164,57 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     // ==========
-    // Explicit permissions API (domínio manda)
+    // PERMISSIONS (TIPADO)
     // ==========
-    public Set<String> getPermissionCodes() {
-        return permissionCodes == null ? Set.of() : Set.copyOf(permissionCodes);
+    public Set<TenantPermission> getPermissions() {
+        return permissions == null ? Set.of() : Set.copyOf(permissions);
     }
 
-    /** Alias compat com código antigo (AuthoritiesFactory usa getPermissions()) */
-    public Set<String> getPermissions() {
-        return getPermissionCodes();
-    }
-
-    /** ✅ COMPAT: converte enum -> codes */
     public void setPermissions(Set<TenantPermission> permissions) {
-        this.permissionCodes.clear();
+        if (this.permissions == null) this.permissions = new LinkedHashSet<>();
+        this.permissions.clear();
+
         if (permissions == null || permissions.isEmpty()) return;
+
+        Set<TenantPermission> validated = PermissionScopeValidator.validateTenantPermissionsStrict(permissions);
+        for (TenantPermission p : validated) {
+            if (p == null) continue;
+            this.permissions.add(p);
+        }
+    }
+
+    public void grantPermission(TenantPermission permission) {
+        if (permission == null) return;
+        if (this.permissions == null) this.permissions = new LinkedHashSet<>();
+
+        Set<TenantPermission> tmp = new LinkedHashSet<>(this.permissions);
+        tmp.add(permission);
+
+        this.permissions = new LinkedHashSet<>(PermissionScopeValidator.validateTenantPermissionsStrict(tmp));
+    }
+
+    public void revokePermission(TenantPermission permission) {
+        if (permission == null) return;
+        if (this.permissions == null || this.permissions.isEmpty()) return;
+        this.permissions.remove(permission);
+    }
+
+    /**
+     * ✅ Mantido só para leitura/compat (ex.: DTO legado).
+     * ❌ Sem setters por code no domínio.
+     */
+    public Set<TenantUserPermission> getExplicitPermissions() {
+        if (permissions == null || permissions.isEmpty()) return Set.of();
+        LinkedHashSet<TenantUserPermission> out = new LinkedHashSet<>();
         for (TenantPermission p : permissions) {
             if (p == null) continue;
-            this.permissionCodes.add(p.name());
-        }
-    }
-
-    public void setPermissionsFromCodes(Set<String> codes) {
-        this.permissionCodes.clear();
-        if (codes == null || codes.isEmpty()) return;
-        for (String c : codes) {
-            if (c == null || c.isBlank()) continue;
-            this.permissionCodes.add(c.trim().toUpperCase(Locale.ROOT));
-        }
-    }
-
-    public Set<TenantUserPermission> getExplicitPermissions() {
-        if (permissionCodes == null || permissionCodes.isEmpty()) return Set.of();
-        LinkedHashSet<TenantUserPermission> out = new LinkedHashSet<>();
-        for (String code : permissionCodes) {
-            if (code == null || code.isBlank()) continue;
-            out.add(new TenantUserPermission(code));
+            out.add(new TenantUserPermission(p.name()));
         }
         return out;
     }
 
-    public void replaceExplicitPermissionsFromCodes(Set<String> newCodes) {
-        this.permissionCodes.clear();
-        if (newCodes == null || newCodes.isEmpty()) return;
-
-        for (String c : newCodes) {
-            if (c == null || c.isBlank()) continue;
-            TenantUserPermission vo = new TenantUserPermission(c);
-            this.permissionCodes.add(vo.code());
-        }
-    }
-
-    public void grantExplicitPermission(TenantUserPermission p) {
-        if (p == null) return;
-        this.permissionCodes.add(p.code());
-    }
-
-    public void revokeExplicitPermission(String code) {
-        if (code == null) return;
-        this.permissionCodes.remove(code.trim().toUpperCase(Locale.ROOT));
-    }
-
     // ==========
-    // Password reset (domínio manda)
-    // ==========
-    public void setPasswordReset(String token, Instant expiresAt) {
-        this.passwordResetToken = token;
-        this.passwordResetExpiresAt = expiresAt;
-    }
-
-    public void clearPasswordResetToken() {
-        this.passwordResetToken = null;
-        this.passwordResetExpiresAt = null;
-    }
-
-    // ==========
-    // Compat (aliases) - para código antigo não quebrar
+    // Password reset (compat com seus call-sites)
     // ==========
     public void setPasswordResetExpires(Instant expiresAt) {
         this.passwordResetExpiresAt = expiresAt;
@@ -305,6 +249,20 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     // ==========
+    // Optional: helpers de normalização (se você quiser migrar call-sites depois)
+    // ==========
+    public void rename(String newName) {
+        if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
+        this.name = newName.trim();
+    }
+
+    public void changeEmail(String newEmail) {
+        String normalized = EmailNormalizer.normalizeOrNull(newEmail);
+        if (normalized == null) throw new IllegalArgumentException("email inválido");
+        this.email = normalized;
+    }
+
+    // ==========
     // Contracts
     // ==========
     @Override
@@ -324,8 +282,9 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         Set<GrantedAuthority> out = new LinkedHashSet<>();
         if (role != null) out.add(new SimpleGrantedAuthority(role.asAuthority()));
-        for (String code : getPermissionCodes()) {
-            out.add(new SimpleGrantedAuthority(code));
+        for (TenantPermission p : getPermissions()) {
+            if (p == null) continue;
+            out.add(new SimpleGrantedAuthority(p.name()));
         }
         return out;
     }

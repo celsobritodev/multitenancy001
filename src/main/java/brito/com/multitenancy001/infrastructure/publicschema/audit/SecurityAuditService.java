@@ -3,6 +3,8 @@ package brito.com.multitenancy001.infrastructure.publicschema.audit;
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -20,8 +22,8 @@ public class SecurityAuditService {
     private final SecurityAuditEventRepository securityAuditEventRepository;
     private final AppClock appClock;
 
-    public void record(String actionType,
-                       String outcome,
+    public void record(SecurityAuditActionType actionType,
+                       AuditOutcome outcome,
                        String actorEmail,
                        Long actorUserId,
                        String targetEmail,

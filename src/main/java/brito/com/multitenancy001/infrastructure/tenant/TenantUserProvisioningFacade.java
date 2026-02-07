@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -81,14 +82,15 @@ public class TenantUserProvisioningFacade {
                     if (accountId == null) {
                         throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
                     }
-                    if (!StringUtils.hasText(email)) {
+
+                    String emailNorm = EmailNormalizer.normalizeOrNull(email);
+                    if (!StringUtils.hasText(emailNorm)) {
                         throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
                     }
+
                     if (!StringUtils.hasText(rawPassword)) {
                         throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
                     }
-
-                    String emailNorm = email.trim().toLowerCase();
 
                     boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(emailNorm, accountId);
                     if (emailExists) {
@@ -103,12 +105,19 @@ public class TenantUserProvisioningFacade {
 
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
-                    tenantUser.setName(name);
-                    tenantUser.setEmail(emailNorm);
+
+                    // ✅ padronização: rename() (trim interno)
+                    tenantUser.rename(name);
+
+                    // ✅ padronização: changeEmail() (normaliza via EmailNormalizer)
+                    tenantUser.changeEmail(emailNorm);
+
                     tenantUser.setPassword(passwordEncoder.encode(rawPassword));
                     tenantUser.setRole(TenantRole.TENANT_OWNER);
+
                     tenantUser.setSuspendedByAccount(false);
                     tenantUser.setSuspendedByAdmin(false);
+
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
 
@@ -205,6 +214,7 @@ public class TenantUserProvisioningFacade {
         );
     }
 
+    // ✅ ESTE MÉTODO É O QUE ESTAVA FALTANDO NO SEU ERRO
     public int restoreAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,

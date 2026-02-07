@@ -1,9 +1,11 @@
 package brito.com.multitenancy001.infrastructure.publicschema.auth;
 
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -13,6 +15,8 @@ import java.util.stream.Collectors;
 @Getter
 @Setter
 public class TenantLoginChallenge {
+
+    private static final Duration DEFAULT_TTL = Duration.ofMinutes(10);
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -34,22 +38,54 @@ public class TenantLoginChallenge {
     @Column(name = "used_at", columnDefinition = "timestamptz")
     private Instant usedAt;
 
-    @PrePersist
-    private void prePersist() {
-        if (this.id == null) this.id = UUID.randomUUID();
-        if (this.candidateAccountIdsCsv == null) this.candidateAccountIdsCsv = "";
-        if (this.email != null) this.email = this.email.trim();
+    // =========================================================
+    // FACTORY (criação explícita; sem @PrePersist)
+    // =========================================================
+    public static TenantLoginChallenge create(Instant now, String email, Set<Long> candidateAccountIds) {
+        if (now == null) throw new IllegalArgumentException("now é obrigatório (use AppClock.instant())");
 
-        // 🚫 Regra: entidade não chama "agora".
-        // ✅ createdAt deve vir da camada de aplicação (AppClock.instant()).
-        if (this.createdAt == null) {
-            throw new IllegalStateException(
-                "TenantLoginChallenge.createdAt é obrigatório (use AppClock.instant() na camada de aplicação)"
-            );
-        }
-        if (this.expiresAt == null) {
-            throw new IllegalStateException("TenantLoginChallenge.expiresAt é obrigatório");
-        }
+        String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
+        if (normalizedEmail == null) throw new IllegalArgumentException("email inválido");
+
+        TenantLoginChallenge c = new TenantLoginChallenge();
+        c.email = normalizedEmail;
+        c.createdAt = now;
+        c.expiresAt = now.plus(DEFAULT_TTL);
+        c.setCandidateAccountIds(candidateAccountIds);
+        return c;
+    }
+
+    public static TenantLoginChallenge create(Instant now, Duration ttl, String email, Set<Long> candidateAccountIds) {
+        if (now == null) throw new IllegalArgumentException("now é obrigatório (use AppClock.instant())");
+        if (ttl == null || ttl.isNegative() || ttl.isZero()) throw new IllegalArgumentException("ttl inválido");
+
+        String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
+        if (normalizedEmail == null) throw new IllegalArgumentException("email inválido");
+
+        TenantLoginChallenge c = new TenantLoginChallenge();
+        c.email = normalizedEmail;
+        c.createdAt = now;
+        c.expiresAt = now.plus(ttl);
+        c.setCandidateAccountIds(candidateAccountIds);
+        return c;
+    }
+
+    // =========================================================
+    // DOMAIN
+    // =========================================================
+    public boolean isExpired(Instant now) {
+        if (now == null) throw new IllegalArgumentException("now é obrigatório");
+        return now.isAfter(expiresAt);
+    }
+
+    public boolean isUsed() {
+        return usedAt != null;
+    }
+
+    public void markUsed(Instant now) {
+        if (now == null) throw new IllegalArgumentException("now é obrigatório");
+        if (this.usedAt != null) return;
+        this.usedAt = now;
     }
 
     public Set<Long> candidateAccountIds() {
@@ -73,9 +109,5 @@ public class TenantLoginChallenge {
                 .sorted()
                 .map(String::valueOf)
                 .collect(Collectors.joining(","));
-    }
-
-    public boolean isUsed() {
-        return usedAt != null;
     }
 }

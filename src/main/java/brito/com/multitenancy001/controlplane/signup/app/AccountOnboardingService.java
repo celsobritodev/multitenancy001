@@ -21,6 +21,7 @@ import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
@@ -209,22 +210,22 @@ public class AccountOnboardingService {
     }
 
     private SignupData validateAndNormalize(SignupCommand cmd) {
-        if (cmd == null) {
-            throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
-        }
+    	 if (cmd == null) {
+    	        throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
+    	    }
 
-        String displayName = safeTrim(cmd.displayName());
-        if (!StringUtils.hasText(displayName)) {
-            throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
-        }
+    	    String displayName = safeTrim(cmd.displayName());
+    	    if (!StringUtils.hasText(displayName)) {
+    	        throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
+    	    }
 
-        String loginEmail = normalizeEmail(cmd.loginEmail());
-        if (!StringUtils.hasText(loginEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-        }
-        if (!looksLikeEmail(loginEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
-        }
+    	    String loginEmail = EmailNormalizer.normalizeOrNull(cmd.loginEmail());
+    	    if (!StringUtils.hasText(loginEmail)) {
+    	        throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+    	    }
+    	    if (!looksLikeEmail(loginEmail)) {
+    	        throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+    	    }
 
         if (cmd.taxIdType() == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
@@ -262,11 +263,6 @@ public class AccountOnboardingService {
 
     private static String safeTrim(String s) {
         return s == null ? null : s.trim();
-    }
-
-    private static String normalizeEmail(String email) {
-        if (email == null) return null;
-        return email.trim().toLowerCase();
     }
 
     private static boolean looksLikeEmail(String email) {

@@ -5,6 +5,7 @@ import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -60,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String authDomain = normalizeLower(jwtTokenProvider.getAuthDomain(jwt));
+        final AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(jwt);
         final String email = normalizeLower(jwtTokenProvider.getEmailFromToken(jwt));
 
         if (!StringUtils.hasText(email)) {
@@ -74,8 +75,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // NORMALIZA authDomain (se vier vazio, isso é token ruim => 401)
-        if (!StringUtils.hasText(authDomain)) {
+        // authDomain ausente => token ruim => 401
+        if (authDomain == null) {
             SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (authDomain)"));
             return;
@@ -87,14 +88,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         boolean needsControlPlane = requiresControlPlane(req);
         boolean needsTenant = requiresTenant(req);
 
-        if (needsControlPlane && "tenant".equals(authDomain)) {
-            // ✅ 403 DIRETO: não lança exception (senão vaza pro dispatcherServlet)
+        if (needsControlPlane && authDomain == AuthDomain.TENANT) {
+            // ✅ 403 DIRETO
             accessDeniedHandler.handle(req, res,
                     new org.springframework.security.access.AccessDeniedException("Tenant token cannot access control plane routes"));
             return;
         }
 
-        if (needsTenant && "controlplane".equals(authDomain)) {
+        if (needsTenant && authDomain == AuthDomain.CONTROLPLANE) {
             // ✅ 403 DIRETO
             accessDeniedHandler.handle(req, res,
                     new org.springframework.security.access.AccessDeniedException("Control plane token cannot access tenant routes"));
@@ -104,7 +105,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // ======================
         // TENANT
         // ======================
-        if ("tenant".equals(authDomain)) {
+        if (authDomain == AuthDomain.TENANT) {
 
             final String tenantSchema = normalize(jwtTokenProvider.getTenantSchemaFromToken(jwt));
             if (!StringUtils.hasText(tenantSchema)) {
@@ -154,7 +155,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // ======================
         // CONTROLPLANE
         // ======================
-        if ("controlplane".equals(authDomain)) {
+        if (authDomain == AuthDomain.CONTROLPLANE) {
 
             String context = normalize(jwtTokenProvider.getContextFromToken(jwt));
             if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
@@ -218,4 +219,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return (t == null) ? null : t.toLowerCase();
     }
 }
-

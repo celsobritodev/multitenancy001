@@ -96,7 +96,26 @@ public final class TenantRolePermissions {
                 TEN_SALE_READ
         )));
 
-        // TENANT_USER existe no enum. Se você quiser que ele seja diferente do READ_ONLY, mapeie aqui.
+        // SUPPORT (tenant) – recomendação: suporte interno sem “poder destrutivo total”
+        // (Se quiser que suporte seja igual a ADMIN, basta apontar pro mesmo set do ADMIN.)
+        MAP.put(TenantRole.TENANT_SUPPORT, unmodifiable(EnumSet.of(
+                TEN_USER_READ,
+                TEN_USER_UPDATE,
+                TEN_USER_SUSPEND,
+                TEN_USER_RESTORE,
+
+                TEN_PRODUCT_READ,
+                TEN_INVENTORY_READ,
+
+                TEN_SALE_READ,
+                TEN_SALE_ISSUES_READ,
+
+                TEN_SETTINGS_READ,
+                TEN_BILLING_READ
+        )));
+
+        // TENANT_USER existe no enum.
+        // Se você quiser que ele seja diferente do READ_ONLY, mapeie aqui.
         // (Se for igual ao READ_ONLY, pode apontar para o mesmo set, mantendo imutável.)
         MAP.put(TenantRole.TENANT_USER, MAP.get(TenantRole.TENANT_READ_ONLY));
 
@@ -108,28 +127,26 @@ public final class TenantRolePermissions {
 
     /**
      * Mantém o mesmo nome do seu método atual.
-     * Retorna Set imutável (consistente com CP).
+     * Retorna Set imutável.
      */
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
         if (role == null) return Set.of();
-
-        Set<TenantPermission> perms = MAP.get(role);
-        if (perms == null) {
-            throw new IllegalStateException("TENANT_ROLE_NOT_MAPPED: " + role);
+        Set<TenantPermission> set = MAP.get(role);
+        if (set == null) {
+            throw new IllegalStateException("Role do Tenant sem mapeamento em TenantRolePermissions: " + role);
         }
-        return perms;
-    }
-
-    private static void assertAllRolesMapped() {
-        for (TenantRole r : TenantRole.values()) {
-            if (!MAP.containsKey(r)) {
-                throw new IllegalStateException("TENANT_ROLE_NOT_MAPPED_IN_MATRIX: " + r);
-            }
-        }
+        return set;
     }
 
     private static Set<TenantPermission> unmodifiable(EnumSet<TenantPermission> set) {
         return Collections.unmodifiableSet(set);
     }
-}
 
+    private static void assertAllRolesMapped() {
+        for (TenantRole role : TenantRole.values()) {
+            if (!MAP.containsKey(role)) {
+                throw new IllegalStateException("Role do Tenant sem mapeamento em TenantRolePermissions: " + role);
+            }
+        }
+    }
+}

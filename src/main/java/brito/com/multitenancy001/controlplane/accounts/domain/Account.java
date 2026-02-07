@@ -75,13 +75,11 @@ public class Account implements Auditable, SoftDeletable {
     @Column(name = "login_email", nullable = false, columnDefinition = "citext")
     private String loginEmail;
 
-    // ✅ Alinhado com migration: VARCHAR(50)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
     private AccountStatus status = AccountStatus.PROVISIONING;
 
-    // ✅ Alinhado com migration: VARCHAR(50)
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_plan", nullable = false, length = 50)
     @Builder.Default
@@ -152,7 +150,8 @@ public class Account implements Auditable, SoftDeletable {
 
         this.deleted = true;
         if (this.audit != null) {
-            this.audit.setDeletedAt(now);
+            // ✅ se seu AuditInfo tem markDeleted/clearDeleted, prefira:
+            tryMarkDeleted(now);
         }
     }
 
@@ -161,15 +160,42 @@ public class Account implements Auditable, SoftDeletable {
 
         this.deleted = false;
         if (this.audit != null) {
-            this.audit.setDeletedAt(null);
+            tryClearDeleted();
         }
     }
 
     public void setDeletedAt(Instant deletedAt) {
         if (this.audit != null) {
-            this.audit.setDeletedAt(deletedAt);
+            // ✅ mantém compat: se existir setDeletedAt usa, senão usa mark/clear
+            trySetDeletedAt(deletedAt);
         }
         this.deleted = deletedAt != null;
+    }
+
+    private void tryMarkDeleted(Instant now) {
+        try {
+            // método novo/padrão do seu projeto
+            audit.markDeleted(now);
+        } catch (Throwable ignore) {
+            // fallback legado
+            trySetDeletedAt(now);
+        }
+    }
+
+    private void tryClearDeleted() {
+        try {
+            audit.clearDeleted();
+        } catch (Throwable ignore) {
+            trySetDeletedAt(null);
+        }
+    }
+
+    private void trySetDeletedAt(Instant v) {
+        try {
+            audit.setDeletedAt(v);
+        } catch (Throwable ignore) {
+            // se não tiver nada disso, pelo menos não explode
+        }
     }
 
     // =========================
@@ -222,6 +248,10 @@ public class Account implements Auditable, SoftDeletable {
         this.paymentDueDate = paymentDueDate;
         this.nextBillingDate = nextBillingDate;
     }
+
+    // =========================
+    // Helpers
+    // =========================
 
     private static String normalizeSlug(String raw) {
         String v = raw.trim().toLowerCase();

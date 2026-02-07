@@ -16,38 +16,37 @@ public class PublicUnitOfWork {
 
     // REQUIRED
     public <T> T tx(Supplier<T> fn) {
-        return publicExecutor.run(() -> transactionExecutor.inPublicTx(fn));
+        return publicExecutor.inPublic(() -> transactionExecutor.inPublicTx(fn));
     }
 
     public void tx(Runnable fn) {
-        publicExecutor.run(() -> transactionExecutor.inPublicTx(fn));
+        publicExecutor.inPublic(() -> transactionExecutor.inPublicTx(fn));
     }
 
     // REQUIRES_NEW
     public <T> T requiresNew(Supplier<T> fn) {
-        return publicExecutor.run(() -> transactionExecutor.inPublicRequiresNew(fn));
+        return publicExecutor.inPublic(() -> transactionExecutor.inPublicRequiresNew(fn));
     }
 
     public void requiresNew(Runnable fn) {
-        publicExecutor.run(() -> transactionExecutor.inPublicRequiresNew(fn));
+        publicExecutor.inPublic(() -> transactionExecutor.inPublicRequiresNew(fn));
     }
 
     // READ ONLY
     public <T> T readOnly(Supplier<T> fn) {
-        return publicExecutor.run(() -> transactionExecutor.inPublicReadOnlyTx(fn));
+        return publicExecutor.inPublic(() -> transactionExecutor.inPublicReadOnlyTx(fn));
     }
 
     public void readOnly(Runnable fn) {
-        publicExecutor.run(() -> transactionExecutor.inPublicReadOnlyTx(fn));
+        publicExecutor.inPublic(() -> transactionExecutor.inPublicReadOnlyTx(fn));
     }
 
     // REQUIRES_NEW READ ONLY
     public <T> T requiresNewReadOnly(Supplier<T> fn) {
-        return publicExecutor.run(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
+        return publicExecutor.inPublic(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 
     public void requiresNewReadOnly(Runnable fn) {
-        publicExecutor.run(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
+        publicExecutor.inPublic(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 }
-

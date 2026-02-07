@@ -3,12 +3,14 @@ package brito.com.multitenancy001.tenant.auth.app;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventAuditService;
 import brito.com.multitenancy001.infrastructure.publicschema.auth.TenantLoginChallenge;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
-import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
@@ -21,6 +23,7 @@ import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmComma
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantSelectionOptionData;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +42,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TenantAuthService {
 
-    private static final String INVALID_USER_MSG = "usuario ou senha invalidos";
+    private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
     private final org.springframework.security.authentication.AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
@@ -64,9 +67,25 @@ public class TenantAuthService {
         return email;
     }
 
-    private static SystemRoleName toSystemRoleOrNull(Object tenantRoleEnum) {
-        if (tenantRoleEnum == null) return null;
-        return SystemRoleName.fromString(tenantRoleEnum.toString());
+    /**
+     * Mantém o método só pra não espalhar lógica/casts:
+     * aqui ele fica tipado e simples (e evita Object + toString()).
+     */
+    private static SystemRoleName toSystemRoleOrNull(TenantRole tenantRole) {
+        if (tenantRole == null) return null;
+
+        // Ajuste os "case" exatamente aos nomes do seu enum TenantRole.
+        return switch (tenantRole) {
+            case TENANT_OWNER -> SystemRoleName.TENANT_OWNER;
+            case TENANT_ADMIN -> SystemRoleName.TENANT_ADMIN;
+            case TENANT_SUPPORT -> SystemRoleName.TENANT_SUPPORT;
+            case TENANT_USER -> SystemRoleName.TENANT_USER;
+            case TENANT_PRODUCT_MANAGER -> SystemRoleName.TENANT_PRODUCT_MANAGER;
+            case TENANT_SALES_MANAGER -> SystemRoleName.TENANT_SALES_MANAGER;
+            case TENANT_BILLING_MANAGER -> SystemRoleName.TENANT_BILLING_MANAGER;
+            case TENANT_READ_ONLY -> SystemRoleName.TENANT_READ_ONLY;
+            case TENANT_OPERATOR -> SystemRoleName.TENANT_OPERATOR;
+        };
     }
 
     /**
@@ -90,9 +109,9 @@ public class TenantAuthService {
         final String password = cmd.password();
 
         authEventAuditService.record(
-                "tenant",
-                "LOGIN_INIT",
-                "ATTEMPT",
+                AuthDomain.TENANT,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.ATTEMPT,
                 email,
                 null,
                 null,
@@ -102,14 +121,14 @@ public class TenantAuthService {
 
         try {
             // PUBLIC — descobre quais contas (tenants) têm esse email cadastrado
-            List<LoginIdentityRow> identities = publicExecutor.run(() ->
+            List<LoginIdentityRow> identities = publicExecutor.inPublic(() ->
                     loginIdentityResolver.findTenantAccountsByEmail(email)
             );
 
             if (identities == null || identities.isEmpty()) {
-                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                         "{\"reason\":\"no_candidates\"}");
-                throw new BadCredentialsException(INVALID_USER_MSG);
+                throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
             LinkedHashSet<Long> candidateAccountIds = identities.stream()
@@ -118,9 +137,9 @@ public class TenantAuthService {
                     .collect(Collectors.toCollection(LinkedHashSet::new));
 
             if (candidateAccountIds.isEmpty()) {
-                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                         "{\"reason\":\"empty_candidate_ids\"}");
-                throw new BadCredentialsException(INVALID_USER_MSG);
+                throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
             // Se só tem 1 conta, autentica direto
@@ -130,7 +149,7 @@ public class TenantAuthService {
 
                 TenantLoginResult result = doTenantAuthentication(account, email, password);
 
-                authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, null, accountId, account.schemaName(),
                         "{\"mode\":\"single_tenant\"}");
 
                 return result;
@@ -152,9 +171,9 @@ public class TenantAuthService {
             }
 
             if (allowedAccountIds.isEmpty()) {
-                authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                         "{\"reason\":\"bad_credentials_multi_tenant\"}");
-                throw new BadCredentialsException(INVALID_USER_MSG);
+                throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
             // Se só 1 tenant validou senha, entra direto nele
@@ -164,7 +183,7 @@ public class TenantAuthService {
 
                 TenantLoginResult result = doTenantAuthentication(account, email, password);
 
-                authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, null, accountId, account.schemaName(),
                         "{\"mode\":\"multi_tenant_but_single_match\"}");
 
                 return result;
@@ -178,7 +197,7 @@ public class TenantAuthService {
                 details.add(tryResolveOption(id));
             }
 
-            authEventAuditService.record("tenant", "TENANT_SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TENANT_SELECTION_REQUIRED, AuditOutcome.SUCCESS, email, null, null, null,
                     "{\"challengeId\":\"" + challengeId + "\",\"candidates\":" + allowedAccountIds.size() + "}");
 
             return new TenantLoginResult.TenantSelectionRequired(
@@ -187,15 +206,15 @@ public class TenantAuthService {
             );
 
         } catch (BadCredentialsException e) {
-            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"bad_credentials\"}");
             throw e;
         } catch (ApiException e) {
-            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"api_exception\",\"code\":\"" + e.getError() + "\"}");
             throw e;
         } catch (Exception e) {
-            authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"unexpected\"}");
             throw e;
         }
@@ -216,14 +235,14 @@ public class TenantAuthService {
         TenantLoginChallenge challenge = tenantLoginChallengeService.requireValid(challengeId);
         final String email = challenge.getEmail();
 
-        authEventAuditService.record("tenant", "LOGIN_CONFIRM", "ATTEMPT", email, null, null, null,
+        authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.ATTEMPT, email, null, null, null,
                 "{\"challengeId\":\"" + challengeId + "\"}");
 
         Long accountId = cmd.accountId();
         String slug = StringUtils.hasText(cmd.slug()) ? cmd.slug().trim() : null;
 
         if (accountId == null && slug == null) {
-            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"missing_selection\"}");
             throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
         }
@@ -233,14 +252,14 @@ public class TenantAuthService {
                 : accountResolver.resolveActiveAccountBySlug(slug);
 
         if (account == null || account.id() == null) {
-            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"account_not_found\"}");
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
 
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
-            authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, account.id(), account.schemaName(),
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, account.id(), account.schemaName(),
                     "{\"reason\":\"account_not_in_challenge\"}");
             throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
         }
@@ -249,7 +268,7 @@ public class TenantAuthService {
 
         JwtResult jwt = issueJwtForAccountAndEmail(account, email);
 
-        authEventAuditService.record("tenant", "LOGIN_SUCCESS", "SUCCESS", email, jwt.userId(), account.id(), account.schemaName(),
+        authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, email, jwt.userId(), account.id(), account.schemaName(),
                 "{\"mode\":\"challenge_confirm\"}");
 
         return jwt;
@@ -261,39 +280,39 @@ public class TenantAuthService {
             throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
         }
 
-        authEventAuditService.record("tenant", "TOKEN_REFRESH", "ATTEMPT", null, null, null, null,
+        authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.ATTEMPT, null, null, null, null,
                 "{\"stage\":\"start\"}");
 
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.FAILURE, null, null, null, null,
                     "{\"reason\":\"invalid_token\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
-        String authDomain = jwtTokenProvider.getAuthDomain(refreshToken);
-        if (!SecurityConstants.AuthDomains.REFRESH.equals(authDomain)) {
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+        AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
+        if (authDomain != AuthDomain.REFRESH) {
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.FAILURE, null, null, null, null,
                     "{\"reason\":\"invalid_auth_domain\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
         if (!StringUtils.hasText(tenantSchema)) {
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, null,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.FAILURE, null, null, null, null,
                     "{\"reason\":\"missing_tenant_schema\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         String email = EmailNormalizer.normalizeOrNull(jwtTokenProvider.getEmailFromToken(refreshToken));
         if (!StringUtils.hasText(email)) {
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", null, null, null, tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.FAILURE, null, null, null, tenantSchema,
                     "{\"reason\":\"missing_email\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
         }
 
         Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
         if (accountId == null) {
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "FAILURE", email, null, null, tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.FAILURE, email, null, null, tenantSchema,
                     "{\"reason\":\"missing_account_id\"}");
             throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
         }
@@ -339,7 +358,7 @@ public class TenantAuthService {
                     tenantSchema
             );
 
-            authEventAuditService.record("tenant", "TOKEN_REFRESH", "SUCCESS", result.email(), result.userId(), result.accountId(), result.tenantSchema(),
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.SUCCESS, result.email(), result.userId(), result.accountId(), result.tenantSchema(),
                     "{\"stage\":\"completed\"}");
 
             return result;
@@ -453,25 +472,25 @@ public class TenantAuthService {
                         tenantSchema
                 );
 
-                authEventAuditService.record("tenant", "LOGIN_SUCCESS", "SUCCESS", user.getEmail(), user.getId(), account.id(), tenantSchema,
+                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, user.getEmail(), user.getId(), account.id(), tenantSchema,
                         "{\"mode\":\"password\"}");
 
                 return new TenantLoginResult.LoginSuccess(jwt);
             });
         } catch (BadCredentialsException e) {
-            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
                     "{\"reason\":\"bad_credentials\"}");
             throw e;
         } catch (UsernameNotFoundException e) {
-            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
                     "{\"reason\":\"user_not_found\"}");
-            throw new BadCredentialsException(INVALID_USER_MSG);
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
         } catch (InternalAuthenticationServiceException e) {
-            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
                     "{\"reason\":\"internal_auth\"}");
-            throw new BadCredentialsException(INVALID_USER_MSG);
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
         } catch (Exception e) {
-            authEventAuditService.record("tenant", "LOGIN_FAILURE", "FAILURE", email, null, account.id(), tenantSchema,
+            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
                     "{\"reason\":\"unexpected\"}");
             throw new ApiException("AUTH_ERROR", "Falha ao autenticar", 500);
         }

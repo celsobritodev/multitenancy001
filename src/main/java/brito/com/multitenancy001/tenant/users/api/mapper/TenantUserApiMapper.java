@@ -3,6 +3,8 @@ package brito.com.multitenancy001.tenant.users.api.mapper;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantActorRef;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse;
@@ -17,10 +19,22 @@ import java.util.Locale;
 @Component
 public class TenantUserApiMapper {
 
-    private static SystemRoleName toSystemRoleOrNull(Object tenantRoleEnum) {
-        if (tenantRoleEnum == null) return null;
-        return SystemRoleName.fromString(tenantRoleEnum.toString());
-    }
+	private static SystemRoleName toSystemRoleOrNull(TenantRole tenantRole) {
+	    if (tenantRole == null) return null;
+
+	    return switch (tenantRole) {
+	        case TENANT_OWNER -> SystemRoleName.TENANT_OWNER;
+	        case TENANT_ADMIN -> SystemRoleName.TENANT_ADMIN;
+	        case TENANT_SUPPORT -> SystemRoleName.TENANT_SUPPORT;
+	        case TENANT_USER -> SystemRoleName.TENANT_USER;
+	        case TENANT_PRODUCT_MANAGER -> SystemRoleName.TENANT_PRODUCT_MANAGER;
+	        case TENANT_SALES_MANAGER -> SystemRoleName.TENANT_SALES_MANAGER;
+	        case TENANT_BILLING_MANAGER -> SystemRoleName.TENANT_BILLING_MANAGER;
+	        case TENANT_READ_ONLY -> SystemRoleName.TENANT_READ_ONLY;
+	        case TENANT_OPERATOR -> SystemRoleName.TENANT_OPERATOR;
+	    };
+	}
+
 
     public TenantUserSummaryResponse toSummary(TenantUser tenantUser) {
         boolean enabled =
@@ -60,9 +74,6 @@ public class TenantUserApiMapper {
         );
     }
 
-    /**
-     * ✅ Assinatura REAL do seu DTO TenantUserDetailsResponse (sem permissions / audit extras).
-     */
     public TenantUserDetailsResponse toDetails(TenantUser u) {
         boolean enabled = u.isEnabled();
         SystemRoleName role = toSystemRoleOrNull(u.getRole());
@@ -86,9 +97,6 @@ public class TenantUserApiMapper {
         );
     }
 
-    /**
-     * ✅ Lista básica (não-owner): sem permissions/audit; mantém shape do DTO.
-     */
     public TenantUserListItemResponse toListItemBasic(TenantUser u) {
         boolean enabled = u.isEnabled();
         SystemRoleName role = toSystemRoleOrNull(u.getRole());
@@ -100,27 +108,23 @@ public class TenantUserApiMapper {
                 List.of(),
                 u.isMustChangePassword(),
                 u.getOrigin(),
-                null,      // lastLoginAt (somente owner)
-                null,      // createdBy (somente owner)
+                null,
+                null,
                 u.isSuspendedByAccount(),
                 u.isSuspendedByAdmin(),
                 enabled
         );
     }
 
-    /**
-     * ✅ Lista rica (owner): inclui permissions + audit/meta.
-     */
     public TenantUserListItemResponse toListItemRich(TenantUser u) {
         boolean enabled = u.isEnabled();
 
-        List<String> perms = (u.getPermissions() == null)
-                ? List.of()
-                : u.getPermissions().stream()
-                        .filter(s -> s != null && !s.isBlank())
-                        .map(s -> s.trim().toUpperCase(Locale.ROOT))
-                        .sorted(Comparator.naturalOrder())
-                        .toList();
+        List<String> perms = u.getPermissions().stream()
+                .filter(p -> p != null)
+                .map(TenantPermission::name)
+                .map(s -> s.trim().toUpperCase(Locale.ROOT))
+                .sorted(Comparator.naturalOrder())
+                .toList();
 
         TenantActorRef createdBy = mapCreatedBy(u.getAudit());
         SystemRoleName role = toSystemRoleOrNull(u.getRole());

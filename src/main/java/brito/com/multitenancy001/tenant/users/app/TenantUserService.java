@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.users.app;
 
 import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
@@ -31,10 +32,6 @@ public class TenantUserService {
     private final AppClock appClock;
     private final TransactionExecutor transactionExecutor;
 
-    // =========================================================
-    // ERROR CODES (padrão)
-    // =========================================================
-
     private static final String BUILT_IN_USER_IMMUTABLE = "BUILT_IN_USER_IMMUTABLE";
     private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
 
@@ -49,12 +46,8 @@ public class TenantUserService {
             if (policy == null) return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
 
             return switch (policy) {
-                // “seats in use” normalmente ignora suspensões, mas ignora deletados
                 case SEATS_IN_USE -> tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
-
-                // “enabled” = não deletado + não suspenso por admin/conta
                 case SEATS_ENABLED -> tenantUserRepository.countEnabledUsersByAccount(accountId);
-
                 default -> tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
             };
         });
@@ -79,7 +72,7 @@ public class TenantUserService {
             String avatarUrl,
             String locale,
             String timezone,
-            LinkedHashSet<String> permissionNames,
+            LinkedHashSet<TenantPermission> requestedPermissions,
             Boolean mustChangePassword,
             EntityOrigin origin
     ) {
@@ -91,9 +84,8 @@ public class TenantUserService {
             if (!StringUtils.hasText(rawPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
             if (role == null) throw new ApiException("INVALID_ROLE", "Role é obrigatória", 400);
 
-            String normEmail = email.trim().toLowerCase();
-
-            if (!normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
+            String normEmail = EmailNormalizer.normalizeOrNull(email);
+            if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
                 throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
             }
             if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
@@ -107,18 +99,21 @@ public class TenantUserService {
 
             TenantUser user = new TenantUser();
             user.setAccountId(accountId);
-            user.setName(name.trim());
-            user.setEmail(normEmail);
+
+            // ✅ padronizado
+            user.rename(name);
+
+            // ✅ padronizado
+            user.changeEmail(normEmail);
+
             user.setPassword(passwordEncoder.encode(rawPassword));
             user.setRole(role);
 
             user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
 
-            // ✅ grava mustChangePassword (default false)
             user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
             Instant now = appClock.instant();
 
-            // se NÃO exige troca, registra que a senha já foi “definida”
             if (!user.isMustChangePassword()) {
                 user.setPasswordChangedAt(now);
             } else {
@@ -128,28 +123,21 @@ public class TenantUserService {
             user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
             user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
 
-            // ✅ persiste locale/timezone recebidos (trim + vazio -> null)
             user.setLocale(StringUtils.hasText(locale) ? locale.trim() : null);
             user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : null);
 
             user.setSuspendedByAccount(false);
             user.setSuspendedByAdmin(false);
 
-            // Permissões: base da role + extras desejadas
+            // ✅ Permissões: base do papel + extras (TIPADO)
             Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
             Set<TenantPermission> desired = new LinkedHashSet<>();
 
-            if (permissionNames != null && !permissionNames.isEmpty()) {
-                for (String p : permissionNames) {
-                    if (!StringUtils.hasText(p)) continue;
-                    try {
-                        desired.add(TenantPermission.valueOf(p.trim()));
-                    } catch (IllegalArgumentException ex) {
-                        throw new ApiException("INVALID_PERMISSION", "Permissão inválida: " + p, 400);
-                    }
-                }
+            if (requestedPermissions != null && !requestedPermissions.isEmpty()) {
+                desired.addAll(requestedPermissions);
             }
 
+            // ✅ FAIL-FAST tipado (garante TEN_* e invariantes)
             desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
 
             Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
@@ -157,7 +145,7 @@ public class TenantUserService {
 
             user.setPermissions(finalPerms);
 
-            // ✅ mantém comportamento atual: fallback só se continuar vazio/nulo
+            // defaults (mantém teu comportamento)
             if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
             if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
 
@@ -193,7 +181,10 @@ public class TenantUserService {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
 
-        String normEmail = email.trim().toLowerCase();
+        String normEmail = EmailNormalizer.normalizeOrNull(email);
+        if (!StringUtils.hasText(normEmail)) {
+            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        }
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(normEmail, accountId)
@@ -229,16 +220,16 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // BUILT_IN: não pode suspender
             requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
 
-            // Invariante: não pode suspender o último OWNER ativo
             if (suspended && isActiveOwner(user)) {
                 requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido suspender o último TENANT_OWNER ativo");
             }
 
             int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
             if (updated == 0) throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404);
+
+            return null;
         });
     }
 
@@ -250,16 +241,16 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // BUILT_IN: não pode suspender
             requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
 
-            // Invariante: não pode suspender o último OWNER ativo
             if (suspended && isActiveOwner(user)) {
                 requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido suspender o último TENANT_OWNER ativo");
             }
 
             int updated = tenantUserRepository.setSuspendedByAccount(accountId, userId, suspended);
             if (updated == 0) throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404);
+
+            return null;
         });
     }
 
@@ -271,7 +262,7 @@ public class TenantUserService {
             String avatarUrl,
             String locale,
             String timezone,
-            Instant now
+            Instant now // mantido por compat com call-sites (domínio não usa "agora" aqui)
     ) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
@@ -280,18 +271,13 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // BUILT_IN: não pode mudar perfil
             requireNotBuiltInForMutation(user, "Não é permitido alterar perfil de usuário BUILT_IN");
 
-            if (StringUtils.hasText(name)) user.setName(name.trim());
+            if (StringUtils.hasText(name)) user.rename(name);
             if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
             if (StringUtils.hasText(locale)) user.setLocale(locale.trim());
             if (StringUtils.hasText(timezone)) user.setTimezone(timezone.trim());
 
-            // ✅ avatarUrl: suporta atualizar OU limpar
-            // - null  -> não altera
-            // - ""    -> limpa (salva null)
-            // - "xxx" -> salva trim()
             if (avatarUrl != null) {
                 String trimmed = avatarUrl.trim();
                 user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
@@ -314,7 +300,6 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // ✅ senha pode mudar mesmo se BUILT_IN
             Instant now = appClock.instant();
 
             user.setPassword(passwordEncoder.encode(newPassword));
@@ -346,15 +331,16 @@ public class TenantUserService {
                 throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
             }
 
-            // Compat/segurança: se veio email no token, confere
+            // ✅ padronizado: normaliza ambos e compara
             if (StringUtils.hasText(email) && user.getEmail() != null) {
-                String tokenLogin = email.trim().toLowerCase();
-                if (!user.getEmail().trim().equalsIgnoreCase(tokenLogin)) {
+                String tokenLogin = EmailNormalizer.normalizeOrNull(email);
+                String userEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
+
+                if (!StringUtils.hasText(tokenLogin) || !StringUtils.hasText(userEmail) || !userEmail.equals(tokenLogin)) {
                     throw new ApiException("TOKEN_INVALID", "Token inválido", 400);
                 }
             }
 
-            // ✅ senha pode mudar mesmo se BUILT_IN
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setMustChangePassword(false);
             user.setPasswordChangedAt(now);
@@ -363,6 +349,7 @@ public class TenantUserService {
             user.setPasswordResetExpires(null);
 
             tenantUserRepository.save(user);
+            return null;
         });
     }
 
@@ -378,12 +365,10 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            if (user.isDeleted()) return;
+            if (user.isDeleted()) return null;
 
-            // BUILT_IN: não pode excluir
             requireNotBuiltInForMutation(user, "Não é permitido excluir usuário BUILT_IN");
 
-            // Invariante: não pode excluir o último OWNER ativo
             if (isActiveOwner(user)) {
                 requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido excluir o último TENANT_OWNER ativo");
             }
@@ -391,6 +376,7 @@ public class TenantUserService {
             Instant now = appClock.instant();
             user.softDelete(now, appClock.epochMillis());
             tenantUserRepository.save(user);
+            return null;
         });
     }
 
@@ -402,7 +388,6 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // ✅ restore pode (inclusive BUILT_IN)
             user.restore();
             return tenantUserRepository.save(user);
         });
@@ -416,15 +401,14 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // BUILT_IN: não pode hard delete
             requireNotBuiltInForMutation(user, "Não é permitido hard-delete de usuário BUILT_IN");
 
-            // Se ainda está ativo e é owner, não pode remover o último owner ativo
             if (!user.isDeleted() && isActiveOwner(user)) {
                 requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido excluir o último TENANT_OWNER ativo");
             }
 
             tenantUserRepository.delete(user);
+            return null;
         });
     }
 
@@ -449,7 +433,6 @@ public class TenantUserService {
             TenantUser from = tenantUserRepository.findEnabledByIdAndAccountId(fromUserId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário origem não encontrado/habilitado", 404));
 
-            // BUILT_IN: não pode transferir role
             requireNotBuiltInForMutation(from, "Não é permitido transferir ownership a partir de usuário BUILT_IN");
 
             if (from.getRole() == null || !from.getRole().isTenantOwner()) {
@@ -459,19 +442,18 @@ public class TenantUserService {
             TenantUser to = tenantUserRepository.findEnabledByIdAndAccountId(toUserId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário destino não encontrado/habilitado", 404));
 
-            // BUILT_IN: não pode receber role
             requireNotBuiltInForMutation(to, "Não é permitido transferir ownership para usuário BUILT_IN");
 
-            // troca roles (teu padrão)
             from.setRole(TenantRole.TENANT_ADMIN);
             to.setRole(TenantRole.TENANT_OWNER);
 
-            // zera permissões custom e volta base do papel (evita “herdar” extras indevidos)
+            // volta base do papel
             from.setPermissions(new LinkedHashSet<>(TenantRolePermissions.permissionsFor(from.getRole())));
             to.setPermissions(new LinkedHashSet<>(TenantRolePermissions.permissionsFor(to.getRole())));
 
             tenantUserRepository.save(from);
             tenantUserRepository.save(to);
+            return null;
         });
     }
 
@@ -507,19 +489,16 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
-            // ✅ valida senha atual
             if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
                 throw new ApiException("CURRENT_PASSWORD_INVALID", "Senha atual inválida", 400);
             }
 
             Instant now = appClock.instant();
 
-            // ✅ senha pode mudar mesmo se BUILT_IN
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setMustChangePassword(false);
             user.setPasswordChangedAt(now);
 
-            // ✅ limpeza compatível com teu fluxo atual
             user.setPasswordResetToken(null);
             user.setPasswordResetExpires(null);
 
@@ -538,9 +517,6 @@ public class TenantUserService {
         }
     }
 
-    /**
-     * OWNER "ativo" = enabled + role.isTenantOwner()
-     */
     private boolean isActiveOwner(TenantUser user) {
         if (user == null) return false;
         if (user.isDeleted()) return false;
@@ -549,14 +525,8 @@ public class TenantUserService {
         return user.getRole() != null && user.getRole().isTenantOwner();
     }
 
-    /**
-     * Invariante: sempre deve existir >= 1 TENANT_OWNER ativo.
-     * Este método deve ser chamado SOMENTE quando o user-alvo é OWNER ATIVO e a ação vai desativá-lo (suspender/deletar).
-     */
     private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, Long removingUserId, String message) {
         long owners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
-
-        // Se só tem 1 owner ativo, remover/suspender ele quebra a regra.
         if (owners <= 1) {
             throw new ApiException(TENANT_OWNER_REQUIRED, message, 409);
         }

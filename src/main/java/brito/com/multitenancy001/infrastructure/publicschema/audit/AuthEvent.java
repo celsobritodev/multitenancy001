@@ -1,5 +1,9 @@
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomainConverter;
+import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,7 +24,7 @@ public class AuthEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "occurred_at", nullable = false)
+    @Column(name = "occurred_at", nullable = false, columnDefinition = "timestamptz")
     private Instant occurredAt;
 
     @Column(name = "request_id")
@@ -39,14 +43,17 @@ public class AuthEvent {
     @Column(name = "user_agent")
     private String userAgent;
 
-    @Column(name = "auth_domain")
-    private String authDomain;
+    @Convert(converter = AuthDomainConverter.class)
+    @Column(name = "auth_domain", length = 30)
+    private AuthDomain authDomain;
 
-    @Column(name = "event_type", nullable = false)
-    private String eventType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 50)
+    private AuthEventType eventType;
 
-    @Column(name = "outcome", nullable = false)
-    private String outcome;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "outcome", nullable = false, length = 20)
+    private AuditOutcome outcome;
 
     @Column(name = "principal_email")
     private String principalEmail;

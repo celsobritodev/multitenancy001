@@ -32,15 +32,19 @@ public class AccountJobSchedule {
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
-    @Column(name = "last_run_at")
+    // ✅ Padronizado: Instant -> timestamptz
+    @Column(name = "last_run_at", columnDefinition = "timestamptz")
     private Instant lastRunAt;
 
-    @Column(name = "next_run_at")
+    // ✅ Padronizado: Instant -> timestamptz
+    @Column(name = "next_run_at", columnDefinition = "timestamptz")
     private Instant nextRunAt;
 
-    @Column(name = "created_at", nullable = false)
+    // ✅ Padronizado: Instant -> timestamptz
+    @Column(name = "created_at", nullable = false, columnDefinition = "timestamptz")
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    // ✅ Padronizado: Instant -> timestamptz
+    @Column(name = "updated_at", nullable = false, columnDefinition = "timestamptz")
     private Instant updatedAt;
 }

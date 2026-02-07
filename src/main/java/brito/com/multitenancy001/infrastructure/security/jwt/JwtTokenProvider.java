@@ -1,7 +1,9 @@
 package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
 import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.time.AppClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -76,7 +78,7 @@ public class JwtTokenProvider {
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN, "CONTROLPLANE")
+                .claim(CLAIM_AUTH_DOMAIN,  SecurityConstants.AuthDomains.CONTROLPLANE)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
@@ -96,7 +98,7 @@ public class JwtTokenProvider {
                 .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN, "TENANT")
+                .claim(CLAIM_AUTH_DOMAIN,  SecurityConstants.AuthDomains.TENANT)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .claim(CLAIM_USER_ID, user.getUserId())
@@ -115,7 +117,7 @@ public class JwtTokenProvider {
     public String generateRefreshToken(String email, String context, Long accountId) {
         return Jwts.builder()
                 .subject(email)
-                .claim(CLAIM_AUTH_DOMAIN, "REFRESH")
+                .claim(CLAIM_AUTH_DOMAIN,SecurityConstants.AuthDomains.REFRESH)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
@@ -129,7 +131,7 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(email)
-                .claim(CLAIM_AUTH_DOMAIN, "PASSWORD_RESET")
+                .claim(CLAIM_AUTH_DOMAIN,SecurityConstants.AuthDomains.PASSWORD_RESET)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
@@ -158,12 +160,19 @@ public class JwtTokenProvider {
 
         String authDomain = getAuthDomain(token);
 
-        if ("TENANT".equals(authDomain) && Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+        if (SecurityConstants.AuthDomains.is(authDomain, AuthDomain.TENANT)
+                && Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+
             throw new JwtException("Invalid context for TENANT token: public");
         }
 
         return context;
     }
+    
+    public AuthDomain getAuthDomainEnum(String token) {
+        return SecurityConstants.AuthDomains.parseOrNull(getAuthDomain(token));
+    }
+
 
     public String getTenantSchemaFromToken(String token) {
         return getContextFromToken(token);
@@ -237,11 +246,12 @@ public class JwtTokenProvider {
     }
 
     public boolean isControlPlaneToken(String token) {
-        return "CONTROLPLANE".equals(getAuthDomain(token));
+        return SecurityConstants.AuthDomains.is(getAuthDomain(token), AuthDomain.CONTROLPLANE);
     }
 
+
     public boolean isTenantToken(String token) {
-        return "TENANT".equals(getAuthDomain(token));
+        return SecurityConstants.AuthDomains.is(getAuthDomain(token), AuthDomain.TENANT);
     }
 }
 

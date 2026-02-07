@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.users.api.dto;
 
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -20,8 +21,7 @@ import java.util.LinkedHashSet;
  * Observações:
  * - locale/timezone são opcionais (defaults são aplicados no service).
  * - mustChangePassword é opcional (default false).
- * - permissions aqui são strings TEN_* (extras), se você quiser tipar isso com enum,
- *   podemos evoluir depois (mas hoje mantém compatibilidade).
+ * - ✅ permissions agora são TIPADAS (enum TenantPermission).
  */
 @Builder
 public record TenantUserCreateRequest(
@@ -45,12 +45,8 @@ public record TenantUserCreateRequest(
         @NotNull(message = "Role é obrigatória")
         TenantRole role,
 
-        LinkedHashSet<
-                @Pattern(
-                        regexp = "^TEN_[A-Z0-9_]+$",
-                        message = "Permission must follow TEN_* pattern (e.g. TEN_USER_CREATE)"
-                )
-                String> permissions,
+        // ✅ TIPADO
+        LinkedHashSet<@NotNull(message = "Permission não pode ser null") TenantPermission> permissions,
 
         @Pattern(regexp = ValidationPatterns.PHONE_PATTERN, message = "Telefone inválido")
         @Size(max = 20, message = "Telefone não pode exceder 20 caracteres")
@@ -67,7 +63,7 @@ public record TenantUserCreateRequest(
 
         Boolean mustChangePassword,
 
-        EntityOrigin  origin
+        EntityOrigin origin
 
 ) {
     public TenantUserCreateRequest {
@@ -77,6 +73,6 @@ public record TenantUserCreateRequest(
         if (avatarUrl != null) avatarUrl = avatarUrl.trim();
         if (locale != null) locale = locale.trim();
         if (timezone != null) timezone = timezone.trim();
+        if (permissions == null) permissions = new LinkedHashSet<>();
     }
 }
-

@@ -20,7 +20,7 @@ public class AccountResolver {
     private final PublicExecutor publicExecutor;
 
     public AccountSnapshot resolveActiveAccountBySlug(String slug) {
-        return publicExecutor.run(() -> {
+        return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
@@ -40,7 +40,7 @@ public class AccountResolver {
     }
 
     private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
-        return publicExecutor.run(() -> {
+        return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
@@ -68,6 +68,4 @@ public class AccountResolver {
 
         return false;
     }
-
 }
-

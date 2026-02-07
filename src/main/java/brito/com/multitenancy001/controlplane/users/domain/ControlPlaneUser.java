@@ -22,8 +22,8 @@ import java.util.Set;
 @EntityListeners(AuditEntityListener.class)
 @Getter
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder(toBuilder = true)
 @ToString(exclude = {"account", "password", "explicitPermissions"})
 public class ControlPlaneUser implements Auditable, SoftDeletable {
 
@@ -106,14 +106,54 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     @Builder.Default
     private Set<ControlPlanePermission> explicitPermissions = new LinkedHashSet<>();
 
-    @PrePersist
-    @PreUpdate
-    private void normalize() {
-        this.email = EmailNormalizer.normalizeOrNull(this.email);
-        if (this.name != null) this.name = this.name.trim();
+    // =========================================================
+    // FACTORY (criação explícita, sem @PrePersist/@PreUpdate)
+    // =========================================================
+    public static ControlPlaneUser createAdminUser(
+            Account account,
+            String name,
+            String email,
+            String passwordHash,
+            ControlPlaneRole role,
+            EntityOrigin origin
+    ) {
+        if (account == null) throw new IllegalArgumentException("account é obrigatório");
+        if (passwordHash == null || passwordHash.isBlank()) throw new IllegalArgumentException("password hash é obrigatório");
 
-        if (this.email != null && this.email.isBlank()) this.email = null;
-        if (this.name != null && this.name.isBlank()) this.name = null;
+        String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
+        if (normalizedEmail == null) throw new IllegalArgumentException("email inválido");
+
+        String normalizedName = normalizeName(name);
+        if (normalizedName == null) throw new IllegalArgumentException("name é obrigatório");
+
+        return ControlPlaneUser.builder()
+                .account(account)
+                .name(normalizedName)
+                .email(normalizedEmail)
+                .password(passwordHash)
+                .role(role)
+                .origin(origin == null ? EntityOrigin.ADMIN : origin)
+                .mustChangePassword(false)
+                .deleted(false)
+                .suspendedByAccount(false)
+                .suspendedByAdmin(false)
+                .build();
+    }
+
+    public static ControlPlaneUser createBuiltInUser(
+            Account account,
+            String name,
+            String email,
+            String passwordHash,
+            ControlPlaneRole role
+    ) {
+        return createAdminUser(account, name, email, passwordHash, role, EntityOrigin.BUILT_IN);
+    }
+
+    private static String normalizeName(String name) {
+        if (name == null) return null;
+        String trimmed = name.trim();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     @Override
@@ -149,8 +189,9 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     }
 
     public void rename(String newName) {
-        if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
-        this.name = newName.trim();
+        String normalized = normalizeName(newName);
+        if (normalized == null) throw new IllegalArgumentException("name é obrigatório");
+        this.name = normalized;
     }
 
     public void changeEmail(String newEmail) {
@@ -222,7 +263,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     }
 
     public Set<ControlPlanePermission> getExplicitPermissions() {
-        return Set.copyOf(explicitPermissions);
+        return explicitPermissions == null ? Set.of() : Set.copyOf(explicitPermissions);
     }
 
     public Set<ControlPlanePermission> getPermissions() {
@@ -231,14 +272,17 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
 
     public void grantExplicitPermission(ControlPlanePermission p) {
         PermissionScopeValidator.requireControlPlanePermission(p);
+        if (this.explicitPermissions == null) this.explicitPermissions = new LinkedHashSet<>();
         this.explicitPermissions.add(p);
     }
 
     public void revokeExplicitPermission(ControlPlanePermission p) {
+        if (this.explicitPermissions == null) return;
         this.explicitPermissions.remove(p);
     }
 
     public void replaceExplicitPermissions(Set<ControlPlanePermission> newPermissions) {
+        if (this.explicitPermissions == null) this.explicitPermissions = new LinkedHashSet<>();
         this.explicitPermissions.clear();
         if (newPermissions == null || newPermissions.isEmpty()) return;
 

@@ -6,6 +6,8 @@ import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsService;
@@ -16,6 +18,7 @@ import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.api.dto.*;
 import brito.com.multitenancy001.tenant.users.api.mapper.TenantUserApiMapper;
@@ -42,14 +45,8 @@ public class TenantUserFacade {
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
     private final AccountEntitlementsService accountEntitlementsService;
-
     private final TenantExecutor tenantExecutor;
-
     private final SecurityAuditService securityAuditService;
-
-    // =========================================================
-    // CONTROLLER METHODS
-    // =========================================================
 
     public void transferTenantOwner(Long toUserId) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -88,7 +85,7 @@ public class TenantUserFacade {
         String timezone = (req.timezone() == null) ? null : req.timezone().trim();
         if (timezone != null && timezone.isBlank()) timezone = null;
 
-        final LinkedHashSet<String> perms =
+        final LinkedHashSet<TenantPermission> perms =
                 (req.permissions() == null || req.permissions().isEmpty())
                         ? null
                         : new LinkedHashSet<>(req.permissions());
@@ -128,11 +125,6 @@ public class TenantUserFacade {
         });
     }
 
-    /**
-     * ✅ MUDOU: agora retorna wrapper com entitlements + lista.
-     * - TENANT_OWNER: lista rica + entitlements
-     * - outros: lista básica (compatível) e entitlements=null
-     */
     public TenantUsersListResponse listTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
         String schema = securityUtils.getCurrentSchema();
@@ -243,17 +235,13 @@ public class TenantUserFacade {
         });
     }
 
-    // =========================================================
-    // PASSWORD RESET (PUBLIC -> TENANT) + SECURITY AUDIT
-    // =========================================================
-
     public String generatePasswordResetToken(String slug, String email) {
         if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
         if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
 
         securityAuditService.record(
-                "PASSWORD_RESET_REQUESTED",
-                "ATTEMPT",
+                SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
+                AuditOutcome.ATTEMPT,
                 null,
                 null,
                 email,
@@ -280,17 +268,14 @@ public class TenantUserFacade {
                 );
 
                 user.setPasswordResetToken(t);
-
-                // ✅ Instant não tem plusHours; use Duration
                 user.setPasswordResetExpires(appClock.instant().plus(Duration.ofHours(1)));
-
                 tenantUserService.save(user);
                 return t;
             });
 
             securityAuditService.record(
-                    "PASSWORD_RESET_REQUESTED",
-                    "SUCCESS",
+                    SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
+                    AuditOutcome.SUCCESS,
                     null,
                     null,
                     email,
@@ -304,8 +289,8 @@ public class TenantUserFacade {
 
         } catch (Exception e) {
             securityAuditService.record(
-                    "PASSWORD_RESET_REQUESTED",
-                    "FAILURE",
+                    SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
+                    AuditOutcome.FAILURE,
                     null,
                     null,
                     email,
@@ -327,8 +312,8 @@ public class TenantUserFacade {
         String email = jwtTokenProvider.getEmailFromToken(token);
 
         securityAuditService.record(
-                "PASSWORD_RESET_COMPLETED",
-                "ATTEMPT",
+                SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
+                AuditOutcome.ATTEMPT,
                 null,
                 null,
                 email,
@@ -345,8 +330,8 @@ public class TenantUserFacade {
             });
 
             securityAuditService.record(
-                    "PASSWORD_RESET_COMPLETED",
-                    "SUCCESS",
+                    SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
+                    AuditOutcome.SUCCESS,
                     null,
                     null,
                     email,
@@ -357,8 +342,8 @@ public class TenantUserFacade {
             );
         } catch (Exception e) {
             securityAuditService.record(
-                    "PASSWORD_RESET_COMPLETED",
-                    "FAILURE",
+                    SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
+                    AuditOutcome.FAILURE,
                     null,
                     null,
                     email,
@@ -370,10 +355,6 @@ public class TenantUserFacade {
             throw e;
         }
     }
-
-    // =========================================================
-    // MY PROFILE
-    // =========================================================
 
     public TenantMeResponse updateMyProfile(UpdateMyProfileRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
@@ -411,7 +392,7 @@ public class TenantUserFacade {
 
         return tenantExecutor.run(schema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
     }
-    
+
     public void changeMyPassword(TenantChangeMyPasswordRequest req) {
         if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
 
@@ -430,5 +411,4 @@ public class TenantUserFacade {
             return null;
         });
     }
- 
 }

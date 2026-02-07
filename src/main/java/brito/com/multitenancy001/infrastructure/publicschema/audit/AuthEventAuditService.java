@@ -3,6 +3,9 @@ package brito.com.multitenancy001.infrastructure.publicschema.audit;
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +23,9 @@ public class AuthEventAuditService {
     private final AuthEventRepository authEventRepository;
     private final AppClock appClock;
 
-    public void record(String authDomain,
-                       String eventType,
-                       String outcome,
+    public void record(AuthDomain authDomain,
+                       AuthEventType eventType,
+                       AuditOutcome outcome,
                        String principalEmail,
                        Long principalUserId,
                        Long accountId,

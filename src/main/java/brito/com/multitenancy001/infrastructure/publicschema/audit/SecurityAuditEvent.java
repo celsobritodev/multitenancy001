@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
+import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
+import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,7 +22,8 @@ public class SecurityAuditEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "occurred_at", nullable = false)
+    // ✅ Padronizado: Instant -> timestamptz
+    @Column(name = "occurred_at", nullable = false, columnDefinition = "timestamptz")
     private Instant occurredAt;
 
     @Column(name = "request_id")
@@ -39,11 +42,13 @@ public class SecurityAuditEvent {
     @Column(name = "user_agent")
     private String userAgent;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "action_type", nullable = false)
-    private String actionType;
+    private SecurityAuditActionType actionType;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "outcome", nullable = false)
-    private String outcome;
+    private AuditOutcome outcome;
 
     @Column(name = "actor_email")
     private String actorEmail;
