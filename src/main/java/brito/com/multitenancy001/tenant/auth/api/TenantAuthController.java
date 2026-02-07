@@ -7,7 +7,9 @@ import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantRefreshRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionOption;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionRequiredResponse;
-import brito.com.multitenancy001.tenant.auth.app.TenantAuthService;
+import brito.com.multitenancy001.tenant.auth.app.TenantLoginConfirmService;
+import brito.com.multitenancy001.tenant.auth.app.TenantLoginInitService;
+import brito.com.multitenancy001.tenant.auth.app.TenantTokenRefreshService;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
@@ -24,7 +26,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantAuthController {
 
-    private final TenantAuthService tenantAuthService;
+    private final TenantLoginInitService tenantLoginInitService;
+    private final TenantLoginConfirmService tenantLoginConfirmService;
+    private final TenantTokenRefreshService tenantTokenRefreshService;
 
     private static JwtResponse toHttp(JwtResult r) {
         if (r == null) return null;
@@ -50,7 +54,7 @@ public class TenantAuthController {
     public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
 
         TenantLoginInitCommand cmd = new TenantLoginInitCommand(req.email(), req.password());
-        TenantLoginResult result = tenantAuthService.loginInit(cmd);
+        TenantLoginResult result = tenantLoginInitService.loginInit(cmd);
 
         if (result instanceof TenantLoginResult.LoginSuccess ok) {
             return ResponseEntity.ok(toHttp(ok.jwt()));
@@ -88,14 +92,13 @@ public class TenantAuthController {
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
 
-        // UUID -> String (seu command já recebe String)
         TenantLoginConfirmCommand cmd = new TenantLoginConfirmCommand(
                 req.challengeId().toString(),
                 req.accountId(),
                 req.slug()
         );
 
-        JwtResult jwt = tenantAuthService.loginConfirm(cmd);
+        JwtResult jwt = tenantLoginConfirmService.loginConfirm(cmd);
         return ResponseEntity.ok(toHttp(jwt));
     }
 
@@ -104,7 +107,7 @@ public class TenantAuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
-        JwtResult jwt = tenantAuthService.refresh(req.refreshToken());
+        JwtResult jwt = tenantTokenRefreshService.refresh(req.refreshToken());
         return ResponseEntity.ok(toHttp(jwt));
     }
 }
