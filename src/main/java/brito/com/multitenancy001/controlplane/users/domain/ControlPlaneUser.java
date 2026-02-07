@@ -135,7 +135,7 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
     }
 
     public boolean isAccountNonLocked(Instant now) {
-        if (now == null) now = Instant.now();
+        if (now == null) throw new IllegalArgumentException("now is required (use AppClock.instant() in application layer)");
         return lockedUntil == null || !now.isBefore(lockedUntil);
     }
 
@@ -153,11 +153,6 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         this.name = newName.trim();
     }
 
-    /**
-     * ✅ pedido: troca de email por método de domínio (sem setter público).
-     * Observação: login "top" usa login_identities como source of truth.
-     * Este email aqui vira "perfil/contato" e pode ser mantido sincronizado.
-     */
     public void changeEmail(String newEmail) {
         String normalized = EmailNormalizer.normalizeOrNull(newEmail);
         if (normalized == null) throw new IllegalArgumentException("email inválido");

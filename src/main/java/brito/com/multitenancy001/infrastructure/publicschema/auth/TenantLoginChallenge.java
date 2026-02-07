@@ -19,7 +19,6 @@ public class TenantLoginChallenge {
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    // migration: CITEXT (recomendado explicitar)
     @Column(name = "email", nullable = false, columnDefinition = "citext")
     private String email;
 
@@ -38,9 +37,19 @@ public class TenantLoginChallenge {
     @PrePersist
     private void prePersist() {
         if (this.id == null) this.id = UUID.randomUUID();
-        if (this.createdAt == null) this.createdAt = Instant.now();
         if (this.candidateAccountIdsCsv == null) this.candidateAccountIdsCsv = "";
         if (this.email != null) this.email = this.email.trim();
+
+        // 🚫 Regra: entidade não chama "agora".
+        // ✅ createdAt deve vir da camada de aplicação (AppClock.instant()).
+        if (this.createdAt == null) {
+            throw new IllegalStateException(
+                "TenantLoginChallenge.createdAt é obrigatório (use AppClock.instant() na camada de aplicação)"
+            );
+        }
+        if (this.expiresAt == null) {
+            throw new IllegalStateException("TenantLoginChallenge.expiresAt é obrigatório");
+        }
     }
 
     public Set<Long> candidateAccountIds() {

@@ -19,8 +19,8 @@ import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
-import brito.com.multitenancy001.tenant.auth.app.dto.AccountSelectionOptionData;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
+import brito.com.multitenancy001.tenant.auth.app.dto.TenantSelectionOptionData;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,7 +54,6 @@ public class TenantAuthService {
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final AppClock appClock;
 
-    // append-only auth_events
     private final AuthEventAuditService authEventAuditService;
 
     private static String normalizeEmailRequired(String raw) {
@@ -71,14 +70,15 @@ public class TenantAuthService {
     }
 
     /**
-     * 1) INIT LOGIN
+     * POST /api/tenant/auth/login
+     *
      * email + password
-     * - se 1 conta (e senha ok): JWT
-     * - se >1 conta:
-     *      - valida senha tentando autenticar em cada tenant candidato
+     * - se 1 tenant válido (e senha ok): JWT
+     * - se >1:
+     *      - valida senha em cada tenant candidato
      *      - se validar em 0: BadCredentials
      *      - se validar em 1: JWT direto
-     *      - se validar em >1: ACCOUNT_SELECTION_REQUIRED (challenge contém SOMENTE allowedAccountIds)
+     *      - se validar em >1: TENANT_SELECTION_REQUIRED (challenge contém SOMENTE allowedAccountIds)
      */
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
 
@@ -112,7 +112,6 @@ public class TenantAuthService {
                 throw new BadCredentialsException(INVALID_USER_MSG);
             }
 
-            // ids candidatos (distinct + preserva ordem)
             LinkedHashSet<Long> candidateAccountIds = identities.stream()
                     .map(LoginIdentityRow::accountId)
                     .filter(Objects::nonNull)
@@ -124,7 +123,7 @@ public class TenantAuthService {
                 throw new BadCredentialsException(INVALID_USER_MSG);
             }
 
-            // Se só tem 1 conta, autentica direto (senha validada aqui mesmo)
+            // Se só tem 1 conta, autentica direto
             if (candidateAccountIds.size() == 1) {
                 Long accountId = candidateAccountIds.iterator().next();
                 AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
@@ -132,12 +131,12 @@ public class TenantAuthService {
                 TenantLoginResult result = doTenantAuthentication(account, email, password);
 
                 authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
-                        "{\"mode\":\"single_account\"}");
+                        "{\"mode\":\"single_tenant\"}");
 
                 return result;
             }
 
-            // ✅ MULTI-CONTA: validar password em cada tenant candidato
+            // MULTI: validar password em cada tenant candidato
             LinkedHashSet<Long> allowedAccountIds = new LinkedHashSet<>();
 
             for (Long accountId : candidateAccountIds) {
@@ -149,18 +148,16 @@ public class TenantAuthService {
                 }
 
                 boolean ok = verifyPasswordInTenant(account, email, password);
-                if (ok) {
-                    allowedAccountIds.add(accountId);
-                }
+                if (ok) allowedAccountIds.add(accountId);
             }
 
             if (allowedAccountIds.isEmpty()) {
                 authEventAuditService.record("tenant", "LOGIN_INIT", "FAILURE", email, null, null, null,
-                        "{\"reason\":\"bad_credentials_multi_account\"}");
+                        "{\"reason\":\"bad_credentials_multi_tenant\"}");
                 throw new BadCredentialsException(INVALID_USER_MSG);
             }
 
-            // Se só 1 conta validou senha, entra direto nela
+            // Se só 1 tenant validou senha, entra direto nele
             if (allowedAccountIds.size() == 1) {
                 Long accountId = allowedAccountIds.iterator().next();
                 AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
@@ -168,25 +165,25 @@ public class TenantAuthService {
                 TenantLoginResult result = doTenantAuthentication(account, email, password);
 
                 authEventAuditService.record("tenant", "LOGIN_INIT", "SUCCESS", email, null, accountId, account.schemaName(),
-                        "{\"mode\":\"multi_account_but_single_match\"}");
+                        "{\"mode\":\"multi_tenant_but_single_match\"}");
 
                 return result;
             }
 
-            // Se mais de 1 conta validou, cria challenge SOMENTE com allowedAccountIds
+            // >1 tenant validou: cria challenge SOMENTE com allowedAccountIds
             UUID challengeId = tenantLoginChallengeService.createChallenge(email, allowedAccountIds);
 
-            List<AccountSelectionOptionData> selection = new ArrayList<>();
+            List<TenantSelectionOptionData> details = new ArrayList<>();
             for (Long id : allowedAccountIds) {
-                selection.add(tryResolveOption(id));
+                details.add(tryResolveOption(id));
             }
 
-            authEventAuditService.record("tenant", "ACCOUNT_SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
+            authEventAuditService.record("tenant", "TENANT_SELECTION_REQUIRED", "SUCCESS", email, null, null, null,
                     "{\"challengeId\":\"" + challengeId + "\",\"candidates\":" + allowedAccountIds.size() + "}");
 
-            return new TenantLoginResult.AccountSelectionRequired(
+            return new TenantLoginResult.TenantSelectionRequired(
                     challengeId.toString(),
-                    selection
+                    details
             );
 
         } catch (BadCredentialsException e) {
@@ -204,14 +201,6 @@ public class TenantAuthService {
         }
     }
 
-    /**
-     * 2) CONFIRM LOGIN
-     * challengeId + (accountId OU slug) => JWT
-     *
-     * ✅ Seguro porque:
-     * - o challenge foi criado somente após validar password
-     * - e contém apenas accountIds onde password foi OK
-     */
     public JwtResult loginConfirm(TenantLoginConfirmCommand cmd) {
 
         if (cmd == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
@@ -239,12 +228,9 @@ public class TenantAuthService {
             throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
         }
 
-        AccountSnapshot account;
-        if (accountId != null) {
-            account = accountResolver.resolveActiveAccountById(accountId);
-        } else {
-            account = accountResolver.resolveActiveAccountBySlug(slug);
-        }
+        AccountSnapshot account = (accountId != null)
+                ? accountResolver.resolveActiveAccountById(accountId)
+                : accountResolver.resolveActiveAccountBySlug(slug);
 
         if (account == null || account.id() == null) {
             authEventAuditService.record("tenant", "LOGIN_CONFIRM", "FAILURE", email, null, null, null,
@@ -269,9 +255,6 @@ public class TenantAuthService {
         return jwt;
     }
 
-    /**
-     * 3) REFRESH — retorna novo accessToken, reutilizando refreshToken
-     */
     public JwtResult refresh(String refreshToken) {
 
         if (!StringUtils.hasText(refreshToken)) {
@@ -342,15 +325,10 @@ public class TenantAuthService {
                     authorities
             );
 
-            String newAccessToken = jwtTokenProvider.generateTenantToken(
-                    authentication,
-                    accountId,
-                    tenantSchema
-            );
+            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, accountId, tenantSchema);
 
             SystemRoleName role = toSystemRoleOrNull(user.getRole());
 
-            // ✅ usa seu construtor curto (tokenType default Bearer)
             JwtResult result = new JwtResult(
                     newAccessToken,
                     refreshToken,
@@ -389,32 +367,28 @@ public class TenantAuthService {
 
                 return true;
             });
-        } catch (BadCredentialsException e) {
-            return false;
-        } catch (UsernameNotFoundException e) {
-            return false;
-        } catch (InternalAuthenticationServiceException e) {
+        } catch (BadCredentialsException | UsernameNotFoundException | InternalAuthenticationServiceException e) {
             return false;
         } catch (Exception e) {
             return false;
         }
     }
 
-    private AccountSelectionOptionData tryResolveOption(Long accountId) {
+    private TenantSelectionOptionData tryResolveOption(Long accountId) {
         if (accountId == null) {
-            return new AccountSelectionOptionData(null, "Conta", null);
+            return new TenantSelectionOptionData(null, "Conta", null);
         }
 
         try {
             AccountSnapshot a = accountResolver.resolveActiveAccountById(accountId);
             if (a == null) {
-                return new AccountSelectionOptionData(accountId, "Conta " + accountId, null);
+                return new TenantSelectionOptionData(accountId, "Conta " + accountId, null);
             }
-            return new AccountSelectionOptionData(a.id(), a.displayName(), a.slug());
+            return new TenantSelectionOptionData(a.id(), a.displayName(), a.slug());
         } catch (ApiException ex) {
-            return new AccountSelectionOptionData(accountId, "Conta " + accountId, null);
+            return new TenantSelectionOptionData(accountId, "Conta " + accountId, null);
         } catch (Exception ex) {
-            return new AccountSelectionOptionData(accountId, "Conta " + accountId, null);
+            return new TenantSelectionOptionData(accountId, "Conta " + accountId, null);
         }
     }
 

@@ -26,6 +26,9 @@ public class TenantUserProvisioningFacade {
     private static final String REQUIRED_TABLE = "tenant_users";
     private static final String OWNER_NAME_FALLBACK = "Owner";
 
+    // error codes padrão
+    private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
+
     private final TenantExecutor tenantExecutor;
     private final TransactionExecutor transactionExecutor;
 
@@ -62,10 +65,6 @@ public class TenantUserProvisioningFacade {
 
     /**
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
-     *
-     * ✅ SIGNUP: como a senha foi criada pelo próprio usuário, não exige troca:
-     * - mustChangePassword = false
-     * - passwordChangedAt = now
      */
     public UserSummaryData createTenantOwner(
             String schemaName,
@@ -100,7 +99,7 @@ public class TenantUserProvisioningFacade {
                             ? ownerDisplayName.trim()
                             : OWNER_NAME_FALLBACK;
 
-                    Instant now = appClock.instant(); // ✅ usa AppClock (padronizado)
+                    Instant now = appClock.instant();
 
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
@@ -113,11 +112,9 @@ public class TenantUserProvisioningFacade {
                     tenantUser.setTimezone("America/Sao_Paulo");
                     tenantUser.setLocale("pt_BR");
 
-                    // ✅ AQUI É O PONTO EXATO DO AJUSTE (SIGNUP)
                     tenantUser.setMustChangePassword(false);
                     tenantUser.setPasswordChangedAt(now);
 
-                    // ✅ aqui o onSave() da entidade garante as permissões do role.
                     TenantUser saved = tenantUserRepository.save(tenantUser);
 
                     return new UserSummaryData(
@@ -134,15 +131,36 @@ public class TenantUserProvisioningFacade {
         );
     }
 
+    /**
+     * ✅ (SAFE) Admin bulk: suspende todos MENOS TENANT_OWNER.
+     */
     public int suspendAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName,
-                REQUIRED_TABLE,
-                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.suspendAllByAccount(accountId)),
-                0
+        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+
+        return tenantExecutor.run(schemaName, () ->
+                transactionExecutor.inTenantRequiresNew(() -> {
+
+                    if (accountId == null) {
+                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                    }
+
+                    long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
+                    if (ownersNotDeleted <= 0) {
+                        throw new ApiException(
+                                TENANT_OWNER_REQUIRED,
+                                "Não é possível suspender usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
+                                409
+                        );
+                    }
+
+                    return tenantUserRepository.suspendAllByAccountExceptRole(accountId, TenantRole.TENANT_OWNER);
+                })
         );
     }
 
+    /**
+     * ✅ Reativa todos (inclusive owners).
+     */
     public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
@@ -152,11 +170,37 @@ public class TenantUserProvisioningFacade {
         );
     }
 
+    /**
+     * ✅ (SAFE) Cancelamento / exclusão da conta:
+     * soft-delete de todos os usuários MENOS TENANT_OWNER.
+     *
+     * Motivo: mantém o dono "existente" (não-deletado) para consistência/auditoria/recuperação.
+     */
     public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
         return tenantExecutor.runIfReady(
                 schemaName,
                 REQUIRED_TABLE,
-                () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.softDeleteAllByAccount(accountId, appClock.instant())),
+                () -> transactionExecutor.inTenantRequiresNew(() -> {
+
+                    if (accountId == null) {
+                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                    }
+
+                    // Guard de sanidade: deve existir pelo menos 1 TENANT_OWNER não deletado.
+                    long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
+                    if (ownersNotDeleted <= 0) {
+                        throw new ApiException(
+                                TENANT_OWNER_REQUIRED,
+                                "Não é possível remover usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
+                                409
+                        );
+                    }
+
+                    Instant now = appClock.instant();
+
+                    // ✅ soft-delete em massa exceto TENANT_OWNER
+                    return tenantUserRepository.softDeleteAllByAccountExceptRole(accountId, TenantRole.TENANT_OWNER, now);
+                }),
                 0
         );
     }
@@ -175,6 +219,30 @@ public class TenantUserProvisioningFacade {
 
         tenantExecutor.run(schemaName, () ->
                 transactionExecutor.inTenantTx(() -> {
+
+                    if (accountId == null) {
+                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                    }
+                    if (userId == null) {
+                        throw new ApiException("USER_ID_REQUIRED", "userId obrigatório", 400);
+                    }
+
+                    if (suspended) {
+                        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404));
+
+                        if (isActiveOwner(user)) {
+                            long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
+                            if (activeOwners <= 1) {
+                                throw new ApiException(
+                                        TENANT_OWNER_REQUIRED,
+                                        "Não é permitido suspender o último TENANT_OWNER ativo.",
+                                        409
+                                );
+                            }
+                        }
+                    }
+
                     int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
                     if (updated == 0) {
                         throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
@@ -208,5 +276,17 @@ public class TenantUserProvisioningFacade {
                                 .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400))
                 )
         );
+    }
+
+    // =========================================================
+    // helpers
+    // =========================================================
+
+    private boolean isActiveOwner(TenantUser user) {
+        if (user == null) return false;
+        if (user.isDeleted()) return false;
+        if (user.isSuspendedByAccount()) return false;
+        if (user.isSuspendedByAdmin()) return false;
+        return user.getRole() != null && user.getRole().isTenantOwner();
     }
 }

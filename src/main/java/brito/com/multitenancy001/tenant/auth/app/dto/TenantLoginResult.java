@@ -9,11 +9,10 @@ public sealed interface TenantLoginResult {
     record LoginSuccess(JwtResult jwt) implements TenantLoginResult {}
 
     /**
-     * Quando o mesmo email existe em mais de uma conta/empresa.
-     * challengeId: String (UUID em texto) para simplificar tráfego no app layer e no controller.
+     * NOVO (semântico): quando email+senha validam para mais de um tenant
      */
-    record AccountSelectionRequired(
+    record TenantSelectionRequired(
             String challengeId,
-            List<AccountSelectionOptionData> candidates
+            List<TenantSelectionOptionData> details
     ) implements TenantLoginResult {}
 }

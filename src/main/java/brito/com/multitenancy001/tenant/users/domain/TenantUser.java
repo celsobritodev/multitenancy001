@@ -157,9 +157,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         if (this.timezone != null) this.timezone = this.timezone.trim();
         if (this.locale != null) this.locale = this.locale.trim();
 
-        if (this.passwordChangedAt == null) {
-            this.passwordChangedAt = Instant.now(); // ✅ fallback seguro
-        }
+        // 🚫 Domínio NÃO define "agora". passwordChangedAt deve ser setado por fluxo de aplicação (AppClock.instant()).
 
         if (this.permissionCodes != null && !this.permissionCodes.isEmpty()) {
             LinkedHashSet<String> normalized = new LinkedHashSet<>();
@@ -171,7 +169,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         }
     }
 
-
     // ==========
     // DOMAIN (status)
     // ==========
@@ -180,13 +177,17 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     public boolean isAccountNonLocked(Instant now) {
-        if (now == null) now = Instant.now();
+        if (now == null) throw new IllegalArgumentException("now is required (use AppClock.instant() in application layer)");
         return lockedUntil == null || !now.isBefore(lockedUntil);
     }
 
+    /**
+     * 🚫 Regra: domínio não pode chamar "agora".
+     * ✅ Use: user.isAccountNonLocked(appClock.instant()) ou AuthenticatedUserContext (que já recebe now).
+     */
     @Override
     public boolean isAccountNonLocked() {
-        return isAccountNonLocked(Instant.now());
+        throw new IllegalStateException("TenantUser.isAccountNonLocked() without 'now' is forbidden. Use isAccountNonLocked(Instant now) with AppClock.instant() in the application layer.");
     }
 
     public boolean isEnabledForLogin(Instant now) {

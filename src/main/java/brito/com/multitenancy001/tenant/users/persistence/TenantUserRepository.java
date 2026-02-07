@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 
 import java.time.Instant;
@@ -65,17 +66,39 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     }
 
     // =========================================================
+    // OWNER COUNTS / INVARIANTS (mínimo 1 OWNER)
+    // =========================================================
+
+    @Query("""
+        select count(u) from TenantUser u
+         where u.accountId = :accountId
+           and u.deleted = false
+           and u.suspendedByAccount = false
+           and u.suspendedByAdmin = false
+           and u.role = :ownerRole
+    """)
+    long countActiveOwnersByAccountId(
+            @Param("accountId") Long accountId,
+            @Param("ownerRole") TenantRole ownerRole
+    );
+
+    @Query("""
+        select count(u) from TenantUser u
+         where u.accountId = :accountId
+           and u.deleted = false
+           and u.role = :role
+    """)
+    long countNotDeletedByAccountIdAndRole(
+            @Param("accountId") Long accountId,
+            @Param("role") TenantRole role
+    );
+
+    // =========================================================
     // SCOPED ID (READ)
     // =========================================================
 
-    /**
-     * DEFAULT (NotDeleted): leitura normal do domínio.
-     */
     Optional<TenantUser> findByIdAndAccountIdAndDeletedFalse(Long id, Long accountId);
 
-    /**
-     * DEFAULT (Enabled): login/uso ativo.
-     */
     @Query("""
         select u from TenantUser u
         where u.id = :id
@@ -89,9 +112,6 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("accountId") Long accountId
     );
 
-    /**
-     * ⚠️ Inclui soft-deleted. Use apenas para auditoria/suporte/restore.
-     */
     @Query("""
         select u from TenantUser u
         where u.id = :id
@@ -102,10 +122,6 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("accountId") Long accountId
     );
 
-    /**
-     * Alias (mesma coisa do findIncludingDeletedByIdAndAccountId).
-     * Mantido se houver código chamando "findAny...".
-     */
     default Optional<TenantUser> findAnyByIdAndAccountId(Long id, Long accountId) {
         return findIncludingDeletedByIdAndAccountId(id, accountId);
     }
@@ -114,9 +130,6 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     // UPDATE: SUSPENSÕES
     // =========================================================
 
-    /**
-     * Suspende/Reativa por ADMIN (1 usuário) - não mexe em suspendedByAccount.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -132,10 +145,6 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("suspended") boolean suspended
     );
 
-    /**
-     * Suspende/Reativa por CONTA (1 usuário) - não mexe em suspendedByAdmin.
-     * ✅ Este método é necessário porque o TenantUserService chama ele.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -151,9 +160,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("suspended") boolean suspended
     );
 
-    /**
-     * Suspende TODOS por CONTA (bulk) - não mexe em suspendedByAdmin.
-     */
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -161,12 +168,13 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
            set u.suspendedByAccount = true
          where u.accountId = :accountId
            and u.deleted = false
+           and u.role <> :excludedRole
     """)
-    int suspendAllByAccount(@Param("accountId") Long accountId);
+    int suspendAllByAccountExceptRole(
+            @Param("accountId") Long accountId,
+            @Param("excludedRole") TenantRole excludedRole
+    );
 
-    /**
-     * Reativa TODOS por CONTA (bulk) - não mexe em suspendedByAdmin.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -177,13 +185,10 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int unsuspendAllByAccount(@Param("accountId") Long accountId);
 
-    // =========================================================
-    // UPDATE: SOFT DELETE / RESTORE (bulk)
-    // =========================================================
+  
 
     /**
-     * Soft-delete em massa por conta.
-     * ✅ Necessário porque o TenantUserProvisioningFacade chama este método.
+     * ✅ NOVO (SAFE): soft-delete em massa por conta, EXCETO uma role (ex: TENANT_OWNER).
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
@@ -193,16 +198,14 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
                u.audit.deletedAt = :deletedAt
          where u.accountId = :accountId
            and u.deleted = false
+           and u.role <> :excludedRole
     """)
-    int softDeleteAllByAccount(
+    int softDeleteAllByAccountExceptRole(
             @Param("accountId") Long accountId,
+            @Param("excludedRole") TenantRole excludedRole,
             @Param("deletedAt") Instant deletedAt
     );
 
-    /**
-     * Restore em massa por conta.
-     * ✅ Necessário porque o TenantUserProvisioningFacade chama este método.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -214,7 +217,6 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int restoreAllByAccount(@Param("accountId") Long accountId);
 
-    // ✅ grava last_login no login
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("""

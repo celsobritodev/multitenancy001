@@ -48,6 +48,7 @@ public class AccountStatusService {
             AccountStatusSideEffect action = AccountStatusSideEffect.NONE;
 
             if (newStatus == AccountStatus.SUSPENDED) {
+                // ✅ Este método agora é SAFE (suspende todos menos TENANT_OWNER)
                 affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;

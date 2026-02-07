@@ -32,6 +32,13 @@ public class TenantUserService {
     private final TransactionExecutor transactionExecutor;
 
     // =========================================================
+    // ERROR CODES (padrão)
+    // =========================================================
+
+    private static final String BUILT_IN_USER_IMMUTABLE = "BUILT_IN_USER_IMMUTABLE";
+    private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
+
+    // =========================================================
     // LIMITS / COUNTS
     // =========================================================
 
@@ -107,22 +114,21 @@ public class TenantUserService {
 
             user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
 
-            // ✅ NOVO: grava mustChangePassword (default false)
+            // ✅ grava mustChangePassword (default false)
             user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
             Instant now = appClock.instant();
 
-           // se NÃO exige troca, registra que a senha já foi “definida”
+            // se NÃO exige troca, registra que a senha já foi “definida”
             if (!user.isMustChangePassword()) {
                 user.setPasswordChangedAt(now);
             } else {
                 user.setPasswordChangedAt(null);
             }
- 
 
             user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
             user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
 
-            // ✅ NOVO: persiste locale/timezone recebidos (trim + vazio -> null)
+            // ✅ persiste locale/timezone recebidos (trim + vazio -> null)
             user.setLocale(StringUtils.hasText(locale) ? locale.trim() : null);
             user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : null);
 
@@ -220,6 +226,17 @@ public class TenantUserService {
         if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
+            TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            // BUILT_IN: não pode suspender
+            requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
+
+            // Invariante: não pode suspender o último OWNER ativo
+            if (suspended && isActiveOwner(user)) {
+                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido suspender o último TENANT_OWNER ativo");
+            }
+
             int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
             if (updated == 0) throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404);
         });
@@ -230,6 +247,17 @@ public class TenantUserService {
         if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
+            TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            // BUILT_IN: não pode suspender
+            requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
+
+            // Invariante: não pode suspender o último OWNER ativo
+            if (suspended && isActiveOwner(user)) {
+                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido suspender o último TENANT_OWNER ativo");
+            }
+
             int updated = tenantUserRepository.setSuspendedByAccount(accountId, userId, suspended);
             if (updated == 0) throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404);
         });
@@ -251,6 +279,9 @@ public class TenantUserService {
         return transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            // BUILT_IN: não pode mudar perfil
+            requireNotBuiltInForMutation(user, "Não é permitido alterar perfil de usuário BUILT_IN");
 
             if (StringUtils.hasText(name)) user.setName(name.trim());
             if (StringUtils.hasText(phone)) user.setPhone(phone.trim());
@@ -283,6 +314,7 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
+            // ✅ senha pode mudar mesmo se BUILT_IN
             Instant now = appClock.instant();
 
             user.setPassword(passwordEncoder.encode(newPassword));
@@ -322,6 +354,7 @@ public class TenantUserService {
                 }
             }
 
+            // ✅ senha pode mudar mesmo se BUILT_IN
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setMustChangePassword(false);
             user.setPasswordChangedAt(now);
@@ -347,6 +380,14 @@ public class TenantUserService {
 
             if (user.isDeleted()) return;
 
+            // BUILT_IN: não pode excluir
+            requireNotBuiltInForMutation(user, "Não é permitido excluir usuário BUILT_IN");
+
+            // Invariante: não pode excluir o último OWNER ativo
+            if (isActiveOwner(user)) {
+                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido excluir o último TENANT_OWNER ativo");
+            }
+
             Instant now = appClock.instant();
             user.softDelete(now, appClock.epochMillis());
             tenantUserRepository.save(user);
@@ -361,6 +402,7 @@ public class TenantUserService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
 
+            // ✅ restore pode (inclusive BUILT_IN)
             user.restore();
             return tenantUserRepository.save(user);
         });
@@ -373,6 +415,14 @@ public class TenantUserService {
         transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+
+            // BUILT_IN: não pode hard delete
+            requireNotBuiltInForMutation(user, "Não é permitido hard-delete de usuário BUILT_IN");
+
+            // Se ainda está ativo e é owner, não pode remover o último owner ativo
+            if (!user.isDeleted() && isActiveOwner(user)) {
+                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(), "Não é permitido excluir o último TENANT_OWNER ativo");
+            }
 
             tenantUserRepository.delete(user);
         });
@@ -399,6 +449,9 @@ public class TenantUserService {
             TenantUser from = tenantUserRepository.findEnabledByIdAndAccountId(fromUserId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário origem não encontrado/habilitado", 404));
 
+            // BUILT_IN: não pode transferir role
+            requireNotBuiltInForMutation(from, "Não é permitido transferir ownership a partir de usuário BUILT_IN");
+
             if (from.getRole() == null || !from.getRole().isTenantOwner()) {
                 throw new ApiException("FORBIDDEN", "Apenas o TENANT_OWNER pode transferir", 403);
             }
@@ -406,7 +459,10 @@ public class TenantUserService {
             TenantUser to = tenantUserRepository.findEnabledByIdAndAccountId(toUserId, accountId)
                     .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário destino não encontrado/habilitado", 404));
 
-            // troca roles
+            // BUILT_IN: não pode receber role
+            requireNotBuiltInForMutation(to, "Não é permitido transferir ownership para usuário BUILT_IN");
+
+            // troca roles (teu padrão)
             from.setRole(TenantRole.TENANT_ADMIN);
             to.setRole(TenantRole.TENANT_OWNER);
 
@@ -418,7 +474,7 @@ public class TenantUserService {
             tenantUserRepository.save(to);
         });
     }
-    
+
     public void changeMyPassword(
             Long userId,
             Long accountId,
@@ -458,6 +514,7 @@ public class TenantUserService {
 
             Instant now = appClock.instant();
 
+            // ✅ senha pode mudar mesmo se BUILT_IN
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setMustChangePassword(false);
             user.setPasswordChangedAt(now);
@@ -471,6 +528,37 @@ public class TenantUserService {
         });
     }
 
-    
-}
+    // =========================================================
+    // HELPERS / GUARDS
+    // =========================================================
 
+    private void requireNotBuiltInForMutation(TenantUser user, String message) {
+        if (user != null && user.getOrigin() == EntityOrigin.BUILT_IN) {
+            throw new ApiException(BUILT_IN_USER_IMMUTABLE, message, 403);
+        }
+    }
+
+    /**
+     * OWNER "ativo" = enabled + role.isTenantOwner()
+     */
+    private boolean isActiveOwner(TenantUser user) {
+        if (user == null) return false;
+        if (user.isDeleted()) return false;
+        if (user.isSuspendedByAccount()) return false;
+        if (user.isSuspendedByAdmin()) return false;
+        return user.getRole() != null && user.getRole().isTenantOwner();
+    }
+
+    /**
+     * Invariante: sempre deve existir >= 1 TENANT_OWNER ativo.
+     * Este método deve ser chamado SOMENTE quando o user-alvo é OWNER ATIVO e a ação vai desativá-lo (suspender/deletar).
+     */
+    private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, Long removingUserId, String message) {
+        long owners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
+
+        // Se só tem 1 owner ativo, remover/suspender ele quebra a regra.
+        if (owners <= 1) {
+            throw new ApiException(TENANT_OWNER_REQUIRED, message, 409);
+        }
+    }
+}

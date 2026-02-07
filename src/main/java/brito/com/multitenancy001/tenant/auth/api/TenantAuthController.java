@@ -2,11 +2,11 @@ package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
-import brito.com.multitenancy001.tenant.auth.api.dto.AccountSelectionOption;
-import brito.com.multitenancy001.tenant.auth.api.dto.AccountSelectionRequiredResponse;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantRefreshRequest;
+import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionOption;
+import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionRequiredResponse;
 import brito.com.multitenancy001.tenant.auth.app.TenantAuthService;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
@@ -41,9 +41,10 @@ public class TenantAuthController {
     }
 
     /**
-     * 1) email + password
-     * - se 1 conta: retorna JWT (200)
-     * - se >1 conta: retorna ACCOUNT_SELECTION_REQUIRED com candidates (409)
+     * POST /api/tenant/auth/login com email + password
+     *
+     * - Se só 1 tenant válido -> 200 + JWT
+     * - Se >1 tenant válido -> 409 + TENANT_SELECTION_REQUIRED + challengeId + details[]
      */
     @PostMapping("/login")
     public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
@@ -55,23 +56,23 @@ public class TenantAuthController {
             return ResponseEntity.ok(toHttp(ok.jwt()));
         }
 
-        if (result instanceof TenantLoginResult.AccountSelectionRequired sel) {
-            List<AccountSelectionOption> candidates = sel.candidates().stream()
-                    .map(o -> new AccountSelectionOption(o.accountId(), o.displayName(), o.slug()))
+        if (result instanceof TenantLoginResult.TenantSelectionRequired sel) {
+            List<TenantSelectionOption> details = sel.details().stream()
+                    .map(o -> new TenantSelectionOption(o.accountId(), o.displayName(), o.slug()))
                     .toList();
 
-            AccountSelectionRequiredResponse body = new AccountSelectionRequiredResponse(
-                    "ACCOUNT_SELECTION_REQUIRED",
-                    "Selecione a conta/empresa",
+            TenantSelectionRequiredResponse body = new TenantSelectionRequiredResponse(
+                    "TENANT_SELECTION_REQUIRED",
+                    "Selecione a empresa/tenant para continuar",
                     sel.challengeId(),
-                    candidates
+                    details
             );
 
             return ResponseEntity.status(409).body(body);
         }
 
         return ResponseEntity.internalServerError().body(
-                new AccountSelectionRequiredResponse(
+                new TenantSelectionRequiredResponse(
                         "INTERNAL_ERROR",
                         "Resposta inesperada do servidor",
                         null,
@@ -81,13 +82,13 @@ public class TenantAuthController {
     }
 
     /**
-     * 2) challengeId + (accountId OU slug)
-     * - retorna JWT (200)
+     * POST /api/tenant/auth/login/confirm com challengeId + slug (ou accountId)
+     * Autentica somente no tenant escolhido
      */
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
 
-        // ✅ AJUSTE: UUID -> String, para bater com TenantLoginConfirmCommand(String, Long, String)
+        // UUID -> String (seu command já recebe String)
         TenantLoginConfirmCommand cmd = new TenantLoginConfirmCommand(
                 req.challengeId().toString(),
                 req.accountId(),
@@ -99,8 +100,7 @@ public class TenantAuthController {
     }
 
     /**
-     * 3) refresh token
-     * - retorna novo accessToken (200)
+     * refresh token -> novo accessToken
      */
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {

@@ -17,8 +17,11 @@ public interface AppClock {
     Clock clock();
 
     default Instant instant() {
-        return Instant.now(clock());
+        Clock c = clock();
+        if (c == null) throw new IllegalStateException("AppClock.clock() não pode ser null");
+        return Instant.now(c);
     }
+
 
     default ZoneId zone() {
         return clock().getZone();
