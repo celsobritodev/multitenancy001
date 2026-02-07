@@ -51,3 +51,32 @@ CREATE INDEX IF NOT EXISTS idx_login_identities_email
 
 CREATE INDEX IF NOT EXISTS idx_login_identities_subject
     ON login_identities (subject_type, subject_id);
+    
+    
+-- Seed: cria login identities para usuários BUILT-IN do Control Plane
+-- (necessário para /api/controlplane/auth/login não dar USER_NOT_FOUND)
+
+INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)
+SELECT
+    cu.email,
+    'CONTROLPLANE_USER',
+    cu.id,
+    NULL
+FROM public.controlplane_users cu
+WHERE cu.deleted = false
+  AND cu.user_origin = 'BUILT_IN'
+  -- evita conflito com ux_login_identity_cp_subject
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.login_identities li
+      WHERE li.subject_type = 'CONTROLPLANE_USER'
+        AND li.subject_id = cu.id
+  )
+  -- evita conflito com ux_login_identity_cp_email
+  AND NOT EXISTS (
+      SELECT 1
+      FROM public.login_identities li
+      WHERE li.subject_type = 'CONTROLPLANE_USER'
+        AND li.email = cu.email
+  );
+    
