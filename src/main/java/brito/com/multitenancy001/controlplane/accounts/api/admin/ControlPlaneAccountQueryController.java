@@ -1,8 +1,5 @@
 package brito.com.multitenancy001.controlplane.accounts.api.admin;
 
-import java.time.LocalDate;
-import java.util.List;
-
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.app.query.ControlPlaneAccountQueryService;
@@ -10,7 +7,11 @@ import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/controlplane/accounts/query")
@@ -21,18 +22,21 @@ public class ControlPlaneAccountQueryController {
     private final AccountApiMapper accountApiMapper;
 
     @GetMapping("/{id}/enabled")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
         Account a = queryService.getEnabledById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
         Account a = queryService.getAnyById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @PostMapping("/count")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<Long> countByStatuses(@RequestBody List<AccountStatus> statuses) {
         return ResponseEntity.ok(queryService.countByStatusesNotDeleted(statuses));
     }
@@ -44,6 +48,7 @@ public class ControlPlaneAccountQueryController {
      * Ex: /payment-due-before?date=2026-02-10
      */
     @GetMapping("/payment-due-before")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<List<AccountResponse>> findPaymentDueBefore(
             @RequestParam("date") String isoDate
     ) {

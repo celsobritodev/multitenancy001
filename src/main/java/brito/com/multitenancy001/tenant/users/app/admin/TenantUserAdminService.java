@@ -17,12 +17,11 @@ public class TenantUserAdminService {
 
     public void setUserSuspendedByAdmin(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        tenantExecutor.run(schema, () -> {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.setSuspendedByAdmin(accountId, userId, suspended);
             return null;
         });
     }
 }
-

@@ -25,12 +25,10 @@ public final class ControlPlaneRolePermissions {
         MAP.put(ControlPlaneRole.CONTROLPLANE_OWNER,
                 unmodifiable(EnumSet.allOf(ControlPlanePermission.class)));
 
-        // ADMIN = forte, mas sem ações mais destrutivas (produção-friendly)
-        // Removemos deletes para evitar "um admin apaga tudo" por erro/ataque.
+        // ADMIN = forte, mas sem ações destrutivas (produção-friendly)
         EnumSet<ControlPlanePermission> admin = EnumSet.allOf(ControlPlanePermission.class);
         admin.remove(ControlPlanePermission.CP_TENANT_DELETE);
         admin.remove(ControlPlanePermission.CP_USER_DELETE);
-
         MAP.put(ControlPlaneRole.CONTROLPLANE_ADMIN, unmodifiable(admin));
 
         // BILLING_MANAGER = billing + leitura básica do tenant
@@ -40,15 +38,12 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_BILLING_WRITE
         )));
 
-        // SUPPORT = operações de suporte (inclui reset de senha)
+        // SUPPORT = READ + SUSPEND/RESUME + PASSWORD_RESET (sem deletes; sem write por padrão)
         MAP.put(ControlPlaneRole.CONTROLPLANE_SUPPORT, unmodifiable(EnumSet.of(
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_RESUME,
-                ControlPlanePermission.CP_TENANT_DELETE,
                 ControlPlanePermission.CP_USER_READ,
-                ControlPlanePermission.CP_USER_WRITE,
-                ControlPlanePermission.CP_USER_DELETE,
                 ControlPlanePermission.CP_USER_PASSWORD_RESET
         )));
 

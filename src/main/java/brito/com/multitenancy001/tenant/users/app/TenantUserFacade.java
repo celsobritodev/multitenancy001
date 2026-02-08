@@ -20,7 +20,11 @@ import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
-import brito.com.multitenancy001.tenant.users.api.dto.*;
+import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
+import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
+import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse;
+import brito.com.multitenancy001.tenant.users.api.dto.TenantUserSummaryResponse;
+import brito.com.multitenancy001.tenant.users.api.dto.TenantUsersListResponse;
 import brito.com.multitenancy001.tenant.users.api.mapper.TenantUserApiMapper;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +54,10 @@ public class TenantUserFacade {
 
     public void transferTenantOwner(Long toUserId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
         Long fromUserId = securityUtils.getCurrentUserId();
 
-        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.transferTenantOwnerRole(accountId, fromUserId, toUserId);
             return null;
         });
@@ -61,10 +65,10 @@ public class TenantUserFacade {
 
     public TenantMeResponse getMyProfile() {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser user = tenantUserService.getUser(userId, accountId);
             return tenantUserApiMapper.toMe(user);
         });
@@ -72,7 +76,7 @@ public class TenantUserFacade {
 
     public TenantUserDetailsResponse createTenantUser(TenantUserCreateRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
         if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
 
@@ -97,7 +101,7 @@ public class TenantUserFacade {
 
         Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
 
-        long currentUsers = tenantExecutor.run(schema, () ->
+        long currentUsers = tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 tenantUserService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
         );
 
@@ -106,7 +110,7 @@ public class TenantUserFacade {
         String finalLocale = locale;
         String finalTimezone = timezone;
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser created = tenantUserService.createTenantUser(
                     accountId,
                     name,
@@ -127,7 +131,7 @@ public class TenantUserFacade {
 
     public TenantUsersListResponse listTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
         TenantRole currentRole = securityUtils.getCurrentTenantRole();
         boolean isOwner = currentRole != null && currentRole.isTenantOwner();
@@ -138,7 +142,7 @@ public class TenantUserFacade {
         }
         AccountEntitlementsSnapshot finalEntitlements = entitlements;
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             List<TenantUser> users = tenantUserService.listUsers(accountId);
 
             List<TenantUserListItemResponse> mapped = users.stream()
@@ -153,9 +157,9 @@ public class TenantUserFacade {
 
     public List<TenantUserSummaryResponse> listEnabledTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () ->
+        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 tenantUserService.listEnabledUsers(accountId)
                         .stream()
                         .map(tenantUserApiMapper::toSummary)
@@ -165,9 +169,9 @@ public class TenantUserFacade {
 
     public TenantUserDetailsResponse getTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser user = tenantUserService.getUser(userId, accountId);
             return tenantUserApiMapper.toDetails(user);
         });
@@ -175,9 +179,9 @@ public class TenantUserFacade {
 
     public TenantUserSummaryResponse setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.setSuspendedByAdmin(accountId, userId, suspended);
             TenantUser updated = tenantUserService.getUser(userId, accountId);
             return tenantUserApiMapper.toSummary(updated);
@@ -186,9 +190,9 @@ public class TenantUserFacade {
 
     public TenantUserSummaryResponse setTenantUserSuspendedByAccount(Long userId, boolean suspended) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.setSuspendedByAccount(accountId, userId, suspended);
             TenantUser updated = tenantUserService.getUser(userId, accountId);
             return tenantUserApiMapper.toSummary(updated);
@@ -197,9 +201,9 @@ public class TenantUserFacade {
 
     public void softDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.softDelete(userId, accountId);
             return null;
         });
@@ -207,9 +211,9 @@ public class TenantUserFacade {
 
     public TenantUserSummaryResponse restoreTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser restored = tenantUserService.restore(userId, accountId);
             return tenantUserApiMapper.toSummary(restored);
         });
@@ -217,9 +221,9 @@ public class TenantUserFacade {
 
     public TenantUserSummaryResponse resetTenantUserPassword(Long userId, String newPassword) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser updated = tenantUserService.resetPassword(userId, accountId, newPassword);
             return tenantUserApiMapper.toSummary(updated);
         });
@@ -227,9 +231,9 @@ public class TenantUserFacade {
 
     public void hardDeleteTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.hardDelete(userId, accountId);
             return null;
         });
@@ -252,25 +256,26 @@ public class TenantUserFacade {
         );
 
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
+        String tenantSchema = account.schemaName();
 
         try {
-            String token = tenantExecutor.run(account.schemaName(), () -> {
+            String token = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
                 TenantUser user = tenantUserService.getUserByEmail(email, account.id());
 
                 if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
                     throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
                 }
 
-                String t = jwtTokenProvider.generatePasswordResetToken(
+                String passwordResetToken = jwtTokenProvider.generatePasswordResetToken(
                         user.getEmail(),
-                        account.schemaName(),
+                        tenantSchema,
                         account.id()
                 );
 
-                user.setPasswordResetToken(t);
+                user.setPasswordResetToken(passwordResetToken);
                 user.setPasswordResetExpires(appClock.instant().plus(Duration.ofHours(1)));
                 tenantUserService.save(user);
-                return t;
+                return passwordResetToken;
             });
 
             securityAuditService.record(
@@ -281,7 +286,7 @@ public class TenantUserFacade {
                     email,
                     null,
                     account.id(),
-                    account.schemaName(),
+                    tenantSchema,
                     "{\"expiresHours\":1}"
             );
 
@@ -296,7 +301,7 @@ public class TenantUserFacade {
                     email,
                     null,
                     account.id(),
-                    account.schemaName(),
+                    tenantSchema,
                     "{\"reason\":\"error\"}"
             );
             throw e;
@@ -307,7 +312,7 @@ public class TenantUserFacade {
         if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
 
-        String schema = jwtTokenProvider.getTenantSchemaFromToken(token);
+        String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
         String email = jwtTokenProvider.getEmailFromToken(token);
 
@@ -319,12 +324,12 @@ public class TenantUserFacade {
                 email,
                 null,
                 accountId,
-                schema,
+                tenantSchema,
                 "{\"stage\":\"start\"}"
         );
 
         try {
-            tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+            tenantExecutor.runInTenantSchema(tenantSchema, () -> {
                 tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword);
                 return null;
             });
@@ -337,7 +342,7 @@ public class TenantUserFacade {
                     email,
                     null,
                     accountId,
-                    schema,
+                    tenantSchema,
                     "{\"stage\":\"done\"}"
             );
         } catch (Exception e) {
@@ -349,7 +354,7 @@ public class TenantUserFacade {
                     email,
                     null,
                     accountId,
-                    schema,
+                    tenantSchema,
                     "{\"reason\":\"error\"}"
             );
             throw e;
@@ -358,10 +363,10 @@ public class TenantUserFacade {
 
     public TenantMeResponse updateMyProfile(UpdateMyProfileRequest req) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser updated = tenantUserService.updateProfile(
                     userId,
                     accountId,
@@ -378,9 +383,9 @@ public class TenantUserFacade {
 
     public TenantUserDetailsResponse getEnabledTenantUser(Long userId) {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> {
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             TenantUser user = tenantUserService.getEnabledUser(userId, accountId);
             return tenantUserApiMapper.toDetails(user);
         });
@@ -388,19 +393,19 @@ public class TenantUserFacade {
 
     public long countEnabledTenantUsers() {
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
 
-        return tenantExecutor.run(schema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserService.countEnabledUsersByAccount(accountId));
     }
 
     public void changeMyPassword(TenantChangeMyPasswordRequest req) {
         if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
 
         Long accountId = securityUtils.getCurrentAccountId();
-        String schema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentSchema();
         Long userId = securityUtils.getCurrentUserId();
 
-        tenantExecutor.run(schema, (java.util.function.Supplier<Void>) () -> {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
             tenantUserService.changeMyPassword(
                     userId,
                     accountId,

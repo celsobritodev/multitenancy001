@@ -38,10 +38,10 @@ public class TenantUserProvisioningFacade {
 
     private final AppClock appClock;
 
-    public List<UserSummaryData> listUserSummaries(String schemaName, Long accountId, boolean onlyOperational) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+    public List<UserSummaryData> listUserSummaries(String tenantSchema, Long accountId, boolean onlyOperational) {
+        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        return tenantExecutor.run(schemaName, () ->
+        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantReadOnlyTx(() -> {
 
                     var users = onlyOperational
@@ -68,15 +68,15 @@ public class TenantUserProvisioningFacade {
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
      */
     public UserSummaryData createTenantOwner(
-            String schemaName,
+            String tenantSchema,
             Long accountId,
             String ownerDisplayName,
             String email,
             String rawPassword
     ) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        return tenantExecutor.run(schemaName, () ->
+        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
@@ -143,10 +143,10 @@ public class TenantUserProvisioningFacade {
     /**
      * ✅ (SAFE) Admin bulk: suspende todos MENOS TENANT_OWNER.
      */
-    public int suspendAllUsersByAccount(String schemaName, Long accountId) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+    public int suspendAllUsersByAccount(String tenantSchema, Long accountId) {
+        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        return tenantExecutor.run(schemaName, () ->
+        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantRequiresNew(() -> {
 
                     if (accountId == null) {
@@ -170,9 +170,9 @@ public class TenantUserProvisioningFacade {
     /**
      * ✅ Reativa todos (inclusive owners).
      */
-    public int unsuspendAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName,
+    public int unsuspendAllUsersByAccount(String tenantSchema, Long accountId) {
+        return tenantExecutor.runInTenantSchemaIfReady(
+                tenantSchema,
                 REQUIRED_TABLE,
                 () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.unsuspendAllByAccount(accountId)),
                 0
@@ -182,12 +182,10 @@ public class TenantUserProvisioningFacade {
     /**
      * ✅ (SAFE) Cancelamento / exclusão da conta:
      * soft-delete de todos os usuários MENOS TENANT_OWNER.
-     *
-     * Motivo: mantém o dono "existente" (não-deletado) para consistência/auditoria/recuperação.
      */
-    public int softDeleteAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName,
+    public int softDeleteAllUsersByAccount(String tenantSchema, Long accountId) {
+        return tenantExecutor.runInTenantSchemaIfReady(
+                tenantSchema,
                 REQUIRED_TABLE,
                 () -> transactionExecutor.inTenantRequiresNew(() -> {
 
@@ -195,7 +193,6 @@ public class TenantUserProvisioningFacade {
                         throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
                     }
 
-                    // Guard de sanidade: deve existir pelo menos 1 TENANT_OWNER não deletado.
                     long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
                     if (ownersNotDeleted <= 0) {
                         throw new ApiException(
@@ -206,28 +203,25 @@ public class TenantUserProvisioningFacade {
                     }
 
                     Instant now = appClock.instant();
-
-                    // ✅ soft-delete em massa exceto TENANT_OWNER
                     return tenantUserRepository.softDeleteAllByAccountExceptRole(accountId, TenantRole.TENANT_OWNER, now);
                 }),
                 0
         );
     }
 
-    // ✅ ESTE MÉTODO É O QUE ESTAVA FALTANDO NO SEU ERRO
-    public int restoreAllUsersByAccount(String schemaName, Long accountId) {
-        return tenantExecutor.runIfReady(
-                schemaName,
+    public int restoreAllUsersByAccount(String tenantSchema, Long accountId) {
+        return tenantExecutor.runInTenantSchemaIfReady(
+                tenantSchema,
                 REQUIRED_TABLE,
                 () -> transactionExecutor.inTenantRequiresNew(() -> tenantUserRepository.restoreAllByAccount(accountId)),
                 0
         );
     }
 
-    public void setSuspendedByAdmin(String schemaName, Long accountId, Long userId, boolean suspended) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+    public void setSuspendedByAdmin(String tenantSchema, Long accountId, Long userId, boolean suspended) {
+        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        tenantExecutor.run(schemaName, () ->
+        tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
@@ -262,8 +256,8 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    public void setPasswordResetToken(String schemaName, Long accountId, Long userId, String token, Instant expiresAt) {
-        tenantExecutor.runIfReady(schemaName, REQUIRED_TABLE, () ->
+    public void setPasswordResetToken(String tenantSchema, Long accountId, Long userId, String token, Instant expiresAt) {
+        tenantExecutor.runInTenantSchemaIfReady(tenantSchema, REQUIRED_TABLE, () ->
                 transactionExecutor.inTenantTx(() -> {
                     TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
                             .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
@@ -277,10 +271,10 @@ public class TenantUserProvisioningFacade {
         );
     }
 
-    public TenantUser findByPasswordResetToken(String schemaName, Long accountId, String token) {
-        tenantExecutor.assertReadyOrThrow(schemaName, REQUIRED_TABLE);
+    public TenantUser findByPasswordResetToken(String tenantSchema, Long accountId, String token) {
+        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        return tenantExecutor.run(schemaName, () ->
+        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantReadOnlyTx(() ->
                         tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
                                 .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400))

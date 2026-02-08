@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 @Table(name = "tenant_login_challenges", schema = "public")
 @Getter
 @Setter
-public class TenantLoginChallenge {
+public class TenantLoginChallengeEntity {
 
     private static final Duration DEFAULT_TTL = Duration.ofMinutes(10);
 
@@ -41,13 +41,13 @@ public class TenantLoginChallenge {
     // =========================================================
     // FACTORY (criação explícita; sem @PrePersist)
     // =========================================================
-    public static TenantLoginChallenge create(Instant now, String email, Set<Long> candidateAccountIds) {
+    public static TenantLoginChallengeEntity create(Instant now, String email, Set<Long> candidateAccountIds) {
         if (now == null) throw new IllegalArgumentException("now é obrigatório (use AppClock.instant())");
 
         String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
         if (normalizedEmail == null) throw new IllegalArgumentException("email inválido");
 
-        TenantLoginChallenge c = new TenantLoginChallenge();
+        TenantLoginChallengeEntity c = new TenantLoginChallengeEntity();
         c.email = normalizedEmail;
         c.createdAt = now;
         c.expiresAt = now.plus(DEFAULT_TTL);
@@ -55,14 +55,14 @@ public class TenantLoginChallenge {
         return c;
     }
 
-    public static TenantLoginChallenge create(Instant now, Duration ttl, String email, Set<Long> candidateAccountIds) {
+    public static TenantLoginChallengeEntity create(Instant now, Duration ttl, String email, Set<Long> candidateAccountIds) {
         if (now == null) throw new IllegalArgumentException("now é obrigatório (use AppClock.instant())");
         if (ttl == null || ttl.isNegative() || ttl.isZero()) throw new IllegalArgumentException("ttl inválido");
 
         String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
         if (normalizedEmail == null) throw new IllegalArgumentException("email inválido");
 
-        TenantLoginChallenge c = new TenantLoginChallenge();
+        TenantLoginChallengeEntity c = new TenantLoginChallengeEntity();
         c.email = normalizedEmail;
         c.createdAt = now;
         c.expiresAt = now.plus(ttl);

@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginConfirmRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantRefreshRequest;
@@ -75,14 +76,8 @@ public class TenantAuthController {
             return ResponseEntity.status(409).body(body);
         }
 
-        return ResponseEntity.internalServerError().body(
-                new TenantSelectionRequiredResponse(
-                        "INTERNAL_ERROR",
-                        "Resposta inesperada do servidor",
-                        null,
-                        null
-                )
-        );
+        // Semântica correta: erro padrão via GlobalExceptionHandler (ApiEnumErrorResponse)
+        throw new ApiException("INTERNAL_ERROR", "Resposta inesperada do servidor", 500);
     }
 
     /**

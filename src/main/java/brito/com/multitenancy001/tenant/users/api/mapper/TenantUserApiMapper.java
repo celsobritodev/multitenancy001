@@ -4,7 +4,7 @@ import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
-import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantActorRef;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse;
@@ -18,23 +18,6 @@ import java.util.Locale;
 
 @Component
 public class TenantUserApiMapper {
-
-	private static SystemRoleName toSystemRoleOrNull(TenantRole tenantRole) {
-	    if (tenantRole == null) return null;
-
-	    return switch (tenantRole) {
-	        case TENANT_OWNER -> SystemRoleName.TENANT_OWNER;
-	        case TENANT_ADMIN -> SystemRoleName.TENANT_ADMIN;
-	        case TENANT_SUPPORT -> SystemRoleName.TENANT_SUPPORT;
-	        case TENANT_USER -> SystemRoleName.TENANT_USER;
-	        case TENANT_PRODUCT_MANAGER -> SystemRoleName.TENANT_PRODUCT_MANAGER;
-	        case TENANT_SALES_MANAGER -> SystemRoleName.TENANT_SALES_MANAGER;
-	        case TENANT_BILLING_MANAGER -> SystemRoleName.TENANT_BILLING_MANAGER;
-	        case TENANT_READ_ONLY -> SystemRoleName.TENANT_READ_ONLY;
-	        case TENANT_OPERATOR -> SystemRoleName.TENANT_OPERATOR;
-	    };
-	}
-
 
     public TenantUserSummaryResponse toSummary(TenantUser tenantUser) {
         boolean enabled =
@@ -53,7 +36,7 @@ public class TenantUserApiMapper {
 
     public TenantMeResponse toMe(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = toSystemRoleOrNull(u.getRole());
+        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
 
         return new TenantMeResponse(
                 u.getId(),
@@ -76,7 +59,7 @@ public class TenantUserApiMapper {
 
     public TenantUserDetailsResponse toDetails(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = toSystemRoleOrNull(u.getRole());
+        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
 
         return new TenantUserDetailsResponse(
                 u.getId(),
@@ -99,7 +82,7 @@ public class TenantUserApiMapper {
 
     public TenantUserListItemResponse toListItemBasic(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = toSystemRoleOrNull(u.getRole());
+        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
 
         return new TenantUserListItemResponse(
                 u.getId(),
@@ -127,7 +110,7 @@ public class TenantUserApiMapper {
                 .toList();
 
         TenantActorRef createdBy = mapCreatedBy(u.getAudit());
-        SystemRoleName role = toSystemRoleOrNull(u.getRole());
+        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
 
         return new TenantUserListItemResponse(
                 u.getId(),

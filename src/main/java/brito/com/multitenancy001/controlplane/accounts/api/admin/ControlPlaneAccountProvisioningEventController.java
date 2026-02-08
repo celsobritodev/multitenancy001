@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.controlplane.accounts.api.admin;
 
-import java.util.Optional;
-
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountProvisioningEventResponse;
 import brito.com.multitenancy001.controlplane.accounts.app.query.AccountProvisioningEventQueryService;
 import brito.com.multitenancy001.controlplane.accounts.app.query.dto.AccountProvisioningEventData;
@@ -10,7 +8,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/controlplane/accounts/{accountId}/provisioning-events")
@@ -32,11 +33,15 @@ public class ControlPlaneAccountProvisioningEventController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<Page<AccountProvisioningEventResponse>> list(@PathVariable Long accountId, Pageable pageable) {
-        return ResponseEntity.ok(queryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventController::toHttp));
+        return ResponseEntity.ok(
+                queryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventController::toHttp)
+        );
     }
 
     @GetMapping("/latest")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<AccountProvisioningEventResponse> latest(
             @PathVariable Long accountId,
             @RequestParam(name = "status", required = false) ProvisioningStatus status
@@ -46,4 +51,3 @@ public class ControlPlaneAccountProvisioningEventController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
-

@@ -1,24 +1,20 @@
-package brito.com.multitenancy001.tenant.auth.app;
+package brito.com.multitenancy001.infrastructure.tenant.auth;
 
-import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventAuditService;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
-import brito.com.multitenancy001.shared.domain.EmailNormalizer;
-import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
-import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
-import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -29,61 +25,33 @@ import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
-public class TenantAuthSupport {
+public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics {
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
-    private final org.springframework.security.authentication.AuthenticationManager authenticationManager;
-    private final JwtTokenProvider jwtTokenProvider;
-
-    private final TenantUserRepository tenantUserRepository;
     private final TenantExecutor tenantExecutor;
-
+    private final AuthenticationManager authenticationManager;
+    private final TenantUserRepository tenantUserRepository;
+    private final JwtTokenProvider jwtTokenProvider;
     private final AppClock appClock;
-    private final AuthEventAuditService authEventAuditService;
 
-    static String normalizeEmailRequired(String raw) {
-        String email = EmailNormalizer.normalizeOrNull(raw);
-        if (!StringUtils.hasText(email)) {
-            throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
-        }
-        return email;
-    }
-
-    /**
-     * Mantém o método só pra não espalhar lógica/casts:
-     * aqui ele fica tipado e simples (e evita Object + toString()).
-     */
-    static SystemRoleName toSystemRoleOrNull(TenantRole tenantRole) {
-        if (tenantRole == null) return null;
-
-        return switch (tenantRole) {
-            case TENANT_OWNER -> SystemRoleName.TENANT_OWNER;
-            case TENANT_ADMIN -> SystemRoleName.TENANT_ADMIN;
-            case TENANT_SUPPORT -> SystemRoleName.TENANT_SUPPORT;
-            case TENANT_USER -> SystemRoleName.TENANT_USER;
-            case TENANT_PRODUCT_MANAGER -> SystemRoleName.TENANT_PRODUCT_MANAGER;
-            case TENANT_SALES_MANAGER -> SystemRoleName.TENANT_SALES_MANAGER;
-            case TENANT_BILLING_MANAGER -> SystemRoleName.TENANT_BILLING_MANAGER;
-            case TENANT_READ_ONLY -> SystemRoleName.TENANT_READ_ONLY;
-            case TENANT_OPERATOR -> SystemRoleName.TENANT_OPERATOR;
-        };
-    }
-
-    boolean verifyPasswordInTenant(AccountSnapshot account, String email, String password) {
+    @Override
+    public boolean verifyPasswordInTenant(AccountSnapshot account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) return false;
 
         String tenantSchema = account.schemaName();
         if (!StringUtils.hasText(tenantSchema)) return false;
 
+        if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
+
         try {
-            return tenantExecutor.run(tenantSchema, () -> {
-                Authentication authRequest = new UsernamePasswordAuthenticationToken(email, password);
+            return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
 
                 tenantUserRepository
-                        .findByEmailAndAccountIdAndDeletedFalse(email, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
+                        .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
+                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
                 return true;
             });
@@ -94,7 +62,8 @@ public class TenantAuthSupport {
         }
     }
 
-    TenantLoginResult doTenantAuthentication(AccountSnapshot account, String email, String password) {
+    @Override
+    public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) {
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
@@ -104,19 +73,21 @@ public class TenantAuthSupport {
             throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
         }
 
-        try {
-            return tenantExecutor.run(tenantSchema, () -> {
+        if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) {
+            throw new ApiException("INVALID_LOGIN", "email e senha são obrigatórios", 400);
+        }
 
-                Authentication authRequest = new UsernamePasswordAuthenticationToken(email, password);
+        try {
+            return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+
+                Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
 
                 TenantUser user = tenantUserRepository
-                        .findByEmailAndAccountIdAndDeletedFalse(email, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
+                        .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
+                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
-                if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
-                    throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-                }
+                ensureUserActive(user);
 
                 tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
@@ -143,9 +114,9 @@ public class TenantAuthSupport {
                         account.id()
                 );
 
-                SystemRoleName role = toSystemRoleOrNull(user.getRole());
+                SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
 
-                JwtResult jwt = new JwtResult(
+                return new JwtResult(
                         accessToken,
                         refreshToken,
                         user.getId(),
@@ -154,32 +125,20 @@ public class TenantAuthSupport {
                         account.id(),
                         tenantSchema
                 );
-
-                authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, user.getEmail(), user.getId(), account.id(), tenantSchema,
-                        "{\"mode\":\"password\"}");
-
-                return new TenantLoginResult.LoginSuccess(jwt);
             });
         } catch (BadCredentialsException e) {
-            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
-                    "{\"reason\":\"bad_credentials\"}");
             throw e;
-        } catch (UsernameNotFoundException e) {
-            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
-                    "{\"reason\":\"user_not_found\"}");
+        } catch (UsernameNotFoundException | InternalAuthenticationServiceException e) {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
-        } catch (InternalAuthenticationServiceException e) {
-            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
-                    "{\"reason\":\"internal_auth\"}");
-            throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
-            authEventAuditService.record(AuthDomain.TENANT, AuthEventType.LOGIN_FAILURE, AuditOutcome.FAILURE, email, null, account.id(), tenantSchema,
-                    "{\"reason\":\"unexpected\"}");
             throw new ApiException("AUTH_ERROR", "Falha ao autenticar", 500);
         }
     }
 
-    JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String email) {
+    @Override
+    public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
         if (account == null || account.id() == null) {
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
@@ -189,15 +148,17 @@ public class TenantAuthSupport {
             throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
         }
 
-        return tenantExecutor.run(tenantSchema, () -> {
+        if (!StringUtils.hasText(normalizedEmail)) {
+            throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
+        }
+
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
 
             TenantUser user = tenantUserRepository
-                    .findByEmailAndAccountIdAndDeletedFalse(email, account.id())
+                    .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
                     .orElseThrow(() -> new ApiException("INVALID_LOGIN", "Usuário não encontrado", 401));
 
-            if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
-                throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
-            }
+            ensureUserActive(user);
 
             tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
@@ -224,7 +185,7 @@ public class TenantAuthSupport {
                     account.id()
             );
 
-            SystemRoleName role = toSystemRoleOrNull(user.getRole());
+            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
 
             return new JwtResult(
                     accessToken,
@@ -236,5 +197,82 @@ public class TenantAuthSupport {
                     tenantSchema
             );
         });
+    }
+
+    @Override
+    public JwtResult refreshTenantJwt(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+        }
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
+        if (authDomain != AuthDomain.REFRESH) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+        }
+
+        String email = jwtTokenProvider.getEmailFromToken(refreshToken);
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (email ausente)", 401);
+        }
+
+        Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+        if (accountId == null) {
+            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
+        }
+
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                    .orElseThrow(() -> new ApiException("INVALID_REFRESH", "refreshToken inválido", 401));
+
+            ensureUserActive(user);
+
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    tenantSchema,
+                    appClock.instant(),
+                    authorities
+            );
+
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
+
+            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, accountId, tenantSchema);
+
+            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
+
+            return new JwtResult(
+                    newAccessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    role,
+                    accountId,
+                    tenantSchema
+            );
+        });
+    }
+
+    private static void ensureUserActive(TenantUser user) {
+        if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+        }
     }
 }
