@@ -18,7 +18,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ControlPlaneAccountProvisioningEventController {
 
-    private final AccountProvisioningEventQueryService queryService;
+    private final AccountProvisioningEventQueryService accountProvisioningEventQueryService;
 
     private static AccountProvisioningEventResponse toHttp(AccountProvisioningEventData d) {
         return new AccountProvisioningEventResponse(
@@ -36,7 +36,7 @@ public class ControlPlaneAccountProvisioningEventController {
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<Page<AccountProvisioningEventResponse>> list(@PathVariable Long accountId, Pageable pageable) {
         return ResponseEntity.ok(
-                queryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventController::toHttp)
+                accountProvisioningEventQueryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventController::toHttp)
         );
     }
 
@@ -46,7 +46,7 @@ public class ControlPlaneAccountProvisioningEventController {
             @PathVariable Long accountId,
             @RequestParam(name = "status", required = false) ProvisioningStatus status
     ) {
-        Optional<AccountProvisioningEventData> d = queryService.getLatestByAccount(accountId, status);
+        Optional<AccountProvisioningEventData> d = accountProvisioningEventQueryService.getLatestByAccount(accountId, status);
         return d.map(x -> ResponseEntity.ok(toHttp(x)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

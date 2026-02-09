@@ -30,7 +30,6 @@ import org.springframework.transaction.PlatformTransactionManager;
                 "brito.com.multitenancy001.controlplane.accounts.persistence",
                 "brito.com.multitenancy001.controlplane.users.persistence",
                 "brito.com.multitenancy001.controlplane.billing.persistence",
-
                 // ✅ necessário para encontrar AccountJobScheduleRepository
                 "brito.com.multitenancy001.controlplane.scheduling.persistence",
 

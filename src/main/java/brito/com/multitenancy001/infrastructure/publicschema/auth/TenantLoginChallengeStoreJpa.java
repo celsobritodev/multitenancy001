@@ -15,27 +15,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TenantLoginChallengeStoreJpa implements TenantLoginChallengeStore {
 
-    private final TenantLoginChallengeJpaRepository repo;
+    private final TenantLoginChallengeJpaRepository tenantLoginChallengeJpaRepository;
 
     @Override
     public UUID create(Instant now, String normalizedEmail, Set<Long> candidateAccountIds) {
         TenantLoginChallengeEntity e = TenantLoginChallengeEntity.create(now, normalizedEmail, candidateAccountIds);
-        e = repo.save(e);
+        e = tenantLoginChallengeJpaRepository.save(e);
         return e.getId();
     }
 
     @Override
     public Optional<TenantLoginChallenge> findValid(UUID id, Instant now) {
-        return repo.findByIdAndExpiresAtAfterAndUsedAtIsNull(id, now)
+        return tenantLoginChallengeJpaRepository.findByIdAndExpiresAtAfterAndUsedAtIsNull(id, now)
                 .map(this::toDomain);
     }
 
     @Override
     public void markUsed(UUID id, Instant now) {
-        repo.findById(id).ifPresent(e -> {
+        tenantLoginChallengeJpaRepository.findById(id).ifPresent(e -> {
             if (e.isUsed()) return;
             e.markUsed(now);
-            repo.save(e);
+            tenantLoginChallengeJpaRepository.save(e);
         });
     }
 

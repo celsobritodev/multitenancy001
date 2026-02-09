@@ -17,6 +17,7 @@ public class TenantUnitOfWork {
     public <T> T tx(String tenantSchema, Supplier<T> fn) {
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantTx(fn));
     }
+
     public void tx(String tenantSchema, Runnable fn) {
         tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantTx(fn));
     }
@@ -33,4 +34,3 @@ public class TenantUnitOfWork {
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
     }
 }
-

@@ -38,6 +38,8 @@ public class TenantSchemaProvisioningService {
     // =========================================================
     // Provisioning
     // =========================================================
+    
+ // schemaName = entrada crua (ainda não necessariamente existente). TenantExecutor usa tenantSchema.
 
     public boolean ensureSchemaExistsAndMigrate(String schemaName) {
         validateSchemaName(schemaName);

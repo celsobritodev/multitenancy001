@@ -14,7 +14,7 @@ import java.time.zone.ZoneRules;
 @RequiredArgsConstructor
 public class AccountJobScheduleService {
 
-    private final AccountJobScheduleRepository repo;
+    private final AccountJobScheduleRepository accountJobScheduleRepository;
     private final AppClock appClock;
 
     /**
@@ -63,6 +63,6 @@ public class AccountJobScheduleService {
             s.setNextRunAt(next);
         }
         s.setUpdatedAt(now);
-        return repo.save(s);
+        return accountJobScheduleRepository.save(s);
     }
 }

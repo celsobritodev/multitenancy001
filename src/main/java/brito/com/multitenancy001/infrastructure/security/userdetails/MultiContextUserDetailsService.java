@@ -41,24 +41,17 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         return normalized;
     }
 
-    /**
-     * Spring Security exige essa assinatura, mas aqui tratamos o parâmetro como EMAIL.
-     *
-     * Regras:
-     * - CONTROLPLANE: resolve identity -> CP user id, carrega user por ID
-     * - TENANT: carrega por email dentro do schema do tenant (TenantContext já está bindado)
-     */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        String schemaName = TenantContext.getOrNull();
+        String tenantSchema = TenantContext.getOrNull();
         String loginEmail = normalizeEmailOrThrow(email);
 
         // CONTROL PLANE
-        if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
+        if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
             return loadControlPlaneUserByLoginIdentity(loginEmail);
         }
 
-        // TENANT
+        // TENANT (tenantSchema já está bindado => tenant pronto)
         Instant now = now();
 
         TenantUser user = tenantUserRepository
@@ -66,12 +59,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 
-    /**
-     * ✅ SaaS moderno top: email -> login_identities(subject_id) -> controlplane_users(id)
-     */
     public UserDetails loadControlPlaneUserByLoginIdentity(String email) {
         Instant now = now();
 
@@ -87,8 +77,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
-
-    // Mantém seus métodos utilitários (caso você use em outros fluxos)
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
         Instant now = now();
@@ -112,8 +100,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     public UserDetails loadTenantUserByEmail(String email, Long accountId) {
-        String schemaName = TenantContext.getOrNull();
-        if (schemaName == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(schemaName)) {
+        String tenantSchema = TenantContext.getOrNull();
+
+        if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
             throw new ApiException(
                     "TENANT_CONTEXT_REQUIRED",
                     "TenantContext não está bindado para autenticar usuário tenant",
@@ -130,7 +119,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
 
         Instant now = now();
-
         String loginEmail = normalizeEmailOrThrow(email);
 
         TenantUser user = tenantUserRepository
@@ -138,6 +126,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return AuthenticatedUserContext.fromTenantUser(user, schemaName, now, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 }

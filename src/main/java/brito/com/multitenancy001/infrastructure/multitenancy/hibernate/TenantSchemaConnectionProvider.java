@@ -50,9 +50,6 @@ public class TenantSchemaConnectionProvider
                 ? tenantIdentifier.trim()
                 : DEFAULT_SCHEMA;
 
-        // ✅ Log inteligente:
-        // - tenantIdentifier vazio é NORMAL no root/public → DEBUG
-        // - WARN só quando há divergência real entre tenantParam e tenantThread
         if (!StringUtils.hasText(tenantIdentifier)) {
             if (log.isDebugEnabled()) {
                 log.debug("🏠 [MT] tenantParam vazio → usando DEFAULT ({}) | thread={} | tenantSchemaThread={}",
@@ -63,7 +60,7 @@ public class TenantSchemaConnectionProvider
                     threadId, effectiveTenantSchema, threadTenantSchema);
         }
 
-        validateSchemaName(effectiveTenantSchema);
+        validateTenantSchema(effectiveTenantSchema);
 
         Connection connection = dataSource.getConnection();
 
@@ -106,7 +103,7 @@ public class TenantSchemaConnectionProvider
 
         if (connection == null) {
             if (log.isDebugEnabled()) {
-                log.debug("🧹 [MT] releaseConnection ignorado (connection=null) | thread={} | tenantSchemaParam={}",
+                log.debug("🧹 [MT] releaseConnection ignorado (connection=null) | thread={} | tenantParam={}",
                         threadId, tenantIdentifier);
             }
             return;
@@ -114,7 +111,7 @@ public class TenantSchemaConnectionProvider
 
         if (connection.isClosed()) {
             if (log.isDebugEnabled()) {
-                log.debug("🧹 [MT] releaseConnection ignorado (connection já fechada) | thread={} | tenantSchemaParam={}",
+                log.debug("🧹 [MT] releaseConnection ignorado (connection já fechada) | thread={} | tenantParam={}",
                         threadId, tenantIdentifier);
             }
             return;
@@ -124,26 +121,26 @@ public class TenantSchemaConnectionProvider
             String resetSearchPath = "SET search_path TO " + quoteIdentifier(DEFAULT_SCHEMA) + ";";
 
             if (log.isDebugEnabled()) {
-                log.debug("🧹 [MT] releaseConnection | thread={} | tenantSchemaParam={} | SQL={}",
+                log.debug("🧹 [MT] releaseConnection | thread={} | tenantParam={} | SQL={}",
                         threadId, tenantIdentifier, resetSearchPath);
             }
 
             stmt.execute(resetSearchPath);
 
         } catch (SQLException e) {
-            log.warn("⚠️ [MT] Falha ao resetar search_path no releaseConnection | thread={} | tenantSchemaParam={}",
+            log.warn("⚠️ [MT] Falha ao resetar search_path no releaseConnection | thread={} | tenantParam={}",
                     threadId, tenantIdentifier, e);
         } finally {
             connection.close();
 
             if (log.isDebugEnabled()) {
-                log.debug("🔒 [MT] conexão fechada | thread={} | tenantSchemaParam={}", threadId, tenantIdentifier);
+                log.debug("🔒 [MT] conexão fechada | thread={} | tenantParam={}", threadId, tenantIdentifier);
             }
         }
     }
 
-    private void ensureSchemaExists(Connection connection, String schemaName) throws SQLException {
-        String quotedSchema = quoteIdentifier(schemaName);
+    private void ensureSchemaExists(Connection connection, String tenantSchema) throws SQLException {
+        String quotedSchema = quoteIdentifier(tenantSchema);
 
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE SCHEMA IF NOT EXISTS " + quotedSchema);
@@ -151,27 +148,25 @@ public class TenantSchemaConnectionProvider
 
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT 1 FROM information_schema.schemata WHERE schema_name = ?")) {
-            ps.setString(1, schemaName);
+            ps.setString(1, tenantSchema);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
-                    throw new SQLException("Schema " + schemaName + " não encontrado após CREATE");
+                    throw new SQLException("Schema " + tenantSchema + " não encontrado após CREATE");
                 }
             }
         }
     }
 
-    private void validateSchemaName(String schemaName) {
-        if (!StringUtils.hasText(schemaName)) {
-            throw new IllegalArgumentException("schemaName vazio");
+    private void validateTenantSchema(String tenantSchema) {
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new IllegalArgumentException("tenantSchema vazio");
         }
-        if (!schemaName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            throw new IllegalArgumentException("schemaName inválido: " + schemaName);
+        if (!tenantSchema.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("tenantSchema inválido: " + tenantSchema);
         }
     }
 
     private String quoteIdentifier(String identifier) {
-        // Mantive simples igual ao seu, pois você já valida o regex seguro.
         return "\"" + identifier + "\"";
     }
 }
-

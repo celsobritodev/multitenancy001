@@ -27,32 +27,27 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
         final String method = request.getMethod();
         final String uri = request.getRequestURI();
 
+        final String rawHeader = request.getHeader(TENANT_HEADER);
+        final String tenantHeader = (rawHeader == null ? null : rawHeader.trim()); // entrada crua
+        final String tenantSchemaFromHeader = StringUtils.hasText(tenantHeader) ? tenantHeader : null; // pronto p/ bind (public=null)
+        final String tenantForLog = (tenantSchemaFromHeader != null ? tenantSchemaFromHeader : "PUBLIC");
+
         // ✅ Se tem Bearer, QUEM MANDA É O TOKEN (não o header)
         final String authHeader = request.getHeader("Authorization");
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
-            String raw = request.getHeader(TENANT_HEADER);
-            String tenantHeader = (raw == null ? null : raw.trim());
-            String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
 
-            log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
+            log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | thread={}",
                     method, uri, tenantForLog, threadId);
 
             filterChain.doFilter(request, response);
             return;
         }
 
-        // ✅ Sem Bearer (ex.: rotas públicas) -> pode bindar por header se você quiser
-        final String raw = request.getHeader(TENANT_HEADER);
-        final String tenantHeader = (raw == null ? null : raw.trim());
-        final String tenantForLog = StringUtils.hasText(tenantHeader) ? tenantHeader : "PUBLIC";
-
-        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
-            log.info("🌐 [REQ] {} {} | X-Tenant={} | thread={}",
+        // ✅ Sem Bearer -> pode bindar por header (entrada crua -> tenantSchema)
+        try (TenantContext.Scope ignored = TenantContext.scope(tenantSchemaFromHeader)) {
+            log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | thread={}",
                     method, uri, tenantForLog, threadId);
             filterChain.doFilter(request, response);
-
-        } finally {
-            try { TenantContext.clear(); } catch (Exception ignore) {}
         }
     }
 
@@ -65,4 +60,3 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
                 || path.startsWith("/favicon.ico");
     }
 }
-

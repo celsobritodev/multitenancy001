@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlanePaymentQueryController {
 
-    private final ControlPlanePaymentQueryService service;
+    private final ControlPlanePaymentQueryService controlPlanePaymentQueryService;
 
     /**
      * Lista pagamentos por status (ex.: PENDING/COMPLETED/FAILED...).
@@ -31,7 +31,7 @@ public class ControlPlanePaymentQueryController {
     @GetMapping("/status/{status}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
     public ResponseEntity<List<PaymentResponse>> findByStatus(@PathVariable PaymentStatus status) {
-        return ResponseEntity.ok(service.findByStatus(status));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.findByStatus(status));
     }
 
     /**
@@ -47,7 +47,7 @@ public class ControlPlanePaymentQueryController {
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam("endDate")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate
     ) {
-        return ResponseEntity.ok(service.getTotalPaidInPeriod(accountId, startDate, endDate));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.getTotalPaidInPeriod(accountId, startDate, endDate));
     }
 
     /**
@@ -59,6 +59,6 @@ public class ControlPlanePaymentQueryController {
             + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
     )
     public ResponseEntity<Long> countCompletedPayments(@PathVariable Long accountId) {
-        return ResponseEntity.ok(service.countCompletedPayments(accountId));
+        return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }
 }

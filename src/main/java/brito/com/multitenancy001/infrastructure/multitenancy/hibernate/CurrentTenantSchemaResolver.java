@@ -15,7 +15,7 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
     // ---------------------------------------------------------------------
-    // ✅ NOVO PADRÃO (limpo, coerente)
+    // ✅ Contexto ativo => tenantSchema
     // ---------------------------------------------------------------------
 
     public static void bindSchemaToCurrentThread(String tenantSchema) {
@@ -27,26 +27,13 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
     }
 
     public static String resolveBoundSchemaOrDefault() {
-        String schema = TenantContext.getOrNull();
-        return (schema != null ? schema : DEFAULT_SCHEMA);
+        String tenantSchema = TenantContext.getOrNull();
+        return (tenantSchema != null ? tenantSchema : DEFAULT_SCHEMA);
     }
 
     public static void unbindSchemaFromCurrentThread() {
         TenantContext.clear();
     }
-
-    // ---------------------------------------------------------------------
-    // ⚠️ COMPATIBILIDADE (NÃO USAR EM CÓDIGO NOVO)
-    // ---------------------------------------------------------------------
-
-  
-
- 
-
-
-
-
-
 
     // ---------------------------------------------------------------------
     // Hibernate integration
@@ -74,4 +61,3 @@ public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResol
         return DEFAULT_SCHEMA.equals(tenantIdentifier);
     }
 }
-

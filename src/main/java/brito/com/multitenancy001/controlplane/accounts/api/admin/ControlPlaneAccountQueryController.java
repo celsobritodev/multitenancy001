@@ -18,27 +18,27 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryController {
 
-    private final ControlPlaneAccountQueryService queryService;
+    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
     private final AccountApiMapper accountApiMapper;
 
     @GetMapping("/{id}/enabled")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
-        Account a = queryService.getEnabledById(id);
+        Account a = controlPlaneAccountQueryService.getEnabledById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
-        Account a = queryService.getAnyById(id);
+        Account a = controlPlaneAccountQueryService.getAnyById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @PostMapping("/count")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<Long> countByStatuses(@RequestBody List<AccountStatus> statuses) {
-        return ResponseEntity.ok(queryService.countByStatusesNotDeleted(statuses));
+        return ResponseEntity.ok(controlPlaneAccountQueryService.countByStatusesNotDeleted(statuses));
     }
 
     /**
@@ -54,7 +54,7 @@ public class ControlPlaneAccountQueryController {
     ) {
         LocalDate date = LocalDate.parse(isoDate);
         return ResponseEntity.ok(
-                queryService.findPaymentDueBeforeNotDeleted(date)
+                controlPlaneAccountQueryService.findPaymentDueBeforeNotDeleted(date)
                         .stream()
                         .map(accountApiMapper::toResponse)
                         .toList()

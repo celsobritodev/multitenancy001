@@ -16,15 +16,15 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountProvis
 @Service
 public class AccountProvisioningEventQueryService {
 
-    private final AccountProvisioningEventRepository repository;
+    private final AccountProvisioningEventRepository accountProvisioningEventRepository;
 
-    public AccountProvisioningEventQueryService(AccountProvisioningEventRepository repository) {
-        this.repository = repository;
+    public AccountProvisioningEventQueryService(AccountProvisioningEventRepository accountProvisioningEventRepository) {
+        this.accountProvisioningEventRepository = accountProvisioningEventRepository;
     }
 
     @Transactional(readOnly = true)
     public Page<AccountProvisioningEventData> listByAccount(Long accountId, Pageable pageable) {
-        return repository.findByAccountId(accountId, pageable)
+        return accountProvisioningEventRepository.findByAccountId(accountId, pageable)
                 .map(this::toData);
     }
 
@@ -36,9 +36,9 @@ public class AccountProvisioningEventQueryService {
         Optional<AccountProvisioningEvent> event;
 
         if (requireStatus == null) {
-            event = repository.findTopByAccountIdOrderByCreatedAtDesc(accountId);
+            event = accountProvisioningEventRepository.findTopByAccountIdOrderByCreatedAtDesc(accountId);
         } else {
-            event = repository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(accountId, requireStatus);
+            event = accountProvisioningEventRepository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(accountId, requireStatus);
         }
 
         return event.map(this::toData);

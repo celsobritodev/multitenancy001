@@ -24,15 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 @DependsOn("flywayInitializer")
 public class AccountJobScheduler {
 
-    private final AccountJobScheduleRepository repo;
-    private final PublicUnitOfWork uow;
+    private final AccountJobScheduleRepository accountJobScheduleRepository;
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AppClock appClock;
 
     @Scheduled(fixedDelayString = "PT30S")
     public void runDueJobs() {
-        uow.requiresNew(() -> {
+        publicUnitOfWork.requiresNew(() -> {
             Instant now = appClock.instant();
-            var due = repo.findDue(now);
+            var due = accountJobScheduleRepository.findDue(now);
 
             if (!due.isEmpty()) {
                 log.info("⏱️ Encontrados {} jobs vencidos (now={})", due.size(), now);

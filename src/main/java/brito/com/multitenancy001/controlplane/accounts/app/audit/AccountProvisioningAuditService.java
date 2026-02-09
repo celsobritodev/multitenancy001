@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 public class AccountProvisioningAuditService {
 
     private final PublicUnitOfWork publicUnitOfWork;
-    private final AccountProvisioningEventRepository repository;
+    private final AccountProvisioningEventRepository accountProvisioningEventRepository;
     private final AppClock appClock;
 
     public void started(Long accountId, String message, String detailsJson) {
@@ -46,7 +46,7 @@ public class AccountProvisioningAuditService {
                     detailsJson,
                     appClock.instant()
             );
-            repository.save(e);
+            accountProvisioningEventRepository.save(e);
         });
     }
 }

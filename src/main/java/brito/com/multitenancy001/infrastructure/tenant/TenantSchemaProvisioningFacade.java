@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 public class TenantSchemaProvisioningFacade {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
+    
+ // schemaName = entrada crua (ainda não necessariamente existente). TenantExecutor usa tenantSchema.
 
     public boolean ensureSchemaExistsAndMigrate(String schemaName) {
         return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
