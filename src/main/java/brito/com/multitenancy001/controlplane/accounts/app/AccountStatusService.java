@@ -43,17 +43,20 @@ public class AccountStatusService {
 
             accountRepository.save(account);
 
+            // Fronteira explícita: schemaName (dado da conta) -> tenantSchema (contexto de execução)
+            String tenantSchema = account.getSchemaName();
+
             int affected = 0;
             boolean applied = false;
             AccountStatusSideEffect action = AccountStatusSideEffect.NONE;
 
             if (newStatus == AccountStatus.SUSPENDED) {
                 // ✅ Este método agora é SAFE (suspende todos menos TENANT_OWNER)
-                affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;
             } else if (newStatus == AccountStatus.ACTIVE) {
-                affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(account.getSchemaName(), account.getId());
+                affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.UNSUSPEND_BY_ACCOUNT;
             } else if (newStatus == AccountStatus.CANCELLED) {
@@ -67,7 +70,7 @@ public class AccountStatusService {
                     account.getStatus().name(),
                     previous == null ? null : previous.name(),
                     appClock.instant(),
-                    account.getSchemaName(),
+                    account.getSchemaName(), // CP continua falando schemaName no resultado
                     applied,
                     action.name(),
                     affected
@@ -89,7 +92,8 @@ public class AccountStatusService {
             account.softDelete(appClock.instant());
             accountRepository.save(account);
 
-            tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+            String tenantSchema = account.getSchemaName();
+            tenantUserProvisioningFacade.softDeleteAllUsersByAccount(tenantSchema, account.getId());
         });
     }
 
@@ -107,7 +111,8 @@ public class AccountStatusService {
             account.restore();
             accountRepository.save(account);
 
-            tenantUserProvisioningFacade.restoreAllUsersByAccount(account.getSchemaName(), account.getId());
+            String tenantSchema = account.getSchemaName();
+            tenantUserProvisioningFacade.restoreAllUsersByAccount(tenantSchema, account.getId());
         });
     }
 
@@ -120,7 +125,8 @@ public class AccountStatusService {
             accountRepository.save(account);
         });
 
-        return tenantUserProvisioningFacade.softDeleteAllUsersByAccount(account.getSchemaName(), account.getId());
+        String tenantSchema = account.getSchemaName();
+        return tenantUserProvisioningFacade.softDeleteAllUsersByAccount(tenantSchema, account.getId());
     }
 
     private Account getAccountByIdRaw(Long accountId) {

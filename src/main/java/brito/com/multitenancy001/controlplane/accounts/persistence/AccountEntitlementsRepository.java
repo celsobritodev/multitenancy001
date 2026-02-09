@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 
+import java.time.Instant;
 import java.util.Optional;
 
 public interface AccountEntitlementsRepository extends JpaRepository<AccountEntitlements, Long> {
@@ -22,6 +23,9 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
      *
      * IMPORTANTE:
      * Deve ser executado dentro de uma TX write-capable (via PublicUnitOfWork.tx()).
+     *
+     * Regra AppClock:
+     *  Receber instantes via parâmetros.
      */
     @Modifying
     @Query(
@@ -30,7 +34,7 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
                 account_id, max_users, max_products, max_storage_mb, created_at, updated_at
             )
             VALUES (
-                :accountId, :maxUsers, :maxProducts, :maxStorageMb, now(), now()
+                :accountId, :maxUsers, :maxProducts, :maxStorageMb, :createdAt, :updatedAt
             )
             ON CONFLICT (account_id) DO NOTHING
             """,
@@ -40,7 +44,8 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
             @Param("accountId") Long accountId,
             @Param("maxUsers") Integer maxUsers,
             @Param("maxProducts") Integer maxProducts,
-            @Param("maxStorageMb") Integer maxStorageMb
+            @Param("maxStorageMb") Integer maxStorageMb,
+            @Param("createdAt") Instant createdAt,
+            @Param("updatedAt") Instant updatedAt
     );
 }
-

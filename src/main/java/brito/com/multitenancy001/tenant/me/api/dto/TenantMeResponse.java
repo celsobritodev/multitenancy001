@@ -1,14 +1,14 @@
 package brito.com.multitenancy001.tenant.me.api.dto;
 
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
-import brito.com.multitenancy001.shared.security.SystemRoleName;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 
 public record TenantMeResponse(
         Long id,
         Long accountId,
         String name,
         String email,
-        SystemRoleName role,
+        TenantRole role,
         String phone,
         String avatarUrl,
         String timezone,
@@ -20,4 +20,3 @@ public record TenantMeResponse(
         boolean deleted,
         boolean enabled
 ) {}
-

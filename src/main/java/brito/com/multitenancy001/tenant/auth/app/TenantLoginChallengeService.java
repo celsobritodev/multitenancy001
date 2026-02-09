@@ -20,7 +20,7 @@ public class TenantLoginChallengeService {
     private final TenantLoginChallengeStore store;
     private final AppClock appClock;
 
-    private Instant now() {
+    private Instant appNow() {
         return appClock.instant();
     }
 
@@ -33,7 +33,7 @@ public class TenantLoginChallengeService {
             throw new ApiException("INVALID_CHALLENGE", "candidateAccountIds é obrigatório", 400);
         }
 
-        return store.create(now(), normalizedEmail, candidateAccountIds);
+        return store.create(appNow(), normalizedEmail, candidateAccountIds);
     }
 
     public TenantLoginChallenge requireValid(UUID challengeId) {
@@ -41,7 +41,7 @@ public class TenantLoginChallengeService {
             throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
         }
 
-        return store.findValid(challengeId, now())
+        return store.findValid(challengeId, appNow())
                 .orElseThrow(() -> new ApiException(
                         "CHALLENGE_NOT_FOUND",
                         "Challenge não encontrado, expirado ou já usado",
@@ -51,6 +51,6 @@ public class TenantLoginChallengeService {
 
     public void markUsed(UUID challengeId) {
         if (challengeId == null) return;
-        store.markUsed(challengeId, now());
+        store.markUsed(challengeId, appNow());
     }
 }

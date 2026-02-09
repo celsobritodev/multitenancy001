@@ -11,11 +11,14 @@ import lombok.RequiredArgsConstructor;
  * Flyway para TENANT schemas.
  *
  * ✅ NÃO se chama "flyway" -> não roda no bootstrap
- * ✅ você chama migrate(schema) quando provisionar o tenant
+ * ✅ você chama migrate(tenantSchema) quando provisionar o tenant
  * ✅ cada tenant tem seu schema history dentro do schema do tenant
  *
  * BLINDAGEM EXTRA (recomendado):
  * - table("tenant_flyway_schema_history") separa o histórico do PUBLIC
+ *
+ * Linguagem ubíqua:
+ * - tenantSchema = contexto de execução na infraestrutura
  */
 @Component
 @RequiredArgsConstructor
@@ -25,15 +28,19 @@ public class TenantFlywayMigrator {
 
     private final DataSource dataSource;
 
-    public void migrate(String schemaName) {
-        migrate(this.dataSource, schemaName);
+    public void migrate(String tenantSchema) {
+        migrate(this.dataSource, tenantSchema);
     }
 
-    public void migrate(DataSource customDataSource, String schemaName) {
+    /**
+     * Executa Flyway usando o DataSource fornecido (pode ser SingleConnectionDataSource).
+     * tenantSchema é o schema do tenant no contexto de execução.
+     */
+    public static void migrate(DataSource dataSource, String tenantSchema) {
         Flyway.configure()
-                .dataSource(customDataSource)
-                .schemas(schemaName)
-                .defaultSchema(schemaName)
+                .dataSource(dataSource)
+                .schemas(tenantSchema)
+                .defaultSchema(tenantSchema)
 
                 // ✅ sua pasta real (pela sua lista)
                 .locations("classpath:db/migration/tenants")

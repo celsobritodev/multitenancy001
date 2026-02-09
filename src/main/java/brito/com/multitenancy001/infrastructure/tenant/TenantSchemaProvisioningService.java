@@ -33,35 +33,38 @@ public class TenantSchemaProvisioningService {
     private static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(30);
 
     private final DataSource dataSource;
-    private final TenantFlywayMigrator tenantFlywayMigrator;
+    
 
     // =========================================================
     // Provisioning
     // =========================================================
-    
- // schemaName = entrada crua (ainda não necessariamente existente). TenantExecutor usa tenantSchema.
 
-    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
-        validateSchemaName(schemaName);
+    /**
+     * Account.schemaName é o identificador persistido do schema do tenant.
+     * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
+     */
+    public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {
+        validateTenantSchema(tenantSchema);
 
         try (Connection conn = dataSource.getConnection()) {
 
-            long lockKey = advisoryKey(schemaName);
+            long lockKey = advisoryKey(tenantSchema);
 
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
                         "TENANT_SCHEMA_LOCK_TIMEOUT",
-                        "Não foi possível obter lock de provisionamento do schema '" + schemaName + "'",
+                        "Não foi possível obter lock de provisionamento do schema '" + tenantSchema + "'",
                         409
                 );
             }
 
             try {
-                createSchemaIfNotExists(conn, schemaName);
+                createSchemaIfNotExists(conn, tenantSchema);
 
                 // Flyway do tenant usando a MESMA connection (lock continua válido)
                 var single = new SingleConnectionDataSource(conn, true);
-                tenantFlywayMigrator.migrate(single, schemaName);
+                TenantFlywayMigrator.migrate(single, tenantSchema);
+
 
                 return true;
 
@@ -72,29 +75,29 @@ public class TenantSchemaProvisioningService {
         } catch (SQLException e) {
             throw new ApiException(
                     "TENANT_SCHEMA_PROVISIONING_FAILED",
-                    "Falha ao provisionar schema '" + schemaName + "': " + e.getMessage(),
+                    "Falha ao provisionar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
         }
     }
 
-    public void tryDropSchema(String schemaName) {
-        validateSchemaName(schemaName);
+    public void tryDropSchema(String tenantSchema) {
+        validateTenantSchema(tenantSchema);
 
         try (Connection conn = dataSource.getConnection()) {
 
-            long lockKey = advisoryKey(schemaName);
+            long lockKey = advisoryKey(tenantSchema);
 
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
                         "TENANT_SCHEMA_LOCK_TIMEOUT",
-                        "Não foi possível obter lock para drop do schema '" + schemaName + "'",
+                        "Não foi possível obter lock para drop do schema '" + tenantSchema + "'",
                         409
                 );
             }
 
             try {
-                dropSchemaIfExists(conn, schemaName);
+                dropSchemaIfExists(conn, tenantSchema);
             } finally {
                 advisoryUnlock(conn, lockKey);
             }
@@ -102,7 +105,7 @@ public class TenantSchemaProvisioningService {
         } catch (SQLException e) {
             throw new ApiException(
                     "TENANT_SCHEMA_DROP_FAILED",
-                    "Falha ao dropar schema '" + schemaName + "': " + e.getMessage(),
+                    "Falha ao dropar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
         }
@@ -112,8 +115,8 @@ public class TenantSchemaProvisioningService {
     // Read-only checks (usados por TenantExecutor)
     // =========================================================
 
-    public boolean schemaExists(String schemaName) {
-        validateSchemaName(schemaName);
+    public boolean schemaExists(String tenantSchema) {
+        validateTenantSchema(tenantSchema);
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement("""
@@ -124,7 +127,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName);
+            ps.setString(1, tenantSchema);
 
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -134,14 +137,14 @@ public class TenantSchemaProvisioningService {
         } catch (SQLException e) {
             throw new ApiException(
                     "TENANT_SCHEMA_EXISTS_CHECK_FAILED",
-                    "Falha ao verificar schema '" + schemaName + "': " + e.getMessage(),
+                    "Falha ao verificar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
         }
     }
 
-    public boolean tableExists(String schemaName, String tableName) {
-        validateSchemaName(schemaName);
+    public boolean tableExists(String tenantSchema, String tableName) {
+        validateTenantSchema(tenantSchema);
 
         if (tableName == null || tableName.isBlank()) {
             throw new ApiException("TABLE_REQUIRED", "requiredTable é obrigatório", 400);
@@ -163,7 +166,7 @@ public class TenantSchemaProvisioningService {
                  )
              """)) {
 
-            ps.setString(1, schemaName);
+            ps.setString(1, tenantSchema);
             ps.setString(2, t);
 
             try (ResultSet rs = ps.executeQuery()) {
@@ -174,7 +177,7 @@ public class TenantSchemaProvisioningService {
         } catch (SQLException e) {
             throw new ApiException(
                     "TENANT_TABLE_EXISTS_CHECK_FAILED",
-                    "Falha ao verificar tabela '" + schemaName + "." + t + "': " + e.getMessage(),
+                    "Falha ao verificar tabela '" + tenantSchema + "." + t + "': " + e.getMessage(),
                     500
             );
         }
@@ -184,15 +187,15 @@ public class TenantSchemaProvisioningService {
     // SQL helpers
     // =========================================================
 
-    private void createSchemaIfNotExists(Connection conn, String schemaName) throws SQLException {
-        String sql = "create schema if not exists " + schemaName;
+    private void createSchemaIfNotExists(Connection conn, String tenantSchema) throws SQLException {
+        String sql = "create schema if not exists " + tenantSchema;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.execute();
         }
     }
 
-    private void dropSchemaIfExists(Connection conn, String schemaName) throws SQLException {
-        String sql = "drop schema if exists " + schemaName + " cascade";
+    private void dropSchemaIfExists(Connection conn, String tenantSchema) throws SQLException {
+        String sql = "drop schema if exists " + tenantSchema + " cascade";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.execute();
         }
@@ -224,8 +227,8 @@ public class TenantSchemaProvisioningService {
         }
     }
 
-    private long advisoryKey(String schemaName) {
-        return fnv1a64(schemaName);
+    private long advisoryKey(String tenantSchema) {
+        return fnv1a64(tenantSchema);
     }
 
     private long fnv1a64(String s) {
@@ -241,12 +244,13 @@ public class TenantSchemaProvisioningService {
     // Validation
     // =========================================================
 
-    private void validateSchemaName(String schemaName) {
-        if (schemaName == null || schemaName.isBlank()) {
+    private void validateTenantSchema(String tenantSchema) {
+        if (tenantSchema == null || tenantSchema.isBlank()) {
+            // mantém mensagem/código pra não mexer em comportamento percebido
             throw new ApiException("SCHEMA_REQUIRED", "schemaName é obrigatório", 400);
         }
 
-        String s = schemaName.trim();
+        String s = tenantSchema.trim();
 
         if (s.length() > 63) {
             throw new ApiException("SCHEMA_INVALID", "schemaName excede 63 caracteres", 400);

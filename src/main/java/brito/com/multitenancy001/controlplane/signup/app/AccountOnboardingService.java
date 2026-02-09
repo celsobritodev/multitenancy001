@@ -14,6 +14,7 @@ import brito.com.multitenancy001.controlplane.accounts.app.command.CreateAccount
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
+import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
@@ -88,8 +89,11 @@ public class AccountOnboardingService {
 
         try {
             // 3) Provisionamento fora do TX do CP (envolve infra/DDL/migrations)
+            // Fronteira explícita: schemaName (dado da conta) -> tenantSchema (contexto de execução)
+            String tenantSchema = account.getSchemaName();
+
             try {
-                tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(account.getSchemaName());
+                tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(tenantSchema);
             } catch (FlywayException ex) {
                 throw provisioningFailed(ProvisioningFailureCode.TENANT_MIGRATION_ERROR, ex);
             } catch (DataAccessException ex) {
@@ -104,7 +108,7 @@ public class AccountOnboardingService {
             // 4) Criação do tenant owner
             try {
                 tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
-                        account.getSchemaName(),
+                        tenantSchema,
                         account.getId(),
                         account.getDisplayName(),
                         data.loginEmail(),
@@ -210,24 +214,25 @@ public class AccountOnboardingService {
     }
 
     private SignupData validateAndNormalize(SignupCommand cmd) {
-    	 if (cmd == null) {
-    	        throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
-    	    }
+        if (cmd == null) {
+            throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
+        }
 
-    	    String displayName = safeTrim(cmd.displayName());
-    	    if (!StringUtils.hasText(displayName)) {
-    	        throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
-    	    }
+        String displayName = safeTrim(cmd.displayName());
+        if (!StringUtils.hasText(displayName)) {
+            throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
+        }
 
-    	    String loginEmail = EmailNormalizer.normalizeOrNull(cmd.loginEmail());
-    	    if (!StringUtils.hasText(loginEmail)) {
-    	        throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-    	    }
-    	    if (!looksLikeEmail(loginEmail)) {
-    	        throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
-    	    }
+        String loginEmail = EmailNormalizer.normalizeOrNull(cmd.loginEmail());
+        if (!StringUtils.hasText(loginEmail)) {
+            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+        }
+        if (!looksLikeEmail(loginEmail)) {
+            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        }
 
-        if (cmd.taxIdType() == null) {
+        TaxIdType taxIdType = cmd.taxIdType();
+        if (taxIdType == null) {
             throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
         }
 
@@ -236,114 +241,92 @@ public class AccountOnboardingService {
             throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
         }
 
-        String password = cmd.password();
-        String confirmPassword = cmd.confirmPassword();
-
-        if (!StringUtils.hasText(password) || !StringUtils.hasText(confirmPassword)) {
-            throw new ApiException("INVALID_PASSWORD", "Senha e confirmação são obrigatórias", 400);
+        String password = safeTrim(cmd.password());
+        if (!StringUtils.hasText(password)) {
+            throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
         }
+
+        String confirmPassword = safeTrim(cmd.confirmPassword());
+        if (!StringUtils.hasText(confirmPassword)) {
+            throw new ApiException("INVALID_CONFIRM_PASSWORD", "Confirmação de senha é obrigatória", 400);
+        }
+
         if (!password.equals(confirmPassword)) {
-            throw new ApiException("PASSWORD_MISMATCH", "As senhas não coincidem", 400);
+            throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
         }
 
         String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;
 
-        if (accountRepository.existsByLoginEmailAndDeletedFalse(loginEmail)) {
-            throw new ApiException("EMAIL_ALREADY_REGISTERED", "Email já cadastrado na plataforma", 409);
-        }
-
-        if (accountRepository.existsByTaxCountryCodeAndTaxIdTypeAndTaxIdNumberAndDeletedFalse(
-                taxCountryCode, cmd.taxIdType(), taxIdNumber
-        )) {
-            throw new ApiException("DOC_ALREADY_REGISTERED", "Documento já cadastrado na plataforma", 409);
-        }
-
-        return new SignupData(displayName, loginEmail, taxCountryCode, cmd.taxIdType(), taxIdNumber, password);
+        return new SignupData(
+                displayName,
+                loginEmail,
+                taxCountryCode,
+                taxIdType,
+                taxIdNumber,
+                password
+        );
     }
 
-    private static String safeTrim(String s) {
-        return s == null ? null : s.trim();
+    private String safeTrim(String s) {
+        return (s == null ? null : s.trim());
     }
 
-    private static boolean looksLikeEmail(String email) {
-        int at = email.indexOf('@');
-        if (at <= 0) return false;
-        if (at != email.lastIndexOf('@')) return false;
-        if (at == email.length() - 1) return false;
-        return true;
+    private boolean looksLikeEmail(String email) {
+        return email != null && email.contains("@") && email.contains(".");
+    }
+
+    private ProvisioningFailedException provisioningFailed(ProvisioningFailureCode code, Exception ex) {
+        return new ProvisioningFailedException(code, ex);
+    }
+
+    private String safeMessage(Throwable t) {
+        if (t == null) return null;
+        String m = t.getMessage();
+        return (m == null ? t.getClass().getSimpleName() : m);
     }
 
     private String buildDetailsJson(
             Account account,
             SignupData data,
             String stage,
-            ProvisioningFailureCode failureCode,
-            Throwable error
+            ProvisioningFailureCode code,
+            Throwable cause
     ) {
-        String taxIdMasked = maskTaxId(data.taxIdNumber());
-        String errorType = (error == null) ? null : error.getClass().getName();
-        String errorMsg = (error == null) ? null : safeMessage(error);
+        String accountId = (account == null || account.getId() == null) ? null : String.valueOf(account.getId());
+        String schemaName = (account == null ? null : account.getSchemaName());
+        String slug = (account == null ? null : account.getSlug());
+
+        String causeClass = (cause == null ? null : cause.getClass().getName());
+        String causeMessage = (cause == null ? null : safeMessage(cause));
 
         return "{"
-                + "\"stage\":\"" + escape(stage) + "\""
-                + ",\"accountId\":" + (account == null ? "null" : account.getId())
-                + ",\"schemaName\":\"" + escape(account == null ? null : account.getSchemaName()) + "\""
-                + ",\"slug\":\"" + escape(account == null ? null : account.getSlug()) + "\""
-                + ",\"status\":\"" + escape(account == null ? null : String.valueOf(account.getStatus())) + "\""
-                + ",\"displayName\":\"" + escape(data.displayName()) + "\""
-                + ",\"loginEmail\":\"" + escape(data.loginEmail()) + "\""
-                + ",\"taxCountryCode\":\"" + escape(data.taxCountryCode()) + "\""
-                + ",\"taxIdType\":\"" + escape(String.valueOf(data.taxIdType())) + "\""
-                + ",\"taxIdMasked\":\"" + escape(taxIdMasked) + "\""
-                + ",\"failureCode\":\"" + escape(failureCode == null ? null : failureCode.name()) + "\""
-                + ",\"errorType\":\"" + escape(errorType) + "\""
-                + ",\"errorMessage\":\"" + escape(errorMsg) + "\""
+                + "\"stage\":\"" + stage + "\""
+                + ",\"accountId\":\"" + accountId + "\""
+                + ",\"schemaName\":\"" + schemaName + "\""
+                + ",\"slug\":\"" + slug + "\""
+                + ",\"loginEmail\":\"" + (data == null ? null : data.loginEmail()) + "\""
+                + ",\"code\":\"" + (code == null ? null : code.name()) + "\""
+                + ",\"causeClass\":\"" + causeClass + "\""
+                + ",\"causeMessage\":\"" + causeMessage + "\""
                 + "}";
-    }
-
-    private static String maskTaxId(String taxId) {
-        if (!StringUtils.hasText(taxId)) return null;
-        String digits = taxId.trim();
-        if (digits.length() <= 4) return "****";
-        return "****" + digits.substring(digits.length() - 4);
-    }
-
-    private static String safeMessage(Throwable t) {
-        if (t == null) return null;
-        String msg = t.getMessage();
-        if (!StringUtils.hasText(msg)) return t.getClass().getSimpleName();
-        return msg;
-    }
-
-    private static String escape(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .trim();
-    }
-
-    private static ProvisioningFailedException provisioningFailed(ProvisioningFailureCode code, Throwable cause) {
-        return new ProvisioningFailedException(code, cause);
     }
 
     private record SignupData(
             String displayName,
             String loginEmail,
             String taxCountryCode,
-            brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType taxIdType,
+            TaxIdType taxIdType,
             String taxIdNumber,
             String password
     ) {}
 
     private static class ProvisioningFailedException extends RuntimeException {
         private static final long serialVersionUID = 1L;
-        private final ProvisioningFailureCode code;
+		private final ProvisioningFailureCode code;
 
-        private ProvisioningFailedException(ProvisioningFailureCode code, Throwable cause) {
+        public ProvisioningFailedException(ProvisioningFailureCode code, Throwable cause) {
             super(cause);
-            this.code = code == null ? ProvisioningFailureCode.UNKNOWN : code;
+            this.code = code;
         }
 
         public ProvisioningFailureCode code() {

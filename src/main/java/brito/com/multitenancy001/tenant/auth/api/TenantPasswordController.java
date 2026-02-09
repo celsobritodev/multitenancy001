@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.tenant.auth.api.dto.ForgotPasswordRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.ResetPasswordRequest;
-import brito.com.multitenancy001.tenant.users.app.TenantUserFacade;
+import brito.com.multitenancy001.tenant.auth.app.TenantPasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,39 +21,24 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TenantPasswordController {
 
-    private final TenantUserFacade tenantUserFacade;
+    private final TenantPasswordResetService tenantPasswordResetService;
 
-    /**
-     * Inicia o fluxo de recuperação de senha para um usuário TENANT.
-     *
-     * Recebe o slug do tenant e o email do usuário, valida a existência
-     * e gera um token temporário para redefinição de senha.
-     *
-     * Este endpoint é normalmente utilizado na funcionalidade
-     * "Esqueci minha senha".
-     */
     @PostMapping("/forgot")
     public ResponseEntity<String> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest
     ) {
-        tenantUserFacade.generatePasswordResetToken(
+        tenantPasswordResetService.generatePasswordResetToken(
                 forgotPasswordRequest.slug(),
                 forgotPasswordRequest.email()
         );
         return ResponseEntity.ok("Token gerado");
     }
 
-    /**
-     * Finaliza o fluxo de redefinição de senha utilizando um token válido.
-     *
-     * Valida o token, atualiza a senha do usuário e encerra o fluxo
-     * de recuperação, permitindo que o usuário volte a se autenticar.
-     */
     @PostMapping("/reset")
     public ResponseEntity<String> resetPassword(
             @Valid @RequestBody ResetPasswordRequest resetPasswordRequest
     ) {
-        tenantUserFacade.resetPasswordWithToken(
+        tenantPasswordResetService.resetPasswordWithToken(
                 resetPasswordRequest.token(),
                 resetPasswordRequest.newPassword()
         );

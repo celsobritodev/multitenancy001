@@ -1,10 +1,9 @@
 package brito.com.multitenancy001.tenant.users.api.mapper;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
-import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantMeResponse;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
-import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
+import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantActorRef;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse;
@@ -36,7 +35,7 @@ public class TenantUserApiMapper {
 
     public TenantMeResponse toMe(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
+        TenantRole role = u.getRole();
 
         return new TenantMeResponse(
                 u.getId(),
@@ -59,7 +58,7 @@ public class TenantUserApiMapper {
 
     public TenantUserDetailsResponse toDetails(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
+        TenantRole role = u.getRole();
 
         return new TenantUserDetailsResponse(
                 u.getId(),
@@ -82,7 +81,7 @@ public class TenantUserApiMapper {
 
     public TenantUserListItemResponse toListItemBasic(TenantUser u) {
         boolean enabled = u.isEnabled();
-        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
+        TenantRole role = u.getRole();
 
         return new TenantUserListItemResponse(
                 u.getId(),
@@ -110,7 +109,7 @@ public class TenantUserApiMapper {
                 .toList();
 
         TenantActorRef createdBy = mapCreatedBy(u.getAudit());
-        SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(u.getRole());
+        TenantRole role = u.getRole();
 
         return new TenantUserListItemResponse(
                 u.getId(),

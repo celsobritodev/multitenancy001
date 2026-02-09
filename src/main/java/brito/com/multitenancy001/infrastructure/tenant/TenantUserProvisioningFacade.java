@@ -101,7 +101,8 @@ public class TenantUserProvisioningFacade {
                             ? ownerDisplayName.trim()
                             : OWNER_NAME_FALLBACK;
 
-                    Instant now = appClock.instant();
+                    Instant now = appNow();
+
 
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
@@ -293,4 +294,9 @@ public class TenantUserProvisioningFacade {
         if (user.isSuspendedByAdmin()) return false;
         return user.getRole() != null && user.getRole().isTenantOwner();
     }
+    
+    private Instant appNow() {
+        return appClock.instant();
+    }
+
 }

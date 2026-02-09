@@ -4,14 +4,18 @@ import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
 public class AccountEntitlementsProvisioningService {
 
     private final AccountEntitlementsRepository accountEntitlementsRepository;
+    private final AppClock appClock;
 
     /**
      * Garante entitlements default para TENANT (idempotente / race-safe).
@@ -31,11 +35,16 @@ public class AccountEntitlementsProvisioningService {
             return null;
         }
 
+        // AppClock é a única fonte de tempo
+        Instant now = appClock.instant();
+
         int inserted = accountEntitlementsRepository.insertDefaultIfMissing(
                 account.getId(),
                 5,
                 100,
-                100
+                100,
+                now,
+                now
         );
 
         return accountEntitlementsRepository.findByAccount_Id(account.getId())

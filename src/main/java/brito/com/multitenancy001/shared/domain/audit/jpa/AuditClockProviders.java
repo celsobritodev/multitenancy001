@@ -41,8 +41,6 @@ public final class AuditClockProviders {
                 "Isso indica que o @PostConstruct do AuditClockProvider não executou ou o bean não foi criado."
             );
         }
-        return p.now();
+        return p.appNow();
     }
-
-  
 }

@@ -9,14 +9,16 @@ import lombok.RequiredArgsConstructor;
 public class TenantSchemaProvisioningFacade {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
-    
- // schemaName = entrada crua (ainda não necessariamente existente). TenantExecutor usa tenantSchema.
 
-    public boolean ensureSchemaExistsAndMigrate(String schemaName) {
-        return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(schemaName);
+    /**
+     * Account.schemaName é o identificador persistido do schema do tenant.
+     * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
+     */
+    public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {
+        return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(tenantSchema);
     }
 
-    public void tryDropSchema(String schemaName) {
-        tenantSchemaProvisioningService.tryDropSchema(schemaName);
+    public void tryDropSchema(String tenantSchema) {
+        tenantSchemaProvisioningService.tryDropSchema(tenantSchema);
     }
 }

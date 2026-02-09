@@ -35,8 +35,10 @@ public class AccountTenantUserService {
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
+        String tenantSchema = account.getSchemaName();
+
         return tenantUserProvisioningFacade
-                .listUserSummaries(account.getSchemaName(), account.getId(), onlyOperational);
+                .listUserSummaries(tenantSchema, account.getId(), onlyOperational);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
@@ -46,6 +48,8 @@ public class AccountTenantUserService {
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        tenantUserProvisioningFacade.setSuspendedByAdmin(account.getSchemaName(), account.getId(), userId, suspended);
+        String tenantSchema = account.getSchemaName();
+
+        tenantUserProvisioningFacade.setSuspendedByAdmin(tenantSchema, account.getId(), userId, suspended);
     }
 }
