@@ -3,7 +3,6 @@ package brito.com.multitenancy001.controlplane.billing.api.admin;
 import brito.com.multitenancy001.controlplane.billing.app.ControlPlanePaymentService;
 import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -30,8 +29,8 @@ public class ControlPlanePaymentController {
     // Cria/processa um pagamento manual para uma conta (cross-tenant) e aplica efeitos no billing da conta.
     @PostMapping("/by-account/{accountId}")
     @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())"
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.asAuthority())"
     )
     public ResponseEntity<PaymentResponse> processPaymentForAccount(
             @PathVariable Long accountId,
@@ -52,8 +51,8 @@ public class ControlPlanePaymentController {
     // Lista pagamentos de uma conta (cross-tenant).
     @GetMapping("/by-account/{accountId}")
     @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())"
     )
     public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccount(accountId));
@@ -62,8 +61,8 @@ public class ControlPlanePaymentController {
     // Informa se existe um pagamento COMPLETED vigente para a conta (cross-tenant).
     @GetMapping("/by-account/{accountId}/active")
     @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())"
     )
     public ResponseEntity<Boolean> hasCurrentPaymentAdmin(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.hasActivePayment(accountId));
@@ -72,8 +71,8 @@ public class ControlPlanePaymentController {
     // Verifica se um paymentId pertence a um accountId (cross-tenant).
     @GetMapping("/by-account/{accountId}/exists/{paymentId}")
     @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())"
     )
     public ResponseEntity<Boolean> existsByIdAndAccountId(
             @PathVariable Long accountId,
@@ -82,49 +81,11 @@ public class ControlPlanePaymentController {
         return ResponseEntity.ok(controlPlanePaymentService.paymentExistsForAccount(paymentId, accountId));
     }
 
-    // Lista pagamentos de uma conta filtrados por status (cross-tenant).
-    @GetMapping("/by-account/{accountId}/status/{status}")
-    @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
-    )
-    public ResponseEntity<List<PaymentResponse>> getPaymentsByAccountAndStatus(
-            @PathVariable Long accountId,
-            @PathVariable PaymentStatus status
-    ) {
-        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByAccountAndStatus(accountId, status));
-    }
-
-    // Busca pagamento por transactionId (admin global).
-    @GetMapping("/by-transaction/{transactionId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
-    public ResponseEntity<PaymentResponse> getByTransactionId(@PathVariable String transactionId) {
-        return ResponseEntity.ok(controlPlanePaymentService.getPaymentByTransactionId(transactionId));
-    }
-
-    // Informa se existe pagamento com transactionId (admin global).
-    @GetMapping("/exists/by-transaction/{transactionId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
-    public ResponseEntity<Boolean> existsByTransactionId(@PathVariable String transactionId) {
-        return ResponseEntity.ok(controlPlanePaymentService.existsByTransactionId(transactionId));
-    }
-
-    // Lista pagamentos por status cujo validUntil é anterior a uma data (admin global).
-    @GetMapping("/valid-until-before")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
-    public ResponseEntity<List<PaymentResponse>> listByValidUntilBeforeAndStatus(
-            @RequestParam("date")
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant date,
-            @RequestParam("status") PaymentStatus status
-    ) {
-        return ResponseEntity.ok(controlPlanePaymentService.getPaymentsByValidUntilBeforeAndStatus(date, status));
-    }
-
     // Lista pagamentos COMPLETED de uma conta, ordenados por data de pagamento (cross-tenant).
     @GetMapping("/by-account/{accountId}/completed")
     @PreAuthorize(
-            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())"
-                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())"
+            "hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())"
+                    + " and hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())"
     )
     public ResponseEntity<List<PaymentResponse>> getCompletedPaymentsByAccount(@PathVariable Long accountId) {
         return ResponseEntity.ok(controlPlanePaymentService.getCompletedPaymentsByAccount(accountId));
@@ -132,7 +93,7 @@ public class ControlPlanePaymentController {
 
     // Lista pagamentos dentro de um período (admin global).
     @GetMapping("/period")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())")
     public ResponseEntity<List<PaymentResponse>> listPaymentsInPeriod(
             @RequestParam("start")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
@@ -144,7 +105,7 @@ public class ControlPlanePaymentController {
 
     // Soma a receita (pagamentos COMPLETED) no período informado (admin global).
     @GetMapping("/revenue")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_READ.asAuthority())")
     public ResponseEntity<BigDecimal> getRevenue(
             @RequestParam("start")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
@@ -156,14 +117,14 @@ public class ControlPlanePaymentController {
 
     // Marca um pagamento PENDING como COMPLETED manualmente (admin global) e aplica efeitos na conta.
     @PostMapping("/{paymentId}/complete-manual")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.asAuthority())")
     public ResponseEntity<PaymentResponse> completeManually(@PathVariable Long paymentId) {
         return ResponseEntity.ok(controlPlanePaymentService.completePaymentManually(paymentId));
     }
 
     // Reembolsa um pagamento elegível (total ou parcial) registrando o motivo (admin global).
     @PostMapping("/{paymentId}/refund")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_BILLING_WRITE.asAuthority())")
     public ResponseEntity<PaymentResponse> refund(
             @PathVariable Long paymentId,
             @Valid @RequestBody RefundRequest refundRequest
@@ -180,4 +141,3 @@ public class ControlPlanePaymentController {
             String reason
     ) {}
 }
-

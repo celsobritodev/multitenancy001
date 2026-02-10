@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.controlplane.security;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -30,7 +31,9 @@ public class ControlPlaneEndpointPreAuthorizeVerifier implements ApplicationRunn
     @Value("${app.security.controlplane.enforce-preauthorize:true}")
     private boolean enabled;
 
-    public ControlPlaneEndpointPreAuthorizeVerifier(RequestMappingHandlerMapping mapping) {
+    public ControlPlaneEndpointPreAuthorizeVerifier(
+            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mapping
+    ) {
         this.mapping = mapping;
     }
 

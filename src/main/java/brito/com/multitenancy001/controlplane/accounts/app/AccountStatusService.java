@@ -7,7 +7,7 @@ import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChan
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
+import brito.com.multitenancy001.integration.tenant.TenantUsersIntegrationService;
 import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -21,7 +21,8 @@ public class AccountStatusService {
 
     private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
+    private final TenantUsersIntegrationService tenantUsersIntegrationService;
+
     private final AppClock appClock;
 
     public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
@@ -52,11 +53,11 @@ public class AccountStatusService {
 
             if (newStatus == AccountStatus.SUSPENDED) {
                 // ✅ Este método agora é SAFE (suspende todos menos TENANT_OWNER)
-                affected = tenantUserProvisioningFacade.suspendAllUsersByAccount(tenantSchema, account.getId());
+                affected = tenantUsersIntegrationService.suspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;
             } else if (newStatus == AccountStatus.ACTIVE) {
-                affected = tenantUserProvisioningFacade.unsuspendAllUsersByAccount(tenantSchema, account.getId());
+                affected = tenantUsersIntegrationService.unsuspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.UNSUSPEND_BY_ACCOUNT;
             } else if (newStatus == AccountStatus.CANCELLED) {
@@ -93,7 +94,7 @@ public class AccountStatusService {
             accountRepository.save(account);
 
             String tenantSchema = account.getSchemaName();
-            tenantUserProvisioningFacade.softDeleteAllUsersByAccount(tenantSchema, account.getId());
+            tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
         });
     }
 
@@ -112,7 +113,7 @@ public class AccountStatusService {
             accountRepository.save(account);
 
             String tenantSchema = account.getSchemaName();
-            tenantUserProvisioningFacade.restoreAllUsersByAccount(tenantSchema, account.getId());
+            tenantUsersIntegrationService.restoreAllUsersByAccount(tenantSchema, account.getId());
         });
     }
 
@@ -126,7 +127,7 @@ public class AccountStatusService {
         });
 
         String tenantSchema = account.getSchemaName();
-        return tenantUserProvisioningFacade.softDeleteAllUsersByAccount(tenantSchema, account.getId());
+        return tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
     }
 
     private Account getAccountByIdRaw(Long accountId) {

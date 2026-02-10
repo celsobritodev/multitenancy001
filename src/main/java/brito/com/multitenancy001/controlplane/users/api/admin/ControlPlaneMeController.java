@@ -17,16 +17,15 @@ public class ControlPlaneMeController {
     private final ControlPlaneUserService controlPlaneUserService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_ME_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_ME_READ.asAuthority())")
     public ResponseEntity<ControlPlaneMeResponse> me() {
         return ResponseEntity.ok(controlPlaneUserService.getMe());
     }
 
     @PatchMapping("/password")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_ME_PASSWORD_CHANGE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_ME_PASSWORD_CHANGE.asAuthority())")
     public ResponseEntity<Void> changeMyPassword(@Valid @RequestBody ControlPlaneChangeMyPasswordRequest request) {
         controlPlaneUserService.changeMyPassword(request);
         return ResponseEntity.noContent().build();
     }
 }
-

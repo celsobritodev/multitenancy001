@@ -1,12 +1,13 @@
 package brito.com.multitenancy001.tenant.categories.app;
 
+import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
+import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
 import brito.com.multitenancy001.tenant.categories.persistence.TenantCategoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -22,7 +23,7 @@ public class TenantCategoryService {
     // READ
     // =========================================================
 
-    @Transactional(readOnly = true)
+    @TenantReadOnlyTx
     public Category findById(Long id) {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
 
@@ -36,17 +37,17 @@ public class TenantCategoryService {
         return c;
     }
 
-    @Transactional(readOnly = true)
+    @TenantReadOnlyTx
     public List<Category> findAll() {
         return tenantCategoryRepository.findNotDeleted();
     }
 
-    @Transactional(readOnly = true)
+    @TenantReadOnlyTx
     public List<Category> findActive() {
         return tenantCategoryRepository.findNotDeletedActive();
     }
 
-    @Transactional(readOnly = true)
+    @TenantReadOnlyTx
     public List<Category> searchByName(String name) {
         if (!StringUtils.hasText(name)) {
             throw new ApiException("CATEGORY_NAME_REQUIRED", "name é obrigatório", 400);
@@ -54,7 +55,7 @@ public class TenantCategoryService {
         return tenantCategoryRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
     }
 
-    @Transactional(readOnly = true)
+    @TenantReadOnlyTx
     public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
         return tenantCategoryRepository.findWithFlags(includeDeleted, includeInactive);
     }
@@ -63,7 +64,7 @@ public class TenantCategoryService {
     // WRITE
     // =========================================================
 
-    @Transactional
+    @TenantTx
     public Category create(Category category) {
         if (category == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
         if (!StringUtils.hasText(category.getName())) {
@@ -84,7 +85,7 @@ public class TenantCategoryService {
         return tenantCategoryRepository.save(category);
     }
 
-    @Transactional
+    @TenantTx
     public Category update(Long id, Category req) {
         if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
         if (req == null) throw new ApiException("CATEGORY_REQUIRED", "payload é obrigatório", 400);
@@ -112,7 +113,7 @@ public class TenantCategoryService {
         return tenantCategoryRepository.save(existing);
     }
 
-    @Transactional
+    @TenantTx
     public Category toggleActive(Long id) {
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
@@ -125,17 +126,16 @@ public class TenantCategoryService {
         return tenantCategoryRepository.save(category);
     }
 
-    @Transactional
+    @TenantTx
     public void softDelete(Long id) {
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
-        // ✅ domínio não recebe Instant: auditoria é feita pelo AuditEntityListener + AppClock
         category.softDelete();
         tenantCategoryRepository.save(category);
     }
 
-    @Transactional
+    @TenantTx
     public Category restore(Long id) {
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));

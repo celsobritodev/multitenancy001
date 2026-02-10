@@ -1,10 +1,10 @@
+// src/main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
 import brito.com.multitenancy001.shared.security.RoleAuthority;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
-
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,24 +12,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.time.Instant;
 import java.util.Collection;
 
-/**
- * Principal autenticado usado pelo Spring Security.
- *
- * Observação importante:
- * - O método do contrato UserDetails se chama getUsername().
- * - No nosso domínio, login é por email.
- * - Por isso, aqui guardamos o principal como principalEmail e
- *   implementamos getUsername() retornando esse email.
- */
 public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrincipal {
 
     private static final long serialVersionUID = 1L;
 
     private final Long userId;
-
-    /** Email usado como principal (UserDetails#getUsername). */
     private final String principalEmail;
-
     private final String name;
     private final String email;
 
@@ -93,17 +81,10 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return name;
     }
 
-    /**
-     * Email principal usado para autenticação (mesmo valor de getUsername()).
-     * Exposto por clareza.
-     */
     public String getPrincipalEmail() {
         return principalEmail;
     }
 
-    /**
-     * Contrato do AuthenticatedPrincipal.
-     */
     @Override
     public String getEmail() {
         return email;
@@ -145,7 +126,6 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return roleAuthority == null ? null : roleAuthority.toString();
     }
 
-    /** Compat com código antigo que chamava getRole() */
     public String getRole() {
         return getRoleName();
     }
@@ -217,9 +197,6 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return authorities;
     }
 
-    /**
-     * Contrato do Spring Security. No nosso sistema, isso é SEMPRE o email.
-     */
     @Override
     public String getUsername() {
         return principalEmail;
@@ -250,4 +227,3 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return enabled;
     }
 }
-

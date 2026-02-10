@@ -1,3 +1,4 @@
+// src/main/java/brito/com/multitenancy001/tenant/users/domain/permission/TenantUserPermission.java
 package brito.com.multitenancy001.tenant.users.domain.permission;
 
 import brito.com.multitenancy001.tenant.security.TenantPermission;
@@ -21,6 +22,6 @@ public record TenantUserPermission(String code) {
         if (permission == null) {
             throw new IllegalArgumentException("Permission cannot be null");
         }
-        return new TenantUserPermission(permission.name());
+        return new TenantUserPermission(permission.asAuthority()); // name() -> asAuthority()
     }
 }

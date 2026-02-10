@@ -1,3 +1,4 @@
+// src/main/java/brito/com/multitenancy001/tenant/users/domain/TenantUser.java
 package brito.com.multitenancy001.tenant.users.domain;
 
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -136,51 +137,40 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     @Builder.Default
     private AuditInfo audit = new AuditInfo();
 
-    // =========================================================
-    // ✅ SEM @PrePersist/@PreUpdate
-    // Normalização deve ocorrer na camada de aplicação (services)
-    // ou via métodos de domínio abaixo (migração gradual).
-    // =========================================================
+    // ==========
+    // DOMAIN HELPERS
+    // ==========
+    public void normalizeEmail() {
+        this.email = EmailNormalizer.normalizeOrNull(this.email);
+    }
 
-    // ==========
-    // DOMAIN (status)
-    // ==========
     public boolean isEnabledDomain() {
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
+    /**
+     * ✅ Regra de lock com "now" explícito (preferida).
+     */
     public boolean isAccountNonLocked(Instant now) {
-        if (now == null) throw new IllegalArgumentException("now is required (use AppClock.instant() in application layer)");
+        if (now == null) throw new IllegalArgumentException("now is required");
         return lockedUntil == null || !now.isBefore(lockedUntil);
     }
 
-    @Override
-    public boolean isAccountNonLocked() {
-        throw new IllegalStateException("TenantUser.isAccountNonLocked() without 'now' is forbidden. Use isAccountNonLocked(Instant now) with AppClock.instant() in the application layer.");
-    }
-
+    /**
+     * ✅ Helper para login (enabled + não locked), usado pelo AuthenticatedUserContext.
+     */
     public boolean isEnabledForLogin(Instant now) {
         return isEnabledDomain() && isAccountNonLocked(now);
     }
 
-    // ==========
-    // PERMISSIONS (TIPADO)
-    // ==========
-    public Set<TenantPermission> getPermissions() {
-        return permissions == null ? Set.of() : Set.copyOf(permissions);
-    }
-
-    public void setPermissions(Set<TenantPermission> permissions) {
-        if (this.permissions == null) this.permissions = new LinkedHashSet<>();
-        this.permissions.clear();
-
-        if (permissions == null || permissions.isEmpty()) return;
-
-        Set<TenantPermission> validated = PermissionScopeValidator.validateTenantPermissionsStrict(permissions);
-        for (TenantPermission p : validated) {
-            if (p == null) continue;
-            this.permissions.add(p);
-        }
+    /**
+     * ⚠️ UserDetails contract (sem "now"): mantido por compat.
+     * Evite usar em fluxos críticos; prefira isAccountNonLocked(Instant).
+     */
+    @Override
+    public boolean isAccountNonLocked() {
+        // fallback "now" local (compat)
+        return isAccountNonLocked(Instant.now());
     }
 
     public void grantPermission(TenantPermission permission) {
@@ -208,7 +198,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         LinkedHashSet<TenantUserPermission> out = new LinkedHashSet<>();
         for (TenantPermission p : permissions) {
             if (p == null) continue;
-            out.add(new TenantUserPermission(p.name()));
+            out.add(new TenantUserPermission(p.asAuthority()));
         }
         return out;
     }
@@ -249,7 +239,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     // ==========
-    // Optional: helpers de normalização (se você quiser migrar call-sites depois)
+    // Optional: helpers de normalização
     // ==========
     public void rename(String newName) {
         if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
@@ -284,7 +274,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         if (role != null) out.add(new SimpleGrantedAuthority(role.asAuthority()));
         for (TenantPermission p : getPermissions()) {
             if (p == null) continue;
-            out.add(new SimpleGrantedAuthority(p.name()));
+            out.add(new SimpleGrantedAuthority(p.asAuthority()));
         }
         return out;
     }
