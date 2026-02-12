@@ -12,7 +12,7 @@ import org.springframework.util.StringUtils;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -26,11 +26,11 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics {
+public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics {
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
     private final AuthenticationManager authenticationManager;
     private final TenantUserRepository tenantUserRepository;
     private final JwtTokenProvider jwtTokenProvider;
@@ -40,15 +40,16 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
     public boolean verifyPasswordInTenant(AccountSnapshot account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) return false;
 
-        String schemaName = account.schemaName();
-        if (!StringUtils.hasText(schemaName)) return false;
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) return false;
 
-        String tenantSchema = schemaName.trim();
+        tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
 
         try {
-            return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+            String finalTenantSchema = tenantSchema;
+            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
                 Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
 
@@ -71,19 +72,21 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
 
-        String schemaName = account.schemaName();
-        if (!StringUtils.hasText(schemaName)) {
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) {
             throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
         }
 
-        String tenantSchema = schemaName.trim();
+        tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) {
             throw new ApiException("INVALID_LOGIN", "email e senha são obrigatórios", 400);
         }
 
+        String finalTenantSchema = tenantSchema;
+
         try {
-            return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
 
                 Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
@@ -100,7 +103,7 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
 
                 AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                         user,
-                        tenantSchema,
+                        finalTenantSchema,
                         appClock.instant(),
                         authorities
                 );
@@ -111,11 +114,11 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
                         authorities
                 );
 
-                String accessToken = jwtTokenProvider.generateTenantToken(finalAuth, account.id(), tenantSchema);
+                String accessToken = jwtTokenProvider.generateTenantToken(finalAuth, account.id(), finalTenantSchema);
 
                 String refreshToken = jwtTokenProvider.generateRefreshToken(
                         user.getEmail(),
-                        tenantSchema,
+                        finalTenantSchema,
                         account.id()
                 );
 
@@ -128,7 +131,7 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
                         user.getEmail(),
                         role,
                         account.id(),
-                        tenantSchema
+                        finalTenantSchema
                 );
             });
         } catch (BadCredentialsException e) {
@@ -148,18 +151,20 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
             throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
         }
 
-        String schemaName = account.schemaName();
-        if (!StringUtils.hasText(schemaName)) {
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) {
             throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
         }
 
-        String tenantSchema = schemaName.trim();
+        tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail)) {
             throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
         }
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+        String finalTenantSchema = tenantSchema;
+
+        return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
@@ -173,7 +178,7 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
-                    tenantSchema,
+                    finalTenantSchema,
                     appClock.instant(),
                     authorities
             );
@@ -184,11 +189,11 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
                     authorities
             );
 
-            String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), tenantSchema);
+            String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), finalTenantSchema);
 
             String refreshToken = jwtTokenProvider.generateRefreshToken(
                     user.getEmail(),
-                    tenantSchema,
+                    finalTenantSchema,
                     account.id()
             );
 
@@ -201,7 +206,7 @@ public class TenantAuthMechanicsImpl implements brito.com.multitenancy001.tenant
                     user.getEmail(),
                     role,
                     account.id(),
-                    tenantSchema
+                    finalTenantSchema
             );
         });
     }

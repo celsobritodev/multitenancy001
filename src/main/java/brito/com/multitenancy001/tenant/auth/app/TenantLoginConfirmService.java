@@ -39,7 +39,6 @@ public class TenantLoginConfirmService {
             throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 400);
         }
 
-        // ✅ Agora o app trabalha com o MODEL (domain), não com Entity JPA
         TenantLoginChallenge challenge = tenantLoginChallengeService.requireValid(challengeId);
         final String email = challenge.email();
 
@@ -67,17 +66,16 @@ public class TenantLoginConfirmService {
 
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
-            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, account.id(), account.schemaName(),
+            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, account.id(), account.tenantSchema(),
                     "{\"reason\":\"account_not_in_challenge\"}");
             throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
         }
 
-        // ✅ marca o challenge usado via service (não via entity)
         tenantLoginChallengeService.markUsed(challengeId);
 
         JwtResult jwt = authMechanics.issueJwtForAccountAndEmail(account, email);
 
-        audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, email, jwt.userId(), account.id(), account.schemaName(),
+        audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, email, jwt.userId(), account.id(), account.tenantSchema(),
                 "{\"mode\":\"challenge_confirm\"}");
 
         return jwt;

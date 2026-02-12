@@ -30,7 +30,7 @@ public class TenantUserProvisioningFacade {
     // error codes padrão
     private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
     private final TransactionExecutor transactionExecutor;
 
     private final TenantUserRepository tenantUserRepository;

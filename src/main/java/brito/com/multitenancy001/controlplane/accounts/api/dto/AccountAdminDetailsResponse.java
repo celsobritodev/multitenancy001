@@ -7,15 +7,15 @@ import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneAdminUserSummaryResponse;
 
 import java.time.Instant;
-
 import java.time.LocalDate;
+
 public record AccountAdminDetailsResponse(
 
         // Identificação
         Long id,
         String displayName,
         String slug,
-        String schemaName,
+        String tenantSchema,
         AccountStatus status,
         AccountType accountType,
         SubscriptionPlan subscriptionPlan,
@@ -26,7 +26,7 @@ public record AccountAdminDetailsResponse(
 
         // Datas
         Instant createdAt,
-        Instant trialEndDate,
+        Instant trialEndAt,
         LocalDate paymentDueDate,
         Instant deletedAt,
 
@@ -42,4 +42,3 @@ public record AccountAdminDetailsResponse(
         long totalControlPlaneUsers,
         boolean operational
 ) {}
-

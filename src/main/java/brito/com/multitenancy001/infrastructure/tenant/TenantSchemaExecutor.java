@@ -9,11 +9,11 @@ import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 
 @Component
-public class TenantExecutor {
+public class TenantSchemaExecutor {
 
-    private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
+    private final TenantSchemaProvisioner tenantSchemaProvisioningService;
 
-    public TenantExecutor(TenantSchemaProvisioningService tenantSchemaProvisioningService) {
+    public TenantSchemaExecutor(TenantSchemaProvisioner tenantSchemaProvisioningService) {
         this.tenantSchemaProvisioningService = tenantSchemaProvisioningService;
     }
 

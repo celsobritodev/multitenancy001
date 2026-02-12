@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -24,7 +24,7 @@ public class TenantPasswordResetService {
     private final TenantUserService tenantUserService;
     private final AccountResolver accountResolver;
     private final JwtTokenProvider jwtTokenProvider;
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
     private final AppClock appClock;
     private final SecurityAuditService securityAuditService;
 
@@ -47,10 +47,17 @@ public class TenantPasswordResetService {
         );
 
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
-        String tenantSchema = account.schemaName();
+
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
+        }
+        tenantSchema = tenantSchema.trim();
+
+        String finalTenantSchema = tenantSchema;
 
         try {
-            String token = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+            String token = tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
                 TenantUser user = tenantUserService.getUserByEmail(normalizedEmail, account.id());
 
                 if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
@@ -59,7 +66,7 @@ public class TenantPasswordResetService {
 
                 String passwordResetToken = jwtTokenProvider.generatePasswordResetToken(
                         user.getEmail(),
-                        tenantSchema,
+                        finalTenantSchema,
                         account.id()
                 );
 
@@ -78,7 +85,7 @@ public class TenantPasswordResetService {
                     normalizedEmail,
                     null,
                     account.id(),
-                    tenantSchema,
+                    finalTenantSchema,
                     "{\"expiresHours\":1}"
             );
 
@@ -93,7 +100,7 @@ public class TenantPasswordResetService {
                     normalizedEmail,
                     null,
                     account.id(),
-                    tenantSchema,
+                    finalTenantSchema,
                     "{\"reason\":\"error\"}"
             );
             throw e;

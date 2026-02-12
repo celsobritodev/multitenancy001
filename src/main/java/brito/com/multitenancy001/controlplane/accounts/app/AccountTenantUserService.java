@@ -22,12 +22,6 @@ public class AccountTenantUserService {
     private final AccountRepository accountRepository;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
 
-    /**
-     * Padronização:
-     * - APP retorna o "contract" (UserSummaryData)
-     * - API decide o formato HTTP (AccountTenantUserSummaryResponse) via mapper
-     * - enabled é calculado no AccountUserApiMapper (um único lugar)
-     */
     public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
 
         Account account = publicUnitOfWork.readOnly(() ->
@@ -35,7 +29,7 @@ public class AccountTenantUserService {
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        String tenantSchema = account.getSchemaName();
+        String tenantSchema = account.getTenantSchema();
 
         return tenantUserProvisioningFacade
                 .listUserSummaries(tenantSchema, account.getId(), onlyOperational);
@@ -48,7 +42,7 @@ public class AccountTenantUserService {
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
 
-        String tenantSchema = account.getSchemaName();
+        String tenantSchema = account.getTenantSchema();
 
         tenantUserProvisioningFacade.setSuspendedByAdmin(tenantSchema, account.getId(), userId, suspended);
     }

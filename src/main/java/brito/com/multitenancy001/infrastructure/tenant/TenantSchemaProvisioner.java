@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-public class TenantSchemaProvisioningService {
+public class TenantSchemaProvisioner {
 
     private static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(30);
 
@@ -40,7 +40,7 @@ public class TenantSchemaProvisioningService {
     // =========================================================
 
     /**
-     * Account.schemaName é o identificador persistido do schema do tenant.
+     * Account.tenantSchema é o identificador persistido do schema do tenant.
      * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
      */
     public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {
@@ -247,19 +247,19 @@ public class TenantSchemaProvisioningService {
     private void validateTenantSchema(String tenantSchema) {
         if (tenantSchema == null || tenantSchema.isBlank()) {
             // mantém mensagem/código pra não mexer em comportamento percebido
-            throw new ApiException("SCHEMA_REQUIRED", "schemaName é obrigatório", 400);
+            throw new ApiException("SCHEMA_REQUIRED", "tenantSchema é obrigatório", 400);
         }
 
         String s = tenantSchema.trim();
 
         if (s.length() > 63) {
-            throw new ApiException("SCHEMA_INVALID", "schemaName excede 63 caracteres", 400);
+            throw new ApiException("SCHEMA_INVALID", "tenantSchema excede 63 caracteres", 400);
         }
 
         if (!s.matches("^[a-z][a-z0-9_]*$")) {
             throw new ApiException(
                     "SCHEMA_INVALID",
-                    "schemaName inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef",
+                    "tenantSchema inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef",
                     400
             );
         }

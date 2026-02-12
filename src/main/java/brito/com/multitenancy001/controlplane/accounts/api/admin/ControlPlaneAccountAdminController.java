@@ -8,7 +8,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTe
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountUserApiMapper;
-import brito.com.multitenancy001.controlplane.accounts.app.AccountLifecycleService;
+import brito.com.multitenancy001.controlplane.accounts.app.AccountAppService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
@@ -34,9 +34,9 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/controlplane/accounts")
 @RequiredArgsConstructor
-public class ControlPlaneAccountController {
+public class ControlPlaneAccountAdminController {
 
-    private final AccountLifecycleService accountLifecycleService;
+    private final AccountAppService accountLifecycleService;
 
     private final AccountApiMapper accountApiMapper;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;

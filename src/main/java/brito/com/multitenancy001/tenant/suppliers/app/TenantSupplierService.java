@@ -85,6 +85,11 @@ public class TenantSupplierService {
     // =========================================================
     // WRITE
     // =========================================================
+    //
+    // ✅ Aqui NÃO migramos para TenantUnitOfWork por semântica,
+    // porque a escrita é "single-aggregate/single-repo".
+    // As validações e checks usam o mesmo repositório.
+    //
 
     @TenantTx
     public Supplier create(Supplier supplier) {

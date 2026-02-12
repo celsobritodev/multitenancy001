@@ -5,8 +5,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
+import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 
@@ -131,7 +131,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     // =========================================================
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.suspendedByAdmin = :suspended
@@ -146,7 +146,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.suspendedByAccount = :suspended
@@ -160,9 +160,8 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("suspended") boolean suspended
     );
 
-
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.suspendedByAccount = true
@@ -176,7 +175,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.suspendedByAccount = false
@@ -185,13 +184,11 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     """)
     int unsuspendAllByAccount(@Param("accountId") Long accountId);
 
-  
-
     /**
      * ✅ NOVO (SAFE): soft-delete em massa por conta, EXCETO uma role (ex: TENANT_OWNER).
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.deleted = true,
@@ -207,7 +204,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.deleted = false,
@@ -218,7 +215,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
     int restoreAllByAccount(@Param("accountId") Long accountId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @TenantTx
     @Query("""
         update TenantUser u
            set u.lastLoginAt = :lastLogin

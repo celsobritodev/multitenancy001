@@ -26,10 +26,10 @@ public class SecurityUtils {
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
     }
 
-    public String getCurrentSchema() {
+    public String getCurrentTenantSchema() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
-            return ctx.getSchemaName();
+            return ctx.getTenantSchema();
         }
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
     }
@@ -45,14 +45,11 @@ public class SecurityUtils {
     public String getCurrentRoleAuthority() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
-            return ctx.getRoleAuthority(); // ex: "ROLE_TENANT_OWNER" ou "ROLE_CONTROLPLANE_OWNER"
+            return ctx.getRoleAuthority();
         }
         throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
     }
 
-    /**
-     * Extrai o nome da role de um authority no formato "ROLE_XYZ".
-     */
     private String extractRoleName(String roleAuthority) {
         if (roleAuthority == null || roleAuthority.isBlank() || !roleAuthority.startsWith("ROLE_")) {
             throw new ApiException("FORBIDDEN", "Role inválida no contexto", 403);
@@ -60,9 +57,6 @@ public class SecurityUtils {
         return roleAuthority.substring("ROLE_".length()).trim();
     }
 
-    /**
-     * Role do tenant (ex.: TENANT_OWNER).
-     */
     public TenantRole getCurrentTenantRole() {
         String roleName = extractRoleName(getCurrentRoleAuthority());
         try {
@@ -72,9 +66,6 @@ public class SecurityUtils {
         }
     }
 
-    /**
-     * Role do control plane (ex.: CONTROLPLANE_OWNER).
-     */
     public ControlPlaneRole getCurrentControlPlaneRole() {
         String roleName = extractRoleName(getCurrentRoleAuthority());
         try {
@@ -84,4 +75,3 @@ public class SecurityUtils {
         }
     }
 }
-

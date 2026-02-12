@@ -30,7 +30,7 @@ public class AccountResolver {
                 throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
             }
 
-            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
+            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
         });
     }
 
@@ -50,7 +50,7 @@ public class AccountResolver {
                 throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
             }
 
-            return new AccountSnapshot(p.getId(), p.getSchemaName(), p.getSlug(), p.getDisplayName());
+            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
         });
     }
 

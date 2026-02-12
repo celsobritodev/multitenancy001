@@ -12,15 +12,11 @@ public class AccountApiMapper {
                 account.getId(),
                 account.getDisplayName(),
                 account.getSlug(),
-                account.getSchemaName(),
-                account.getStatus(),            // enum direto
-                account.getType(),              // enum direto
-                account.getSubscriptionPlan(),  // enum direto
-
-                // ✅ Auditoria única: AuditInfo (Instant)
+                account.getTenantSchema(),
+                account.getStatus(),
+                account.getType(),
+                account.getSubscriptionPlan(),
                 account.getAudit() != null ? account.getAudit().getCreatedAt() : null,
-
-                // ✅ Trial como instante real (Instant)
                 account.getTrialEndAt()
         );
     }

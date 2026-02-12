@@ -1,16 +1,14 @@
 package brito.com.multitenancy001.controlplane.scheduling.persistence;
 
-import brito.com.multitenancy001.controlplane.scheduling.domain.AccountJobSchedule;
+import java.time.Instant;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+import brito.com.multitenancy001.controlplane.scheduling.domain.AccountJobSchedule;
 
 public interface AccountJobScheduleRepository extends JpaRepository<AccountJobSchedule, Long> {
-
-    Optional<AccountJobSchedule> findByAccountIdAndJobKey(Long accountId, String jobKey);
 
     @Query("""
         select s

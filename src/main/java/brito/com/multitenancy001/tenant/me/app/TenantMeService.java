@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.me.app;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
@@ -16,13 +16,13 @@ import org.springframework.stereotype.Service;
 public class TenantMeService {
 
     private final TenantUserService tenantUserService;
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
 
     public TenantUser getMyProfile() {
         Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentTenantSchema();
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
@@ -34,7 +34,7 @@ public class TenantMeService {
         if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
 
         Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentTenantSchema();
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
@@ -55,7 +55,7 @@ public class TenantMeService {
         if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
 
         Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+        String tenantSchema = securityUtils.getCurrentTenantSchema();
         Long userId = securityUtils.getCurrentUserId();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {

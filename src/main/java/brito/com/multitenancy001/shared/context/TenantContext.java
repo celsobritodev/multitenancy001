@@ -43,7 +43,7 @@ public class TenantContext {
      * - MAS pode chamar bindTenantSchema() de forma idempotente (sem mudança) dentro de transação.
      *
      * Entrada aqui é "tenantSchema" (já no sentido de execução / contexto).
-     * Para "entrada crua" (schemaName), isso deve ser tratado antes (provisioning / validação).
+     * Para "entrada crua" (tenantSchema), isso deve ser tratado antes (provisioning / validação).
      */
     public static void bindTenantSchema(String tenantSchema) {
 

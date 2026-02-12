@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.billing.api;
 
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
-import brito.com.multitenancy001.tenant.billing.app.TenantBillingService;
+import brito.com.multitenancy001.tenant.billing.app.TenantPaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,7 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantPaymentController {
 
-    private final TenantBillingService tenantBillingService;
+    private final TenantPaymentService tenantBillingService;
 
     @GetMapping("/account/{accountId}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")

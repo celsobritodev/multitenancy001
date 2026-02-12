@@ -10,11 +10,10 @@ public record AccountResponse(
         Long id,
         String displayName,
         String slug,
-        String schemaName,
+        String tenantSchema,
         AccountStatus status,
         AccountType accountType,
         SubscriptionPlan subscriptionPlan,
         Instant createdAt,
-        Instant trialEndDate
+        Instant trialEndAt
 ) {}
-

@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.debug.api;
 
 import brito.com.multitenancy001.shared.context.TenantContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
+@Profile("dev")
 public class TenantDebugController {
 
     private final JdbcTemplate jdbcTemplate;
@@ -51,4 +53,3 @@ public class TenantDebugController {
         }
     }
 }
-

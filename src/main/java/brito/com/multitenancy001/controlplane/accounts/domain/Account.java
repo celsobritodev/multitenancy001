@@ -52,8 +52,12 @@ public class Account implements Auditable, SoftDeletable {
     @Builder.Default
     private LegalEntityType legalEntityType = LegalEntityType.COMPANY;
 
+    /**
+     * ✅ Semântica no código: tenantSchema
+     * ✅ Banco permanece: schema_name
+     */
     @Column(name = "schema_name", nullable = false, unique = true, length = 100)
-    private String schemaName;
+    private String tenantSchema;
 
     @Column(name = "slug", nullable = false, unique = true, length = 80)
     private String slug;
@@ -150,7 +154,6 @@ public class Account implements Auditable, SoftDeletable {
 
         this.deleted = true;
         if (this.audit != null) {
-            // ✅ se seu AuditInfo tem markDeleted/clearDeleted, prefira:
             tryMarkDeleted(now);
         }
     }
@@ -166,7 +169,6 @@ public class Account implements Auditable, SoftDeletable {
 
     public void setDeletedAt(Instant deletedAt) {
         if (this.audit != null) {
-            // ✅ mantém compat: se existir setDeletedAt usa, senão usa mark/clear
             trySetDeletedAt(deletedAt);
         }
         this.deleted = deletedAt != null;
@@ -174,10 +176,8 @@ public class Account implements Auditable, SoftDeletable {
 
     private void tryMarkDeleted(Instant now) {
         try {
-            // método novo/padrão do seu projeto
             audit.markDeleted(now);
         } catch (Throwable ignore) {
-            // fallback legado
             trySetDeletedAt(now);
         }
     }
@@ -194,7 +194,7 @@ public class Account implements Auditable, SoftDeletable {
         try {
             audit.setDeletedAt(v);
         } catch (Throwable ignore) {
-            // se não tiver nada disso, pelo menos não explode
+            // best-effort
         }
     }
 
@@ -222,9 +222,13 @@ public class Account implements Auditable, SoftDeletable {
         this.slug = normalizeSlug(value);
     }
 
-    public void ensureSchemaName() {
-        if (this.schemaName == null || this.schemaName.isBlank()) {
-            this.schemaName = generateSchemaNameFromSlug(this.slug);
+    /**
+     * ✅ Antes: ensureSchemaName()
+     * ✅ Agora: ensureTenantSchema()
+     */
+    public void ensureTenantSchema() {
+        if (this.tenantSchema == null || this.tenantSchema.isBlank()) {
+            this.tenantSchema = generateTenantSchemaFromSlug(this.slug);
         }
     }
 
@@ -262,7 +266,7 @@ public class Account implements Auditable, SoftDeletable {
         return v;
     }
 
-    private static String generateSchemaNameFromSlug(String slug) {
+    private static String generateTenantSchemaFromSlug(String slug) {
         String base = (slug == null ? "tenant" : slug.replace("-", "_"));
         base = base.replaceAll("[^a-z0-9_]", "");
         if (base.length() > 40) base = base.substring(0, 40);

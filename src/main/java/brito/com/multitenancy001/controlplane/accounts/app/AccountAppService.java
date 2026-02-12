@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class AccountLifecycleService {
+public class AccountAppService {
 
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final AccountRepository accountRepository;

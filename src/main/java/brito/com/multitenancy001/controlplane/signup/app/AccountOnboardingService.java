@@ -19,7 +19,7 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountReposi
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningFacade;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningOrchestrator;
 import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -38,7 +38,7 @@ public class AccountOnboardingService {
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
     private static final long DEFAULT_TRIAL_DAYS = 14L;
 
-    private final TenantSchemaProvisioningFacade tenantSchemaProvisioningFacade;
+    private final TenantSchemaProvisioningOrchestrator tenantSchemaProvisioningFacade;
     private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
@@ -68,8 +68,10 @@ public class AccountOnboardingService {
 
                 Account created = AccountFactory.newTenantAccount(cmd);
 
-                // status inicial deve refletir que ainda falta schema+user
                 created.setStatus(AccountStatus.PROVISIONING);
+
+                // ✅ se a factory não setar tenantSchema, garante aqui
+                created.ensureTenantSchema();
 
                 return accountRepository.save(created);
             });
@@ -89,8 +91,7 @@ public class AccountOnboardingService {
 
         try {
             // 3) Provisionamento fora do TX do CP (envolve infra/DDL/migrations)
-            // Fronteira explícita: schemaName (dado da conta) -> tenantSchema (contexto de execução)
-            String tenantSchema = account.getSchemaName();
+            String tenantSchema = account.getTenantSchema();
 
             try {
                 tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(tenantSchema);
@@ -143,9 +144,9 @@ public class AccountOnboardingService {
                     buildDetailsJson(finalized, data, "SUCCESS", null, null)
             );
 
-            log.info("✅ Account criada | accountId={} | schemaName={} | slug={} | status={} | trialEndAt={}",
+            log.info("✅ Account criada | accountId={} | tenantSchema={} | slug={} | status={} | trialEndAt={}",
                     finalized.getId(),
-                    finalized.getSchemaName(),
+                    finalized.getTenantSchema(),
                     finalized.getSlug(),
                     finalized.getStatus(),
                     finalized.getTrialEndAt()
@@ -170,8 +171,8 @@ public class AccountOnboardingService {
                     buildDetailsJson(account, data, "FAILED", code, wrapped.getCause())
             );
 
-            log.error("❌ Falha no provisioning | accountId={} | schemaName={} | code={}",
-                    account.getId(), account.getSchemaName(), code, wrapped.getCause());
+            log.error("❌ Falha no provisioning | accountId={} | tenantSchema={} | code={}",
+                    account.getId(), account.getTenantSchema(), code, wrapped.getCause());
 
             if (wrapped.getCause() instanceof RuntimeException re) {
                 throw re;
@@ -186,8 +187,8 @@ public class AccountOnboardingService {
                     buildDetailsJson(account, data, "FAILED", ProvisioningFailureCode.UNKNOWN, ex)
             );
 
-            log.error("❌ Falha inesperada no provisioning | accountId={} | schemaName={}",
-                    account.getId(), account.getSchemaName(), ex);
+            log.error("❌ Falha inesperada no provisioning | accountId={} | tenantSchema={}",
+                    account.getId(), account.getTenantSchema(), ex);
 
             throw ex;
         }
@@ -204,7 +205,6 @@ public class AccountOnboardingService {
                 managed.setStatus(AccountStatus.FREE_TRIAL);
             }
 
-            // FREE_TRIAL precisa de trialEndAt (Instant)
             if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndAt() == null) {
                 managed.setTrialEndAt(now.plus(DEFAULT_TRIAL_DAYS, ChronoUnit.DAYS));
             }
@@ -293,7 +293,7 @@ public class AccountOnboardingService {
             Throwable cause
     ) {
         String accountId = (account == null || account.getId() == null) ? null : String.valueOf(account.getId());
-        String schemaName = (account == null ? null : account.getSchemaName());
+        String tenantSchema = (account == null ? null : account.getTenantSchema());
         String slug = (account == null ? null : account.getSlug());
 
         String causeClass = (cause == null ? null : cause.getClass().getName());
@@ -302,7 +302,7 @@ public class AccountOnboardingService {
         return "{"
                 + "\"stage\":\"" + stage + "\""
                 + ",\"accountId\":\"" + accountId + "\""
-                + ",\"schemaName\":\"" + schemaName + "\""
+                + ",\"tenantSchema\":\"" + tenantSchema + "\""
                 + ",\"slug\":\"" + slug + "\""
                 + ",\"loginEmail\":\"" + (data == null ? null : data.loginEmail()) + "\""
                 + ",\"code\":\"" + (code == null ? null : code.name()) + "\""
@@ -322,7 +322,7 @@ public class AccountOnboardingService {
 
     private static class ProvisioningFailedException extends RuntimeException {
         private static final long serialVersionUID = 1L;
-		private final ProvisioningFailureCode code;
+        private final ProvisioningFailureCode code;
 
         public ProvisioningFailedException(ProvisioningFailureCode code, Throwable cause) {
             super(cause);

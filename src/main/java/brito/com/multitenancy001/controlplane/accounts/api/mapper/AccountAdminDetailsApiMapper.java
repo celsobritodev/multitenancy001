@@ -26,7 +26,6 @@ public class AccountAdminDetailsApiMapper {
     public AccountAdminDetailsResponse toResponse(Account account, ControlPlaneUser admin, long totalUsers) {
         Instant now = appClock.instant();
 
-        // Trial é instante real (Instant). Para "dias restantes", convertemos para data civil em UTC explicitamente.
         LocalDate todayUtc = LocalDate.ofInstant(now, ZoneOffset.UTC);
 
         Instant trialEndAt = account.getTrialEndAt();
@@ -42,36 +41,25 @@ public class AccountAdminDetailsApiMapper {
         }
 
         return new AccountAdminDetailsResponse(
-                // Identificação
                 account.getId(),
                 account.getDisplayName(),
                 account.getSlug(),
-                account.getSchemaName(),
+                account.getTenantSchema(),
                 account.getStatus(),
                 account.getType(),
                 account.getSubscriptionPlan(),
-
-                // Dados legais
                 account.getTaxIdType(),
                 account.getTaxIdNumber(),
-
-                // Datas (semântica correta)
                 account.getAudit() != null ? account.getAudit().getCreatedAt() : null,
                 account.getTrialEndAt(),
                 account.getPaymentDueDate(),
                 account.getAudit() != null ? account.getAudit().getDeletedAt() : null,
-
-                // Flags calculadas
                 inTrial,
                 trialExpired,
                 trialDaysRemaining,
-
-                // Admin
                 admin != null ? controlPlaneUserApiMapper.toAdminSummary(admin) : null,
-
-                // Indicadores
                 totalUsers,
-                account.isOperational() // aqui não precisa de "now" porque seu domínio já tem isOperational()
+                account.isOperational()
         );
     }
 }

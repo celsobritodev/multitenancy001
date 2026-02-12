@@ -8,8 +8,8 @@ import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserSummaryResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUsersListResponse;
 import brito.com.multitenancy001.tenant.users.api.mapper.TenantUserApiMapper;
-import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
-import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
+import brito.com.multitenancy001.tenant.users.app.context.TenantUserCurrentContextCommandService;
+import brito.com.multitenancy001.tenant.users.app.context.TenantUserCurrentContextQueryService;
 import brito.com.multitenancy001.tenant.users.app.query.TenantUsersListView;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import jakarta.validation.Valid;
@@ -27,8 +27,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserController {
 
-    private final TenantUserQueryService tenantUserQueryService;
-    private final TenantUserCommandService tenantUserCommandService;
+    private final TenantUserCurrentContextQueryService tenantUserQueryService;
+    private final TenantUserCurrentContextCommandService tenantUserCommandService;
     private final TenantUserApiMapper tenantUserApiMapper;
 
     @GetMapping

@@ -6,8 +6,8 @@ public record AccountStatusChangeResponse(
         Long id,
         String status,
         String previousStatus,
-        Instant effectiveAt,
-        String schemaName,
+        Instant changedAt,
+        String tenantSchema,
         SideEffects sideEffects
 ) {
     public record SideEffects(
@@ -16,4 +16,3 @@ public record AccountStatusChangeResponse(
             int tenantUsersCount
     ) {}
 }
-

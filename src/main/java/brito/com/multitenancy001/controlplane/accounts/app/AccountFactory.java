@@ -13,23 +13,26 @@ public final class AccountFactory {
     private AccountFactory() {}
 
     public static Account newTenantAccount(CreateAccountCommand cmd) {
-        Account a = new Account();
+        if (cmd == null) throw new IllegalArgumentException("cmd é obrigatório");
 
-        a.setDisplayName(cmd.displayName());
-        a.setLoginEmail(cmd.loginEmail());
-        a.setTaxCountryCode(cmd.taxCountryCode());
-        a.setTaxIdType(cmd.taxIdType());
-        a.setTaxIdNumber(cmd.taxIdNumber());
+        Account account = new Account();
+
+        account.setDisplayName(cmd.displayName());
+        account.setLoginEmail(cmd.loginEmail());
+        account.setTaxCountryCode(cmd.taxCountryCode());
+        account.setTaxIdType(cmd.taxIdType());
+        account.setTaxIdNumber(cmd.taxIdNumber());
 
         String baseSlug = slugify(cmd.displayName());
-        a.setSlug(baseSlug + "-" + shortId());
+        account.setSlug(baseSlug + "-" + shortId());
 
-        String schemaBase = "t_" + slugify(cmd.displayName()).replace("-", "_");
-        a.setSchemaName(schemaBase + "_" + shortId());
+        // ✅ Antes: account.setSchemaName(...)
+        // ✅ Agora: o Aggregate gera tenantSchema de forma consistente
+        account.ensureTenantSchema();
 
-        a.setStatus(AccountStatus.PROVISIONING);
+        account.setStatus(AccountStatus.PROVISIONING);
 
-        return a;
+        return account;
     }
 
     private static String shortId() {

@@ -16,7 +16,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/controlplane/accounts/{accountId}/provisioning-events")
 @RequiredArgsConstructor
-public class ControlPlaneAccountProvisioningEventController {
+public class ControlPlaneAccountProvisioningEventsController {
 
     private final AccountProvisioningEventQueryService accountProvisioningEventQueryService;
 
@@ -36,7 +36,7 @@ public class ControlPlaneAccountProvisioningEventController {
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
     public ResponseEntity<Page<AccountProvisioningEventResponse>> list(@PathVariable Long accountId, Pageable pageable) {
         return ResponseEntity.ok(
-                accountProvisioningEventQueryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventController::toHttp)
+                accountProvisioningEventQueryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventsController::toHttp)
         );
     }
 

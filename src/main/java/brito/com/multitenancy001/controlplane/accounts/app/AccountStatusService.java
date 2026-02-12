@@ -22,7 +22,6 @@ public class AccountStatusService {
     private final PublicUnitOfWork publicUnitOfWork;
     private final AccountRepository accountRepository;
     private final TenantUsersIntegrationService tenantUsersIntegrationService;
-
     private final AppClock appClock;
 
     public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
@@ -37,22 +36,20 @@ public class AccountStatusService {
             AccountStatus newStatus = cmd.status();
             account.setStatus(newStatus);
 
-            // Se reativou, garante que não está deletado
             if (newStatus == AccountStatus.ACTIVE && account.isDeleted()) {
                 account.restore();
             }
 
             accountRepository.save(account);
 
-            // Fronteira explícita: schemaName (dado da conta) -> tenantSchema (contexto de execução)
-            String tenantSchema = account.getSchemaName();
+            // ✅ Fronteira explícita: tenantSchema (dado CP) -> tenantSchema (execução Tenant)
+            String tenantSchema = account.getTenantSchema();
 
             int affected = 0;
             boolean applied = false;
             AccountStatusSideEffect action = AccountStatusSideEffect.NONE;
 
             if (newStatus == AccountStatus.SUSPENDED) {
-                // ✅ Este método agora é SAFE (suspende todos menos TENANT_OWNER)
                 affected = tenantUsersIntegrationService.suspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;
@@ -71,7 +68,7 @@ public class AccountStatusService {
                     account.getStatus().name(),
                     previous == null ? null : previous.name(),
                     appClock.instant(),
-                    account.getSchemaName(), // CP continua falando schemaName no resultado
+                    tenantSchema,
                     applied,
                     action.name(),
                     affected
@@ -93,7 +90,7 @@ public class AccountStatusService {
             account.softDelete(appClock.instant());
             accountRepository.save(account);
 
-            String tenantSchema = account.getSchemaName();
+            String tenantSchema = account.getTenantSchema();
             tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
         });
     }
@@ -112,7 +109,7 @@ public class AccountStatusService {
             account.restore();
             accountRepository.save(account);
 
-            String tenantSchema = account.getSchemaName();
+            String tenantSchema = account.getTenantSchema();
             tenantUsersIntegrationService.restoreAllUsersByAccount(tenantSchema, account.getId());
         });
     }
@@ -126,7 +123,7 @@ public class AccountStatusService {
             accountRepository.save(account);
         });
 
-        String tenantSchema = account.getSchemaName();
+        String tenantSchema = account.getTenantSchema();
         return tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
     }
 

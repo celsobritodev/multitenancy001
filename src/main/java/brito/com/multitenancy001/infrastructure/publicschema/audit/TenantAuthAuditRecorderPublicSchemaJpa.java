@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class TenantAuthAuditRecorderImpl implements TenantAuthAuditRecorder {
+public class TenantAuthAuditRecorderPublicSchemaJpa implements TenantAuthAuditRecorder {
 
     private final AuthEventAuditService authEventAuditService;
 

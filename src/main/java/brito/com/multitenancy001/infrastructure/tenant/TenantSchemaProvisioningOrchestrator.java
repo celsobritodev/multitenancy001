@@ -6,12 +6,12 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class TenantSchemaProvisioningFacade {
+public class TenantSchemaProvisioningOrchestrator {
 
-    private final TenantSchemaProvisioningService tenantSchemaProvisioningService;
+    private final TenantSchemaProvisioner tenantSchemaProvisioningService;
 
     /**
-     * Account.schemaName é o identificador persistido do schema do tenant.
+     * Account.tenantSchema é o identificador persistido do schema do tenant.
      * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
      */
     public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {

@@ -5,43 +5,44 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import brito.com.multitenancy001.controlplane.accounts.app.query.dto.AccountProvisioningEventData;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountProvisioningEvent;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountProvisioningEventRepository;
+import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class AccountProvisioningEventQueryService {
 
+    private final PublicUnitOfWork publicUnitOfWork;
     private final AccountProvisioningEventRepository accountProvisioningEventRepository;
 
-    public AccountProvisioningEventQueryService(AccountProvisioningEventRepository accountProvisioningEventRepository) {
-        this.accountProvisioningEventRepository = accountProvisioningEventRepository;
-    }
-
-    @Transactional(readOnly = true)
     public Page<AccountProvisioningEventData> listByAccount(Long accountId, Pageable pageable) {
-        return accountProvisioningEventRepository.findByAccountId(accountId, pageable)
-                .map(this::toData);
+        return publicUnitOfWork.readOnly(() ->
+                accountProvisioningEventRepository.findByAccountId(accountId, pageable)
+                        .map(this::toData)
+        );
     }
 
-    @Transactional(readOnly = true)
     public Optional<AccountProvisioningEventData> getLatestByAccount(
             Long accountId,
             ProvisioningStatus requireStatus
     ) {
-        Optional<AccountProvisioningEvent> event;
+        return publicUnitOfWork.readOnly(() -> {
+            Optional<AccountProvisioningEvent> event;
 
-        if (requireStatus == null) {
-            event = accountProvisioningEventRepository.findTopByAccountIdOrderByCreatedAtDesc(accountId);
-        } else {
-            event = accountProvisioningEventRepository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(accountId, requireStatus);
-        }
+            if (requireStatus == null) {
+                event = accountProvisioningEventRepository.findTopByAccountIdOrderByCreatedAtDesc(accountId);
+            } else {
+                event = accountProvisioningEventRepository.findTopByAccountIdAndStatusOrderByCreatedAtDesc(accountId, requireStatus);
+            }
 
-        return event.map(this::toData);
+            return event.map(this::toData);
+        });
     }
 
     private AccountProvisioningEventData toData(AccountProvisioningEvent e) {
@@ -65,4 +66,3 @@ public class AccountProvisioningEventQueryService {
         }
     }
 }
-

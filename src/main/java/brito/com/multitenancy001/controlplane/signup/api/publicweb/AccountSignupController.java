@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.controlplane.signup.api.publicweb;
 
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
-import brito.com.multitenancy001.controlplane.accounts.app.AccountLifecycleService;
+import brito.com.multitenancy001.controlplane.accounts.app.AccountAppService;
 import brito.com.multitenancy001.controlplane.signup.api.dto.SignupRequest;
 import brito.com.multitenancy001.controlplane.signup.api.dto.SignupResponse;
 import brito.com.multitenancy001.controlplane.signup.api.dto.TenantAdminResponse;
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AccountSignupController {
 
-    private final AccountLifecycleService accountLifecycleService;
+    private final AccountAppService accountLifecycleService;
     private final AccountApiMapper accountApiMapper;
 
     @PostMapping

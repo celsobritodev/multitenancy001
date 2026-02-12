@@ -18,9 +18,9 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class TenantReadyExecutor {
+public class TenantSchemaReadinessService {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
 
     // ---------------------------------------------------------------------
     // USERS

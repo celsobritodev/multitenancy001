@@ -1,4 +1,3 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/security/AuthenticatedUserContext.java
 package brito.com.multitenancy001.infrastructure.security;
 
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
@@ -28,7 +27,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
     private final boolean accountNonLocked;
 
     private final Long accountId;
-    private final String schemaName;
+    private final String tenantSchema;
 
     private final boolean suspendedByAccount;
     private final boolean suspendedByAdmin;
@@ -48,7 +47,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
             boolean enabled,
             boolean accountNonLocked,
             Long accountId,
-            String schemaName,
+            String tenantSchema,
             boolean suspendedByAccount,
             boolean suspendedByAdmin,
             boolean deleted,
@@ -64,7 +63,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         this.enabled = enabled;
         this.accountNonLocked = accountNonLocked;
         this.accountId = accountId;
-        this.schemaName = schemaName;
+        this.tenantSchema = tenantSchema;
         this.suspendedByAccount = suspendedByAccount;
         this.suspendedByAdmin = suspendedByAdmin;
         this.deleted = deleted;
@@ -98,8 +97,8 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return accountId;
     }
 
-    public String getSchemaName() {
-        return schemaName;
+    public String getTenantSchema() {
+        return tenantSchema;
     }
 
     public boolean isSuspendedByAccount() {

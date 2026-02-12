@@ -63,6 +63,12 @@ public class TenantCategoryService {
     // =========================================================
     // WRITE
     // =========================================================
+    //
+    // ✅ Mesmo critério aplicado:
+    // - Category é single-aggregate / single-repo
+    // - checks de unicidade e validações usam o MESMO repo
+    // => manter @TenantTx (não há ganho real em mover para TenantUnitOfWork aqui).
+    //
 
     @TenantTx
     public Category create(Category category) {
@@ -110,11 +116,16 @@ public class TenantCategoryService {
             existing.setName(newName);
         }
 
+        // opcional: permitir atualizar active diretamente via payload (se existir no seu entity)
+        // (mantive o comportamento atual: toggleActive é o caminho)
+
         return tenantCategoryRepository.save(existing);
     }
 
     @TenantTx
     public Category toggleActive(Long id) {
+        if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
@@ -128,6 +139,8 @@ public class TenantCategoryService {
 
     @TenantTx
     public void softDelete(Long id) {
+        if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 
@@ -137,6 +150,8 @@ public class TenantCategoryService {
 
     @TenantTx
     public Category restore(Long id) {
+        if (id == null) throw new ApiException("CATEGORY_ID_REQUIRED", "id é obrigatório", 400);
+
         Category category = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + id, 404));
 

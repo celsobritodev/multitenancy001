@@ -9,8 +9,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Linguagem ubíqua:
- * - Account.schemaName = identificador persistido do schema do tenant
- * - tenantSchema = o mesmo valor, usado como contexto de execução na infraestrutura
+ * - tenantSchema = identificador persistido do schema do tenant (accounts.schema_name)
  */
 @Service
 @RequiredArgsConstructor
@@ -22,7 +21,7 @@ public class TenantSchemaFlywayMigrationService {
         Flyway flyway = Flyway.configure()
                 .dataSource(dataSource)
                 .schemas(tenantSchema)
-                .defaultSchema(tenantSchema) // ESSENCIAL
+                .defaultSchema(tenantSchema)
                 .createSchemas(false)
                 .locations("classpath:db/migration/tenants")
                 .baselineOnMigrate(true)

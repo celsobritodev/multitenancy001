@@ -1,14 +1,16 @@
 package brito.com.multitenancy001.tenant.users.app.query;
 
-import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsService;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsSnapshot;
+import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
+import brito.com.multitenancy001.shared.account.UserLimitPolicy;
+import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantRole;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -16,64 +18,93 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserQueryService {
 
-    private final TenantUserService tenantUserService;
-    private final TenantExecutor tenantExecutor;
-    private final SecurityUtils securityUtils;
-    private final AccountEntitlementsService accountEntitlementsService;
+    private final TenantUserRepository tenantUserRepository;
+    private final TransactionExecutor transactionExecutor;
 
-    public TenantUsersListView listTenantUsers() {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+    // =========================================================
+    // LIMITS / COUNTS
+    // =========================================================
 
-        TenantRole currentRole = securityUtils.getCurrentTenantRole();
-        boolean isOwner = currentRole != null && currentRole.isTenantOwner();
+    public long countUsersForLimit(Long accountId, UserLimitPolicy policy) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 
-        AccountEntitlementsSnapshot entitlements = null;
-        if (isOwner) {
-            entitlements = accountEntitlementsService.resolveEffectiveByAccountId(accountId);
-        }
+        return transactionExecutor.inTenantReadOnlyTx(() -> {
+            if (policy == null) return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
 
-        AccountEntitlementsSnapshot finalEntitlements = entitlements;
-
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            List<TenantUser> users = tenantUserService.listUsers(accountId);
-            return new TenantUsersListView(isOwner, finalEntitlements, users);
+            return switch (policy) {
+                case SEATS_IN_USE -> tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+                case SEATS_ENABLED -> tenantUserRepository.countEnabledUsersByAccount(accountId);
+                default -> tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
+            };
         });
     }
 
-    public List<TenantUser> listEnabledTenantUsers() {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+    public long countEnabledUsersByAccount(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        return transactionExecutor.inTenantReadOnlyTx(() -> tenantUserRepository.countEnabledUsersByAccount(accountId));
+    }
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.listEnabledUsers(accountId)
+    public long countActiveOwnersByAccountId(Long accountId, TenantRole ownerRole) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (ownerRole == null) throw new ApiException("ROLE_REQUIRED", "role é obrigatório", 400);
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.countActiveOwnersByAccountId(accountId, ownerRole)
         );
     }
 
-    public TenantUser getTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+    // =========================================================
+    // READ / LIST
+    // =========================================================
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.getUser(userId, accountId)
+    public TenantUser getUser(Long userId, Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
+                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404))
         );
     }
 
-    public TenantUser getEnabledTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+    public TenantUser getEnabledUser(Long userId, Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.getEnabledUser(userId, accountId)
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
+                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário habilitado não encontrado", 404))
         );
     }
 
-    public long countEnabledTenantUsers() {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentSchema();
+    public TenantUser getUserByEmail(String email, Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.countEnabledUsersByAccount(accountId)
+        String normEmail = EmailNormalizer.normalizeOrNull(email);
+        if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
+            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        }
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(normEmail, accountId)
+                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404))
+        );
+    }
+
+    public List<TenantUser> listUsers(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findByAccountIdAndDeletedFalse(accountId)
+        );
+    }
+
+    public List<TenantUser> listEnabledUsers(Long accountId) {
+        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findEnabledUsersByAccount(accountId)
         );
     }
 }

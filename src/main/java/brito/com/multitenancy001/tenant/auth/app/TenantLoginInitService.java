@@ -20,7 +20,10 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -79,7 +82,7 @@ public class TenantLoginInitService {
 
                 var jwt = authMechanics.authenticateWithPassword(account, email, password);
 
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.schemaName(),
+                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.tenantSchema(),
                         "{\"mode\":\"single_tenant\"}");
 
                 return new TenantLoginResult.LoginSuccess(jwt);
@@ -107,7 +110,7 @@ public class TenantLoginInitService {
 
                 var jwt = authMechanics.authenticateWithPassword(account, email, password);
 
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.schemaName(),
+                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.tenantSchema(),
                         "{\"mode\":\"multi_resolved_single\"}");
 
                 return new TenantLoginResult.LoginSuccess(jwt);

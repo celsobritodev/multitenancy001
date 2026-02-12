@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantUnitOfWork {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantSchemaExecutor tenantExecutor;
     private final TransactionExecutor transactionExecutor;
 
     public <T> T tx(String tenantSchema, Supplier<T> fn) {
