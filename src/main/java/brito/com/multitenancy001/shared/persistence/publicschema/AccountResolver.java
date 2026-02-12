@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountResolverProjection;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ public class AccountResolver {
 
     private final AccountRepository accountRepository;
     private final AppClock appClock;
-    private final PublicExecutor publicExecutor;
+    private final PublicSchemaExecutor publicExecutor;
 
     public AccountSnapshot resolveActiveAccountBySlug(String slug) {
         return publicExecutor.inPublic(() -> {

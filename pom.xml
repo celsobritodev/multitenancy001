@@ -9,7 +9,7 @@
 		<version>3.5.9</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>brito.com.example</groupId>
+	<groupId>brito.com.multitenancy001</groupId>
 	<artifactId>multitenancy001</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>multitenancy001</name>

@@ -4,7 +4,7 @@ import brito.com.multitenancy001.controlplane.accounts.domain.AccountProvisionin
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountProvisioningEventRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AccountProvisioningAuditService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountProvisioningEventRepository accountProvisioningEventRepository;
     private final AppClock appClock;
 
@@ -37,7 +37,7 @@ public class AccountProvisioningAuditService {
             String detailsJson
     ) {
         // ✅ write-capable TX no public schema
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
             AccountProvisioningEvent e = new AccountProvisioningEvent(
                     accountId,
                     status,

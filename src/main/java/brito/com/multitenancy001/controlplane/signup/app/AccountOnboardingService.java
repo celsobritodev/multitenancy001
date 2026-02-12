@@ -19,14 +19,14 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountReposi
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningOrchestrator;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUserProvisioningFacade;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningService;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.provisioning.app.TenantUserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,13 +38,13 @@ public class AccountOnboardingService {
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
     private static final long DEFAULT_TRIAL_DAYS = 14L;
 
-    private final TenantSchemaProvisioningOrchestrator tenantSchemaProvisioningFacade;
-    private final TenantUserProvisioningFacade tenantUserProvisioningFacade;
+    private final TenantSchemaProvisioningService tenantSchemaProvisioningFacade;
+    private final TenantUserProvisioningService tenantUserProvisioningFacade;
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
     private final AccountRepository accountRepository;
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AppClock appClock;
 
     private final AccountProvisioningAuditService provisioningAuditService;
@@ -57,7 +57,7 @@ public class AccountOnboardingService {
         // 1) Cria Account no PUBLIC (TX CP)
         Account account;
         try {
-            account = publicUnitOfWork.tx(() -> {
+            account = publicSchemaUnitOfWork.tx(() -> {
                 CreateAccountCommand cmd = new CreateAccountCommand(
                         data.displayName(),
                         data.loginEmail(),
@@ -121,7 +121,7 @@ public class AccountOnboardingService {
 
             // 5) Registrar identidade de login no PUBLIC (para /api/tenant/auth/login)
             try {
-                publicUnitOfWork.tx(() -> {
+                publicSchemaUnitOfWork.tx(() -> {
                     loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
                     return null;
                 });
@@ -195,7 +195,7 @@ public class AccountOnboardingService {
     }
 
     private Account finalizeProvisioning(Long accountId) {
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
 

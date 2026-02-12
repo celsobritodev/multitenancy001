@@ -18,54 +18,78 @@ public final class AuthoritiesFactory {
     private AuthoritiesFactory() {}
 
     public static Set<GrantedAuthority> forControlPlane(ControlPlaneUser user) {
-        Set<String> merged = new LinkedHashSet<>();
+        if (user == null) return Set.of();
+
+        // 1) PERMISSIONS (strings)
+        Set<String> mergedPerms = new LinkedHashSet<>();
 
         // defaults por role
         for (ControlPlanePermission p : ControlPlaneRolePermissions.permissionsFor(user.getRole())) {
             if (p == null) continue;
-            merged.add(p.asAuthority());
+            mergedPerms.add(p.asAuthority());
         }
 
         // permissões explícitas do usuário
         if (user.getPermissions() != null) {
             for (ControlPlanePermission p : user.getPermissions()) {
                 if (p == null) continue;
-                merged.add(p.asAuthority());
+                mergedPerms.add(p.asAuthority());
             }
         }
 
         // fail-fast + normalize CP_
-        merged = PermissionScopeValidator.normalizeControlPlaneStrict(merged);
+        mergedPerms = PermissionScopeValidator.normalizeControlPlaneStrict(mergedPerms);
 
+        // 2) BUILD authorities (permissions + role)
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
-        for (String perm : merged) {
+
+        // role como authority (ROLE_...)
+        if (user.getRole() != null) {
+            authorities.add(new SimpleGrantedAuthority(user.getRole().asAuthority()));
+        }
+
+        // permissions
+        for (String perm : mergedPerms) {
             if (perm == null || perm.isBlank()) continue;
             authorities.add(new SimpleGrantedAuthority(perm.trim()));
         }
+
         return authorities;
     }
 
     public static Set<GrantedAuthority> forTenant(TenantUser user) {
-        Set<TenantPermission> merged = new LinkedHashSet<>();
+        if (user == null) return Set.of();
+
+        // 1) PERMISSIONS (tipadas)
+        Set<TenantPermission> mergedPerms = new LinkedHashSet<>();
 
         // defaults por role
         if (user.getRole() != null) {
-            merged.addAll(TenantRolePermissions.permissionsFor(user.getRole()));
+            mergedPerms.addAll(TenantRolePermissions.permissionsFor(user.getRole()));
         }
 
         // permissões explícitas do usuário
         if (user.getPermissions() != null) {
-            merged.addAll(user.getPermissions());
+            mergedPerms.addAll(user.getPermissions());
         }
 
         // fail-fast tipado (não deixa sair do escopo Tenant)
-        merged = PermissionScopeValidator.validateTenantPermissionsStrict(merged);
+        mergedPerms = PermissionScopeValidator.validateTenantPermissionsStrict(mergedPerms);
 
+        // 2) BUILD authorities (permissions + role)
         Set<GrantedAuthority> authorities = new LinkedHashSet<>();
-        for (TenantPermission p : merged) {
+
+        // role como authority (ROLE_...)
+        if (user.getRole() != null) {
+            authorities.add(new SimpleGrantedAuthority(user.getRole().asAuthority()));
+        }
+
+        // permissions
+        for (TenantPermission p : mergedPerms) {
             if (p == null) continue;
             authorities.add(new SimpleGrantedAuthority(p.asAuthority()));
         }
+
         return authorities;
     }
 }

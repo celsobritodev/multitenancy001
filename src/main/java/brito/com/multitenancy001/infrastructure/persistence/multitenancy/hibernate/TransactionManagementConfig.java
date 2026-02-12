@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate;
 
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;

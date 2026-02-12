@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.categories.app;
 
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
-import brito.com.multitenancy001.infrastructure.tenant.TenantUnitOfWork;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
@@ -21,7 +21,7 @@ import java.util.List;
 @Slf4j
 public class TenantSubcategoryService {
 
-    private final TenantUnitOfWork tenantUnitOfWork;
+    private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
 
     private final TenantSubcategoryRepository tenantSubcategoryRepository;
     private final TenantCategoryRepository tenantCategoryRepository;
@@ -73,7 +73,7 @@ public class TenantSubcategoryService {
     }
 
     // =========================================================
-    // WRITE (multi-step/multi-repo => TenantUnitOfWork)
+    // WRITE (multi-step/multi-repo => TenantSchemaUnitOfWork)
     // =========================================================
 
     public Subcategory create(Long categoryId, Subcategory req) {
@@ -85,7 +85,7 @@ public class TenantSubcategoryService {
 
         String tenantSchema = requireBoundTenantSchema();
 
-        return tenantUnitOfWork.tx(tenantSchema, () -> {
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Category category = tenantCategoryRepository.findById(categoryId)
                     .orElseThrow(() -> new ApiException("CATEGORY_NOT_FOUND", "Categoria não encontrada: " + categoryId, 404));
 
@@ -117,7 +117,7 @@ public class TenantSubcategoryService {
 
         String tenantSchema = requireBoundTenantSchema();
 
-        return tenantUnitOfWork.tx(tenantSchema, () -> {
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Subcategory existing = tenantSubcategoryRepository.findByIdWithCategory(id)
                     .orElseThrow(() -> new ApiException("SUBCATEGORY_NOT_FOUND", "Subcategoria não encontrada: " + id, 404));
 

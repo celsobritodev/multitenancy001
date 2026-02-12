@@ -16,7 +16,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/controlplane/accounts/{accountId}/provisioning-events")
 @RequiredArgsConstructor
-public class ControlPlaneAccountProvisioningEventsController {
+public class ControlPlaneAccountProvisioningEventController {
 
     private final AccountProvisioningEventQueryService accountProvisioningEventQueryService;
 
@@ -33,20 +33,24 @@ public class ControlPlaneAccountProvisioningEventsController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<Page<AccountProvisioningEventResponse>> list(@PathVariable Long accountId, Pageable pageable) {
         return ResponseEntity.ok(
-                accountProvisioningEventQueryService.listByAccount(accountId, pageable).map(ControlPlaneAccountProvisioningEventsController::toHttp)
+                accountProvisioningEventQueryService
+                        .listByAccount(accountId, pageable)
+                        .map(ControlPlaneAccountProvisioningEventController::toHttp)
         );
     }
 
     @GetMapping("/latest")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountProvisioningEventResponse> latest(
             @PathVariable Long accountId,
             @RequestParam(name = "status", required = false) ProvisioningStatus status
     ) {
-        Optional<AccountProvisioningEventData> d = accountProvisioningEventQueryService.getLatestByAccount(accountId, status);
+        Optional<AccountProvisioningEventData> d =
+                accountProvisioningEventQueryService.getLatestByAccount(accountId, status);
+
         return d.map(x -> ResponseEntity.ok(toHttp(x)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

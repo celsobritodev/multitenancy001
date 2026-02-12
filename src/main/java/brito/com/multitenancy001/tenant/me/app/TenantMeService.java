@@ -1,12 +1,13 @@
 package brito.com.multitenancy001.tenant.me.app;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
 import brito.com.multitenancy001.tenant.me.api.dto.UpdateMyProfileRequest;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
+import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
+import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TenantMeService {
 
-    private final TenantUserService tenantUserService;
-    private final TenantSchemaExecutor tenantExecutor;
+    private final TenantUserQueryService tenantUserQueryService;
+    private final TenantUserCommandService tenantUserCommandService;
+
+    private final TenantExecutor tenantExecutor;
     private final SecurityUtils securityUtils;
     private final AppClock appClock;
 
@@ -26,7 +29,7 @@ public class TenantMeService {
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.getUser(userId, accountId)
+                tenantUserQueryService.getUser(userId, accountId)
         );
     }
 
@@ -38,7 +41,7 @@ public class TenantMeService {
         Long userId = securityUtils.getCurrentUserId();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.updateProfile(
+                tenantUserCommandService.updateProfile(
                         userId,
                         accountId,
                         req.name(),
@@ -59,7 +62,7 @@ public class TenantMeService {
         Long userId = securityUtils.getCurrentUserId();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.changeMyPassword(
+            tenantUserCommandService.changeMyPassword(
                     userId,
                     accountId,
                     req.currentPassword(),

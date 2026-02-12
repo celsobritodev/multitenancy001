@@ -9,7 +9,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
-public class TransactionExecutor {
+public class TxExecutor {
 
     private final TransactionTemplate transactionTemplatePublicTx;
     private final TransactionTemplate transactionTemplatePublicRequiresNew;
@@ -23,7 +23,7 @@ public class TransactionExecutor {
     private final TransactionTemplate transactionTemplateTenantReadOnlyTx;
     private final TransactionTemplate transactionTemplateTenantRequiresNewReadOnly;
 
-    public TransactionExecutor(
+    public TxExecutor(
             @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
             @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
     ) {

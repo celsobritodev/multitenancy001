@@ -86,7 +86,7 @@ public class TenantSupplierService {
     // WRITE
     // =========================================================
     //
-    // ✅ Aqui NÃO migramos para TenantUnitOfWork por semântica,
+    // ✅ Aqui NÃO migramos para TenantSchemaUnitOfWork por semântica,
     // porque a escrita é "single-aggregate/single-repo".
     // As validações e checks usam o mesmo repositório.
     //

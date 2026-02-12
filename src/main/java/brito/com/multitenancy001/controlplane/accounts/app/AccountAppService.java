@@ -23,7 +23,7 @@ import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class AccountAppService {
     private final AccountOnboardingService accountOnboardingService;
     private final AccountStatusService accountStatusService;
     private final AccountTenantUserService accountTenantUserService;
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AppClock appClock;
 
     // 1) ONBOARDING / SIGNUP
@@ -47,18 +47,18 @@ public class AccountAppService {
 
     // 2) CONSULTAS
     public List<Account> listAccounts() {
-        return publicUnitOfWork.readOnly(accountRepository::findAllByDeletedFalse);
+        return publicSchemaUnitOfWork.readOnly(accountRepository::findAllByDeletedFalse);
     }
 
     public Account getAccount(Long accountId) {
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
     }
 
     public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -111,7 +111,7 @@ public class AccountAppService {
 
     public Account findBySlug(String slug) {
         if (slug == null || slug.isBlank()) throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
@@ -120,19 +120,19 @@ public class AccountAppService {
     public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
         if (status == null) throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
-        return publicUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
+        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
     }
 
     public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
         assertValidCreatedBetweenRange(start, end);
         Pageable p = normalizePageable(pageable);
-        return publicUnitOfWork.readOnly(() -> accountRepository.findAccountsCreatedBetween(start, end, p));
+        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.findAccountsCreatedBetween(start, end, p));
     }
 
     public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
         if (term == null || term.isBlank()) throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
-        return publicUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(term, p));
+        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(term, p));
     }
 
     /**
@@ -146,12 +146,12 @@ public class AccountAppService {
 
         AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
 
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findOverdueAccountsNotDeleted(st, baseDateUtc)
         );
     }
 
     public long countOperationalAccounts() {
-        return publicUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
+        return publicSchemaUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
     }
 }

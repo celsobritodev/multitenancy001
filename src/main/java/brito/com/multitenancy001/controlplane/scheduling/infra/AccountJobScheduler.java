@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.controlplane.scheduling.persistence.AccountJobScheduleRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +25,12 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountJobScheduler {
 
     private final AccountJobScheduleRepository accountJobScheduleRepository;
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AppClock appClock;
 
     @Scheduled(fixedDelayString = "PT30S")
     public void runDueJobs() {
-        publicUnitOfWork.requiresNew(() -> {
+        publicSchemaUnitOfWork.requiresNew(() -> {
             Instant now = appClock.instant();
             var due = accountJobScheduleRepository.findDue(now);
 

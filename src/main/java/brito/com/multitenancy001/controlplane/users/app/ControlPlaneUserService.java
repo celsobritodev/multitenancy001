@@ -13,7 +13,7 @@ import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
@@ -36,7 +36,7 @@ public class ControlPlaneUserService {
     private static final String CP_ACCOUNT_INVALID_MESSAGE =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
@@ -56,7 +56,7 @@ public class ControlPlaneUserService {
     // =========================================================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
@@ -149,7 +149,7 @@ public class ControlPlaneUserService {
     }
 
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
             return controlPlaneUserRepository.findNotDeletedByAccountId(cp.getId()).stream()
                     .map(this::mapToResponse)
@@ -158,7 +158,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
 
             Account cp = getControlPlaneAccount();
@@ -175,7 +175,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
@@ -304,7 +304,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(Long userId, ControlPlaneUserPermissionsUpdateRequest request) {
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
@@ -344,7 +344,7 @@ public class ControlPlaneUserService {
     }
 
     public void resetControlPlaneUserPassword(Long userId, ControlPlaneUserPasswordResetRequest request) {
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
@@ -386,7 +386,7 @@ public class ControlPlaneUserService {
     }
 
     public void softDeleteControlPlaneUser(Long userId) {
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
@@ -423,7 +423,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
@@ -468,7 +468,7 @@ public class ControlPlaneUserService {
     // =========================================================
 
     public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
 
             List<ControlPlaneUser> users = controlPlaneUserRepository.findEnabledByAccountId(cp.getId());
@@ -480,7 +480,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
 
             Account cp = getControlPlaneAccount();
@@ -498,7 +498,7 @@ public class ControlPlaneUserService {
     // =========================================================
 
     public ControlPlaneMeResponse getMe() {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Long accountId = securityUtils.getCurrentAccountId();
             Long userId = securityUtils.getCurrentUserId();
 
@@ -529,7 +529,7 @@ public class ControlPlaneUserService {
     }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
             if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
@@ -675,7 +675,7 @@ public class ControlPlaneUserService {
             Long accountId = securityUtils.getCurrentAccountId();
             if (actorId == null || accountId == null) return Actor.anonymous();
 
-            return publicUnitOfWork.readOnly(() -> controlPlaneUserRepository.findById(actorId)
+            return publicSchemaUnitOfWork.readOnly(() -> controlPlaneUserRepository.findById(actorId)
                     .map(u -> new Actor(actorId, u.getEmail()))
                     .orElse(new Actor(actorId, null)));
         } catch (Exception ignored) {

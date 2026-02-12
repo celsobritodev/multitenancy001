@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.products.app;
 
-import brito.com.multitenancy001.infrastructure.tenant.TenantUnitOfWork;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -33,7 +33,7 @@ import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 @Slf4j
 public class TenantProductService {
 
-    private final TenantUnitOfWork tenantUnitOfWork;
+    private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
 
     private final TenantProductRepository tenantProductRepository;
     private final TenantSupplierRepository tenantSupplierRepository;
@@ -60,7 +60,7 @@ public class TenantProductService {
     }
 
     // =========================================================
-    // WRITE (orquestração multi-repo => TenantUnitOfWork)
+    // WRITE (orquestração multi-repo => TenantSchemaUnitOfWork)
     // =========================================================
 
     public Product create(Product product) {
@@ -69,7 +69,7 @@ public class TenantProductService {
         String tenantSchema = requireBoundTenantSchema();
 
         // ✅ orquestração + multi-repo dentro de um boundary explícito
-        return tenantUnitOfWork.tx(tenantSchema, () -> {
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             resolveCategoryAndSubcategory(product);
             resolveSupplier(product);
             validateSubcategoryBelongsToCategory(product);
@@ -83,7 +83,7 @@ public class TenantProductService {
 
         String tenantSchema = requireBoundTenantSchema();
 
-        return tenantUnitOfWork.tx(tenantSchema, () -> {
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Product existingProduct = tenantProductRepository.findById(id)
                     .orElseThrow(() -> new ApiException("PRODUCT_NOT_FOUND",
                             "Produto não encontrado com ID: " + id, 404));

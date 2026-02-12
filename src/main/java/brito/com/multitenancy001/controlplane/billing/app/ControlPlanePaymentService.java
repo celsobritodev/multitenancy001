@@ -12,7 +12,7 @@ import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ControlPlanePaymentService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
 
     private final AccountRepository accountRepository;
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
@@ -50,7 +50,7 @@ public class ControlPlanePaymentService {
         Instant now = appClock.instant();
 
         // ✅ Trials expirados: pega só IDs (evita carregar Account à toa)
-        List<Long> expiredTrialIds = publicUnitOfWork.readOnly(() ->
+        List<Long> expiredTrialIds = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findExpiredTrialIdsNotDeleted(now, AccountStatus.FREE_TRIAL)
         );
 
@@ -61,7 +61,7 @@ public class ControlPlanePaymentService {
         // ✅ Pagamentos vencidos: pega só IDs (evita carregar Account à toa)
         LocalDate todayUtc = LocalDate.ofInstant(now, ZoneOffset.UTC);
 
-        List<Long> overdueAccountIds = publicUnitOfWork.readOnly(() ->
+        List<Long> overdueAccountIds = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findOverdueAccountIdsNotDeleted(AccountStatus.ACTIVE, todayUtc)
         );
 
@@ -83,7 +83,7 @@ public class ControlPlanePaymentService {
         );
 
         // side-effect fora de transação: para isso precisamos do email => busca leve e explícita
-        Account account = publicUnitOfWork.readOnly(() ->
+        Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findAnyById(accountId)
                         .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
         );
@@ -94,7 +94,7 @@ public class ControlPlanePaymentService {
     private void checkExpiredPendingPayments(Instant now) {
         Instant thirtyMinutesAgo = now.minusSeconds(30 * 60);
 
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
             List<Payment> expiredPayments = controlPlanePaymentRepository
                     .findByStatusAndAudit_CreatedAtBefore(PaymentStatus.PENDING, thirtyMinutesAgo);
 
@@ -117,7 +117,7 @@ public class ControlPlanePaymentService {
         Instant now = appClock.instant();
 
         // 1) Valida e cria PENDING dentro do CP tx
-        Long paymentId = publicUnitOfWork.tx(() -> {
+        Long paymentId = publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findById(adminPaymentRequest.accountId())
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -149,11 +149,11 @@ public class ControlPlanePaymentService {
 
         // 3) Finaliza dentro de tx (commit atômico)
         if (ok) {
-            Payment payment = publicUnitOfWork.tx(() -> completePaymentById(paymentId, now));
+            Payment payment = publicSchemaUnitOfWork.tx(() -> completePaymentById(paymentId, now));
             return mapToResponse(payment);
         }
 
-        publicUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
+        publicSchemaUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
         throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
     }
 
@@ -161,7 +161,7 @@ public class ControlPlanePaymentService {
         Long accountId = securityUtils.getCurrentAccountId();
         Instant now = appClock.instant();
 
-        Long paymentId = publicUnitOfWork.tx(() -> {
+        Long paymentId = publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findById(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 
@@ -183,11 +183,11 @@ public class ControlPlanePaymentService {
         boolean ok = processWithPaymentGateway(paymentId, paymentRequest);
 
         if (ok) {
-            Payment payment = publicUnitOfWork.tx(() -> completePaymentById(paymentId, now));
+            Payment payment = publicSchemaUnitOfWork.tx(() -> completePaymentById(paymentId, now));
             return mapToResponse(payment);
         }
 
-        publicUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
+        publicSchemaUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
         throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
     }
 
@@ -198,7 +198,7 @@ public class ControlPlanePaymentService {
 
         Instant now = appClock.instant();
 
-        Payment payment = publicUnitOfWork.tx(() -> {
+        Payment payment = publicSchemaUnitOfWork.tx(() -> {
             Payment p = controlPlanePaymentRepository.findById(paymentId)
                     .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
@@ -219,7 +219,7 @@ public class ControlPlanePaymentService {
 
         Instant now = appClock.instant();
 
-        Payment payment = publicUnitOfWork.tx(() -> {
+        Payment payment = publicSchemaUnitOfWork.tx(() -> {
             Payment p = controlPlanePaymentRepository.findById(paymentId)
                     .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
 
@@ -246,7 +246,7 @@ public class ControlPlanePaymentService {
     public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
         Long accountId = securityUtils.getCurrentAccountId();
 
-        Payment payment = publicUnitOfWork.readOnly(() ->
+        Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
                         .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
         );
@@ -265,7 +265,7 @@ public class ControlPlanePaymentService {
     }
 
     public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByAccount_Id(accountId)
                         .stream()
                         .map(this::mapToResponse)
@@ -275,11 +275,11 @@ public class ControlPlanePaymentService {
 
     public boolean hasActivePayment(Long accountId) {
         Instant now = appClock.instant();
-        return publicUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsActivePayment(accountId, now));
+        return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsActivePayment(accountId, now));
     }
 
     public PaymentResponse getPaymentById(Long paymentId) {
-        Payment payment = publicUnitOfWork.readOnly(() ->
+        Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findById(paymentId)
                         .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
         );
@@ -287,7 +287,7 @@ public class ControlPlanePaymentService {
     }
 
     public BigDecimal getTotalRevenue(Instant startDate, Instant endDate) {
-        List<Object[]> revenueByAccount = publicUnitOfWork.readOnly(() ->
+        List<Object[]> revenueByAccount = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.getRevenueByAccount(startDate, endDate)
         );
 
@@ -303,7 +303,7 @@ public class ControlPlanePaymentService {
         if (accountId == null) {
             throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         }
-        return publicUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByIdAndAccount_Id(paymentId, accountId));
+        return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByIdAndAccount_Id(paymentId, accountId));
     }
 
     public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
@@ -314,7 +314,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         }
 
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByAccount_IdAndStatus(accountId, status)
                         .stream()
                         .map(this::mapToResponse)
@@ -327,7 +327,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
         }
 
-        Payment payment = publicUnitOfWork.readOnly(() ->
+        Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByTransactionId(transactionId.trim())
                         .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
         );
@@ -339,7 +339,7 @@ public class ControlPlanePaymentService {
         if (transactionId == null || transactionId.isBlank()) {
             throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
         }
-        return publicUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByTransactionId(transactionId.trim()));
+        return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByTransactionId(transactionId.trim()));
     }
 
     public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(Instant date, PaymentStatus status) {
@@ -350,7 +350,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
         }
 
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByValidUntilBeforeAndStatus(date, status)
                         .stream()
                         .map(this::mapToResponse)
@@ -363,7 +363,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
         }
 
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findCompletedPaymentsByAccount(accountId)
                         .stream()
                         .map(this::mapToResponse)
@@ -379,7 +379,7 @@ public class ControlPlanePaymentService {
             throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
         }
 
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findPaymentsInPeriod(startDate, endDate)
                         .stream()
                         .map(this::mapToResponse)

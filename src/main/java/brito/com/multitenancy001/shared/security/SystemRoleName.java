@@ -13,6 +13,7 @@ public enum SystemRoleName {
     // TENANT
     TENANT_OWNER,
     TENANT_ADMIN,
+    TENANT_MANAGER,
     TENANT_SUPPORT,
     TENANT_USER,
     TENANT_PRODUCT_MANAGER,
@@ -29,4 +30,3 @@ public enum SystemRoleName {
         return SystemRoleName.valueOf(value.trim().toUpperCase());
     }
 }
-

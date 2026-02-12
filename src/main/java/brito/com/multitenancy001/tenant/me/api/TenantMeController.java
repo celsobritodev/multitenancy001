@@ -28,7 +28,7 @@ public class TenantMeController {
 
     // ✅ Perfil do usuário logado
     @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
     public ResponseEntity<TenantMeResponse> me() {
         TenantUser tenantUser = tenantMeService.getMyProfile();
         return ResponseEntity.ok(tenantMeApiMapper.toMe(tenantUser));
@@ -36,7 +36,7 @@ public class TenantMeController {
 
     // ✅ Atualiza perfil do usuário logado (SAFE whitelist)
     @PutMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.asAuthority())")
     public ResponseEntity<TenantMeResponse> update(@Valid @RequestBody UpdateMyProfileRequest req) {
         TenantUser tenantUser = tenantMeService.updateMyProfile(req);
         return ResponseEntity.ok(tenantMeApiMapper.toMe(tenantUser));
@@ -44,7 +44,7 @@ public class TenantMeController {
 
     // ✅ Troca minha senha (JWT) - destrava mustChangePassword
     @PatchMapping("/password")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.asAuthority())")
     public ResponseEntity<Void> changeMyPassword(@Valid @RequestBody TenantChangeMyPasswordRequest req) {
         tenantMeService.changeMyPassword(req);
         return ResponseEntity.noContent().build();

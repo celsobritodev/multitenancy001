@@ -17,21 +17,20 @@ public class TenantPaymentController {
     private final TenantPaymentService tenantBillingService;
 
     @GetMapping("/account/{accountId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.asAuthority())")
     public ResponseEntity<List<PaymentResponse>> listPayments(@PathVariable Long accountId) {
         return ResponseEntity.ok(tenantBillingService.listPaymentsForAccount(accountId));
     }
 
     @GetMapping("/account/{accountId}/{paymentId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.asAuthority())")
     public ResponseEntity<PaymentResponse> getPayment(@PathVariable Long accountId, @PathVariable Long paymentId) {
         return ResponseEntity.ok(tenantBillingService.getPaymentForAccount(accountId, paymentId));
     }
 
     @GetMapping("/account/{accountId}/has-active")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_BILLING_READ.asAuthority())")
     public ResponseEntity<Boolean> hasActive(@PathVariable Long accountId) {
         return ResponseEntity.ok(tenantBillingService.hasActivePayment(accountId));
     }
 }
-

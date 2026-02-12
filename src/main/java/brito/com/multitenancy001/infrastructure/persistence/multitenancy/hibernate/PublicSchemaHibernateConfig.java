@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.jpa.publicschema;
+package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate;
 
 import brito.com.multitenancy001.shared.db.Schemas;
 import lombok.RequiredArgsConstructor;

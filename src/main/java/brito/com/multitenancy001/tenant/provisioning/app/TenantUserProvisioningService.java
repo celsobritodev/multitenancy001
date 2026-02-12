@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.tenant;
+package brito.com.multitenancy001.tenant.provisioning.app;
 
 import java.time.Instant;
 import java.util.List;
@@ -7,7 +7,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -22,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TenantUserProvisioningFacade {
+public class TenantUserProvisioningService {
 
     private static final String REQUIRED_TABLE = "tenant_users";
     private static final String OWNER_NAME_FALLBACK = "Owner";
@@ -30,8 +31,8 @@ public class TenantUserProvisioningFacade {
     // error codes padrão
     private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
 
-    private final TenantSchemaExecutor tenantExecutor;
-    private final TransactionExecutor transactionExecutor;
+    private final TenantExecutor tenantExecutor;
+    private final TxExecutor transactionExecutor;
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;

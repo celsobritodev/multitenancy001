@@ -18,13 +18,13 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AccountSignupController {
 
-    private final AccountAppService accountLifecycleService;
+    private final AccountAppService accountAppService;
     private final AccountApiMapper accountApiMapper;
 
     @PostMapping
     public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest req) {
 
-        SignupResult result = accountLifecycleService.createAccount(new SignupCommand(
+        SignupResult result = accountAppService.createAccount(new SignupCommand(
                 req.displayName(),
                 req.loginEmail(),
                 req.taxIdType(),

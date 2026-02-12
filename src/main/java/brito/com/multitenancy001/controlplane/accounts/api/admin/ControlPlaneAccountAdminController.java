@@ -3,7 +3,6 @@ package brito.com.multitenancy001.controlplane.accounts.api.admin;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountAdminDetailsResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeRequest;
-import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTenantUserSummaryResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
@@ -11,6 +10,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountUserApi
 import brito.com.multitenancy001.controlplane.accounts.app.AccountAppService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResponse;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
@@ -36,7 +36,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneAccountAdminController {
 
-    private final AccountAppService accountLifecycleService;
+    private final AccountAppService accountAppService;
 
     private final AccountApiMapper accountApiMapper;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
@@ -47,10 +47,10 @@ public class ControlPlaneAccountAdminController {
      * Signup via admin (criação de tenant pelo Control Plane).
      */
     @PostMapping("/signup")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_CREATE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_CREATE.asAuthority())")
     public ResponseEntity<SignupResponse> createAccount(@Valid @RequestBody SignupRequest req) {
 
-        SignupResult result = accountLifecycleService.createAccount(new SignupCommand(
+        SignupResult result = accountAppService.createAccount(new SignupCommand(
                 req.displayName(),
                 req.loginEmail(),
                 req.taxIdType(),
@@ -72,78 +72,66 @@ public class ControlPlaneAccountAdminController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<List<AccountResponse>> listAccounts() {
-        List<AccountResponse> out = accountLifecycleService.listAccounts()
+        List<AccountResponse> out = accountAppService.listAccounts()
                 .stream().map(accountApiMapper::toResponse).toList();
         return ResponseEntity.ok(out);
     }
 
     @GetMapping("/{accountId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountResponse> getAccount(@PathVariable Long accountId) {
-        Account a = accountLifecycleService.getAccount(accountId);
+        Account a = accountAppService.getAccount(accountId);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @GetMapping("/{accountId}/admin-details")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountAdminDetailsResponse> getAdminDetails(@PathVariable Long accountId) {
-        AccountAdminDetailsProjection p = accountLifecycleService.getAccountAdminDetails(accountId);
+        AccountAdminDetailsProjection p = accountAppService.getAccountAdminDetails(accountId);
         return ResponseEntity.ok(accountAdminDetailsApiMapper.toResponse(p.account(), p.admin(), p.totalUsers()));
     }
 
     @PostMapping("/{accountId}/status")
     @PreAuthorize("hasAnyAuthority("
-            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_SUSPEND.name(), "
-            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.name()"
+            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_SUSPEND.asAuthority(), "
+            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.asAuthority()"
             + ")")
     public ResponseEntity<AccountStatusChangeResponse> changeStatus(
             @PathVariable Long accountId,
             @Valid @RequestBody AccountStatusChangeRequest req
     ) {
-        AccountStatusChangeResult r = accountLifecycleService.changeAccountStatus(
+        AccountStatusChangeResult r = accountAppService.changeAccountStatus(
                 accountId,
                 new AccountStatusChangeCommand(req.status())
         );
 
-        AccountStatusChangeResponse http = new AccountStatusChangeResponse(
-                r.accountId(),
-                r.newStatus(),
-                r.previousStatus(),
-                r.changedAt(),
-                r.tenantSchema(),
-                new AccountStatusChangeResponse.SideEffects(
-                        r.tenantUsersUpdated(),
-                        r.action(),
-                        r.affectedUsers()
-                )
-        );
-
-        return ResponseEntity.ok(http);
+        // ✅ Response “flat” + tipado 
+        return ResponseEntity.ok(AccountStatusChangeResponse.from(r));
     }
 
     @DeleteMapping("/{accountId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_DELETE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_DELETE.asAuthority())")
     public ResponseEntity<Void> softDelete(@PathVariable Long accountId) {
-        accountLifecycleService.softDeleteAccount(accountId);
+        accountAppService.softDeleteAccount(accountId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{accountId}/restore")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.asAuthority())")
     public ResponseEntity<Void> restore(@PathVariable Long accountId) {
-        accountLifecycleService.restoreAccount(accountId);
+        accountAppService.restoreAccount(accountId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{accountId}/tenant-users")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<List<AccountTenantUserSummaryResponse>> listTenantUsers(
             @PathVariable Long accountId,
             @RequestParam(name = "onlyOperational", defaultValue = "false") boolean onlyOperational
     ) {
-        List<AccountTenantUserSummaryResponse> out = accountLifecycleService
+        List<AccountTenantUserSummaryResponse> out = accountAppService
                 .listTenantUsers(accountId, onlyOperational)
                 .stream()
                 .map(accountUserApiMapper::toAccountUserSummary)
@@ -154,51 +142,52 @@ public class ControlPlaneAccountAdminController {
 
     @PostMapping("/{accountId}/tenant-users/{userId}/suspended-by-admin")
     @PreAuthorize("hasAnyAuthority("
-            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_SUSPEND.name(), "
-            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.name()"
+            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_SUSPEND.asAuthority(), "
+            + "T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.asAuthority()"
             + ")")
     public ResponseEntity<Void> setSuspendedByAdmin(
             @PathVariable Long accountId,
             @PathVariable Long userId,
             @RequestParam("value") boolean value
     ) {
-        accountLifecycleService.setUserSuspendedByAdmin(accountId, userId, value);
+        accountAppService.setUserSuspendedByAdmin(accountId, userId, value);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/by-status")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<Page<AccountResponse>> listByStatus(
             @RequestParam AccountStatus status,
             Pageable pageable
     ) {
         return ResponseEntity.ok(
-                accountLifecycleService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse)
+                accountAppService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse)
         );
     }
 
-    @GetMapping("/created-between")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
-    public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
-            @RequestParam("start") String startIso,
-            @RequestParam("end") String endIso,
-            Pageable pageable
-    ) {
-        Instant start = Instant.parse(startIso);
-        Instant end = Instant.parse(endIso);
-        return ResponseEntity.ok(
-                accountLifecycleService.listAccountsCreatedBetween(start, end, pageable).map(accountApiMapper::toResponse)
-        );
-    }
+  @GetMapping("/created-between")
+@PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
+public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
+        @RequestParam("start") Instant start,
+        @RequestParam("end") Instant end,
+        Pageable pageable
+) {
+    return ResponseEntity.ok(
+            accountAppService
+                    .listAccountsCreatedBetween(start, end, pageable)
+                    .map(accountApiMapper::toResponse)
+    );
+}
+
 
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<Page<AccountResponse>> search(
             @RequestParam("term") String term,
             Pageable pageable
     ) {
         return ResponseEntity.ok(
-                accountLifecycleService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse)
+                accountAppService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse)
         );
     }
 }

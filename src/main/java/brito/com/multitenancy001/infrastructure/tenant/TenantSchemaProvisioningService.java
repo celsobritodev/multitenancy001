@@ -6,9 +6,9 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class TenantSchemaProvisioningOrchestrator {
+public class TenantSchemaProvisioningService {
 
-    private final TenantSchemaProvisioner tenantSchemaProvisioningService;
+    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningService;
 
     /**
      * Account.tenantSchema é o identificador persistido do schema do tenant.

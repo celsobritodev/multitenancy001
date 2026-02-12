@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate;
 
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
@@ -10,7 +10,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
 
 @Slf4j
 @Component
-public class CurrentTenantSchemaResolver implements CurrentTenantIdentifierResolver<String> {
+public class TenantSchemaResolver implements CurrentTenantIdentifierResolver<String> {
 
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 

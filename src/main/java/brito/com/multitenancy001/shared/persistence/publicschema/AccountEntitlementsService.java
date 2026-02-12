@@ -5,7 +5,7 @@ import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,14 +17,14 @@ public class AccountEntitlementsService {
     private final AccountEntitlementsRepository accountEntitlementsRepository;
     private final AccountEntitlementsProvisioningService provisioningService;
     private final AccountRepository accountRepository;
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
 
     /**
      * Resolve entitlements efetivos da conta.
      * ✅ TX normal porque pode provisionar default entitlements.
      */
     public AccountEntitlementsSnapshot resolveEffective(Account account) {
-        return publicUnitOfWork.tx(() -> resolveEffectiveInternal(account));
+        return publicSchemaUnitOfWork.tx(() -> resolveEffectiveInternal(account));
     }
 
     /**
@@ -35,7 +35,7 @@ public class AccountEntitlementsService {
     public AccountEntitlementsSnapshot resolveEffectiveByAccountId(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
 
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
 

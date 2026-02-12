@@ -5,7 +5,7 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountReposi
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ public class ControlPlaneUserExplicitPermissionsService {
     private static final String CP_ACCOUNT_INVALID_MESSAGE =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
@@ -60,7 +60,7 @@ public class ControlPlaneUserExplicitPermissionsService {
                 })
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
 
             final Account cp;
             try {

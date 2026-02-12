@@ -1,14 +1,15 @@
 package brito.com.multitenancy001.tenant.users.app.context;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
+import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
+import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,8 +21,10 @@ import java.util.LinkedHashSet;
 @RequiredArgsConstructor
 public class TenantUserCurrentContextCommandService {
 
-    private final TenantUserService tenantUserService;
-    private final TenantSchemaExecutor tenantExecutor;
+    private final TenantUserCommandService tenantUserCommandService;
+    private final TenantUserQueryService tenantUserQueryService;
+
+    private final TenantExecutor tenantExecutor;
     private final SecurityUtils securityUtils;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
@@ -31,7 +34,7 @@ public class TenantUserCurrentContextCommandService {
         Long fromUserId = securityUtils.getCurrentUserId();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.transferTenantOwnerRole(accountId, fromUserId, toUserId);
+            tenantUserCommandService.transferTenantOwnerRole(accountId, fromUserId, toUserId);
             return null;
         });
     }
@@ -64,7 +67,7 @@ public class TenantUserCurrentContextCommandService {
         Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
 
         long currentUsers = tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
+                tenantUserQueryService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE)
         );
 
         accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
@@ -73,7 +76,7 @@ public class TenantUserCurrentContextCommandService {
         String finalTimezone = timezone;
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.createTenantUser(
+                tenantUserCommandService.createTenantUser(
                         accountId,
                         name,
                         email,
@@ -95,8 +98,8 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.setSuspendedByAdmin(accountId, userId, suspended);
-            return tenantUserService.getUser(userId, accountId);
+            tenantUserCommandService.setSuspendedByAdmin(accountId, userId, suspended);
+            return tenantUserQueryService.getUser(userId, accountId);
         });
     }
 
@@ -105,8 +108,8 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.setSuspendedByAccount(accountId, userId, suspended);
-            return tenantUserService.getUser(userId, accountId);
+            tenantUserCommandService.setSuspendedByAccount(accountId, userId, suspended);
+            return tenantUserQueryService.getUser(userId, accountId);
         });
     }
 
@@ -115,7 +118,7 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.softDelete(userId, accountId);
+            tenantUserCommandService.softDelete(userId, accountId);
             return null;
         });
     }
@@ -125,7 +128,7 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserService.hardDelete(userId, accountId);
+            tenantUserCommandService.hardDelete(userId, accountId);
             return null;
         });
     }
@@ -135,7 +138,7 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.restore(userId, accountId)
+                tenantUserCommandService.restore(userId, accountId)
         );
     }
 
@@ -146,7 +149,7 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserService.resetPassword(userId, accountId, newPassword)
+                tenantUserCommandService.resetPassword(userId, accountId, newPassword)
         );
     }
 }

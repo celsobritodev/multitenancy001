@@ -178,12 +178,7 @@ public final class PermissionScopeValidator {
         assertNoTenantPermissionLeak(toList(permissions));
     }
 
-    // =========================================================
-    // COMPAT: validate*Strict(Set<EnumPermission>)
-    //
-    // Seu TenantUserService chama validateTenantPermissionsStrict(Set<TenantPermission>)
-    // então mantemos o nome para não sair editando call-sites.
-    // =========================================================
+  
 
     /**
      * Valida permissões tipadas do Tenant (TEN_*), estritamente.

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import brito.com.multitenancy001.shared.context.TenantContext;
 
 @Component
-public class PublicExecutor {
+public class PublicSchemaExecutor {
 
     // ---------------------------------------------------------------------
     // ✅ PADRÃO CANÔNICO (preferido)

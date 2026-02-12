@@ -23,7 +23,7 @@ public final class TenantRolePermissions {
         // OWNER = tudo
         MAP.put(TenantRole.TENANT_OWNER, unmodifiable(EnumSet.allOf(TenantPermission.class)));
 
-        // ADMIN = administra tudo do tenant (conforme seu set de TenantPermission)
+        // ADMIN = "admin total" do tenant (coerente com delete user + settings write + role transfer)
         MAP.put(TenantRole.TENANT_ADMIN, unmodifiable(EnumSet.of(
                 // Users
                 TEN_USER_READ,
@@ -62,6 +62,44 @@ public final class TenantRolePermissions {
                 TEN_SETTINGS_WRITE
         )));
 
+        /**
+         * MANAGER = "admin operacional" (sem poderes sensíveis/destrutivos).
+         * - NÃO transfere ownership/admin (TEN_ROLE_TRANSFER)
+         * - NÃO deleta usuário (TEN_USER_DELETE)
+         * - NÃO escreve billing/settings (TEN_BILLING_WRITE / TEN_SETTINGS_WRITE)
+         */
+        MAP.put(TenantRole.TENANT_MANAGER, unmodifiable(EnumSet.of(
+                // Users (sem delete)
+                TEN_USER_READ,
+                TEN_USER_CREATE,
+                TEN_USER_UPDATE,
+                TEN_USER_SUSPEND,
+                TEN_USER_RESTORE,
+
+                // Products + Inventory
+                TEN_PRODUCT_READ,
+                TEN_PRODUCT_WRITE,
+                TEN_INVENTORY_READ,
+                TEN_INVENTORY_WRITE,
+
+                // Catalog
+                TEN_CATEGORY_READ,
+                TEN_CATEGORY_WRITE,
+                TEN_SUPPLIER_READ,
+                TEN_SUPPLIER_WRITE,
+
+                // Sales + Issues + Reports
+                TEN_SALE_READ,
+                TEN_SALE_WRITE,
+                TEN_SALE_ISSUES_READ,
+                TEN_SALE_ISSUES_WRITE,
+                TEN_REPORT_SALES_READ,
+
+                // Billing + Settings (read-only)
+                TEN_BILLING_READ,
+                TEN_SETTINGS_READ
+        )));
+
         MAP.put(TenantRole.TENANT_PRODUCT_MANAGER, unmodifiable(EnumSet.of(
                 TEN_PRODUCT_READ,
                 TEN_PRODUCT_WRITE,
@@ -82,10 +120,28 @@ public final class TenantRolePermissions {
                 TEN_BILLING_WRITE
         )));
 
+        // READ_ONLY = auditor/consulta (sem write)
         MAP.put(TenantRole.TENANT_READ_ONLY, unmodifiable(EnumSet.of(
                 TEN_PRODUCT_READ,
                 TEN_INVENTORY_READ,
-                TEN_USER_READ
+                TEN_CATEGORY_READ,
+                TEN_SUPPLIER_READ,
+                TEN_SALE_READ,
+                TEN_SALE_ISSUES_READ,
+                TEN_REPORT_SALES_READ,
+                TEN_USER_READ,
+                TEN_BILLING_READ,
+                TEN_SETTINGS_READ
+        )));
+
+        // USER = usuário comum (opera o sistema)
+        MAP.put(TenantRole.TENANT_USER, unmodifiable(EnumSet.of(
+                TEN_PRODUCT_READ,
+                TEN_CATEGORY_READ,
+                TEN_SUPPLIER_READ,
+                TEN_INVENTORY_READ,
+                TEN_SALE_READ,
+                TEN_SALE_WRITE
         )));
 
         // OPERATOR operacional (não administra usuários/config/billing)
@@ -96,8 +152,7 @@ public final class TenantRolePermissions {
                 TEN_SALE_READ
         )));
 
-        // SUPPORT (tenant) – recomendação: suporte interno sem “poder destrutivo total”
-        // (Se quiser que suporte seja igual a ADMIN, basta apontar pro mesmo set do ADMIN.)
+        // SUPPORT (tenant) – suporte interno sem “poder destrutivo total”
         MAP.put(TenantRole.TENANT_SUPPORT, unmodifiable(EnumSet.of(
                 TEN_USER_READ,
                 TEN_USER_UPDATE,
@@ -114,21 +169,12 @@ public final class TenantRolePermissions {
                 TEN_BILLING_READ
         )));
 
-        // TENANT_USER existe no enum.
-        // Se você quiser que ele seja diferente do READ_ONLY, mapeie aqui.
-        // (Se for igual ao READ_ONLY, pode apontar para o mesmo set, mantendo imutável.)
-        MAP.put(TenantRole.TENANT_USER, MAP.get(TenantRole.TENANT_READ_ONLY));
-
         // FAIL-FAST: garante que todas as roles do enum estão mapeadas.
         assertAllRolesMapped();
     }
 
     private TenantRolePermissions() {}
 
-    /**
-     * Mantém o mesmo nome do seu método atual.
-     * Retorna Set imutável.
-     */
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
         if (role == null) return Set.of();
         Set<TenantPermission> set = MAP.get(role);

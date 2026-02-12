@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-public class TenantSchemaProvisioner {
+public class TenantSchemaProvisioningWorker {
 
     private static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(30);
 

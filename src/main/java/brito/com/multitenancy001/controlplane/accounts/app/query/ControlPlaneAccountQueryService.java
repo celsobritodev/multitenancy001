@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 
@@ -16,11 +16,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
 
     public Account getEnabledById(Long id) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (id == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "id é obrigatório", 400);
 
             return accountRepository.findEnabledById(id)
@@ -29,7 +29,7 @@ public class ControlPlaneAccountQueryService {
     }
 
     public Account getAnyById(Long id) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (id == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "id é obrigatório", 400);
 
             return accountRepository.findAnyById(id)
@@ -38,7 +38,7 @@ public class ControlPlaneAccountQueryService {
     }
 
     public long countByStatusesNotDeleted(List<AccountStatus> statuses) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (statuses == null || statuses.isEmpty()) {
                 throw new ApiException("ACCOUNT_STATUSES_REQUIRED", "statuses é obrigatório", 400);
             }
@@ -47,7 +47,7 @@ public class ControlPlaneAccountQueryService {
     }
 
     public List<Account> findPaymentDueBeforeNotDeleted(LocalDate date) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             if (date == null) throw new ApiException("DATE_REQUIRED", "date é obrigatório", 400);
 
             return accountRepository.findByPaymentDueDateBeforeAndDeletedFalse(date);

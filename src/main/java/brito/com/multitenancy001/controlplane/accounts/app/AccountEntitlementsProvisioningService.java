@@ -23,7 +23,7 @@ public class AccountEntitlementsProvisioningService {
      * - TENANT   => INSERT ... ON CONFLICT DO NOTHING + SELECT
      *
      * IMPORTANTE:
-     * Este método deve rodar dentro de uma TX write-capable (via PublicUnitOfWork.tx()).
+     * Este método deve rodar dentro de uma TX write-capable (via PublicSchemaUnitOfWork.tx()).
      */
     public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {

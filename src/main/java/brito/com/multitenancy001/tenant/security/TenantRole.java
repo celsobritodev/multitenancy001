@@ -6,6 +6,13 @@ public enum TenantRole implements RoleAuthority {
 
     TENANT_OWNER,
     TENANT_ADMIN,
+
+    /**
+     * Admin operacional do dia a dia (sem poderes sensíveis / destrutivos).
+     * Recomendado para separar "admin total" (TENANT_ADMIN) do "gerente" (TENANT_MANAGER).
+     */
+    TENANT_MANAGER,
+
     TENANT_SUPPORT,
     TENANT_USER,
     TENANT_PRODUCT_MANAGER,
@@ -23,4 +30,3 @@ public enum TenantRole implements RoleAuthority {
         return this == TENANT_OWNER;
     }
 }
-

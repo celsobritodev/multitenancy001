@@ -5,7 +5,7 @@ import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,7 +18,7 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class SecurityAuditService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final SecurityAuditEventRepository securityAuditEventRepository;
     private final AppClock appClock;
 
@@ -35,7 +35,7 @@ public class SecurityAuditService {
         RequestMeta meta = RequestMetaContext.getOrNull();
         String resolvedTenant = StringUtils.hasText(tenantSchema) ? tenantSchema : TenantContext.getOrNull();
 
-        publicUnitOfWork.requiresNew(() -> {
+        publicSchemaUnitOfWork.requiresNew(() -> {
             SecurityAuditEvent ev = new SecurityAuditEvent();
 
             Instant occurredAt = appClock.instant();

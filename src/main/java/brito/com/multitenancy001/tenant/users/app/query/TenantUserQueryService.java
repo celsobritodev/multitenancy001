@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.users.app.query;
 
-import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -19,7 +19,7 @@ import java.util.List;
 public class TenantUserQueryService {
 
     private final TenantUserRepository tenantUserRepository;
-    private final TransactionExecutor transactionExecutor;
+    private final TxExecutor transactionExecutor;
 
     // =========================================================
     // LIMITS / COUNTS

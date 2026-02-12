@@ -22,7 +22,7 @@ public interface AccountEntitlementsRepository extends JpaRepository<AccountEnti
      * Retorna 1 se inseriu, 0 se já existia.
      *
      * IMPORTANTE:
-     * Deve ser executado dentro de uma TX write-capable (via PublicUnitOfWork.tx()).
+     * Deve ser executado dentro de uma TX write-capable (via PublicSchemaUnitOfWork.tx()).
      *
      * Regra AppClock:
      *  Receber instantes via parâmetros.

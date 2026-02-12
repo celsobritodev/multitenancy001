@@ -2,14 +2,15 @@ package brito.com.multitenancy001.tenant.auth.app;
 
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.users.app.TenantUserService;
+import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
+import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,10 +22,12 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class TenantPasswordResetService {
 
-    private final TenantUserService tenantUserService;
+    private final TenantUserQueryService tenantUserQueryService;
+    private final TenantUserCommandService tenantUserCommandService;
+
     private final AccountResolver accountResolver;
     private final JwtTokenProvider jwtTokenProvider;
-    private final TenantSchemaExecutor tenantExecutor;
+    private final TenantExecutor tenantExecutor;
     private final AppClock appClock;
     private final SecurityAuditService securityAuditService;
 
@@ -58,7 +61,7 @@ public class TenantPasswordResetService {
 
         try {
             String token = tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
-                TenantUser user = tenantUserService.getUserByEmail(normalizedEmail, account.id());
+                TenantUser user = tenantUserQueryService.getUserByEmail(normalizedEmail, account.id());
 
                 if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
                     throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
@@ -72,7 +75,7 @@ public class TenantPasswordResetService {
 
                 user.setPasswordResetToken(passwordResetToken);
                 user.setPasswordResetExpires(appClock.instant().plus(Duration.ofHours(1)));
-                tenantUserService.save(user);
+                tenantUserCommandService.save(user);
 
                 return passwordResetToken;
             });
@@ -129,7 +132,7 @@ public class TenantPasswordResetService {
 
         try {
             tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                tenantUserService.resetPasswordWithToken(accountId, email, token, newPassword);
+                tenantUserCommandService.resetPasswordWithToken(accountId, email, token, newPassword);
                 return null;
             });
 

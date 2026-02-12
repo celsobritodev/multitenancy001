@@ -20,13 +20,14 @@ public final class TenantRoleMapper {
         if (role == null) return null;
         return TenantRoleName.valueOf(role.name());
     }
-    
+
     public static SystemRoleName toSystemRoleOrNull(TenantRole tenantRole) {
         if (tenantRole == null) return null;
 
         return switch (tenantRole) {
             case TENANT_OWNER -> SystemRoleName.TENANT_OWNER;
             case TENANT_ADMIN -> SystemRoleName.TENANT_ADMIN;
+            case TENANT_MANAGER -> SystemRoleName.TENANT_MANAGER;
             case TENANT_SUPPORT -> SystemRoleName.TENANT_SUPPORT;
             case TENANT_USER -> SystemRoleName.TENANT_USER;
             case TENANT_PRODUCT_MANAGER -> SystemRoleName.TENANT_PRODUCT_MANAGER;
@@ -37,4 +38,3 @@ public final class TenantRoleMapper {
         };
     }
 }
-

@@ -20,35 +20,35 @@ public class TenantSubcategoryController {
 
     // Lista subcategorias (não-deletadas) do tenant.
     @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<Subcategory>> listAll() {
         return ResponseEntity.ok(tenantSubcategoryService.findAll());
     }
 
     // Lista subcategorias ativas (não-deletadas) do tenant.
     @GetMapping("/active")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<Subcategory>> listActive() {
         return ResponseEntity.ok(tenantSubcategoryService.findActive());
     }
 
     // Busca subcategoria por id (escopo: tenant).
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<Subcategory> getById(@PathVariable Long id) {
         return ResponseEntity.ok(tenantSubcategoryService.findById(id));
     }
 
     // Lista subcategorias por categoria (default: apenas ativas e não-deletadas).
     @GetMapping("/category/{categoryId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<Subcategory>> listByCategory(@PathVariable Long categoryId) {
         return ResponseEntity.ok(tenantSubcategoryService.findByCategoryId(categoryId));
     }
 
     // Lista subcategorias por categoria com flags administrativas (incluir deletadas/inativas).
     @GetMapping("/category/{categoryId}/admin")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<Subcategory>> listByCategoryAdmin(
             @PathVariable Long categoryId,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
@@ -59,9 +59,16 @@ public class TenantSubcategoryController {
         );
     }
 
+    // Lista subcategorias por categoria (NOT DELETED, inclui inativas).
+    @GetMapping("/category/{categoryId}/not-deleted")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
+    public ResponseEntity<List<Subcategory>> listByCategoryNotDeleted(@PathVariable Long categoryId) {
+        return ResponseEntity.ok(tenantSubcategoryService.findByCategoryIdNotDeleted(categoryId));
+    }
+
     // Cria subcategoria dentro de uma categoria.
     @PostMapping("/category/{categoryId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Subcategory> create(
             @PathVariable Long categoryId,
             @Valid @RequestBody Subcategory subcategory
@@ -72,21 +79,21 @@ public class TenantSubcategoryController {
 
     // Atualiza subcategoria do tenant (substituição completa).
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Subcategory> update(@PathVariable Long id, @RequestBody Subcategory subcategory) {
         return ResponseEntity.ok(tenantSubcategoryService.update(id, subcategory));
     }
 
     // Alterna status ativo/inativo da subcategoria.
     @PatchMapping("/{id}/toggle-active")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Subcategory> toggleActive(@PathVariable Long id) {
         return ResponseEntity.ok(tenantSubcategoryService.toggleActive(id));
     }
 
     // Soft-delete de subcategoria no tenant.
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Void> softDelete(@PathVariable Long id) {
         tenantSubcategoryService.softDelete(id);
         return ResponseEntity.noContent().build();
@@ -94,16 +101,8 @@ public class TenantSubcategoryController {
 
     // Restaura subcategoria previamente deletada (soft-delete).
     @PatchMapping("/{id}/restore")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.name())")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Subcategory> restore(@PathVariable Long id) {
         return ResponseEntity.ok(tenantSubcategoryService.restore(id));
     }
-
-    // Lista subcategorias por categoria (NOT DELETED, inclui inativas).
-    @GetMapping("/category/{categoryId}/not-deleted")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.name())")
-    public ResponseEntity<List<Subcategory>> listByCategoryNotDeleted(@PathVariable Long categoryId) {
-        return ResponseEntity.ok(tenantSubcategoryService.findByCategoryIdNotDeleted(categoryId));
-    }
 }
-

@@ -11,18 +11,18 @@ import brito.com.multitenancy001.controlplane.accounts.domain.AccountProvisionin
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountProvisioningEventRepository;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class AccountProvisioningEventQueryService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountProvisioningEventRepository accountProvisioningEventRepository;
 
     public Page<AccountProvisioningEventData> listByAccount(Long accountId, Pageable pageable) {
-        return publicUnitOfWork.readOnly(() ->
+        return publicSchemaUnitOfWork.readOnly(() ->
                 accountProvisioningEventRepository.findByAccountId(accountId, pageable)
                         .map(this::toData)
         );
@@ -32,7 +32,7 @@ public class AccountProvisioningEventQueryService {
             Long accountId,
             ProvisioningStatus requireStatus
     ) {
-        return publicUnitOfWork.readOnly(() -> {
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Optional<AccountProvisioningEvent> event;
 
             if (requireStatus == null) {

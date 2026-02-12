@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate;
 
 import lombok.RequiredArgsConstructor;
 import org.hibernate.cfg.AvailableSettings;
@@ -23,7 +23,7 @@ public class TenantSchemaHibernateConfig {
 
     private final DataSource dataSource;
     private final TenantSchemaConnectionProvider tenantSchemaConnectionProvider;
-    private final CurrentTenantSchemaResolver currentTenantSchemaResolver;
+    private final TenantSchemaResolver currentTenantSchemaResolver;
     private final ConfigurableListableBeanFactory configurableListableBeanFactory;
 
     @Bean(name = "tenantEntityManagerFactory")

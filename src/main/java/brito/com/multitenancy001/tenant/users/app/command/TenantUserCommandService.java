@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.users.app.command;
 
-import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -32,7 +32,7 @@ public class TenantUserCommandService {
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
-    private final TransactionExecutor transactionExecutor;
+    private final TxExecutor transactionExecutor;
 
     private final SecurityUtils securityUtils;
     private final SecurityAuditService securityAuditService;

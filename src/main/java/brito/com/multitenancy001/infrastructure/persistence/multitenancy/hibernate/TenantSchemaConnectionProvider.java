@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.multitenancy.hibernate;
+package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

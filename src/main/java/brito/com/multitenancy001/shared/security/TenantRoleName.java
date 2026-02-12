@@ -10,8 +10,9 @@ package brito.com.multitenancy001.shared.security;
  */
 public enum TenantRoleName {
 
-	TENANT_OWNER,
+    TENANT_OWNER,
     TENANT_ADMIN,
+    TENANT_MANAGER,
     TENANT_SUPPORT,
     TENANT_USER,
     TENANT_PRODUCT_MANAGER,
@@ -25,4 +26,3 @@ public enum TenantRoleName {
         return TenantRoleName.valueOf(value.trim().toUpperCase());
     }
 }
-

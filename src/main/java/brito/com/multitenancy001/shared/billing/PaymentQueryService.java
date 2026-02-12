@@ -15,7 +15,7 @@ import java.util.List;
  *
  * Implementação padrão: ControlPlanePaymentQueryService.
  */
-public interface PaymentQueryFacade {
+public interface PaymentQueryService {
 
     List<PaymentResponse> findByStatus(PaymentStatus status);
 

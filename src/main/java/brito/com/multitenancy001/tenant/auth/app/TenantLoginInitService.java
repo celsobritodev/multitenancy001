@@ -4,7 +4,7 @@ import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
-import brito.com.multitenancy001.shared.executor.PublicExecutor;
+import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
@@ -34,7 +34,7 @@ public class TenantLoginInitService {
 
     private final AccountResolver accountResolver;
     private final LoginIdentityResolver loginIdentityResolver;
-    private final PublicExecutor publicExecutor;
+    private final PublicSchemaExecutor publicExecutor;
 
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final TenantAuthMechanics authMechanics;

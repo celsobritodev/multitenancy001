@@ -4,15 +4,15 @@ import java.util.function.Supplier;
 
 import org.springframework.stereotype.Component;
 
-import brito.com.multitenancy001.infrastructure.persistence.TransactionExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class PublicUnitOfWork {
+public class PublicSchemaUnitOfWork {
 
-    private final PublicExecutor publicExecutor;
-    private final TransactionExecutor transactionExecutor;
+    private final PublicSchemaExecutor publicExecutor;
+    private final TxExecutor transactionExecutor;
 
     // REQUIRED
     public <T> T tx(Supplier<T> fn) {

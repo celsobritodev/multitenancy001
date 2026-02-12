@@ -67,7 +67,7 @@ public class TenantCategoryService {
     // ✅ Mesmo critério aplicado:
     // - Category é single-aggregate / single-repo
     // - checks de unicidade e validações usam o MESMO repo
-    // => manter @TenantTx (não há ganho real em mover para TenantUnitOfWork aqui).
+    // => manter @TenantTx (não há ganho real em mover para TenantSchemaUnitOfWork aqui).
     //
 
     @TenantTx

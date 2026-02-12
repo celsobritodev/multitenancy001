@@ -2,14 +2,15 @@ package brito.com.multitenancy001.controlplane.accounts.app.dto;
 
 import java.time.Instant;
 
+import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
+
 public record AccountStatusChangeResult(
         Long accountId,
-        String newStatus,
-        String previousStatus,
+        AccountStatus newStatus,
+        AccountStatus previousStatus,
         Instant changedAt,
         String tenantSchema,
         boolean tenantUsersUpdated,
-        String action,
+        AccountStatusSideEffect action,
         int affectedUsers
 ) {}
-

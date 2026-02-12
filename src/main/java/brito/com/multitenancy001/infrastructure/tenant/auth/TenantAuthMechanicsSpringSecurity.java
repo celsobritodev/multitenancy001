@@ -12,7 +12,7 @@ import org.springframework.util.StringUtils;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -30,7 +30,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
-    private final TenantSchemaExecutor tenantExecutor;
+    private final TenantExecutor tenantExecutor;
     private final AuthenticationManager authenticationManager;
     private final TenantUserRepository tenantUserRepository;
     private final JwtTokenProvider jwtTokenProvider;

@@ -4,11 +4,12 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
+import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusSideEffect;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.integration.tenant.TenantUsersIntegrationService;
-import brito.com.multitenancy001.shared.executor.PublicUnitOfWork;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusService {
 
-    private final PublicUnitOfWork publicUnitOfWork;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final TenantUsersIntegrationService tenantUsersIntegrationService;
     private final AppClock appClock;
@@ -28,7 +29,7 @@ public class AccountStatusService {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
         if (cmd == null || cmd.status() == null) throw new ApiException("STATUS_REQUIRED", "status é obrigatório", 400);
 
-        return publicUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
             AccountStatus previous = account.getStatus();
@@ -36,13 +37,14 @@ public class AccountStatusService {
             AccountStatus newStatus = cmd.status();
             account.setStatus(newStatus);
 
+            // Reativar também restaura soft-delete se necessário
             if (newStatus == AccountStatus.ACTIVE && account.isDeleted()) {
                 account.restore();
             }
 
             accountRepository.save(account);
 
-            // ✅ Fronteira explícita: tenantSchema (dado CP) -> tenantSchema (execução Tenant)
+            // ✅ Fronteira explícita: tenantSchema (dado CP) -> execução Tenant
             String tenantSchema = account.getTenantSchema();
 
             int affected = 0;
@@ -53,24 +55,26 @@ public class AccountStatusService {
                 affected = tenantUsersIntegrationService.suspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.SUSPEND_BY_ACCOUNT;
+
             } else if (newStatus == AccountStatus.ACTIVE) {
                 affected = tenantUsersIntegrationService.unsuspendAllUsersByAccount(tenantSchema, account.getId());
                 applied = true;
                 action = AccountStatusSideEffect.UNSUSPEND_BY_ACCOUNT;
+
             } else if (newStatus == AccountStatus.CANCELLED) {
                 affected = cancelAccount(account);
                 applied = true;
-                action = AccountStatusSideEffect.CANCELLED;
+                action = AccountStatusSideEffect.CANCEL_ACCOUNT;
             }
 
             return new AccountStatusChangeResult(
                     account.getId(),
-                    account.getStatus().name(),
-                    previous == null ? null : previous.name(),
+                    account.getStatus(),
+                    previous,
                     appClock.instant(),
                     tenantSchema,
                     applied,
-                    action.name(),
+                    action,
                     affected
             );
         });
@@ -79,7 +83,7 @@ public class AccountStatusService {
     public void softDeleteAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -98,7 +102,7 @@ public class AccountStatusService {
     public void restoreAccount(Long accountId) {
         if (accountId == null) throw new ApiException("ACCOUNT_ID_REQUIRED", "accountId é obrigatório", 400);
 
-        publicUnitOfWork.tx(() -> {
+        publicSchemaUnitOfWork.tx(() -> {
 
             Account account = getAccountByIdRaw(accountId);
 
@@ -115,7 +119,7 @@ public class AccountStatusService {
     }
 
     private int cancelAccount(Account account) {
-        publicUnitOfWork.requiresNew(() -> {
+        publicSchemaUnitOfWork.requiresNew(() -> {
             if (!account.isDeleted()) {
                 account.softDelete(appClock.instant());
             }
@@ -130,12 +134,5 @@ public class AccountStatusService {
     private Account getAccountByIdRaw(Long accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
-    }
-
-    private enum AccountStatusSideEffect {
-        NONE,
-        SUSPEND_BY_ACCOUNT,
-        UNSUSPEND_BY_ACCOUNT,
-        CANCELLED
     }
 }
