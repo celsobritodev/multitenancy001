@@ -4,6 +4,7 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -27,6 +28,7 @@ public class TenantDebugController {
      * Header: X-Tenant: t_foton_devices_6d79df
      */
     @GetMapping("/api/tenant/_debug/schema")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SETTINGS_READ.asAuthority())")
     public Map<String, Object> schema(
             @RequestHeader(name = "X-Tenant", required = false) String tenantHeaderRaw
     ) {
