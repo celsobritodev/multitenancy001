@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.shared.api.error;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.util.Locale;
 import java.util.Optional;
 
