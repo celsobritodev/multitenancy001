@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.users.api;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
@@ -81,10 +83,10 @@ public class TenantUserController {
             @RequestParam(required = false) Boolean suspendedByAdmin
     ) {
         if (suspendedByAccount == null && suspendedByAdmin == null) {
-            throw new ApiException("INVALID_STATUS", "Informe suspendedByAccount ou suspendedByAdmin", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "Informe suspendedByAccount ou suspendedByAdmin", 400);
         }
         if (suspendedByAccount != null && suspendedByAdmin != null) {
-            throw new ApiException("INVALID_STATUS", "Informe apenas um dos parâmetros (suspendedByAccount OU suspendedByAdmin)", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "Informe apenas um dos parâmetros (suspendedByAccount OU suspendedByAdmin)", 400);
         }
 
         TenantUser updated =

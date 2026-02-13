@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdminLoginCommand;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
@@ -44,12 +46,12 @@ public class ControlPlaneAuthService {
 
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
-        if (cmd == null) throw new ApiException("INVALID_LOGIN", "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
-        if (!StringUtils.hasText(cmd.password())) throw new ApiException("INVALID_LOGIN", "password é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Requisição inválida", 400);
+        if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
+        if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
 
         final String emailNorm = EmailNormalizer.normalizeOrNull(cmd.email());
-        if (emailNorm == null) throw new ApiException("INVALID_LOGIN", "email inválido", 400);
+        if (emailNorm == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email inválido", 400);
 
         final String password = cmd.password();
 
@@ -80,13 +82,13 @@ public class ControlPlaneAuthService {
                 	        DEFAULT_SCHEMA,
                 	        "{\"reason\":\"identity_not_found\"}"
                 	);
-                    throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
+                    throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
                 }
 
                 // (2) Carrega o usuário CP por ID (não por email)
                 ControlPlaneUser user = controlPlaneUserRepository
                         .findByIdAndDeletedFalse(cpUserId)
-                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404));
 
                 Long accountId = user.getAccount().getId();
 
@@ -104,7 +106,7 @@ public class ControlPlaneAuthService {
                 	        DEFAULT_SCHEMA,
                 	        "{\"stage\":\"init\",\"mode\":\"password\"}"
                 	);
-                    throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
                 if (!user.isEnabledForLogin(now)) {
@@ -118,7 +120,7 @@ public class ControlPlaneAuthService {
                 	        DEFAULT_SCHEMA,
                 	        "{\"reason\":\"identity_not_found\"}"
                 	);
-                    throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
                 // (4) Autentica

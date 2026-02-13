@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -26,7 +28,7 @@ public class AccountTenantUserService {
 
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
 
         String tenantSchema = account.getTenantSchema();
@@ -39,7 +41,7 @@ public class AccountTenantUserService {
 
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
 
         String tenantSchema = account.getTenantSchema();

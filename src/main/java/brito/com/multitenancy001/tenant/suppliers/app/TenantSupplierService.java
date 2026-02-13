@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.suppliers.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -30,14 +32,14 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public Supplier findById(UUID id) {
-        if (id == null) throw new ApiException("SUPPLIER_ID_REQUIRED", "id é obrigatório", 400);
+        if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
         Supplier s = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com ID: " + id, 404));
 
         if (s.isDeleted()) {
-            throw new ApiException("SUPPLIER_DELETED", "Fornecedor deletado não pode ser consultado", 404);
+            throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Fornecedor deletado não pode ser consultado", 404);
         }
 
         return s;
@@ -56,20 +58,20 @@ public class TenantSupplierService {
     @TenantReadOnlyTx
     public Supplier findByDocument(String document) {
         if (!StringUtils.hasText(document)) {
-            throw new ApiException("SUPPLIER_DOCUMENT_REQUIRED", "document é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_REQUIRED, "document é obrigatório", 400);
         }
 
         String doc = document.trim();
 
         return tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com document: " + doc, 404));
     }
 
     @TenantReadOnlyTx
     public List<Supplier> searchByName(String name) {
         if (!StringUtils.hasText(name)) {
-            throw new ApiException("SUPPLIER_NAME_REQUIRED", "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_NAME_REQUIRED, "name é obrigatório", 400);
         }
         return tenantSupplierRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
     }
@@ -77,7 +79,7 @@ public class TenantSupplierService {
     @TenantReadOnlyTx
     public List<Supplier> findByEmail(String email) {
         if (!StringUtils.hasText(email)) {
-            throw new ApiException("SUPPLIER_EMAIL_REQUIRED", "email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
         return tenantSupplierRepository.findNotDeletedByEmail(email.trim());
     }
@@ -99,7 +101,7 @@ public class TenantSupplierService {
             String doc = supplier.getDocument().trim();
             Optional<Supplier> existing = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc);
             if (existing.isPresent()) {
-                throw new ApiException("SUPPLIER_DOCUMENT_ALREADY_EXISTS",
+                throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
                         "Já existe fornecedor com document: " + doc, 409);
             }
             supplier.setDocument(doc);
@@ -115,15 +117,15 @@ public class TenantSupplierService {
 
     @TenantTx
     public Supplier update(UUID id, Supplier req) {
-        if (id == null) throw new ApiException("SUPPLIER_ID_REQUIRED", "id é obrigatório", 400);
-        if (req == null) throw new ApiException("SUPPLIER_REQUIRED", "payload é obrigatório", 400);
+        if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
+        if (req == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "payload é obrigatório", 400);
 
         Supplier existing = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com ID: " + id, 404));
 
         if (existing.isDeleted()) {
-            throw new ApiException("SUPPLIER_DELETED", "Não é permitido alterar fornecedor deletado", 409);
+            throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Não é permitido alterar fornecedor deletado", 409);
         }
 
         if (StringUtils.hasText(req.getName())) {
@@ -153,7 +155,7 @@ public class TenantSupplierService {
 
                 Optional<Supplier> other = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(newDoc);
                 if (other.isPresent() && !other.get().getId().equals(id)) {
-                    throw new ApiException("SUPPLIER_DOCUMENT_ALREADY_EXISTS",
+                    throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
                             "Já existe fornecedor com document: " + newDoc, 409);
                 }
 
@@ -177,7 +179,7 @@ public class TenantSupplierService {
 
         if (req.getLeadTimeDays() != null) {
             if (req.getLeadTimeDays() < 0) {
-                throw new ApiException("INVALID_LEAD_TIME", "leadTimeDays não pode ser negativo", 400);
+                throw new ApiException(ApiErrorCode.INVALID_LEAD_TIME, "leadTimeDays não pode ser negativo", 400);
             }
             existing.setLeadTimeDays(req.getLeadTimeDays());
         }
@@ -197,11 +199,11 @@ public class TenantSupplierService {
     @TenantTx
     public Supplier toggleActive(UUID id) {
         Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com ID: " + id, 404));
 
         if (supplier.isDeleted()) {
-            throw new ApiException("SUPPLIER_DELETED", "Não é permitido alterar fornecedor deletado", 409);
+            throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Não é permitido alterar fornecedor deletado", 409);
         }
 
         supplier.setActive(!supplier.isActive());
@@ -211,7 +213,7 @@ public class TenantSupplierService {
     @TenantTx
     public void softDelete(UUID id) {
         Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com ID: " + id, 404));
 
         supplier.softDelete(appClock.instant());
@@ -221,7 +223,7 @@ public class TenantSupplierService {
     @TenantTx
     public Supplier restore(UUID id) {
         Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException("SUPPLIER_NOT_FOUND",
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
                         "Fornecedor não encontrado com ID: " + id, 404));
 
         supplier.restore();
@@ -233,10 +235,10 @@ public class TenantSupplierService {
     // =========================================================
 
     private void validateForCreate(Supplier supplier) {
-        if (supplier == null) throw new ApiException("SUPPLIER_REQUIRED", "Fornecedor é obrigatório", 400);
+        if (supplier == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "Fornecedor é obrigatório", 400);
 
         if (!StringUtils.hasText(supplier.getName())) {
-            throw new ApiException("SUPPLIER_NAME_REQUIRED", "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_NAME_REQUIRED, "name é obrigatório", 400);
         }
 
         supplier.setName(supplier.getName().trim());
@@ -267,7 +269,7 @@ public class TenantSupplierService {
         }
 
         if (supplier.getLeadTimeDays() != null && supplier.getLeadTimeDays() < 0) {
-            throw new ApiException("INVALID_LEAD_TIME", "leadTimeDays não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LEAD_TIME, "leadTimeDays não pode ser negativo", 400);
         }
 
         if (supplier.getRating() != null) {
@@ -277,17 +279,17 @@ public class TenantSupplierService {
 
     private void validateRating(BigDecimal rating) {
         if (rating.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException("INVALID_RATING", "rating não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_RATING, "rating não pode ser negativo", 400);
         }
         if (rating.compareTo(new BigDecimal("9.99")) > 0) {
-            throw new ApiException("INVALID_RATING", "rating máximo é 9.99", 400);
+            throw new ApiException(ApiErrorCode.INVALID_RATING, "rating máximo é 9.99", 400);
         }
     }
 
     @TenantReadOnlyTx
     public List<Supplier> findAnyByEmail(String email) {
         if (!StringUtils.hasText(email)) {
-            throw new ApiException("SUPPLIER_EMAIL_REQUIRED", "email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
         return tenantSupplierRepository.findAnyByEmail(email);
     }

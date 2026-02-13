@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -27,10 +29,10 @@ public class TenantLoginChallengeService {
     public UUID createChallenge(String email, Set<Long> candidateAccountIds) {
         String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
         if (!StringUtils.hasText(normalizedEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
         }
         if (candidateAccountIds == null || candidateAccountIds.isEmpty()) {
-            throw new ApiException("INVALID_CHALLENGE", "candidateAccountIds é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "candidateAccountIds é obrigatório", 400);
         }
 
         return store.create(appNow(), normalizedEmail, candidateAccountIds);
@@ -38,7 +40,7 @@ public class TenantLoginChallengeService {
 
     public TenantLoginChallenge requireValid(UUID challengeId) {
         if (challengeId == null) {
-            throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório", 400);
         }
 
         return store.findValid(challengeId, appNow())

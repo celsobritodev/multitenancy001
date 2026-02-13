@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.provisioning.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -81,21 +83,21 @@ public class TenantUserProvisioningService {
                 transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
-                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
                     }
 
                     String emailNorm = EmailNormalizer.normalizeOrNull(email);
                     if (!StringUtils.hasText(emailNorm)) {
-                        throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
                     }
 
                     if (!StringUtils.hasText(rawPassword)) {
-                        throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+                        throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
                     }
 
                     boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(emailNorm, accountId);
                     if (emailExists) {
-                        throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
+                        throw new ApiException(ApiErrorCode.EMAIL_ALREADY_EXISTS, "Email já cadastrado nesta conta", 409);
                     }
 
                     String name = StringUtils.hasText(ownerDisplayName)
@@ -152,7 +154,7 @@ public class TenantUserProvisioningService {
                 transactionExecutor.inTenantRequiresNew(() -> {
 
                     if (accountId == null) {
-                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
                     }
 
                     long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
@@ -192,7 +194,7 @@ public class TenantUserProvisioningService {
                 () -> transactionExecutor.inTenantRequiresNew(() -> {
 
                     if (accountId == null) {
-                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
                     }
 
                     long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
@@ -227,15 +229,15 @@ public class TenantUserProvisioningService {
                 transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
-                        throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
                     }
                     if (userId == null) {
-                        throw new ApiException("USER_ID_REQUIRED", "userId obrigatório", 400);
+                        throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId obrigatório", 400);
                     }
 
                     if (suspended) {
                         TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404));
+                                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404));
 
                         if (isActiveOwner(user)) {
                             long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
@@ -251,7 +253,7 @@ public class TenantUserProvisioningService {
 
                     int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
                     if (updated == 0) {
-                        throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
+                        throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404);
                     }
                     return null;
                 })
@@ -262,7 +264,7 @@ public class TenantUserProvisioningService {
         tenantExecutor.runInTenantSchemaIfReady(tenantSchema, REQUIRED_TABLE, () ->
                 transactionExecutor.inTenantTx(() -> {
                     TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
-                            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                            .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
                     user.setPasswordResetToken(token);
                     user.setPasswordResetExpiresAt(expiresAt);
@@ -279,7 +281,7 @@ public class TenantUserProvisioningService {
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantReadOnlyTx(() ->
                         tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
-                                .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400))
+                                .orElseThrow(() -> new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400))
                 )
         );
     }

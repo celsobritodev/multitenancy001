@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.billing.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.controlplane.accounts.app.AccountStatusService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
@@ -85,7 +87,7 @@ public class ControlPlanePaymentService {
         // side-effect fora de transação: para isso precisamos do email => busca leve e explícita
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findAnyById(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
 
         sendSuspensionEmail(account, reason);
@@ -111,7 +113,7 @@ public class ControlPlanePaymentService {
 
     public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
         if (adminPaymentRequest.accountId() == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
 
         Instant now = appClock.instant();
@@ -119,7 +121,7 @@ public class ControlPlanePaymentService {
         // 1) Valida e cria PENDING dentro do CP tx
         Long paymentId = publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findById(adminPaymentRequest.accountId())
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             validatePayment(account, adminPaymentRequest.amount(), now);
 
@@ -154,7 +156,7 @@ public class ControlPlanePaymentService {
         }
 
         publicSchemaUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
-        throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
+        throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Falha no processamento do pagamento", 402);
     }
 
     public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
@@ -163,7 +165,7 @@ public class ControlPlanePaymentService {
 
         Long paymentId = publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findById(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             validatePayment(account, paymentRequest.amount(), now);
 
@@ -188,22 +190,22 @@ public class ControlPlanePaymentService {
         }
 
         publicSchemaUnitOfWork.tx(() -> failPaymentById(paymentId, "Falha no processamento do pagamento"));
-        throw new ApiException("PAYMENT_FAILED", "Falha no processamento do pagamento", 402);
+        throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Falha no processamento do pagamento", 402);
     }
 
     public PaymentResponse completePaymentManually(Long paymentId) {
         if (paymentId == null) {
-            throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
 
         Instant now = appClock.instant();
 
         Payment payment = publicSchemaUnitOfWork.tx(() -> {
             Payment p = controlPlanePaymentRepository.findById(paymentId)
-                    .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
             if (p.getStatus() != PaymentStatus.PENDING) {
-                throw new ApiException("INVALID_PAYMENT_STATUS", "Pagamento não está pendente", 409);
+                throw new ApiException(ApiErrorCode.INVALID_PAYMENT_STATUS, "Pagamento não está pendente", 409);
             }
 
             return completePaymentById(paymentId, now);
@@ -214,17 +216,17 @@ public class ControlPlanePaymentService {
 
     public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
         if (paymentId == null) {
-            throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
 
         Instant now = appClock.instant();
 
         Payment payment = publicSchemaUnitOfWork.tx(() -> {
             Payment p = controlPlanePaymentRepository.findById(paymentId)
-                    .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
             if (!p.canBeRefunded(now)) {
-                throw new ApiException("PAYMENT_NOT_REFUNDABLE", "Pagamento não pode ser reembolsado", 409);
+                throw new ApiException(ApiErrorCode.PAYMENT_NOT_REFUNDABLE, "Pagamento não pode ser reembolsado", 409);
             }
 
             if (amount == null) {
@@ -248,7 +250,7 @@ public class ControlPlanePaymentService {
 
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
-                        .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404))
         );
 
         return mapToResponse(payment);
@@ -281,7 +283,7 @@ public class ControlPlanePaymentService {
     public PaymentResponse getPaymentById(Long paymentId) {
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findById(paymentId)
-                        .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404))
         );
         return mapToResponse(payment);
     }
@@ -298,20 +300,20 @@ public class ControlPlanePaymentService {
 
     public boolean paymentExistsForAccount(Long paymentId, Long accountId) {
         if (paymentId == null) {
-            throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
         return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByIdAndAccount_Id(paymentId, accountId));
     }
 
     public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
         if (status == null) {
-            throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "status é obrigatório", 400);
         }
 
         return publicSchemaUnitOfWork.readOnly(() ->
@@ -324,12 +326,12 @@ public class ControlPlanePaymentService {
 
     public PaymentResponse getPaymentByTransactionId(String transactionId) {
         if (transactionId == null || transactionId.isBlank()) {
-            throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_TRANSACTION_ID, "transactionId é obrigatório", 400);
         }
 
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByTransactionId(transactionId.trim())
-                        .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404))
         );
 
         return mapToResponse(payment);
@@ -337,17 +339,17 @@ public class ControlPlanePaymentService {
 
     public boolean existsByTransactionId(String transactionId) {
         if (transactionId == null || transactionId.isBlank()) {
-            throw new ApiException("INVALID_TRANSACTION_ID", "transactionId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_TRANSACTION_ID, "transactionId é obrigatório", 400);
         }
         return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsByTransactionId(transactionId.trim()));
     }
 
     public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(Instant date, PaymentStatus status) {
         if (date == null) {
-            throw new ApiException("INVALID_DATE", "date é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_DATE, "date é obrigatório", 400);
         }
         if (status == null) {
-            throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "status é obrigatório", 400);
         }
 
         return publicSchemaUnitOfWork.readOnly(() ->
@@ -360,7 +362,7 @@ public class ControlPlanePaymentService {
 
     public List<PaymentResponse> getCompletedPaymentsByAccount(Long accountId) {
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
 
         return publicSchemaUnitOfWork.readOnly(() ->
@@ -373,10 +375,10 @@ public class ControlPlanePaymentService {
 
     public List<PaymentResponse> getPaymentsInPeriod(Instant startDate, Instant endDate) {
         if (startDate == null || endDate == null) {
-            throw new ApiException("INVALID_DATE_RANGE", "startDate e endDate são obrigatórios", 400);
+            throw new ApiException(ApiErrorCode.INVALID_DATE_RANGE, "startDate e endDate são obrigatórios", 400);
         }
         if (endDate.isBefore(startDate)) {
-            throw new ApiException("INVALID_DATE_RANGE", "endDate deve ser >= startDate", 400);
+            throw new ApiException(ApiErrorCode.INVALID_DATE_RANGE, "endDate deve ser >= startDate", 400);
         }
 
         return publicSchemaUnitOfWork.readOnly(() ->
@@ -393,11 +395,11 @@ public class ControlPlanePaymentService {
 
     private Payment completePaymentById(Long paymentId, Instant now) {
         Payment payment = controlPlanePaymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+                .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
         Account account = payment.getAccount();
         if (account == null) {
-            throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada para o pagamento", 404);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada para o pagamento", 404);
         }
 
         payment.markAsCompleted(now);
@@ -415,7 +417,7 @@ public class ControlPlanePaymentService {
 
     private void failPaymentById(Long paymentId, String reason) {
         Payment payment = controlPlanePaymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ApiException("PAYMENT_NOT_FOUND", "Pagamento não encontrado", 404));
+                .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
         payment.markAsFailed(reason);
         controlPlanePaymentRepository.save(payment);
@@ -423,20 +425,20 @@ public class ControlPlanePaymentService {
 
     private void validatePayment(Account account, BigDecimal amount, Instant now) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ApiException("INVALID_AMOUNT", "Valor do pagamento inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "Valor do pagamento inválido", 400);
         }
 
         if (account.isDeleted()) {
-            throw new ApiException("ACCOUNT_DELETED", "Conta deletada", 410);
+            throw new ApiException(ApiErrorCode.ACCOUNT_DELETED, "Conta deletada", 410);
         }
 
         if (account.isBuiltInAccount()) {
-            throw new ApiException("BUILTIN_ACCOUNT_NO_BILLING", "Conta BUILTIN não possui billing", 409);
+            throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_NO_BILLING, "Conta BUILTIN não possui billing", 409);
         }
 
         boolean hasActive = controlPlanePaymentRepository.existsActivePayment(account.getId(), now);
         if (hasActive) {
-            throw new ApiException("PAYMENT_ALREADY_EXISTS", "Já existe um pagamento ativo para esta conta", 409);
+            throw new ApiException(ApiErrorCode.PAYMENT_ALREADY_EXISTS, "Já existe um pagamento ativo para esta conta", 409);
         }
     }
 

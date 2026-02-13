@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.users.app.command;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -60,18 +62,18 @@ public class TenantUserCommandService {
     ) {
         return transactionExecutor.inTenantTx(() -> {
 
-            if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-            if (!StringUtils.hasText(name)) throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
-            if (!StringUtils.hasText(email)) throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
-            if (!StringUtils.hasText(rawPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
-            if (role == null) throw new ApiException("INVALID_ROLE", "Role é obrigatória", 400);
+            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+            if (!StringUtils.hasText(name)) throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
+            if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
+            if (!StringUtils.hasText(rawPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
+            if (role == null) throw new ApiException(ApiErrorCode.INVALID_ROLE, "Role é obrigatória", 400);
 
             String normEmail = EmailNormalizer.normalizeOrNull(email);
             if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
-                throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+                throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
             }
             if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-                throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+                throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
             }
 
             Actor actor = resolveActorOrNull(accountId);
@@ -95,7 +97,7 @@ public class TenantUserCommandService {
                     () -> {
 
                         boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
-                        if (exists) throw new ApiException("EMAIL_ALREADY_EXISTS", "Email já cadastrado nesta conta", 409);
+                        if (exists) throw new ApiException(ApiErrorCode.EMAIL_ALREADY_EXISTS, "Email já cadastrado nesta conta", 409);
 
                         TenantUser user = new TenantUser();
                         user.setAccountId(accountId);
@@ -196,14 +198,14 @@ public class TenantUserCommandService {
     }
 
     private void setSuspension(Long accountId, Long userId, boolean suspended, boolean byAdmin) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
 
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
 
@@ -231,7 +233,7 @@ public class TenantUserCommandService {
                                 ? tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended)
                                 : tenantUserRepository.setSuspendedByAccount(accountId, userId, suspended);
 
-                        if (updated == 0) throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404);
+                        if (updated == 0) throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404);
                         return null;
                     }
             );
@@ -250,14 +252,14 @@ public class TenantUserCommandService {
             String timezone,
             Instant now // mantido por compat
     ) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
         return transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
 
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             requireNotBuiltInForMutation(user, "Não é permitido alterar perfil de usuário BUILT_IN");
 
@@ -308,17 +310,17 @@ public class TenantUserCommandService {
     // =========================================================
 
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
         if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+            throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
         return transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             Instant now = appClock.instant();
 
@@ -333,22 +335,22 @@ public class TenantUserCommandService {
     }
 
     public void resetPasswordWithToken(Long accountId, String email, String token, String newPassword) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (!StringUtils.hasText(token)) throw new ApiException("TOKEN_REQUIRED", "token é obrigatório", 400);
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.TOKEN_REQUIRED, "token é obrigatório", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
         if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-            throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+            throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
         transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
-                    .orElseThrow(() -> new ApiException("TOKEN_INVALID", "Token inválido", 400));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400));
 
             Instant now = appClock.instant();
 
             if (user.getPasswordResetExpires() == null || user.getPasswordResetExpires().isBefore(now)) {
-                throw new ApiException("TOKEN_EXPIRED", "Token expirado", 400);
+                throw new ApiException(ApiErrorCode.TOKEN_EXPIRED, "Token expirado", 400);
             }
 
             if (StringUtils.hasText(email) && user.getEmail() != null) {
@@ -356,7 +358,7 @@ public class TenantUserCommandService {
                 String userEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
 
                 if (!StringUtils.hasText(tokenLogin) || !StringUtils.hasText(userEmail) || !userEmail.equals(tokenLogin)) {
-                    throw new ApiException("TOKEN_INVALID", "Token inválido", 400);
+                    throw new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400);
                 }
             }
 
@@ -373,19 +375,19 @@ public class TenantUserCommandService {
     }
 
     public void changeMyPassword(Long userId, Long accountId, String currentPassword, String newPassword, String confirmNewPassword) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
-        if (!StringUtils.hasText(currentPassword)) throw new ApiException("CURRENT_PASSWORD_REQUIRED", "Senha atual é obrigatória", 400);
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("NEW_PASSWORD_REQUIRED", "Nova senha é obrigatória", 400);
-        if (!StringUtils.hasText(confirmNewPassword)) throw new ApiException("CONFIRM_PASSWORD_REQUIRED", "Confirmar nova senha é obrigatório", 400);
+        if (!StringUtils.hasText(currentPassword)) throw new ApiException(ApiErrorCode.CURRENT_PASSWORD_REQUIRED, "Senha atual é obrigatória", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.NEW_PASSWORD_REQUIRED, "Nova senha é obrigatória", 400);
+        if (!StringUtils.hasText(confirmNewPassword)) throw new ApiException(ApiErrorCode.CONFIRM_PASSWORD_REQUIRED, "Confirmar nova senha é obrigatório", 400);
 
-        if (!newPassword.equals(confirmNewPassword)) throw new ApiException("PASSWORD_MISMATCH", "Nova senha e confirmação não conferem", 400);
-        if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) throw new ApiException("WEAK_PASSWORD", "Senha fraca", 400);
+        if (!newPassword.equals(confirmNewPassword)) throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Nova senha e confirmação não conferem", 400);
+        if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
 
         transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             Actor actor = resolveActorOrNull(accountId);
 
@@ -400,7 +402,7 @@ public class TenantUserCommandService {
                     "{\"scope\":\"TENANT\"}",
                     () -> {
                         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-                            throw new ApiException("CURRENT_PASSWORD_INVALID", "Senha atual inválida", 400);
+                            throw new ApiException(ApiErrorCode.CURRENT_PASSWORD_INVALID, "Senha atual inválida", 400);
                         }
 
                         Instant now = appClock.instant();
@@ -426,14 +428,14 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void softDelete(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.isDeleted()) return null;
 
@@ -466,14 +468,14 @@ public class TenantUserCommandService {
     }
 
     public TenantUser restore(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
         return transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_RESTORED,
@@ -493,12 +495,12 @@ public class TenantUserCommandService {
     }
 
     public void hardDelete(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException("USER_REQUIRED", "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             requireNotBuiltInForMutation(user, "Não é permitido hard-delete de usuário BUILT_IN");
 
@@ -513,7 +515,7 @@ public class TenantUserCommandService {
     }
 
     public TenantUser save(TenantUser user) {
-        if (user == null) throw new ApiException("INVALID_REQUEST", "Usuário inválido", 400);
+        if (user == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Usuário inválido", 400);
         return transactionExecutor.inTenantTx(() -> tenantUserRepository.save(user));
     }
 
@@ -522,24 +524,24 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (fromUserId == null) throw new ApiException("FROM_USER_REQUIRED", "fromUserId é obrigatório", 400);
-        if (toUserId == null) throw new ApiException("TO_USER_REQUIRED", "toUserId é obrigatório", 400);
-        if (fromUserId.equals(toUserId)) throw new ApiException("INVALID_TRANSFER", "Não é possível transferir para si mesmo", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (fromUserId == null) throw new ApiException(ApiErrorCode.FROM_USER_REQUIRED, "fromUserId é obrigatório", 400);
+        if (toUserId == null) throw new ApiException(ApiErrorCode.TO_USER_REQUIRED, "toUserId é obrigatório", 400);
+        if (fromUserId.equals(toUserId)) throw new ApiException(ApiErrorCode.INVALID_TRANSFER, "Não é possível transferir para si mesmo", 400);
 
         transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
 
             TenantUser from = tenantUserRepository.findEnabledByIdAndAccountId(fromUserId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário origem não encontrado/habilitado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário origem não encontrado/habilitado", 404));
             requireNotBuiltInForMutation(from, "Não é permitido transferir ownership a partir de usuário BUILT_IN");
 
             if (from.getRole() == null || !from.getRole().isTenantOwner()) {
-                throw new ApiException("FORBIDDEN", "Apenas o TENANT_OWNER pode transferir", 403);
+                throw new ApiException(ApiErrorCode.FORBIDDEN, "Apenas o TENANT_OWNER pode transferir", 403);
             }
 
             TenantUser to = tenantUserRepository.findEnabledByIdAndAccountId(toUserId, accountId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário destino não encontrado/habilitado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário destino não encontrado/habilitado", 404));
             requireNotBuiltInForMutation(to, "Não é permitido transferir ownership para usuário BUILT_IN");
 
             TenantRole beforeFrom = from.getRole();

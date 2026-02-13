@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -53,14 +55,14 @@ public class AccountAppService {
     public Account getAccount(Long accountId) {
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
     }
 
     public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             long totalUsers = controlPlaneUserRepository.countByAccount_IdAndDeletedFalse(accountId);
 
@@ -101,24 +103,24 @@ public class AccountAppService {
     }
 
     private void assertValidCreatedBetweenRange(Instant start, Instant end) {
-        if (start == null || end == null) throw new ApiException("INVALID_RANGE", "start/end são obrigatórios", 400);
-        if (end.isBefore(start)) throw new ApiException("INVALID_RANGE", "end deve ser >= start", 400);
+        if (start == null || end == null) throw new ApiException(ApiErrorCode.INVALID_RANGE, "start/end são obrigatórios", 400);
+        if (end.isBefore(start)) throw new ApiException(ApiErrorCode.INVALID_RANGE, "end deve ser >= start", 400);
         Duration d = Duration.between(start, end);
         if (d.toDays() > MAX_CREATED_BETWEEN_DAYS) {
-            throw new ApiException("RANGE_TOO_LARGE", "Intervalo máximo é " + MAX_CREATED_BETWEEN_DAYS + " dias", 400);
+            throw new ApiException(ApiErrorCode.RANGE_TOO_LARGE, "Intervalo máximo é " + MAX_CREATED_BETWEEN_DAYS + " dias", 400);
         }
     }
 
     public Account findBySlug(String slug) {
-        if (slug == null || slug.isBlank()) throw new ApiException("INVALID_SLUG", "slug é obrigatório", 400);
+        if (slug == null || slug.isBlank()) throw new ApiException(ApiErrorCode.INVALID_SLUG, "slug é obrigatório", 400);
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findBySlugAndDeletedFalseIgnoreCase(slug.trim())
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
     }
 
     public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
-        if (status == null) throw new ApiException("INVALID_STATUS", "status é obrigatório", 400);
+        if (status == null) throw new ApiException(ApiErrorCode.INVALID_STATUS, "status é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
         return publicSchemaUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
     }
@@ -130,7 +132,7 @@ public class AccountAppService {
     }
 
     public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
-        if (term == null || term.isBlank()) throw new ApiException("INVALID_SEARCH", "term é obrigatório", 400);
+        if (term == null || term.isBlank()) throw new ApiException(ApiErrorCode.INVALID_SEARCH, "term é obrigatório", 400);
         Pageable p = normalizePageable(pageable);
         return publicSchemaUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(term, p));
     }

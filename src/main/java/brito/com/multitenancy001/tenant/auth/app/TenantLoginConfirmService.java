@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -29,14 +31,14 @@ public class TenantLoginConfirmService {
 
     public JwtResult loginConfirm(TenantLoginConfirmCommand cmd) {
 
-        if (cmd == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.challengeId())) throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
+        if (!StringUtils.hasText(cmd.challengeId())) throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório", 400);
 
         final UUID challengeId;
         try {
             challengeId = UUID.fromString(cmd.challengeId());
         } catch (Exception e) {
-            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId inválido", 400);
         }
 
         TenantLoginChallenge challenge = tenantLoginChallengeService.requireValid(challengeId);
@@ -51,7 +53,7 @@ public class TenantLoginConfirmService {
         if (accountId == null && slug == null) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"missing_selection\"}");
-            throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug", 400);
         }
 
         AccountSnapshot account = (accountId != null)
@@ -61,14 +63,14 @@ public class TenantLoginConfirmService {
         if (account == null || account.id() == null) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"account_not_found\"}");
-            throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }
 
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, account.id(), account.tenantSchema(),
                     "{\"reason\":\"account_not_in_challenge\"}");
-            throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Conta não pertence ao challenge", 400);
         }
 
         tenantLoginChallengeService.markUsed(challengeId);

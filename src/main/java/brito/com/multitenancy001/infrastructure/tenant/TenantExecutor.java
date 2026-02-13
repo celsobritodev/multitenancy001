@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.util.function.Supplier;
 
 import org.springframework.stereotype.Component;
@@ -25,7 +27,7 @@ public class TenantExecutor {
         String normalizedTenantSchema = normalizeTenantSchemaOrNull(tenantSchema);
 
         if (normalizedTenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(normalizedTenantSchema)) {
-            throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+            throw new ApiException(ApiErrorCode.TENANT_INVALID, "Tenant inválido", 404);
         }
 
         try (TenantContext.Scope ignored = TenantContext.scope(normalizedTenantSchema)) {
@@ -67,13 +69,13 @@ public class TenantExecutor {
         String normalizedTenantSchema = normalizeTenantSchemaOrNull(tenantSchema);
 
         if (normalizedTenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(normalizedTenantSchema)) {
-            throw new ApiException("TENANT_INVALID", "Tenant inválido", 404);
+            throw new ApiException(ApiErrorCode.TENANT_INVALID, "Tenant inválido", 404);
         }
         if (!tenantSchemaProvisioningService.schemaExists(normalizedTenantSchema)) {
-            throw new ApiException("TENANT_SCHEMA_NOT_FOUND", "Schema do tenant não existe", 404);
+            throw new ApiException(ApiErrorCode.TENANT_SCHEMA_NOT_FOUND, "Schema do tenant não existe", 404);
         }
         if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(normalizedTenantSchema, requiredTable)) {
-            throw new ApiException("TENANT_TABLE_NOT_FOUND", "Tabela " + requiredTable + " não existe no tenant", 404);
+            throw new ApiException(ApiErrorCode.TENANT_TABLE_NOT_FOUND, "Tabela " + requiredTable + " não existe no tenant", 404);
         }
     }
 

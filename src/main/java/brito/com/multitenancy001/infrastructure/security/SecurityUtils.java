@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -15,7 +17,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getUserId();
         }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
     }
 
     public Long getCurrentAccountId() {
@@ -23,7 +25,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getAccountId();
         }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
     }
 
     public String getCurrentTenantSchema() {
@@ -31,7 +33,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getTenantSchema();
         }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
     }
 
     public String getCurrentEmail() {
@@ -47,12 +49,12 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getRoleAuthority();
         }
-        throw new ApiException("UNAUTHENTICATED", "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
     }
 
     private String extractRoleName(String roleAuthority) {
         if (roleAuthority == null || roleAuthority.isBlank() || !roleAuthority.startsWith("ROLE_")) {
-            throw new ApiException("FORBIDDEN", "Role inválida no contexto", 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role inválida no contexto", 403);
         }
         return roleAuthority.substring("ROLE_".length()).trim();
     }
@@ -62,7 +64,7 @@ public class SecurityUtils {
         try {
             return TenantRole.valueOf(roleName);
         } catch (IllegalArgumentException e) {
-            throw new ApiException("FORBIDDEN", "Role de tenant não reconhecida: " + roleName, 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role de tenant não reconhecida: " + roleName, 403);
         }
     }
 
@@ -71,7 +73,7 @@ public class SecurityUtils {
         try {
             return ControlPlaneRole.valueOf(roleName);
         } catch (IllegalArgumentException e) {
-            throw new ApiException("FORBIDDEN", "Role de control plane não reconhecida: " + roleName, 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role de control plane não reconhecida: " + roleName, 403);
         }
     }
 }

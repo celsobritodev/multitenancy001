@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -147,13 +149,13 @@ public class TenantSchemaProvisioningWorker {
         validateTenantSchema(tenantSchema);
 
         if (tableName == null || tableName.isBlank()) {
-            throw new ApiException("TABLE_REQUIRED", "requiredTable é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.TABLE_REQUIRED, "requiredTable é obrigatório", 400);
         }
 
         String t = tableName.trim();
 
         if (!t.matches("^[a-z][a-z0-9_]*$")) {
-            throw new ApiException("TABLE_INVALID", "Nome de tabela inválido: " + t, 400);
+            throw new ApiException(ApiErrorCode.TABLE_INVALID, "Nome de tabela inválido: " + t, 400);
         }
 
         try (Connection conn = dataSource.getConnection();
@@ -247,13 +249,13 @@ public class TenantSchemaProvisioningWorker {
     private void validateTenantSchema(String tenantSchema) {
         if (tenantSchema == null || tenantSchema.isBlank()) {
             // mantém mensagem/código pra não mexer em comportamento percebido
-            throw new ApiException("SCHEMA_REQUIRED", "tenantSchema é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SCHEMA_REQUIRED, "tenantSchema é obrigatório", 400);
         }
 
         String s = tenantSchema.trim();
 
         if (s.length() > 63) {
-            throw new ApiException("SCHEMA_INVALID", "tenantSchema excede 63 caracteres", 400);
+            throw new ApiException(ApiErrorCode.SCHEMA_INVALID, "tenantSchema excede 63 caracteres", 400);
         }
 
         if (!s.matches("^[a-z][a-z0-9_]*$")) {

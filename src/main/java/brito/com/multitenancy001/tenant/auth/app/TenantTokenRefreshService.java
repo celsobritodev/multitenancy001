@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -21,7 +23,7 @@ public class TenantTokenRefreshService {
     public JwtResult refresh(String refreshToken) {
 
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
 
         audit.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.ATTEMPT, null, null, null, null,

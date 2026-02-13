@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.users.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -127,7 +129,7 @@ public class TenantUserAdminTxService {
 
             if (suspended) {
                 TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404));
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404));
 
                 if (isActiveOwner(user)) {
                     long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
@@ -143,7 +145,7 @@ public class TenantUserAdminTxService {
 
             int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
             if (updated == 0) {
-                throw new ApiException("USER_NOT_FOUND", "Usuário não encontrado ou removido", 404);
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404);
             }
         });
     }
@@ -175,13 +177,13 @@ public class TenantUserAdminTxService {
 
     private void requireAccountId(Long accountId) {
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
         }
     }
 
     private void requireUserId(Long userId) {
         if (userId == null) {
-            throw new ApiException("USER_ID_REQUIRED", "userId obrigatório", 400);
+            throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId obrigatório", 400);
         }
     }
 }

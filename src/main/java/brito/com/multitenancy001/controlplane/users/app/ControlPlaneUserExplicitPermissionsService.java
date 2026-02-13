@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
@@ -74,16 +76,16 @@ public class ControlPlaneUserExplicitPermissionsService {
             }
 
             if (userId == null) {
-                throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
             // NOT DELETED por contrato (deleted=false)
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             // escopo CP garantido
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (user.isBuiltInUser()) {

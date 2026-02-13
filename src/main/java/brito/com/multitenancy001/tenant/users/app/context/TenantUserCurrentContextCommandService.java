@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.users.app.context;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
@@ -43,7 +45,7 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = securityUtils.getCurrentAccountId();
         String tenantSchema = securityUtils.getCurrentTenantSchema();
 
-        if (req == null) throw new ApiException("INVALID_REQUEST", "Request inválido", 400);
+        if (req == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Request inválido", 400);
 
         String name = (req.name() == null) ? null : req.name().trim();
         String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
@@ -61,7 +63,7 @@ public class TenantUserCurrentContextCommandService {
 
         EntityOrigin origin = (req.origin() != null) ? req.origin() : EntityOrigin.ADMIN;
         if (origin == EntityOrigin.BUILT_IN) {
-            throw new ApiException("INVALID_ORIGIN", "Origin BUILT_IN não pode ser criado via API", 400);
+            throw new ApiException(ApiErrorCode.INVALID_ORIGIN, "Origin BUILT_IN não pode ser criado via API", 400);
         }
 
         Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
@@ -143,7 +145,7 @@ public class TenantUserCurrentContextCommandService {
     }
 
     public TenantUser resetTenantUserPassword(Long userId, String newPassword) {
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+        if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Nova senha é obrigatória", 400);
 
         Long accountId = securityUtils.getCurrentAccountId();
         String tenantSchema = securityUtils.getCurrentTenantSchema();

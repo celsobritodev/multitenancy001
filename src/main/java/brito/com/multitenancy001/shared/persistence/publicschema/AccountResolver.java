@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.shared.persistence.publicschema;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
@@ -24,10 +26,10 @@ public class AccountResolver {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+                throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa", 403);
             }
 
             return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
@@ -35,7 +37,7 @@ public class AccountResolver {
     }
 
     public AccountSnapshot resolveActiveAccountById(Long accountId) {
-        if (accountId == null) throw new ApiException("INVALID_ACCOUNT", "accountId inválido", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.INVALID_ACCOUNT, "accountId inválido", 400);
         return resolveActiveAccountByIdInternal(accountId);
     }
 
@@ -44,10 +46,10 @@ public class AccountResolver {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+                throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa", 403);
             }
 
             return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());

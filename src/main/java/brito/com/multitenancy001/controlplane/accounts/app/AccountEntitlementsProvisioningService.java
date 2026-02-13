@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
@@ -27,7 +29,7 @@ public class AccountEntitlementsProvisioningService {
      */
     public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
         }
 
         if (account.isBuiltInAccount()) {

@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -43,9 +45,9 @@ public class TenantLoginInitService {
 
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
 
-        if (cmd == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
-        if (!StringUtils.hasText(cmd.password())) throw new ApiException("INVALID_LOGIN", "password é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
+        if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
+        if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
 
         final String email = normalizeEmailRequired(cmd.email());
         final String password = cmd.password();
@@ -143,7 +145,7 @@ public class TenantLoginInitService {
     private static String normalizeEmailRequired(String email) {
         String normalized = EmailNormalizer.normalizeOrNull(email);
         if (!StringUtils.hasText(normalized)) {
-            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
         }
         return normalized;
     }
