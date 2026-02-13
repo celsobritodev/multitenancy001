@@ -6,13 +6,24 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
+import brito.com.multitenancy001.integration.tenant.TenantProvisioningIntegrationService;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.tenant.provisioning.app.TenantUserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Service do Control Plane para ações administrativas sobre usuários do TENANT, na perspectiva da Account.
+ *
+ * <p>
+ * Importante (bounded context):
+ * <ul>
+ *   <li>Este service NÃO deve depender de tenant.*.</li>
+ *   <li>Toda comunicação ControlPlane -> Tenant passa por integration.*.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -20,30 +31,35 @@ public class AccountTenantUserService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantUserProvisioningService tenantUserProvisioningFacade;
+
+    /** Fronteira de integração ControlPlane -> Tenant. */
+    private final TenantProvisioningIntegrationService tenantProvisioningIntegrationService;
 
     public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
 
+        // Entrada do método: listTenantUsers
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
 
         String tenantSchema = account.getTenantSchema();
 
-        return tenantUserProvisioningFacade
+        return tenantProvisioningIntegrationService
                 .listUserSummaries(tenantSchema, account.getId(), onlyOperational);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
 
+        // Entrada do método: setUserSuspendedByAdmin
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
         );
 
         String tenantSchema = account.getTenantSchema();
 
-        tenantUserProvisioningFacade.setSuspendedByAdmin(tenantSchema, account.getId(), userId, suspended);
+        tenantProvisioningIntegrationService
+                .setSuspendedByAdmin(tenantSchema, account.getId(), userId, suspended);
     }
 }

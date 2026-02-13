@@ -2,6 +2,7 @@ package brito.com.multitenancy001.shared.persistence.publicschema;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class AccountEntitlementsGuard {
         // ✅ PRECISA ser TX normal, porque pode provisionar entitlements
         publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             accountEntitlementsService.assertCanCreateUser(account, currentUsers);
         });

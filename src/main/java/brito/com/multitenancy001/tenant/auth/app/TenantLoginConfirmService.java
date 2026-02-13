@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -61,7 +62,7 @@ public class TenantLoginConfirmService {
         if (account == null || account.id() == null) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
                     "{\"reason\":\"account_not_found\"}");
-            throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }
 
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();

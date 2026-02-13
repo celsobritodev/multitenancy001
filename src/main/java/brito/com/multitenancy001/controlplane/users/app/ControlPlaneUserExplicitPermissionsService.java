@@ -1,32 +1,26 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
-import brito.com.multitenancy001.controlplane.accounts.domain.Account;
-import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
-import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.controlplane.accounts.domain.Account;
+import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.security.ControlPlanePermission;
+import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
+import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import lombok.RequiredArgsConstructor;
+
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneUserExplicitPermissionsService {
-
-    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
-    private static final String BUILTIN_IMMUTABLE_MESSAGE =
-            "Usuário BUILT_IN é protegido: não pode ter permissões alteradas; apenas senha pode ser trocada.";
-
-    private static final String CP_ACCOUNT_INVALID_CODE = "CONTROLPLANE_ACCOUNT_INVALID";
-    private static final String CP_ACCOUNT_INVALID_MESSAGE =
-            "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
@@ -52,7 +46,7 @@ public class ControlPlaneUserExplicitPermissionsService {
                         return ControlPlanePermission.valueOf(code);
                     } catch (IllegalArgumentException e) {
                         throw new ApiException(
-                                "INVALID_PERMISSION",
+                                ApiErrorCode.INVALID_PERMISSION,
                                 "Permission não existe no enum ControlPlanePermission: " + code,
                                 400
                         );
@@ -67,27 +61,31 @@ public class ControlPlaneUserExplicitPermissionsService {
                 cp = accountRepository.getSingleControlPlaneAccount();
             } catch (IllegalStateException e) {
                 throw new ApiException(
-                        CP_ACCOUNT_INVALID_CODE,
-                        CP_ACCOUNT_INVALID_MESSAGE + " " + e.getMessage(),
+                        ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
+                        "Configuração inválida: conta do Control Plane ausente ou duplicada. " + e.getMessage(),
                         500
                 );
             }
 
             if (userId == null) {
-                throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
             // NOT DELETED por contrato (deleted=false)
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             // escopo CP garantido
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(
+                        ApiErrorCode.USER_BUILT_IN_IMMUTABLE,
+                        "Usuário BUILT_IN é protegido: não pode ter permissões alteradas; apenas senha pode ser trocada.",
+                        409
+                );
             }
 
             user.replaceExplicitPermissions(perms);

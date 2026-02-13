@@ -52,10 +52,10 @@ public class GlobalExceptionHandler {
                         .map(Object::toString)
                         .toList();
 
-                return ResponseEntity.badRequest().body(
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                         ApiEnumErrorResponse.builder()
                                 .timestamp(ts)
-                                .error("INVALID_ENUM")
+                                .error(ApiErrorCode.INVALID_ENUM.code())
                                 .message("Valor inválido para o campo " + fieldName)
                                 .field(fieldName)
                                 .invalidValue(invalidValue)
@@ -65,10 +65,10 @@ public class GlobalExceptionHandler {
             }
         }
 
-        return ResponseEntity.badRequest().body(
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
-                        .error("INVALID_REQUEST_BODY")
+                        .error(ApiErrorCode.INVALID_REQUEST_BODY.code())
                         .message("Corpo da requisição inválido")
                         .build()
         );
@@ -85,10 +85,10 @@ public class GlobalExceptionHandler {
 
         if (errorMessage.contains("tax_id_number")) {
             String cnpj = extractValue(errorMessage, "tax_id_number");
-            return ResponseEntity.status(409).body(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
-                            .error("DUPLICATE_NUMBER")
+                            .error(ApiErrorCode.DUPLICATE_NUMBER.code())
                             .message("Já existe uma conta com o Number: " + cnpj)
                             .field("taxIdNumber")
                             .invalidValue(cnpj)
@@ -98,10 +98,10 @@ public class GlobalExceptionHandler {
 
         if (errorMessage.contains("LoginEmail")) {
             String email = extractValue(errorMessage, "LoginEmail");
-            return ResponseEntity.status(409).body(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
-                            .error("DUPLICATE_EMAIL")
+                            .error(ApiErrorCode.DUPLICATE_EMAIL.code())
                             .message("Já existe uma conta com o email " + email)
                             .field("loginEmail")
                             .invalidValue(email)
@@ -111,10 +111,10 @@ public class GlobalExceptionHandler {
 
         if (errorMessage.contains("slug")) {
             String slug = extractValue(errorMessage, "slug");
-            return ResponseEntity.status(409).body(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
-                            .error("DUPLICATE_SLUG")
+                            .error(ApiErrorCode.DUPLICATE_SLUG.code())
                             .message("Já existe uma conta com o slug " + slug)
                             .field("slug")
                             .invalidValue(slug)
@@ -124,19 +124,19 @@ public class GlobalExceptionHandler {
 
         if (errorMessage.contains("schema_name")) {
             String schema = extractValue(errorMessage, "schema_name");
-            return ResponseEntity.status(409).body(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
-                            .error("DUPLICATE_SCHEMA")
+                            .error(ApiErrorCode.DUPLICATE_SCHEMA.code())
                             .message("Erro interno: schema " + schema + " já existe")
                             .build()
             );
         }
 
-        return ResponseEntity.status(409).body(
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
-                        .error("DUPLICATE_ENTRY")
+                        .error(ApiErrorCode.DUPLICATE_ENTRY.code())
                         .message("Registro duplicado. Verifique os dados informados.")
                         .build()
         );
@@ -166,7 +166,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
-                        .error(ex.getError())
+                        .error(ex.getError()) // continua String no JSON (compat)
                         .message(ex.getMessage())
                         .field(ex.getField())
                         .invalidValue(ex.getInvalidValue())
@@ -188,12 +188,12 @@ public class GlobalExceptionHandler {
 
         ApiErrorResponse errorResponse = ApiErrorResponse.builder()
                 .timestamp(ts)
-                .error("VALIDATION_ERROR")
+                .error(ApiErrorCode.VALIDATION_ERROR.code())
                 .message("Erro de validação")
                 .details(errors)
                 .build();
 
-        return ResponseEntity.badRequest().body(errorResponse);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
     @ExceptionHandler({
@@ -209,23 +209,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
-                        .error("INVALID_USER")
+                        .error(ApiErrorCode.INVALID_USER.code())
                         .message("usuario ou senha invalidos")
-                        .build()
-        );
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
-        Instant ts = appNow();
-
-        log.error("Unhandled exception: {}", ex.getMessage(), ex);
-
-        return ResponseEntity.internalServerError().body(
-                ApiEnumErrorResponse.builder()
-                        .timestamp(ts)
-                        .error("INTERNAL_SERVER_ERROR")
-                        .message("Erro interno inesperado. Contate o suporte.")
                         .build()
         );
     }
@@ -236,10 +221,25 @@ public class GlobalExceptionHandler {
 
         ApiErrorResponse body = ApiErrorResponse.builder()
                 .timestamp(ts)
-                .error("DOMAIN_RULE_VIOLATION")
+                .error(ApiErrorCode.DOMAIN_RULE_VIOLATION.code())
                 .message(ex.getMessage())
                 .build();
 
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
+        Instant ts = appNow();
+
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(ts)
+                        .error(ApiErrorCode.INTERNAL_SERVER_ERROR.code())
+                        .message("Erro interno inesperado. Contate o suporte.")
+                        .build()
+        );
     }
 }

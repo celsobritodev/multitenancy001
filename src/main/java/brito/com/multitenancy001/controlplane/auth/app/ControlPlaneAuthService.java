@@ -5,6 +5,7 @@ import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventAuditService;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -44,12 +45,12 @@ public class ControlPlaneAuthService {
 
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
-        if (cmd == null) throw new ApiException("INVALID_LOGIN", "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.email())) throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
-        if (!StringUtils.hasText(cmd.password())) throw new ApiException("INVALID_LOGIN", "password é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Requisição inválida", 400);
+        if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
+        if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
 
         final String emailNorm = EmailNormalizer.normalizeOrNull(cmd.email());
-        if (emailNorm == null) throw new ApiException("INVALID_LOGIN", "email inválido", 400);
+        if (emailNorm == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email inválido", 400);
 
         final String password = cmd.password();
 
@@ -70,23 +71,35 @@ public class ControlPlaneAuthService {
                 // (1) Resolve identity -> subject_id (CP user id)
                 Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
                 if (cpUserId == null) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_DENIED,
-                	        AuditOutcome.DENIED,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"reason\":\"identity_not_found\"}"
-                	);
-                    throw new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404);
+                    authEventAuditService.record(
+                            AuthDomain.CONTROLPLANE,
+                            AuthEventType.LOGIN_DENIED,
+                            AuditOutcome.DENIED,
+                            emailNorm,
+                            null,
+                            null,
+                            DEFAULT_SCHEMA,
+                            "{\"reason\":\"identity_not_found\"}"
+                    );
+                    throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
                 }
 
                 // (2) Carrega o usuário CP por ID (não por email)
                 ControlPlaneUser user = controlPlaneUserRepository
                         .findByIdAndDeletedFalse(cpUserId)
-                        .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário de plataforma não encontrado", 404));
+                        .orElseThrow(() -> {
+                            authEventAuditService.record(
+                                    AuthDomain.CONTROLPLANE,
+                                    AuthEventType.LOGIN_DENIED,
+                                    AuditOutcome.DENIED,
+                                    emailNorm,
+                                    null,
+                                    null,
+                                    DEFAULT_SCHEMA,
+                                    "{\"reason\":\"user_deleted_or_missing\"}"
+                            );
+                            return new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
+                        });
 
                 Long accountId = user.getAccount().getId();
 
@@ -94,31 +107,31 @@ public class ControlPlaneAuthService {
                 Instant now = appClock.instant();
 
                 if (!user.isEnabled()) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_INIT,
-                	        AuditOutcome.ATTEMPT,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"stage\":\"init\",\"mode\":\"password\"}"
-                	);
-                    throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+                    authEventAuditService.record(
+                            AuthDomain.CONTROLPLANE,
+                            AuthEventType.LOGIN_DENIED,
+                            AuditOutcome.DENIED,
+                            emailNorm,
+                            null,
+                            null,
+                            DEFAULT_SCHEMA,
+                            "{\"reason\":\"user_disabled\"}"
+                    );
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
                 if (!user.isEnabledForLogin(now)) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_DENIED,
-                	        AuditOutcome.DENIED,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"reason\":\"identity_not_found\"}"
-                	);
-                    throw new ApiException("ACCESS_DENIED", "Usuário não autorizado", 403);
+                    authEventAuditService.record(
+                            AuthDomain.CONTROLPLANE,
+                            AuthEventType.LOGIN_DENIED,
+                            AuditOutcome.DENIED,
+                            emailNorm,
+                            null,
+                            null,
+                            DEFAULT_SCHEMA,
+                            "{\"reason\":\"login_not_allowed_now\"}"
+                    );
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
                 // (4) Autentica
@@ -146,14 +159,15 @@ public class ControlPlaneAuthService {
 
                 authEventAuditService.record(
                         AuthDomain.CONTROLPLANE,
-                        AuthEventType.LOGIN_INIT,
-                        AuditOutcome.ATTEMPT,
+                        AuthEventType.LOGIN_SUCCESS,
+                        AuditOutcome.SUCCESS,
                         emailNorm,
-                        null,
-                        null,
+                        user.getId(),
+                        accountId,
                         DEFAULT_SCHEMA,
-                        "{\"stage\":\"init\",\"mode\":\"password\"}"
+                        "{\"stage\":\"success\",\"mode\":\"password\"}"
                 );
+
                 return new JwtResult(
                         accessToken,
                         refreshToken,
@@ -165,16 +179,16 @@ public class ControlPlaneAuthService {
                 );
             });
         } catch (BadCredentialsException e) {
-        	authEventAuditService.record(
-        	        AuthDomain.CONTROLPLANE,
-        	        AuthEventType.LOGIN_DENIED,
-        	        AuditOutcome.DENIED,
-        	        emailNorm,
-        	        null,
-        	        null,
-        	        DEFAULT_SCHEMA,
-        	        "{\"reason\":\"identity_not_found\"}"
-        	);
+            authEventAuditService.record(
+                    AuthDomain.CONTROLPLANE,
+                    AuthEventType.LOGIN_DENIED,
+                    AuditOutcome.DENIED,
+                    emailNorm,
+                    null,
+                    null,
+                    DEFAULT_SCHEMA,
+                    "{\"reason\":\"bad_credentials\"}"
+            );
             throw e;
         }
     }

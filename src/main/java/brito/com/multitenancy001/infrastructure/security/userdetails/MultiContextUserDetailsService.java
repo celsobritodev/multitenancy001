@@ -42,9 +42,9 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String rawEmail) throws UsernameNotFoundException {
         String tenantSchema = TenantContext.getOrNull();
-        String loginEmail = normalizeEmailOrThrow(email);
+        String loginEmail = normalizeEmailOrThrow(rawEmail);
 
         // CONTROL PLANE
         if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
@@ -52,18 +52,18 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
 
         // TENANT (tenantSchema já está bindado => tenant pronto)
-        Instant issuedAt = appNow();
+        Instant now = appNow();
 
         TenantUser user = tenantUserRepository
                 .findByEmailAndDeletedFalse(loginEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, issuedAt, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 
     public UserDetails loadControlPlaneUserByLoginIdentity(String email) {
-        Instant issuedAt = appNow();
+        Instant now = appNow();
 
         Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(email);
         if (cpUserId == null) {
@@ -75,11 +75,11 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
-        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, issuedAt, authorities);
+        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
     public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
-        Instant issuedAt = appNow();
+        Instant now = appNow();
 
         if (accountId == null) {
             throw new ApiException(
@@ -96,7 +96,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
-        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, issuedAt, authorities);
+        return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, now, authorities);
     }
 
     public UserDetails loadTenantUserByEmail(String email, Long accountId) {
@@ -118,7 +118,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             );
         }
 
-        Instant issuedAt = appNow();
+        Instant now = appNow();
         String loginEmail = normalizeEmailOrThrow(email);
 
         TenantUser user = tenantUserRepository
@@ -126,6 +126,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
 
         var authorities = AuthoritiesFactory.forTenant(user);
-        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, issuedAt, authorities);
+        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 }

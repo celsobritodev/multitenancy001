@@ -9,6 +9,7 @@ import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -28,11 +29,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
 
-    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
     private static final String BUILTIN_IMMUTABLE_MESSAGE =
             "Usuário BUILT_IN é protegido: não pode ser alterado/deletado/restaurado; apenas senha pode ser trocada.";
 
-    private static final String CP_ACCOUNT_INVALID_CODE = "CONTROLPLANE_ACCOUNT_INVALID";
     private static final String CP_ACCOUNT_INVALID_MESSAGE =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
@@ -59,22 +58,23 @@ public class ControlPlaneUserService {
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
-            if (request.role() == null) throw new ApiException("ROLE_REQUIRED", "role é obrigatório", 400);
+            if (request == null) throw apiEx(ApiErrorCode.INVALID_REQUEST_BODY, "request é obrigatório");
+            if (request.role() == null) throw apiEx(ApiErrorCode.ROLE_REQUIRED, "role é obrigatório");
             if (request.password() == null || request.password().isBlank()) {
-                throw new ApiException("INVALID_PASSWORD", "senha é obrigatória", 400);
+                throw apiEx(ApiErrorCode.INVALID_PASSWORD, "senha é obrigatória");
             }
 
             Account cp = getControlPlaneAccount();
 
             String email = normalizeEmailOrThrow(request.email());
             if (ControlPlaneBuiltInUsers.isReservedEmail(email)) {
-                throw new ApiException("EMAIL_RESERVED", "Este email é reservado do sistema (BUILT_IN)", 409);
+                throw apiEx(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
             }
 
             // target ainda não existe (id null)
             AuditTarget target = new AuditTarget(email, null);
 
+            // ✅ aqui: ATTEMPT + FAIL (SUCCESS será registrado manualmente com detalhes úteis)
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_CREATED,
                     actor,
@@ -82,13 +82,13 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     "{\"scope\":\"CONTROL_PLANE\",\"stage\":\"before_save\"}",
-                    "{\"scope\":\"CONTROL_PLANE\",\"stage\":\"after_save\"}",
+                    null, // <- evita SUCCESS duplicado
                     () -> {
                         boolean emailExists = controlPlaneUserRepository
                                 .findByEmailAndAccount_IdAndDeletedFalse(email, cp.getId())
                                 .isPresent();
                         if (emailExists) {
-                            throw new ApiException("EMAIL_ALREADY_IN_USE", "Já existe um usuário ativo com este email", 409);
+                            throw apiEx(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
                         }
 
                         String name = normalizeNameOrThrow(request.name());
@@ -111,7 +111,6 @@ public class ControlPlaneUserService {
                         if (request.permissions() != null && !request.permissions().isEmpty()) {
                             explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
 
-                            // perms changed (create)
                             recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
@@ -120,13 +119,17 @@ public class ControlPlaneUserService {
                                     saved.getId(),
                                     cp.getId(),
                                     null,
-                                    "{\"scope\":\"CONTROL_PLANE\",\"reason\":\"create\",\"permissionsCount\":" + request.permissions().size() + "}"
+                                    "{"
+                                            + "\"scope\":\"CONTROL_PLANE\""
+                                            + ",\"reason\":\"create\""
+                                            + ",\"permissionsCount\":" + request.permissions().size()
+                                            + "}"
                             );
                         }
 
                         loginIdentityProvisioningService.ensureControlPlaneIdentity(email, saved.getId());
 
-                        // log SUCCESS do create com role (sem duplicar o bloco inteiro)
+                        // ✅ SUCCESS explícito com detalhes úteis
                         recordAudit(
                                 SecurityAuditActionType.USER_CREATED,
                                 AuditOutcome.SUCCESS,
@@ -138,7 +141,7 @@ public class ControlPlaneUserService {
                                 "{"
                                         + "\"scope\":\"CONTROL_PLANE\""
                                         + ",\"stage\":\"after_save\""
-                                        + ",\"role\":\"" + jsonEscape(role.name()) + "\""
+                                        + ",\"role\":" + jsonString(role == null ? null : role.name())
                                         + "}"
                         );
 
@@ -159,15 +162,15 @@ public class ControlPlaneUserService {
 
     public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             return mapToResponse(user);
@@ -178,17 +181,17 @@ public class ControlPlaneUserService {
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
-            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
+            if (request == null) throw apiEx(ApiErrorCode.INVALID_REQUEST_BODY, "request é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(userId, cp.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw apiEx(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             String beforeEmail = user.getEmail();
@@ -196,6 +199,7 @@ public class ControlPlaneUserService {
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
+            // ✅ ATTEMPT + FAIL (SUCCESS será registrado manualmente com diffs)
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_UPDATED,
                     actor,
@@ -203,7 +207,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     "{\"scope\":\"CONTROL_PLANE\"}",
-                    null,
+                    null, // <- evita SUCCESS duplicado
                     () -> {
                         boolean anyChange = false;
                         boolean roleChanged = false;
@@ -217,7 +221,7 @@ public class ControlPlaneUserService {
                             String newEmail = normalizeEmailOrThrow(request.email());
 
                             if (ControlPlaneBuiltInUsers.isReservedEmail(newEmail)) {
-                                throw new ApiException("EMAIL_RESERVED", "Este email é reservado do sistema (BUILT_IN)", 409);
+                                throw apiEx(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
                             }
 
                             String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
@@ -229,7 +233,7 @@ public class ControlPlaneUserService {
                                         .isPresent();
 
                                 if (emailExists) {
-                                    throw new ApiException("EMAIL_ALREADY_IN_USE", "Já existe um usuário ativo com este email", 409);
+                                    throw apiEx(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
                                 }
 
                                 user.changeEmail(newEmail);
@@ -259,7 +263,11 @@ public class ControlPlaneUserService {
                                     user.getId(),
                                     cp.getId(),
                                     null,
-                                    "{\"scope\":\"CONTROL_PLANE\",\"reason\":\"update\",\"permissionsCount\":" + request.permissions().size() + "}"
+                                    "{"
+                                            + "\"scope\":\"CONTROL_PLANE\""
+                                            + ",\"reason\":\"update\""
+                                            + ",\"permissionsCount\":" + request.permissions().size()
+                                            + "}"
                             );
                         }
 
@@ -274,13 +282,13 @@ public class ControlPlaneUserService {
                                     null,
                                     "{"
                                             + "\"scope\":\"CONTROL_PLANE\""
-                                            + ",\"from\":\"" + jsonEscape(beforeRole == null ? null : beforeRole.name()) + "\""
-                                            + ",\"to\":\"" + jsonEscape(user.getRole() == null ? null : user.getRole().name()) + "\""
+                                            + ",\"from\":" + jsonString(beforeRole == null ? null : beforeRole.name())
+                                            + ",\"to\":" + jsonString(user.getRole() == null ? null : user.getRole().name())
                                             + "}"
                             );
                         }
 
-                        // SUCCESS "final" de USER_UPDATED com diffs úteis
+                        // ✅ SUCCESS final com diffs úteis
                         recordAudit(
                                 SecurityAuditActionType.USER_UPDATED,
                                 AuditOutcome.SUCCESS,
@@ -291,9 +299,9 @@ public class ControlPlaneUserService {
                                 null,
                                 "{"
                                         + "\"scope\":\"CONTROL_PLANE\""
-                                        + ",\"changed\":" + (anyChange ? "true" : "false")
-                                        + ",\"emailBefore\":\"" + jsonEscape(beforeEmail) + "\""
-                                        + ",\"emailAfter\":\"" + jsonEscape(user.getEmail()) + "\""
+                                        + ",\"changed\":" + anyChange
+                                        + ",\"emailBefore\":" + jsonString(beforeEmail)
+                                        + ",\"emailAfter\":" + jsonString(user.getEmail())
                                         + "}"
                         );
 
@@ -307,20 +315,20 @@ public class ControlPlaneUserService {
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
-            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
+            if (request == null) throw apiEx(ApiErrorCode.INVALID_REQUEST_BODY, "request é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser targetUser = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (targetUser.getAccount() == null || targetUser.getAccount().getId() == null || !targetUser.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (targetUser.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw apiEx(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             int permCount = (request.permissions() == null) ? 0 : request.permissions().size();
@@ -347,21 +355,21 @@ public class ControlPlaneUserService {
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
-            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
+            if (request == null) throw apiEx(ApiErrorCode.INVALID_REQUEST_BODY, "request é obrigatório");
 
             if (request.newPassword() == null || request.confirmPassword() == null) {
-                throw new ApiException("INVALID_PASSWORD", "Senha e confirmação são obrigatórias", 400);
+                throw apiEx(ApiErrorCode.INVALID_PASSWORD, "Senha e confirmação são obrigatórias");
             }
             if (!request.newPassword().equals(request.confirmPassword())) {
-                throw new ApiException("PASSWORD_MISMATCH", "Nova senha e confirmação não conferem", 400);
+                throw apiEx(ApiErrorCode.PASSWORD_MISMATCH, "Nova senha e confirmação não conferem");
             }
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(userId, cp.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
@@ -389,16 +397,16 @@ public class ControlPlaneUserService {
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(userId, cp.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw apiEx(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
@@ -426,19 +434,19 @@ public class ControlPlaneUserService {
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("USER_OUT_OF_SCOPE", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw apiEx(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
@@ -481,13 +489,13 @@ public class ControlPlaneUserService {
 
     public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (userId == null) throw new ApiException("USER_ID_REQUIRED", "userId é obrigatório", 400);
+            if (userId == null) throw apiEx(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório");
 
             Account cp = getControlPlaneAccount();
 
             ControlPlaneUser user = controlPlaneUserRepository
                     .findEnabledByIdAndAccountId(userId, cp.getId())
-                    .orElseThrow(() -> new ApiException("USER_NOT_ENABLED", "Usuário não encontrado ou não habilitado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_ENABLED, "Usuário não encontrado ou não habilitado", 404));
 
             return mapToResponse(user);
         });
@@ -504,14 +512,14 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
             if (accountId == null || !cp.getId().equals(accountId)) {
-                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
             }
 
             ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
             }
 
             return new ControlPlaneMeResponse(
@@ -532,12 +540,12 @@ public class ControlPlaneUserService {
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
-            if (request == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+            if (request == null) throw apiEx(ApiErrorCode.INVALID_REQUEST_BODY, "request é obrigatório");
             if (request.currentPassword() == null || request.newPassword() == null || request.confirmPassword() == null) {
-                throw new ApiException("INVALID_PASSWORD", "Senha atual, nova senha e confirmação são obrigatórias", 400);
+                throw apiEx(ApiErrorCode.INVALID_PASSWORD, "Senha atual, nova senha e confirmação são obrigatórias");
             }
             if (!request.newPassword().equals(request.confirmPassword())) {
-                throw new ApiException("PASSWORD_MISMATCH", "Nova senha e confirmação não conferem", 400);
+                throw apiEx(ApiErrorCode.PASSWORD_MISMATCH, "Nova senha e confirmação não conferem");
             }
 
             Long accountId = securityUtils.getCurrentAccountId();
@@ -545,18 +553,18 @@ public class ControlPlaneUserService {
 
             Account cp = getControlPlaneAccount();
             if (accountId == null || userId == null || !cp.getId().equals(accountId)) {
-                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
             }
 
             ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "Usuário não encontrado", 404));
+                    .orElseThrow(() -> apiEx(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException("FORBIDDEN", "Usuário não pertence ao Control Plane", 403);
+                throw apiEx(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (!user.isEnabled()) {
-                throw new ApiException("USER_NOT_ENABLED", "Usuário não está habilitado para trocar senha", 403);
+                throw apiEx(ApiErrorCode.USER_NOT_ENABLED, "Usuário não está habilitado para trocar senha", 403);
             }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
@@ -572,7 +580,7 @@ public class ControlPlaneUserService {
                     () -> {
                         String currentHash = user.getPassword();
                         if (currentHash == null || !passwordEncoder.matches(request.currentPassword(), currentHash)) {
-                            throw new ApiException("CURRENT_PASSWORD_INVALID", "Senha atual inválida", 400);
+                            throw apiEx(ApiErrorCode.CURRENT_PASSWORD_INVALID, "Senha atual inválida");
                         }
 
                         String newHash = passwordEncoder.encode(request.newPassword());
@@ -583,7 +591,7 @@ public class ControlPlaneUserService {
                     }
             );
 
-            return;
+            return null;
         });
     }
 
@@ -593,14 +601,14 @@ public class ControlPlaneUserService {
 
     private static String normalizeEmailOrThrow(String raw) {
         String email = EmailNormalizer.normalizeOrNull(raw);
-        if (email == null) throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+        if (email == null) throw apiEx(ApiErrorCode.INVALID_EMAIL, "Email inválido");
         return email;
     }
 
     private static String normalizeNameOrThrow(String raw) {
-        if (raw == null) throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
+        if (raw == null) throw apiEx(ApiErrorCode.INVALID_NAME, "Nome é obrigatório");
         String name = raw.trim();
-        if (name.isBlank()) throw new ApiException("INVALID_NAME", "Nome é obrigatório", 400);
+        if (name.isBlank()) throw apiEx(ApiErrorCode.INVALID_NAME, "Nome é obrigatório");
         return name;
     }
 
@@ -623,8 +631,7 @@ public class ControlPlaneUserService {
         try {
             return accountRepository.getSingleControlPlaneAccount();
         } catch (IllegalStateException e) {
-            throw new ApiException(
-                    CP_ACCOUNT_INVALID_CODE,
+            throw apiEx(ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
                     CP_ACCOUNT_INVALID_MESSAGE + " " + e.getMessage(),
                     500
             );
@@ -656,8 +663,10 @@ public class ControlPlaneUserService {
         try {
             T result = block.call();
 
-            // SUCCESS
-            recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, successDetailsJson);
+            // SUCCESS (só grava se vier detalhes; evita duplicação quando você grava manualmente)
+            if (successDetailsJson != null) {
+                recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, successDetailsJson);
+            }
 
             return result;
         } catch (ApiException ex) {
@@ -717,10 +726,10 @@ public class ControlPlaneUserService {
         int status = ex == null ? 0 : ex.getStatus();
         String msg = ex == null ? null : ex.getMessage();
         return "{"
-                + "\"scope\":\"" + jsonEscape(scope) + "\""
-                + ",\"error\":\"" + jsonEscape(code) + "\""
+                + "\"scope\":" + jsonString(scope)
+                + ",\"error\":" + jsonString(code)
                 + ",\"status\":" + status
-                + ",\"message\":\"" + jsonEscape(msg) + "\""
+                + ",\"message\":" + jsonString(msg)
                 + "}";
     }
 
@@ -728,10 +737,20 @@ public class ControlPlaneUserService {
         String type = ex == null ? null : ex.getClass().getSimpleName();
         String msg = ex == null ? null : ex.getMessage();
         return "{"
-                + "\"scope\":\"" + jsonEscape(scope) + "\""
-                + ",\"unexpected\":\"" + jsonEscape(type) + "\""
-                + ",\"message\":\"" + jsonEscape(msg) + "\""
+                + "\"scope\":" + jsonString(scope)
+                + ",\"unexpected\":" + jsonString(type)
+                + ",\"message\":" + jsonString(msg)
                 + "}";
+    }
+
+    /**
+     * Retorna um valor JSON literal:
+     * - null -> "null"
+     * - string -> "\"...escapado...\""
+     */
+    private static String jsonString(String s) {
+        if (s == null) return "null";
+        return "\"" + jsonEscape(s) + "\"";
     }
 
     private static String jsonEscape(String s) {
@@ -743,6 +762,14 @@ public class ControlPlaneUserService {
                 .replace("\r", " ")
                 .replace("\t", " ")
                 .trim();
+    }
+
+    private static ApiException apiEx(ApiErrorCode code, String message) {
+        return new ApiException(code.code(), message, code.defaultHttpStatus());
+    }
+
+    private static ApiException apiEx(ApiErrorCode code, String message, int status) {
+        return new ApiException(code.code(), message, status);
     }
 
     private record Actor(Long userId, String email) {

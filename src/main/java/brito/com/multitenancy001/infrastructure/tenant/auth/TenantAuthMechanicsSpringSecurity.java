@@ -13,6 +13,7 @@ import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContex
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -55,7 +56,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
                 tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                        .orElseThrow(() -> new UsernameNotFoundException(ApiErrorCode.INVALID_USER.code()));
 
                 return true;
             });
@@ -69,18 +70,18 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
     @Override
     public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) {
-            throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", ApiErrorCode.ACCOUNT_NOT_FOUND.defaultHttpStatus());
         }
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", ApiErrorCode.ACCOUNT_NOT_READY.defaultHttpStatus());
         }
 
         tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) {
-            throw new ApiException("INVALID_LOGIN", "email e senha são obrigatórios", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email e senha são obrigatórios", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus());
         }
 
         String finalTenantSchema = tenantSchema;
@@ -93,7 +94,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
                 TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                        .orElseThrow(() -> new UsernameNotFoundException(ApiErrorCode.INVALID_USER.code()));
 
                 ensureUserActive(user);
 
@@ -141,25 +142,25 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException("AUTH_ERROR", "Falha ao autenticar", 500);
+            throw new ApiException(ApiErrorCode.AUTH_ERROR, "Falha ao autenticar", ApiErrorCode.AUTH_ERROR.defaultHttpStatus());
         }
     }
 
     @Override
     public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
         if (account == null || account.id() == null) {
-            throw new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada", 404);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", ApiErrorCode.ACCOUNT_NOT_FOUND.defaultHttpStatus());
         }
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", ApiErrorCode.ACCOUNT_NOT_READY.defaultHttpStatus());
         }
 
         tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail)) {
-            throw new ApiException("INVALID_LOGIN", "email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus());
         }
 
         String finalTenantSchema = tenantSchema;
@@ -168,7 +169,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                    .orElseThrow(() -> new ApiException("INVALID_LOGIN", "Usuário não encontrado", 401));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_LOGIN, "Usuário não encontrado", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus()));
 
             ensureUserActive(user);
 
@@ -214,39 +215,39 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
     @Override
     public JwtResult refreshTenantJwt(String refreshToken) {
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
 
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
 
         AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
         if (authDomain != AuthDomain.REFRESH) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
 
         final String tenantSchemaRaw = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
         if (!StringUtils.hasText(tenantSchemaRaw)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken inválido", 401);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
         final String tenantSchema = tenantSchemaRaw.trim();
 
         final String email = jwtTokenProvider.getEmailFromToken(refreshToken);
         if (!StringUtils.hasText(email)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (email ausente)", 401);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (email ausente)", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
 
         final Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
         if (accountId == null) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken inválido (accountId ausente)", 401);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (accountId ausente)", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
         }
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
 
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
-                    .orElseThrow(() -> new ApiException("INVALID_REFRESH", "refreshToken inválido", 401));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus()));
 
             ensureUserActive(user);
 
@@ -285,7 +286,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
     private static void ensureUserActive(TenantUser user) {
         if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
-            throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+            throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo", ApiErrorCode.USER_INACTIVE.defaultHttpStatus());
         }
     }
 }

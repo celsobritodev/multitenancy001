@@ -150,6 +150,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
 
     /**
      * ✅ Regra de lock com "now" explícito (preferida).
+     * AppClock deve ser a única fonte de tempo.
      */
     public boolean isAccountNonLocked(Instant now) {
         if (now == null) throw new IllegalArgumentException("now is required");
@@ -157,20 +158,22 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     /**
-     * ✅ Helper para login (enabled + não locked), usado pelo AuthenticatedUserContext.
+     * ✅ Helper para login (enabled + não locked).
      */
     public boolean isEnabledForLogin(Instant now) {
         return isEnabledDomain() && isAccountNonLocked(now);
     }
 
     /**
-     * ⚠️ UserDetails contract (sem "now"): mantido por compat.
-     * Evite usar em fluxos críticos; prefira isAccountNonLocked(Instant).
+     * 🚫 UserDetails contract sem clock: proibido no domínio (não pode usar Instant.now()).
+     * Fail-fast pra impedir regressão silenciosa.
      */
     @Override
     public boolean isAccountNonLocked() {
-        // fallback "now" local (compat)
-        return isAccountNonLocked(Instant.now());
+        throw new UnsupportedOperationException(
+                "TenantUser.isAccountNonLocked() (UserDetails) não deve ser usado. " +
+                        "Use isAccountNonLocked(Instant now) com now vindo do AppClock."
+        );
     }
 
     public void grantPermission(TenantPermission permission) {
@@ -189,10 +192,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         this.permissions.remove(permission);
     }
 
-    /**
-     * ✅ Mantido só para leitura/compat (ex.: DTO legado).
-     * ❌ Sem setters por code no domínio.
-     */
     public Set<TenantUserPermission> getExplicitPermissions() {
         if (permissions == null || permissions.isEmpty()) return Set.of();
         LinkedHashSet<TenantUserPermission> out = new LinkedHashSet<>();
@@ -204,7 +203,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     // ==========
-    // Password reset (compat com seus call-sites)
+    // Password reset (compat)
     // ==========
     public void setPasswordResetExpires(Instant expiresAt) {
         this.passwordResetExpiresAt = expiresAt;
@@ -238,9 +237,6 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         this.lockedUntil = null;
     }
 
-    // ==========
-    // Optional: helpers de normalização
-    // ==========
     public void rename(String newName) {
         if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
         this.name = newName.trim();
@@ -296,6 +292,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
 
     @Override
     public boolean isEnabled() {
+        // ✅ ok: não depende de tempo
         return isEnabledDomain();
     }
 }

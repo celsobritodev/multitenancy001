@@ -20,16 +20,34 @@ import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningService;
+import brito.com.multitenancy001.integration.tenant.TenantProvisioningIntegrationService;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.provisioning.app.TenantUserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Orquestra o onboarding de uma nova conta (Control Plane), incluindo provisioning do schema Tenant e do usuário OWNER.
+ *
+ * <p>
+ * Regras de arquitetura (bounded contexts):
+ * <ul>
+ *   <li>ControlPlane não depende de tenant.* diretamente.</li>
+ *   <li>Qualquer ação cross-context CP -> Tenant passa por integration.*.</li>
+ * </ul>
+ *
+ * <p>
+ * Observação:
+ * <ul>
+ *   <li>Você SEMPRE dropa o banco, então o fluxo precisa ser determinístico e reexecutável.</li>
+ *   <li>Provisionamento de schema (DDL/Flyway) ocorre fora do TX do CP.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -39,7 +57,9 @@ public class AccountOnboardingService {
     private static final long DEFAULT_TRIAL_DAYS = 14L;
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningFacade;
-    private final TenantUserProvisioningService tenantUserProvisioningFacade;
+
+    /** Fronteira explícita de integração ControlPlane -> Tenant (sem leak de bounded context). */
+    private final TenantProvisioningIntegrationService tenantProvisioningIntegrationService;
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
@@ -50,6 +70,7 @@ public class AccountOnboardingService {
     private final AccountProvisioningAuditService provisioningAuditService;
 
     public SignupResult createAccount(SignupCommand signupCommand) {
+
         SignupData data = validateAndNormalize(signupCommand);
 
         log.info("Tentando criar conta | loginEmail={}", data.loginEmail());
@@ -58,6 +79,7 @@ public class AccountOnboardingService {
         Account account;
         try {
             account = publicSchemaUnitOfWork.tx(() -> {
+
                 CreateAccountCommand cmd = new CreateAccountCommand(
                         data.displayName(),
                         data.loginEmail(),
@@ -106,9 +128,9 @@ public class AccountOnboardingService {
                 throw provisioningFailed(code, ex);
             }
 
-            // 4) Criação do tenant owner
+            // 4) Criação do tenant owner (via integração - sem chamar tenant.* direto)
             try {
-                tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
+                tenantOwner = tenantProvisioningIntegrationService.createTenantOwner(
                         tenantSchema,
                         account.getId(),
                         account.getDisplayName(),
@@ -161,6 +183,7 @@ public class AccountOnboardingService {
             return new SignupResult(finalized, tenantAdminResult);
 
         } catch (ProvisioningFailedException wrapped) {
+
             ProvisioningFailureCode code = wrapped.code();
 
             String message = safeMessage(wrapped.getCause());
@@ -180,6 +203,7 @@ public class AccountOnboardingService {
             throw wrapped;
 
         } catch (RuntimeException ex) {
+
             provisioningAuditService.failed(
                     account.getId(),
                     ProvisioningFailureCode.UNKNOWN,
@@ -196,8 +220,9 @@ public class AccountOnboardingService {
 
     private Account finalizeProvisioning(Long accountId) {
         return publicSchemaUnitOfWork.tx(() -> {
+
             Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException("ACCOUNT_NOT_FOUND", "Conta não encontrada após criação", 500));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada após criação", 500));
 
             Instant now = appClock.instant();
 
@@ -214,45 +239,46 @@ public class AccountOnboardingService {
     }
 
     private SignupData validateAndNormalize(SignupCommand cmd) {
+
         if (cmd == null) {
-            throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST_BODY, "Requisição inválida", 400);
         }
 
         String displayName = safeTrim(cmd.displayName());
         if (!StringUtils.hasText(displayName)) {
-            throw new ApiException("INVALID_COMPANY_NAME", "Nome da empresa é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_NAME, "Nome da empresa é obrigatório", 400);
         }
 
         String loginEmail = EmailNormalizer.normalizeOrNull(cmd.loginEmail());
         if (!StringUtils.hasText(loginEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
         }
         if (!looksLikeEmail(loginEmail)) {
-            throw new ApiException("INVALID_EMAIL", "Email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
         }
 
         TaxIdType taxIdType = cmd.taxIdType();
         if (taxIdType == null) {
-            throw new ApiException("INVALID_COMPANY_DOC_TYPE", "Tipo de documento é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_TYPE, "Tipo de documento é obrigatório", 400);
         }
 
         String taxIdNumber = safeTrim(cmd.taxIdNumber());
         if (!StringUtils.hasText(taxIdNumber)) {
-            throw new ApiException("INVALID_COMPANY_DOC_NUMBER", "Número do documento é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_NUMBER, "Número do documento é obrigatório", 400);
         }
 
         String password = safeTrim(cmd.password());
         if (!StringUtils.hasText(password)) {
-            throw new ApiException("INVALID_PASSWORD", "Senha é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
         }
 
         String confirmPassword = safeTrim(cmd.confirmPassword());
         if (!StringUtils.hasText(confirmPassword)) {
-            throw new ApiException("INVALID_CONFIRM_PASSWORD", "Confirmação de senha é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CONFIRM_PASSWORD, "Confirmação de senha é obrigatória", 400);
         }
 
         if (!password.equals(confirmPassword)) {
-            throw new ApiException("PASSWORD_MISMATCH", "Senha e confirmação não conferem", 400);
+            throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Senha e confirmação não conferem", 400);
         }
 
         String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;

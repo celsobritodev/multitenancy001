@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.tenant.billing.app;
 
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.billing.PaymentQueryService;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -16,26 +17,20 @@ public class TenantPaymentService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final PaymentQueryService paymentQueryFacade;
 
-    /**
-     * ✅ Tenant service chamando PUBLIC de forma explícita, sem @Transactional meta-annotation aqui.
-     * Semântica: cross-context => boundary é UnitOfWork.
-     */
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.listByAccount(accountId));
     }
 
     public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-        if (paymentId == null) throw new ApiException("PAYMENT_ID_REQUIRED", "paymentId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", ApiErrorCode.PAYMENT_ID_REQUIRED.defaultHttpStatus());
 
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.getByAccount(accountId, paymentId));
     }
 
     public boolean hasActivePayment(Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
-
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.hasActivePayment(accountId));
     }
 }

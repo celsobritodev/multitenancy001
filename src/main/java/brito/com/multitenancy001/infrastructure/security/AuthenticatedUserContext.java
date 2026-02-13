@@ -148,7 +148,7 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
                 email,
                 user.getPassword(),
                 user.isMustChangePassword(),
-                user.isEnabled(),
+                user.isEnabledDomain(),          // ✅ aqui é o ajuste
                 user.isAccountNonLocked(now),
                 user.getAccountId(),
                 tenantSchema,
