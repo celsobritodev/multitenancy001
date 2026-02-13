@@ -16,3 +16,4 @@ public class AuthDomainConverter implements AttributeConverter<AuthDomain, Strin
         return AuthDomain.fromDbValueOrNull(dbData);
     }
 }
+

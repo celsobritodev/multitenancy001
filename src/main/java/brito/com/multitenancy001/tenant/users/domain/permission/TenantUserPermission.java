@@ -25,3 +25,4 @@ public record TenantUserPermission(String code) {
         return new TenantUserPermission(permission.asAuthority()); // name() -> asAuthority()
     }
 }
+

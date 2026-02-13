@@ -8,3 +8,4 @@ public record TenantUserSummaryResponse(
         boolean enabled
 ) {}
 
+

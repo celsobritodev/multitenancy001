@@ -57,3 +57,4 @@ public class ControlPlanePaymentQueryController {
         return ResponseEntity.ok(controlPlanePaymentQueryService.countCompletedPayments(accountId));
     }
 }
+

@@ -100,3 +100,4 @@ public class TenantSchemaReadinessService {
         tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, requiredTable);
     }
 }
+

@@ -28,10 +28,10 @@ public class AccountStatusService {
 
     public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
         if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
         }
         if (cmd == null || cmd.status() == null) {
-            throw new ApiException(ApiErrorCode.STATUS_REQUIRED, "status é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.STATUS_REQUIRED);
         }
 
         return publicSchemaUnitOfWork.tx(() -> {
@@ -87,7 +87,7 @@ public class AccountStatusService {
 
     public void softDeleteAccount(Long accountId) {
         if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
         }
 
         publicSchemaUnitOfWork.tx(() -> {
@@ -95,11 +95,7 @@ public class AccountStatusService {
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount()) {
-                throw new ApiException(
-                        ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED,
-                        "Não é permitido excluir contas do sistema",
-                        403
-                );
+                throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED);
             }
 
             account.softDelete(appClock.instant());
@@ -112,7 +108,7 @@ public class AccountStatusService {
 
     public void restoreAccount(Long accountId) {
         if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
         }
 
         publicSchemaUnitOfWork.tx(() -> {
@@ -120,11 +116,7 @@ public class AccountStatusService {
             Account account = getAccountByIdRaw(accountId);
 
             if (account.isBuiltInAccount() && account.isDeleted()) {
-                throw new ApiException(
-                        ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED,
-                        "Contas do sistema não podem ser restauradas via este endpoint",
-                        403
-                );
+                throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED);
             }
 
             account.restore();
@@ -150,6 +142,7 @@ public class AccountStatusService {
 
     private Account getAccountByIdRaw(Long accountId) {
         return accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada"));
     }
 }
+

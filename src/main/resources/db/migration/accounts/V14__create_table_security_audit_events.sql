@@ -32,3 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_security_audit_request_id ON security_audit_event
 CREATE INDEX IF NOT EXISTS idx_security_audit_action_type ON security_audit_events (action_type);
 CREATE INDEX IF NOT EXISTS idx_security_audit_account_id ON security_audit_events (account_id);
 
+

@@ -2,124 +2,116 @@ package brito.com.multitenancy001.infrastructure.persistence;
 
 import java.util.function.Supplier;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 
+import brito.com.multitenancy001.infrastructure.persistence.transaction.PublicTransactionExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.transaction.TenantTransactionExecutor;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Executor único para transações do sistema (Public schema e Tenant schema).
+ *
+ * - inPublicTx / inPublicReadOnlyTx
+ * - inTenantTx / inTenantReadOnlyTx
+ *
+ * Mantém aliases "tenantTx/tenantReadOnlyTx" por compatibilidade com código legado do refactor.
+ */
 @Component
+@RequiredArgsConstructor
 public class TxExecutor {
 
-    private final TransactionTemplate transactionTemplatePublicTx;
-    private final TransactionTemplate transactionTemplatePublicRequiresNew;
+    private final PublicTransactionExecutor publicTransactionExecutor;
+    private final TenantTransactionExecutor tenantTransactionExecutor;
 
-    private final TransactionTemplate transactionTemplatePublicReadOnlyTx;
-    private final TransactionTemplate transactionTemplatePublicRequiresNewReadOnly;
+    // ----------------------------
+    // Public schema
+    // ----------------------------
 
-    private final TransactionTemplate transactionTemplateTenantTx;
-    private final TransactionTemplate transactionTemplateTenantRequiresNew;
-
-    private final TransactionTemplate transactionTemplateTenantReadOnlyTx;
-    private final TransactionTemplate transactionTemplateTenantRequiresNewReadOnly;
-
-    public TxExecutor(
-            @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
-            @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
-    ) {
-        // PUBLIC - REQUIRED
-        this.transactionTemplatePublicTx = new TransactionTemplate(publicTm);
-        this.transactionTemplatePublicTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-
-        // PUBLIC - REQUIRES_NEW
-        this.transactionTemplatePublicRequiresNew = new TransactionTemplate(publicTm);
-        this.transactionTemplatePublicRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        // PUBLIC - REQUIRED READONLY
-        this.transactionTemplatePublicReadOnlyTx = new TransactionTemplate(publicTm);
-        this.transactionTemplatePublicReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-        this.transactionTemplatePublicReadOnlyTx.setReadOnly(true);
-
-        // PUBLIC - REQUIRES_NEW READONLY
-        this.transactionTemplatePublicRequiresNewReadOnly = new TransactionTemplate(publicTm);
-        this.transactionTemplatePublicRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.transactionTemplatePublicRequiresNewReadOnly.setReadOnly(true);
-
-        // TENANT - REQUIRED
-        this.transactionTemplateTenantTx = new TransactionTemplate(tenantTm);
-        this.transactionTemplateTenantTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-
-        // TENANT - REQUIRES_NEW
-        this.transactionTemplateTenantRequiresNew = new TransactionTemplate(tenantTm);
-        this.transactionTemplateTenantRequiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        // TENANT - REQUIRED READONLY
-        this.transactionTemplateTenantReadOnlyTx = new TransactionTemplate(tenantTm);
-        this.transactionTemplateTenantReadOnlyTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-        this.transactionTemplateTenantReadOnlyTx.setReadOnly(true);
-
-        // TENANT - REQUIRES_NEW READONLY
-        this.transactionTemplateTenantRequiresNewReadOnly = new TransactionTemplate(tenantTm);
-        this.transactionTemplateTenantRequiresNewReadOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.transactionTemplateTenantRequiresNewReadOnly.setReadOnly(true);
-    }
-
-    // ---------- PUBLIC ----------
-    public <T> T inPublicTx(Supplier<T> fn) {
-        return transactionTemplatePublicTx.execute(status -> fn.get());
-    }
     public void inPublicTx(Runnable fn) {
-        transactionTemplatePublicTx.executeWithoutResult(status -> fn.run());
+        publicTransactionExecutor.inPublicTx(fn);
     }
 
-    public <T> T inPublicRequiresNew(Supplier<T> fn) {
-        return transactionTemplatePublicRequiresNew.execute(status -> fn.get());
+    public <T> T inPublicTx(Supplier<T> fn) {
+        return publicTransactionExecutor.inPublicTx(fn);
     }
-    public void inPublicRequiresNew(Runnable fn) {
-        transactionTemplatePublicRequiresNew.executeWithoutResult(status -> fn.run());
+
+    public void inPublicReadOnlyTx(Runnable fn) {
+        publicTransactionExecutor.inPublicReadOnlyTx(fn);
     }
 
     public <T> T inPublicReadOnlyTx(Supplier<T> fn) {
-        return transactionTemplatePublicReadOnlyTx.execute(status -> fn.get());
-    }
-    public void inPublicReadOnlyTx(Runnable fn) {
-        transactionTemplatePublicReadOnlyTx.executeWithoutResult(status -> fn.run());
+        return publicTransactionExecutor.inPublicReadOnlyTx(fn);
     }
 
-    public <T> T inPublicRequiresNewReadOnly(Supplier<T> fn) {
-        return transactionTemplatePublicRequiresNewReadOnly.execute(status -> fn.get());
-    }
-    public void inPublicRequiresNewReadOnly(Runnable fn) {
-        transactionTemplatePublicRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
-    }
+    // ----------------------------
+    // Tenant schema
+    // ----------------------------
 
-    // ---------- TENANT ----------
-    public <T> T inTenantTx(Supplier<T> fn) {
-        return transactionTemplateTenantTx.execute(status -> fn.get());
-    }
     public void inTenantTx(Runnable fn) {
-        transactionTemplateTenantTx.executeWithoutResult(status -> fn.run());
+        tenantTransactionExecutor.inTenantTx(fn);
     }
 
-    public <T> T inTenantRequiresNew(Supplier<T> fn) {
-        return transactionTemplateTenantRequiresNew.execute(status -> fn.get());
+    public <T> T inTenantTx(Supplier<T> fn) {
+        return tenantTransactionExecutor.inTenantTx(fn);
     }
-    public void inTenantRequiresNew(Runnable fn) {
-        transactionTemplateTenantRequiresNew.executeWithoutResult(status -> fn.run());
+
+    public void inTenantReadOnlyTx(Runnable fn) {
+        tenantTransactionExecutor.inTenantReadOnlyTx(fn);
     }
 
     public <T> T inTenantReadOnlyTx(Supplier<T> fn) {
-        return transactionTemplateTenantReadOnlyTx.execute(status -> fn.get());
-    }
-    public void inTenantReadOnlyTx(Runnable fn) {
-        transactionTemplateTenantReadOnlyTx.executeWithoutResult(status -> fn.run());
+        return tenantTransactionExecutor.inTenantReadOnlyTx(fn);
     }
 
-    public <T> T inTenantRequiresNewReadOnly(Supplier<T> fn) {
-        return transactionTemplateTenantRequiresNewReadOnly.execute(status -> fn.get());
+    // ----------------------------
+    // ✅ Aliases (compatibilidade)
+    // ----------------------------
+
+    /** @deprecated use inTenantTx */
+    @Deprecated
+    public void tenantTx(Runnable fn) {
+        inTenantTx(fn);
     }
-    public void inTenantRequiresNewReadOnly(Runnable fn) {
-        transactionTemplateTenantRequiresNewReadOnly.executeWithoutResult(status -> fn.run());
+
+    /** @deprecated use inTenantTx */
+    @Deprecated
+    public <T> T tenantTx(Supplier<T> fn) {
+        return inTenantTx(fn);
+    }
+
+    /** @deprecated use inTenantReadOnlyTx */
+    @Deprecated
+    public void tenantReadOnlyTx(Runnable fn) {
+        inTenantReadOnlyTx(fn);
+    }
+
+    /** @deprecated use inTenantReadOnlyTx */
+    @Deprecated
+    public <T> T tenantReadOnlyTx(Supplier<T> fn) {
+        return inTenantReadOnlyTx(fn);
+    }
+
+    /** @deprecated use inPublicTx */
+    @Deprecated
+    public void publicTx(Runnable fn) {
+        inPublicTx(fn);
+    }
+
+    /** @deprecated use inPublicTx */
+    @Deprecated
+    public <T> T publicTx(Supplier<T> fn) {
+        return inPublicTx(fn);
+    }
+
+    /** @deprecated use inPublicReadOnlyTx */
+    @Deprecated
+    public void publicReadOnlyTx(Runnable fn) {
+        inPublicReadOnlyTx(fn);
+    }
+
+    /** @deprecated use inPublicReadOnlyTx */
+    @Deprecated
+    public <T> T publicReadOnlyTx(Supplier<T> fn) {
+        return inPublicReadOnlyTx(fn);
     }
 }
-

@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.me.app;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.me.api.dto.TenantChangeMyPasswordRequest;
@@ -34,7 +35,7 @@ public class TenantMeService {
     }
 
     public TenantUser updateMyProfile(UpdateMyProfileRequest req) {
-        if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+        if (req == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório");
 
         Long accountId = securityUtils.getCurrentAccountId();
         String tenantSchema = securityUtils.getCurrentTenantSchema();
@@ -55,7 +56,7 @@ public class TenantMeService {
     }
 
     public void changeMyPassword(TenantChangeMyPasswordRequest req) {
-        if (req == null) throw new ApiException("INVALID_REQUEST", "request é obrigatório", 400);
+        if (req == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório");
 
         Long accountId = securityUtils.getCurrentAccountId();
         String tenantSchema = securityUtils.getCurrentTenantSchema();

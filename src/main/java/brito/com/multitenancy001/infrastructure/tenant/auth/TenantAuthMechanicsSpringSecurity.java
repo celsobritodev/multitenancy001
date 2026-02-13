@@ -1,14 +1,5 @@
 package brito.com.multitenancy001.infrastructure.tenant.auth;
 
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.InternalAuthenticationServiceException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
@@ -20,14 +11,27 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
 import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
-public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics {
+public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
@@ -44,13 +48,10 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) return false;
 
-        tenantSchema = tenantSchema.trim();
-
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
 
         try {
-            String finalTenantSchema = tenantSchema;
-            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+            return tenantExecutor.runInTenantSchema(tenantSchema.trim(), () -> {
                 Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
 
@@ -70,223 +71,138 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
     @Override
     public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", ApiErrorCode.ACCOUNT_NOT_FOUND.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada");
         }
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", ApiErrorCode.ACCOUNT_NOT_READY.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta não pronta");
         }
-
         tenantSchema = tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email e senha são obrigatórios", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, INVALID_CREDENTIALS_MSG);
         }
 
         String finalTenantSchema = tenantSchema;
 
         try {
             return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
-
                 Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
                 authenticationManager.authenticate(authRequest);
 
                 TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException(ApiErrorCode.INVALID_USER.code()));
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_USER, INVALID_CREDENTIALS_MSG));
 
-                ensureUserActive(user);
+                user.setLastLoginAt(appClock.instant());
+                tenantUserRepository.save(user);
 
-                tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+                Set<GrantedAuthority> authorities = AuthoritiesFactory.forTenant(user);
+                AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(user, finalTenantSchema, appClock.instant(), authorities);
 
-                var authorities = AuthoritiesFactory.forTenant(user);
+                Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
-                AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
-                        user,
-                        finalTenantSchema,
-                        appClock.instant(),
-                        authorities
-                );
+                String accessToken = jwtTokenProvider.generateTenantToken(auth, account.id(), finalTenantSchema);
+                String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail(), finalTenantSchema, account.id());
 
-                Authentication finalAuth = new UsernamePasswordAuthenticationToken(
-                        principal,
-                        null,
-                        authorities
-                );
+                SystemRoleName roleName = TenantRoleMapper.toSystemRoleName(user.getRole());
 
-                String accessToken = jwtTokenProvider.generateTenantToken(finalAuth, account.id(), finalTenantSchema);
-
-                String refreshToken = jwtTokenProvider.generateRefreshToken(
-                        user.getEmail(),
-                        finalTenantSchema,
-                        account.id()
-                );
-
-                SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
-
-                return new JwtResult(
-                        accessToken,
-                        refreshToken,
-                        user.getId(),
-                        user.getEmail(),
-                        role,
-                        account.id(),
-                        finalTenantSchema
-                );
+                return new JwtResult(accessToken, refreshToken, user.getId(), user.getEmail(), roleName, account.id(), finalTenantSchema);
             });
         } catch (BadCredentialsException e) {
-            throw e;
-        } catch (UsernameNotFoundException | InternalAuthenticationServiceException e) {
-            throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
-        } catch (ApiException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ApiException(ApiErrorCode.AUTH_ERROR, "Falha ao autenticar", ApiErrorCode.AUTH_ERROR.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, INVALID_CREDENTIALS_MSG);
         }
     }
 
     @Override
     public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
         if (account == null || account.id() == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", ApiErrorCode.ACCOUNT_NOT_FOUND.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada");
+        }
+        if (!StringUtils.hasText(normalizedEmail)) {
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório");
         }
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", ApiErrorCode.ACCOUNT_NOT_READY.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta não pronta");
         }
-
         tenantSchema = tenantSchema.trim();
-
-        if (!StringUtils.hasText(normalizedEmail)) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus());
-        }
 
         String finalTenantSchema = tenantSchema;
 
         return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
-
             TenantUser user = tenantUserRepository
                     .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_LOGIN, "Usuário não encontrado", ApiErrorCode.INVALID_LOGIN.defaultHttpStatus()));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_USER, "Usuário não encontrado"));
 
-            ensureUserActive(user);
+            if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+                throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo");
+            }
 
-            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+            user.setLastLoginAt(appClock.instant());
+            tenantUserRepository.save(user);
 
-            var authorities = AuthoritiesFactory.forTenant(user);
+            Set<GrantedAuthority> authorities = AuthoritiesFactory.forTenant(user);
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(user, finalTenantSchema, appClock.instant(), authorities);
 
-            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
-                    user,
-                    finalTenantSchema,
-                    appClock.instant(),
-                    authorities
-            );
+            Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    principal,
-                    null,
-                    authorities
-            );
+            String accessToken = jwtTokenProvider.generateTenantToken(auth, account.id(), finalTenantSchema);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail(), finalTenantSchema, account.id());
 
-            String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), finalTenantSchema);
+            SystemRoleName roleName = TenantRoleMapper.toSystemRoleName(user.getRole());
 
-            String refreshToken = jwtTokenProvider.generateRefreshToken(
-                    user.getEmail(),
-                    finalTenantSchema,
-                    account.id()
-            );
-
-            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
-
-            return new JwtResult(
-                    accessToken,
-                    refreshToken,
-                    user.getId(),
-                    user.getEmail(),
-                    role,
-                    account.id(),
-                    finalTenantSchema
-            );
+            return new JwtResult(accessToken, refreshToken, user.getId(), user.getEmail(), roleName, account.id(), finalTenantSchema);
         });
     }
 
     @Override
     public JwtResult refreshTenantJwt(String refreshToken) {
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório");
         }
 
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
-        }
+        try {
+            AuthDomain domain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
+            if (domain == null || domain != AuthDomain.REFRESH) {
+                throw new ApiException(ApiErrorCode.INVALID_REFRESH, "Refresh token inválido");
+            }
 
-        AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
-        if (authDomain != AuthDomain.REFRESH) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
-        }
+            String tenantSchema = jwtTokenProvider.getContextFromToken(refreshToken);
+            Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+            String email = jwtTokenProvider.getEmailFromToken(refreshToken);
 
-        final String tenantSchemaRaw = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
-        if (!StringUtils.hasText(tenantSchemaRaw)) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
-        }
-        final String tenantSchema = tenantSchemaRaw.trim();
+            if (!StringUtils.hasText(tenantSchema) || accountId == null || !StringUtils.hasText(email)) {
+                throw new ApiException(ApiErrorCode.INVALID_REFRESH, "Refresh token inválido");
+            }
 
-        final String email = jwtTokenProvider.getEmailFromToken(refreshToken);
-        if (!StringUtils.hasText(email)) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (email ausente)", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
-        }
+            String finalTenantSchema = tenantSchema.trim();
 
-        final Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (accountId ausente)", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus());
-        }
+            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+                TenantUser user = tenantUserRepository
+                        .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_USER, "Usuário não encontrado"));
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+                    throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo");
+                }
 
-            TenantUser user = tenantUserRepository
-                    .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", ApiErrorCode.INVALID_REFRESH.defaultHttpStatus()));
+                Set<GrantedAuthority> authorities = AuthoritiesFactory.forTenant(user);
+                AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(user, finalTenantSchema, appClock.instant(), authorities);
+                Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
-            ensureUserActive(user);
+                String accessToken = jwtTokenProvider.generateTenantToken(auth, accountId, finalTenantSchema);
+                String newRefresh = jwtTokenProvider.generateRefreshToken(user.getEmail(), finalTenantSchema, accountId);
 
-            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+                SystemRoleName roleName = TenantRoleMapper.toSystemRoleName(user.getRole());
 
-            var authorities = AuthoritiesFactory.forTenant(user);
+                return new JwtResult(accessToken, newRefresh, user.getId(), user.getEmail(), roleName, accountId, finalTenantSchema);
+            });
 
-            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
-                    user,
-                    tenantSchema,
-                    appClock.instant(),
-                    authorities
-            );
-
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    principal,
-                    null,
-                    authorities
-            );
-
-            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, accountId, tenantSchema);
-
-            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
-
-            return new JwtResult(
-                    newAccessToken,
-                    refreshToken,
-                    user.getId(),
-                    user.getEmail(),
-                    role,
-                    accountId,
-                    tenantSchema
-            );
-        });
-    }
-
-    private static void ensureUserActive(TenantUser user) {
-        if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
-            throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo", ApiErrorCode.USER_INACTIVE.defaultHttpStatus());
+        } catch (JwtException e) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "Refresh token inválido");
         }
     }
 }

@@ -22,3 +22,4 @@ public record TenantLoginChallenge(
         return now.isAfter(expiresAt);
     }
 }
+

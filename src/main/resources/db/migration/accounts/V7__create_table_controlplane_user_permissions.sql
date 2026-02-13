@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS controlplane_user_permissions (
         ON DELETE CASCADE
 );
 
+

@@ -292,3 +292,4 @@ public class ControlPlaneUser implements Auditable, SoftDeletable {
         }
     }
 }
+

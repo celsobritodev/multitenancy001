@@ -15,3 +15,4 @@ public interface AccountResolverProjection {
 
     String getOrigin();
 }
+

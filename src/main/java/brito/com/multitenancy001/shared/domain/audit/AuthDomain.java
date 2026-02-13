@@ -62,3 +62,4 @@ public enum AuthDomain {
         return fromDbValueOrNull(t);
     }
 }
+

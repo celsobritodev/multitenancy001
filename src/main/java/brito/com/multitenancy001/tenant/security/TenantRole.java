@@ -30,3 +30,4 @@ public enum TenantRole implements RoleAuthority {
         return this == TENANT_OWNER;
     }
 }
+

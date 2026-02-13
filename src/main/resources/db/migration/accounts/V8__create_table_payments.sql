@@ -50,3 +50,4 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_account_id ON payments (account_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status     ON payments (status);
 CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments (payment_date);
+

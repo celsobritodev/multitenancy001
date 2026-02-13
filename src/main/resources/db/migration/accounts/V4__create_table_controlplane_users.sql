@@ -46,3 +46,4 @@ CREATE TABLE IF NOT EXISTS controlplane_users (
 
 CREATE INDEX IF NOT EXISTS idx_cp_users_account_id ON controlplane_users(account_id);
 CREATE INDEX IF NOT EXISTS idx_cp_users_email ON controlplane_users(email);
+

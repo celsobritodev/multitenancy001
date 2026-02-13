@@ -17,3 +17,4 @@ public interface TenantAuthMechanics {
 
     JwtResult refreshTenantJwt(String refreshToken);
 }
+

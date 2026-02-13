@@ -27,3 +27,4 @@ CREATE INDEX IF NOT EXISTS idx_categories_active  ON categories(active);
 CREATE INDEX IF NOT EXISTS idx_categories_deleted ON categories(deleted) WHERE deleted = false;
 CREATE INDEX IF NOT EXISTS idx_categories_created_at ON categories(created_at);
 
+

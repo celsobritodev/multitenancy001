@@ -60,3 +60,4 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
                 || path.startsWith("/favicon.ico");
     }
 }
+

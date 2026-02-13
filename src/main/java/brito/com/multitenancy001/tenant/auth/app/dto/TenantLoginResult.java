@@ -16,3 +16,4 @@ public sealed interface TenantLoginResult {
             List<TenantSelectionOptionData> details
     ) implements TenantLoginResult {}
 }
+

@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_expires_at
 CREATE INDEX IF NOT EXISTS idx_tenant_login_challenges_used_at
     ON tenant_login_challenges (used_at);
 
+

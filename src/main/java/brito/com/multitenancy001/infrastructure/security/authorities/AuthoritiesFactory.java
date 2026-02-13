@@ -93,3 +93,4 @@ public final class AuthoritiesFactory {
         return authorities;
     }
 }
+

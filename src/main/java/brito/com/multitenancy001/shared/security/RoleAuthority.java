@@ -6,3 +6,4 @@ public interface RoleAuthority extends Serializable {
     String asAuthority();
 }
 
+

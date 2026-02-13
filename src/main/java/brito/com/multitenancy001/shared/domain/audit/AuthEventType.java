@@ -9,3 +9,4 @@ public enum AuthEventType {
     LOGIN_DENIED,
     TOKEN_REFRESH
 }
+

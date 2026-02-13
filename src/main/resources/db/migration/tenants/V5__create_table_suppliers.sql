@@ -47,3 +47,4 @@ CREATE INDEX IF NOT EXISTS idx_supplier_email   ON suppliers(email);
 CREATE INDEX IF NOT EXISTS idx_supplier_active  ON suppliers(active);
 CREATE INDEX IF NOT EXISTS idx_supplier_deleted ON suppliers(deleted) WHERE deleted = false;
 
+

@@ -1,16 +1,14 @@
 package brito.com.multitenancy001.tenant.users.api;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserDetailsResponse;
-import brito.com.multitenancy001.tenant.users.api.dto.TenantUserListItemResponse;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserSummaryResponse;
-import brito.com.multitenancy001.tenant.users.api.dto.TenantUsersListResponse;
 import brito.com.multitenancy001.tenant.users.api.mapper.TenantUserApiMapper;
-import brito.com.multitenancy001.tenant.users.app.context.TenantUserCurrentContextCommandService;
-import brito.com.multitenancy001.tenant.users.app.context.TenantUserCurrentContextQueryService;
-import brito.com.multitenancy001.tenant.users.app.query.TenantUsersListView;
+import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
+import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -20,42 +18,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
-@RequestMapping("/api/tenant/users")
 @RequiredArgsConstructor
+@RequestMapping("/api/tenant/users")
 public class TenantUserController {
 
-    private final TenantUserCurrentContextQueryService tenantUserQueryService;
-    private final TenantUserCurrentContextCommandService tenantUserCommandService;
+    private final TenantUserQueryService tenantUserQueryService;
+    private final TenantUserCommandService tenantUserCommandService;
     private final TenantUserApiMapper tenantUserApiMapper;
-
-    @GetMapping
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<TenantUsersListResponse> listTenantUsers() {
-        TenantUsersListView view = tenantUserQueryService.listTenantUsers();
-
-        List<TenantUserListItemResponse> mapped = view.users().stream()
-                .map(u -> view.isOwner()
-                        ? tenantUserApiMapper.toListItemRich(u)
-                        : tenantUserApiMapper.toListItemBasic(u))
-                .toList();
-
-        return ResponseEntity.ok(new TenantUsersListResponse(view.entitlements(), mapped));
-    }
-
-    @GetMapping("/enabled")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<List<TenantUserSummaryResponse>> listEnabledTenantUsers() {
-        List<TenantUser> users = tenantUserQueryService.listEnabledTenantUsers();
-        return ResponseEntity.ok(users.stream().map(tenantUserApiMapper::toSummary).toList());
-    }
 
     @GetMapping("/{userId}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
     public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
-        TenantUser user = tenantUserQueryService.getTenantUser(userId);
+        TenantUser user = tenantUserQueryService.getUser(userId);
         return ResponseEntity.ok(tenantUserApiMapper.toDetails(user));
     }
 
@@ -81,10 +56,10 @@ public class TenantUserController {
             @RequestParam(required = false) Boolean suspendedByAdmin
     ) {
         if (suspendedByAccount == null && suspendedByAdmin == null) {
-            throw new ApiException("INVALID_STATUS", "Informe suspendedByAccount ou suspendedByAdmin", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "Informe suspendedByAccount ou suspendedByAdmin");
         }
         if (suspendedByAccount != null && suspendedByAdmin != null) {
-            throw new ApiException("INVALID_STATUS", "Informe apenas um dos parâmetros (suspendedByAccount OU suspendedByAdmin)", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STATUS, "Informe apenas um: suspendedByAccount ou suspendedByAdmin");
         }
 
         TenantUser updated =
@@ -108,39 +83,5 @@ public class TenantUserController {
     ) {
         TenantUser updated = tenantUserCommandService.resetTenantUserPassword(userId, newPassword);
         return ResponseEntity.ok(tenantUserApiMapper.toSummary(updated));
-    }
-
-    @DeleteMapping("/{userId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.asAuthority())")
-    public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
-        tenantUserCommandService.softDeleteTenantUser(userId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/{userId}/hard")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.asAuthority())")
-    public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
-        tenantUserCommandService.hardDeleteTenantUser(userId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/{userId}/restore")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_RESTORE.asAuthority())")
-    public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
-        TenantUser restored = tenantUserCommandService.restoreTenantUser(userId);
-        return ResponseEntity.ok(tenantUserApiMapper.toSummary(restored));
-    }
-
-    @GetMapping("/enabled/{userId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
-        TenantUser user = tenantUserQueryService.getEnabledTenantUser(userId);
-        return ResponseEntity.ok(tenantUserApiMapper.toDetails(user));
-    }
-
-    @GetMapping("/enabled/count")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<Long> countEnabledTenantUsers() {
-        return ResponseEntity.ok(tenantUserQueryService.countEnabledTenantUsers());
     }
 }

@@ -147,3 +147,4 @@ public class Sale implements Auditable, SoftDeletable {
         this.status = SaleStatus.CANCELLED;
     }
 }
+

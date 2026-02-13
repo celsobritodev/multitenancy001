@@ -7,3 +7,4 @@ public record ControlPlaneAdminLoginRequest(
         @NotBlank String password
 ) {}
 
+

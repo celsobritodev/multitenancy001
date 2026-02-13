@@ -16,18 +16,21 @@ public class AccountEntitlementsGuard {
     private final AccountEntitlementsService accountEntitlementsService;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
 
+    /**
+     * Valida quota de criação de usuários.
+     * ✅ TX normal no PUBLIC porque a resolução de entitlements pode provisionar defaults.
+     */
     public void assertCanCreateUser(Long accountId, long currentUsers) {
         if (accountId == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "AccountId obrigatório", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
         }
 
-        // ✅ PRECISA ser TX normal, porque pode provisionar entitlements
         publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada"));
 
             accountEntitlementsService.assertCanCreateUser(account, currentUsers);
+            return null;
         });
     }
 }
-

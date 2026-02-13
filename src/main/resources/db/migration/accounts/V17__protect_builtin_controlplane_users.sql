@@ -98,3 +98,4 @@ CREATE TRIGGER trg_cp_user_permissions_protect_builtin
 BEFORE INSERT OR UPDATE OR DELETE ON controlplane_user_permissions
 FOR EACH ROW
 EXECUTE FUNCTION fn_cp_user_permissions_protect_builtin();
+

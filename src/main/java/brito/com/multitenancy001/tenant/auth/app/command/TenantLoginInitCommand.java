@@ -5,3 +5,4 @@ public record TenantLoginInitCommand(
         String password
 ) { }
 
+

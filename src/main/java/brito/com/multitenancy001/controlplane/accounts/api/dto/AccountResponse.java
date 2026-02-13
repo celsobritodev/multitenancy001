@@ -17,3 +17,4 @@ public record AccountResponse(
         Instant createdAt,
         Instant trialEndAt
 ) {}
+

@@ -234,3 +234,4 @@ public class Product implements Auditable, SoftDeletable {
         this.profitMargin = pct;
     }
 }
+

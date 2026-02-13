@@ -219,3 +219,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return (t == null) ? null : t.toLowerCase();
     }
 }
+

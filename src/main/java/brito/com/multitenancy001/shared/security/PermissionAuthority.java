@@ -4,3 +4,4 @@ public interface PermissionAuthority {
     String asAuthority(); // ex: "CP_USER_READ" ou "TEN_USER_READ"
 }
 
+

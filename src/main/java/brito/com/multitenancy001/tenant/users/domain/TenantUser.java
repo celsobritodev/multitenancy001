@@ -296,3 +296,4 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
         return isEnabledDomain();
     }
 }
+

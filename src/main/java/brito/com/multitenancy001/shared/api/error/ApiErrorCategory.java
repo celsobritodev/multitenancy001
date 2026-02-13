@@ -10,9 +10,16 @@ public enum ApiErrorCategory {
     ACCOUNT,
     ENTITLEMENTS,
     SECURITY,
+
+    /**
+     * Erros de multi-tenancy / schema / contexto de tenant.
+     */
+    TENANT,
+
     BILLING,
     PROVISIONING,
     DATA_INTEGRITY,
     DOMAIN,
     SYSTEM
 }
+

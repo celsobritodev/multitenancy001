@@ -93,3 +93,4 @@ public class TenantCategoryController {
         return ResponseEntity.ok(tenantCategoryService.restore(id));
     }
 }
+

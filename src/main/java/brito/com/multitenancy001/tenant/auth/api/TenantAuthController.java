@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.auth.api;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -45,12 +46,6 @@ public class TenantAuthController {
         );
     }
 
-    /**
-     * POST /api/tenant/auth/login com email + password
-     *
-     * - Se só 1 tenant válido -> 200 + JWT
-     * - Se >1 tenant válido -> 409 + TENANT_SELECTION_REQUIRED + challengeId + details[]
-     */
     @PostMapping("/login")
     public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
 
@@ -76,14 +71,9 @@ public class TenantAuthController {
             return ResponseEntity.status(409).body(body);
         }
 
-        // Semântica correta: erro padrão via GlobalExceptionHandler (ApiEnumErrorResponse)
-        throw new ApiException("INTERNAL_ERROR", "Resposta inesperada do servidor", 500);
+        throw new ApiException(ApiErrorCode.INTERNAL_SERVER_ERROR, "Resposta inesperada do servidor");
     }
 
-    /**
-     * POST /api/tenant/auth/login/confirm com challengeId + slug (ou accountId)
-     * Autentica somente no tenant escolhido
-     */
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
 
@@ -97,9 +87,6 @@ public class TenantAuthController {
         return ResponseEntity.ok(toHttp(jwt));
     }
 
-    /**
-     * refresh token -> novo accessToken
-     */
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
         JwtResult jwt = tenantTokenRefreshService.refresh(req.refreshToken());

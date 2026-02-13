@@ -118,3 +118,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
 CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts (status);
 CREATE INDEX IF NOT EXISTS idx_accounts_created_at ON accounts (created_at);
 
+

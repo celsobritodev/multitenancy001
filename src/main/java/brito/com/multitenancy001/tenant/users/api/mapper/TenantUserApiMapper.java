@@ -132,3 +132,4 @@ public class TenantUserApiMapper {
         return new TenantActorRef(audit.getCreatedBy(), audit.getCreatedByEmail());
     }
 }
+

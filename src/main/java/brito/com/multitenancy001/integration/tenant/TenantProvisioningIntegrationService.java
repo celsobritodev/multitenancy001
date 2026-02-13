@@ -4,29 +4,57 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
+import brito.com.multitenancy001.tenant.users.app.TenantUserAdminTxService;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Fronteira explícita de integração: ControlPlane -> Tenant (provisioning de usuário/admin).
+ * Fronteira explícita de integração: ControlPlane -> Tenant.
  *
- * <p>
- * Regras de arquitetura (DDD/layered sem ports & adapters):
- * <ul>
- *   <li>controlplane.* depende de integration.* (e shared.*), nunca de tenant.* diretamente.</li>
- *   <li>integration.* pode depender de tenant.* para executar casos de uso do contexto Tenant.</li>
- * </ul>
+ * Regras:
+ * - controlplane.* depende de integration.* e shared.*, nunca de tenant.* diretamente.
+ * - integration.* pode depender de tenant.* para executar casos de uso do contexto Tenant.
  *
- * <p>
- * Esta classe encapsula chamadas do ControlPlane para o contexto Tenant, evitando "leaks" de bounded context.
- * O schema alvo é sempre informado (tenantSchema) por ser uma operação cross-context.
+ * Observação:
+ * - A troca de schema é responsabilidade desta fronteira (cross-context/cross-tenant).
  */
 @Service
 @RequiredArgsConstructor
 public class TenantProvisioningIntegrationService {
 
-    private final TenantProvisioningIntegrationService tenantProvisioningIntegrationService;
+    private final TenantExecutor tenantSchemaExecutor;
+    private final TenantUserAdminTxService tenantUserAdminTxService;
 
+    /**
+     * Lista usuários do tenant (resumo) no schema informado.
+     */
+    public List<UserSummaryData> listUserSummaries(String tenantSchema, boolean onlyOperational) {
+        return tenantSchemaExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserAdminTxService.listUserSummaries(onlyOperational)
+        );
+    }
+
+    /**
+     * Suspende/reativa usuário via ação administrativa do ControlPlane.
+     */
+    public void setSuspendedByAdmin(String tenantSchema, Long userId, boolean suspended) {
+        tenantSchemaExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> {
+                    tenantUserAdminTxService.setSuspendedByAdmin(userId, suspended);
+                    return null;
+                }
+        );
+    }
+
+    /**
+     * Provisiona o owner/admin do tenant (signup/admin create).
+     * Mantive aqui porque você mencionou esse caso antes.
+     * Se o seu tenant provisioning for em outro service (TenantUserProvisioningService),
+     * me mande o arquivo e eu ajusto para o seu nome real.
+     */
     public UserSummaryData createTenantOwner(
             String tenantSchema,
             Long accountId,
@@ -34,41 +62,9 @@ public class TenantProvisioningIntegrationService {
             String loginEmail,
             String rawPassword
     ) {
-        // Entrada do método: createTenantOwner
-        return tenantProvisioningIntegrationService.createTenantOwner(
+        return tenantSchemaExecutor.runInTenantSchema(
                 tenantSchema,
-                accountId,
-                accountDisplayName,
-                loginEmail,
-                rawPassword
-        );
-    }
-
-    public List<UserSummaryData> listUserSummaries(
-            String tenantSchema,
-            Long accountId,
-            boolean onlyOperational
-    ) {
-        // Entrada do método: listUserSummaries
-        return tenantProvisioningIntegrationService.listUserSummaries(
-                tenantSchema,
-                accountId,
-                onlyOperational
-        );
-    }
-
-    public void setSuspendedByAdmin(
-            String tenantSchema,
-            Long accountId,
-            Long userId,
-            boolean suspended
-    ) {
-        // Entrada do método: setSuspendedByAdmin
-        tenantProvisioningIntegrationService.setSuspendedByAdmin(
-                tenantSchema,
-                accountId,
-                userId,
-                suspended
+                () -> tenantUserAdminTxService.createTenantOwner(accountId, accountDisplayName, loginEmail, rawPassword)
         );
     }
 }

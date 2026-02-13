@@ -10,3 +10,4 @@ public interface AuthenticatedPrincipal {
     String getEmail();
 }
 
+

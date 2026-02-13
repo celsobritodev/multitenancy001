@@ -15,3 +15,4 @@ public @interface PublicReadOnlyTx {
     @AliasFor(annotation = Transactional.class, attribute = "propagation")
     Propagation propagation() default Propagation.REQUIRED;
 }
+

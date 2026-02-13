@@ -80,3 +80,4 @@ WHERE cu.deleted = false
         AND li.email = cu.email
   );
     
+

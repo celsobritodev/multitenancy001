@@ -10,3 +10,4 @@ public record TenantUsersListView(
         AccountEntitlementsSnapshot entitlements,
         List<TenantUser> users
 ) {}
+

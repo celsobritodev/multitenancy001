@@ -33,3 +33,4 @@ public enum SecurityAuditActionType {
     ROLE_CHANGED,
     PERMISSIONS_CHANGED
 }
+

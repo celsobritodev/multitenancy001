@@ -14,3 +14,4 @@ public enum AccountStatusSideEffect {
     UNSUSPEND_BY_ACCOUNT,
     CANCEL_ACCOUNT
 }
+

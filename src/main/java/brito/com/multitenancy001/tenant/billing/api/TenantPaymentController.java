@@ -34,3 +34,4 @@ public class TenantPaymentController {
         return ResponseEntity.ok(tenantBillingService.hasActivePayment(accountId));
     }
 }
+

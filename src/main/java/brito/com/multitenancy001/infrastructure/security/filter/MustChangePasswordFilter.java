@@ -104,3 +104,4 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
+

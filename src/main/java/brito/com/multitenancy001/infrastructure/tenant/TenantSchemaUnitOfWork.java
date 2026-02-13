@@ -26,11 +26,23 @@ public class TenantSchemaUnitOfWork {
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantReadOnlyTx(fn));
     }
 
+    public void readOnly(String tenantSchema, Runnable fn) {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantReadOnlyTx(fn));
+    }
+
     public <T> T requiresNew(String tenantSchema, Supplier<T> fn) {
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNew(fn));
     }
 
+    public void requiresNew(String tenantSchema, Runnable fn) {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNew(fn));
+    }
+
     public <T> T requiresNewReadOnly(String tenantSchema, Supplier<T> fn) {
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
+    }
+
+    public void requiresNewReadOnly(String tenantSchema, Runnable fn) {
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
     }
 }

@@ -30,3 +30,4 @@ public interface PaymentQueryService {
     boolean hasActivePayment(Long accountId);
 }
 
+

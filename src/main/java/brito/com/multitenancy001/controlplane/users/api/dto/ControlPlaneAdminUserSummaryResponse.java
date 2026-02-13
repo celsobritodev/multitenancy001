@@ -8,3 +8,4 @@ public record ControlPlaneAdminUserSummaryResponse(
         boolean suspendedByAdmin
 ) {}
 
+

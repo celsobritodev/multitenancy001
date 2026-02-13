@@ -55,3 +55,4 @@ CREATE INDEX IF NOT EXISTS ix_tenant_users_account_id
 CREATE INDEX IF NOT EXISTS ix_tenant_users_deleted
     ON tenant_users(deleted);
 
+

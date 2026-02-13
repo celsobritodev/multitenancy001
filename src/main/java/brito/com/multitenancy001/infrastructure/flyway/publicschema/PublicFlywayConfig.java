@@ -41,3 +41,4 @@ public class PublicFlywayConfig {
         return new FlywayMigrationInitializer(flyway, null);
     }
 }
+

@@ -5,3 +5,4 @@ public record TenantSelectionOptionData(
         String displayName,
         String slug
 ) { }
+

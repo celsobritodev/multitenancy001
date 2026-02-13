@@ -48,3 +48,4 @@ public class AccountJobSchedule {
     @Column(name = "updated_at", nullable = false, columnDefinition = "timestamptz")
     private Instant updatedAt;
 }
+

@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -21,17 +22,52 @@ public class TenantTokenRefreshService {
     public JwtResult refresh(String refreshToken) {
 
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException("INVALID_REFRESH", "refreshToken é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório");
         }
 
-        audit.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.ATTEMPT, null, null, null, null,
-                "{\"stage\":\"start\"}");
+        // ✅ Tentativa (não sabemos email/account/schema ainda, depende do token ser válido)
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.TOKEN_REFRESH,
+                AuditOutcome.ATTEMPT,
+                null,
+                null,
+                null,
+                null,
+                "{\"stage\":\"start\"}"
+        );
 
-        JwtResult result = authMechanics.refreshTenantJwt(refreshToken);
+        try {
+            JwtResult result = authMechanics.refreshTenantJwt(refreshToken);
 
-        audit.record(AuthDomain.TENANT, AuthEventType.TOKEN_REFRESH, AuditOutcome.SUCCESS, result.email(), result.userId(), result.accountId(), result.tenantSchema(),
-                "{\"stage\":\"completed\"}");
+            audit.record(
+                    AuthDomain.TENANT,
+                    AuthEventType.TOKEN_REFRESH,
+                    AuditOutcome.SUCCESS,
+                    result.email(),
+                    result.userId(),
+                    result.accountId(),
+                    result.tenantSchema(),
+                    "{\"stage\":\"completed\"}"
+            );
 
-        return result;
+            return result;
+
+        } catch (RuntimeException e) {
+
+            // ✅ Falha (não logar token por segurança)
+            audit.record(
+                    AuthDomain.TENANT,
+                    AuthEventType.TOKEN_REFRESH,
+                    AuditOutcome.FAILURE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "{\"stage\":\"failed\"}"
+            );
+
+            throw e;
+        }
     }
 }

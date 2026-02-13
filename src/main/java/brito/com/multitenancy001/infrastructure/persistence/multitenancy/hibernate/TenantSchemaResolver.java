@@ -61,3 +61,4 @@ public class TenantSchemaResolver implements CurrentTenantIdentifierResolver<Str
         return DEFAULT_SCHEMA.equals(tenantIdentifier);
     }
 }
+

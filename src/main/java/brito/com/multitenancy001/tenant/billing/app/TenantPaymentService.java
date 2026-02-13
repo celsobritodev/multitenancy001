@@ -18,19 +18,20 @@ public class TenantPaymentService {
     private final PaymentQueryService paymentQueryFacade;
 
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.listByAccount(accountId));
     }
 
-    public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
-        if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", ApiErrorCode.PAYMENT_ID_REQUIRED.defaultHttpStatus());
+    public PaymentResponse getPaymentForAccount(Long accountId) {
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
+        if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED);
 
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.getByAccount(accountId, paymentId));
     }
 
     public boolean hasActivePayment(Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
         return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.hasActivePayment(accountId));
     }
 }
+

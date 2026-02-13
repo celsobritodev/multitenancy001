@@ -3,6 +3,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -32,8 +33,8 @@ public class TenantPasswordResetService {
     private final SecurityAuditService securityAuditService;
 
     public String generatePasswordResetToken(String slug, String email) {
-        if (!StringUtils.hasText(slug)) throw new ApiException("INVALID_SLUG", "Slug é obrigatório", 400);
-        if (!StringUtils.hasText(email)) throw new ApiException("INVALID_LOGIN", "Email é obrigatório", 400);
+        if (!StringUtils.hasText(slug)) throw new ApiException(ApiErrorCode.INVALID_SLUG, "Slug é obrigatório");
+        if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Email é obrigatório");
 
         String normalizedEmail = email.trim().toLowerCase();
 
@@ -46,14 +47,14 @@ public class TenantPasswordResetService {
                 null,
                 null,
                 null,
-                "{\"slug\":\"" + slug + "\"}"
+                "{\\\"slug\\\":\\\"" + slug.trim() + "\\\"}"
         );
 
-        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
+        AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug.trim());
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException("ACCOUNT_NOT_READY", "Conta sem schema", 409);
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema");
         }
         tenantSchema = tenantSchema.trim();
 
@@ -64,7 +65,7 @@ public class TenantPasswordResetService {
                 TenantUser user = tenantUserQueryService.getUserByEmail(normalizedEmail, account.id());
 
                 if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
-                    throw new ApiException("USER_INACTIVE", "Usuário inativo", 403);
+                    throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo");
                 }
 
                 String passwordResetToken = jwtTokenProvider.generatePasswordResetToken(
@@ -89,7 +90,7 @@ public class TenantPasswordResetService {
                     null,
                     account.id(),
                     finalTenantSchema,
-                    "{\"expiresHours\":1}"
+                    "{\\\"expiresHours\\\":1}"
             );
 
             return token;
@@ -104,15 +105,15 @@ public class TenantPasswordResetService {
                     null,
                     account.id(),
                     finalTenantSchema,
-                    "{\"reason\":\"error\"}"
+                    "{\\\"reason\\\":\\\"error\\\"}"
             );
             throw e;
         }
     }
 
     public void resetPasswordWithToken(String token, String newPassword) {
-        if (!StringUtils.hasText(token)) throw new ApiException("INVALID_TOKEN", "Token inválido", 400);
-        if (!StringUtils.hasText(newPassword)) throw new ApiException("INVALID_PASSWORD", "Nova senha é obrigatória", 400);
+        if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido");
+        if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha inválida");
 
         String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(token);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(token);
@@ -127,7 +128,7 @@ public class TenantPasswordResetService {
                 null,
                 accountId,
                 tenantSchema,
-                "{\"stage\":\"start\"}"
+                "{\\\"stage\\\":\\\"start\\\"}"
         );
 
         try {
@@ -145,8 +146,9 @@ public class TenantPasswordResetService {
                     null,
                     accountId,
                     tenantSchema,
-                    "{\"stage\":\"done\"}"
+                    "{\\\"stage\\\":\\\"done\\\"}"
             );
+
         } catch (Exception e) {
             securityAuditService.record(
                     SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
@@ -157,7 +159,7 @@ public class TenantPasswordResetService {
                     null,
                     accountId,
                     tenantSchema,
-                    "{\"reason\":\"error\"}"
+                    "{\\\"reason\\\":\\\"error\\\"}"
             );
             throw e;
         }

@@ -76,3 +76,4 @@ public record TenantUserCreateRequest(
         if (permissions == null) permissions = new LinkedHashSet<>();
     }
 }
+

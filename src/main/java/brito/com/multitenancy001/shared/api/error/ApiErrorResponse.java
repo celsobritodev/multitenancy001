@@ -13,3 +13,4 @@ public record ApiErrorResponse(
         List<String> details
 ) {}
 
+

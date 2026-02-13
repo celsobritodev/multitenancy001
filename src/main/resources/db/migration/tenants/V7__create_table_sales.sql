@@ -33,3 +33,4 @@ CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE INDEX IF NOT EXISTS idx_sales_deleted ON sales(deleted) WHERE deleted = false;
 
+

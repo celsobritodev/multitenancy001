@@ -10,3 +10,4 @@ CREATE TABLE IF NOT EXISTS tenant_user_permissions (
         REFERENCES tenant_users(id)
         ON DELETE CASCADE
 );
+

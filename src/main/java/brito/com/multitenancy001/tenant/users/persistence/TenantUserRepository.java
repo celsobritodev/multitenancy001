@@ -227,3 +227,4 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, Long> {
             @Param("lastLogin") Instant lastLogin
     );
 }
+

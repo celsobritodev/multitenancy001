@@ -27,3 +27,4 @@ public class PublicFlywayRunner implements ApplicationRunner {
         flyway.migrate();
     }
 }
+

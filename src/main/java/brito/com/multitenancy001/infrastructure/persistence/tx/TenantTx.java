@@ -18,3 +18,4 @@ public @interface TenantTx {
     @AliasFor(annotation = Transactional.class, attribute = "readOnly")
     boolean readOnly() default false;
 }
+

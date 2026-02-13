@@ -28,59 +28,57 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
 
     @Override
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (status == null) throw new ApiException(ApiErrorCode.PAYMENT_STATUS_REQUIRED, "status é obrigatório", 400);
+        if (status == null) throw new ApiException(ApiErrorCode.PAYMENT_STATUS_REQUIRED, "status é obrigatório");
 
-            return controlPlanePaymentRepository.findByStatus(status)
-                    .stream()
-                    .map(this::mapToResponse)
-                    .toList();
-        });
+        return publicSchemaUnitOfWork.readOnly(() ->
+                controlPlanePaymentRepository.findByStatus(status)
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList()
+        );
     }
 
     @Override
     public BigDecimal getTotalPaidInPeriod(Long accountId, Instant startDate, Instant endDate) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            if (startDate == null || endDate == null) {
-                throw new ApiException(ApiErrorCode.DATE_RANGE_REQUIRED, "startDate/endDate são obrigatórios", 400);
-            }
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
+        if (startDate == null || endDate == null) throw new ApiException(ApiErrorCode.DATE_RANGE_REQUIRED, "start/end são obrigatórios");
+        if (endDate.isBefore(startDate)) throw new ApiException(ApiErrorCode.INVALID_RANGE, "end não pode ser antes de start");
 
-            BigDecimal total = controlPlanePaymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
+        return publicSchemaUnitOfWork.readOnly(() -> {
+            BigDecimal total = controlPlanePaymentRepository.sumTotalPaidInPeriod(accountId, startDate, endDate);
             return total != null ? total : BigDecimal.ZERO;
         });
     }
 
     @Override
     public long countCompletedPayments(Long accountId) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
 
-            Long count = controlPlanePaymentRepository.countCompletedPayments(accountId);
-            return count != null ? count : 0L;
-        });
+        return publicSchemaUnitOfWork.readOnly(() ->
+                controlPlanePaymentRepository.countCompletedPayments(accountId)
+        );
     }
 
     @Override
     public List<PaymentResponse> listByAccount(Long accountId) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
 
-            return controlPlanePaymentRepository.findByAccount_IdOrderByAudit_CreatedAtDesc(accountId)
-                    .stream()
-                    .map(this::mapToResponse)
-                    .toList();
-        });
+        return publicSchemaUnitOfWork.readOnly(() ->
+                controlPlanePaymentRepository.findByAccount_IdOrderByAudit_CreatedAtDesc(accountId)
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList()
+        );
     }
 
     @Override
     public PaymentResponse getByAccount(Long accountId, Long paymentId) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
+        if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório");
 
+        return publicSchemaUnitOfWork.readOnly(() -> {
             Payment payment = controlPlanePaymentRepository.findByIdAndAccount_Id(paymentId, accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado"));
 
             return mapToResponse(payment);
         });
@@ -88,16 +86,19 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
 
     @Override
     public boolean hasActivePayment(Long accountId) {
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.instant());
-        });
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório");
+
+        Instant now = appClock.instant();
+
+        return publicSchemaUnitOfWork.readOnly(() ->
+                controlPlanePaymentRepository.existsActivePayment(accountId, now)
+        );
     }
 
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
-                payment.getAccount().getId(),
+                payment.getAccount() != null ? payment.getAccount().getId() : null,
 
                 payment.getAmount(),
                 payment.getPaymentMethod(),

@@ -71,3 +71,4 @@ public class AuthEvent {
     @Column(name = "details", columnDefinition = "jsonb")
     private String detailsJson;
 }
+

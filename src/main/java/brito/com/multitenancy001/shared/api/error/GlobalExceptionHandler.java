@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.shared.api.error;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.DomainException;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -243,3 +244,4 @@ public class GlobalExceptionHandler {
         );
     }
 }
+

@@ -77,3 +77,4 @@ public class LoginIdentityResolver {
         return count != null && count > 0;
     }
 }
+

@@ -76,3 +76,4 @@ CREATE INDEX IF NOT EXISTS idx_products_category_id ON products (category_id);
 CREATE INDEX IF NOT EXISTS idx_products_subcategory_id ON products (subcategory_id);
 CREATE INDEX IF NOT EXISTS idx_products_created_at ON products (created_at);
 
+

@@ -34,11 +34,11 @@ public class AccountEntitlementsService {
      * ✅ TX normal porque pode provisionar default entitlements.
      */
     public AccountEntitlementsSnapshot resolveEffectiveByAccountId(Long accountId) {
-        if (accountId == null) throw new ApiException("ACCOUNT_REQUIRED", "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
 
         return publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND));
 
             return resolveEffectiveInternal(account);
         });
@@ -56,11 +56,11 @@ public class AccountEntitlementsService {
     public void assertCanCreateUser(Account account, long currentUsers) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         if (currentUsers >= eff.maxUsers()) {
-            throw new ApiException("QUOTA_MAX_USERS_REACHED", "Limite de usuários atingido para este plano", 403);
+            throw new ApiException(ApiErrorCode.QUOTA_MAX_USERS_REACHED, "Limite de usuários atingido para este plano");
         }
     }
 
-    public boolean canCreateProduct(Account account, long currentProducts) {
+    public boolean canCreateProduct(Account account) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         return currentProducts < eff.maxProducts();
     }
@@ -68,20 +68,20 @@ public class AccountEntitlementsService {
     public void assertCanCreateProduct(Account account, long currentProducts) {
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         if (currentProducts >= eff.maxProducts()) {
-            throw new ApiException("QUOTA_MAX_PRODUCTS_REACHED", "Limite de produtos atingido para este plano", 403);
+            throw new ApiException(ApiErrorCode.QUOTA_MAX_PRODUCTS_REACHED, "Limite de produtos atingido para este plano");
         }
     }
 
-    public void assertCanConsumeStorage(Account account, long currentStorageMb, long deltaMb) {
+    public void assertCanConsumeStorage(Account account) {
         if (deltaMb < 0) {
-            throw new ApiException("INVALID_STORAGE_DELTA", "deltaMb não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_STORAGE_DELTA, "deltaMb não pode ser negativo");
         }
 
         AccountEntitlementsSnapshot eff = resolveEffective(account);
         long after = currentStorageMb + deltaMb;
 
         if (after > eff.maxStorageMb()) {
-            throw new ApiException("QUOTA_MAX_STORAGE_REACHED", "Limite de armazenamento atingido para este plano", 403);
+            throw new ApiException(ApiErrorCode.QUOTA_MAX_STORAGE_REACHED);
         }
     }
 
@@ -91,7 +91,7 @@ public class AccountEntitlementsService {
 
     private AccountEntitlementsSnapshot resolveEffectiveInternal(Account account) {
         if (account == null || account.getId() == null) {
-            throw new ApiException("ACCOUNT_REQUIRED", "Conta é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória");
         }
 
         // BUILT_IN/PLATFORM => ilimitado
@@ -109,7 +109,7 @@ public class AccountEntitlementsService {
         }
 
         if (ent == null) {
-            throw new ApiException("ENTITLEMENTS_UNEXPECTED_NULL", "Entitlements inesperadamente nulos", 500);
+            throw new ApiException(ApiErrorCode.ENTITLEMENTS_UNEXPECTED_NULL);
         }
 
         Integer maxUsers = safePositive(ent.getMaxUsers(), "maxUsers");
@@ -121,9 +121,10 @@ public class AccountEntitlementsService {
 
     private Integer safePositive(Integer value, String field) {
         if (value == null || value <= 0) {
-            throw new ApiException("INVALID_ENTITLEMENT", "Entitlement inválido: " + field, 500);
+            throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "Entitlement inválido: " + field);
         }
         return value;
     }
 }
+
 

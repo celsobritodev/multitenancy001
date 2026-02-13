@@ -24,37 +24,29 @@ public class ControlPlaneAccountQueryService {
         return publicSchemaUnitOfWork.readOnly(() -> {
             if (id == null) {
                 // validação -> category VALIDATION
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "id é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "id é obrigatório");
             }
 
             return accountRepository.findEnabledById(id)
-                    .orElseThrow(() -> new ApiException(
-                            ApiErrorCode.ACCOUNT_NOT_ENABLED,
-                            "Conta não encontrada ou não operacional",
-                            404
-                    ));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_ENABLED));
         });
     }
 
     public Account getAnyById(Long id) {
         return publicSchemaUnitOfWork.readOnly(() -> {
             if (id == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "id é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "id é obrigatório");
             }
 
             return accountRepository.findAnyById(id)
-                    .orElseThrow(() -> new ApiException(
-                            ApiErrorCode.ACCOUNT_NOT_FOUND,
-                            "Conta não encontrada",
-                            404
-                    ));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND));
         });
     }
 
     public long countByStatusesNotDeleted(List<AccountStatus> statuses) {
         return publicSchemaUnitOfWork.readOnly(() -> {
             if (statuses == null || statuses.isEmpty()) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_STATUSES_REQUIRED, "statuses é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.ACCOUNT_STATUSES_REQUIRED, "statuses é obrigatório");
             }
             return accountRepository.countByStatusesAndDeletedFalse(statuses);
         });
@@ -63,9 +55,10 @@ public class ControlPlaneAccountQueryService {
     public List<Account> findPaymentDueBeforeNotDeleted(LocalDate date) {
         return publicSchemaUnitOfWork.readOnly(() -> {
             if (date == null) {
-                throw new ApiException(ApiErrorCode.DATE_REQUIRED, "date é obrigatório", 400);
+                throw new ApiException(ApiErrorCode.DATE_REQUIRED);
             }
             return accountRepository.findByPaymentDueDateBeforeAndDeletedFalse(date);
         });
     }
 }
+

@@ -6,3 +6,4 @@ public enum AuditOutcome {
     FAILURE,
     DENIED
 }
+

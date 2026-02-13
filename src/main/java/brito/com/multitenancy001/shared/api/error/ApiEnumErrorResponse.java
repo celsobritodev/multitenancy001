@@ -20,3 +20,4 @@ public record ApiEnumErrorResponse(
         Object details
 ) {}
 
+

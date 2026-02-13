@@ -5,3 +5,4 @@ public enum LegalEntityType {
     COMPANY       // pessoa jurídica
 }
 
+

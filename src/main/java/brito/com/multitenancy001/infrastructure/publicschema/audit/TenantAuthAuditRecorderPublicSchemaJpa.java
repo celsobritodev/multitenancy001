@@ -26,3 +26,4 @@ public class TenantAuthAuditRecorderPublicSchemaJpa implements TenantAuthAuditRe
         authEventAuditService.record(domain, type, outcome, email, userId, accountId, tenantSchema, detailsJson);
     }
 }
+

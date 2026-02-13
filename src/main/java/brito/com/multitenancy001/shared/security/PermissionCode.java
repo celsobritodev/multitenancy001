@@ -15,3 +15,4 @@ public interface PermissionCode extends PermissionAuthority {
     // marker + compatibilidade (herda asAuthority())
 }
 
+

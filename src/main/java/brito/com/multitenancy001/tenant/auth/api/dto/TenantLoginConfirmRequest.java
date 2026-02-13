@@ -14,3 +14,4 @@ public record TenantLoginConfirmRequest(
         // Compat opcional (se você quiser confirmar por id)
         Long accountId
 ) {}
+

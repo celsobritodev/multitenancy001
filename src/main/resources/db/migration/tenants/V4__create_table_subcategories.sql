@@ -32,3 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_subcategories_active  ON subcategories(active);
 CREATE INDEX IF NOT EXISTS idx_subcategories_deleted ON subcategories(deleted) WHERE deleted = false;
 CREATE INDEX IF NOT EXISTS idx_subcategories_category_id ON subcategories(category_id);
 
+

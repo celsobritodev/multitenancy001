@@ -17,3 +17,4 @@ public record UserSummaryData(
         boolean deleted
 ) {}
 
+

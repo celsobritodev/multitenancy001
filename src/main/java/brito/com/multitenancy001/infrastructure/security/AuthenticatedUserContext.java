@@ -226,3 +226,4 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         return enabled;
     }
 }
+

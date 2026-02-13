@@ -42,3 +42,4 @@ public record AccountAdminDetailsResponse(
         long totalControlPlaneUsers,
         boolean operational
 ) {}
+

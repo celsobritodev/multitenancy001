@@ -11,3 +11,4 @@ public record TenantLoginInitRequest(
         @NotBlank(message = "password é obrigatório")
         String password
 ) {}
+

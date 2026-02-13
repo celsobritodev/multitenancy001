@@ -4,3 +4,4 @@ public enum PaymentGateway {
     MERCADOPAGO, STRIPE, PAGSEGURO, MANUAL
 }
 
+

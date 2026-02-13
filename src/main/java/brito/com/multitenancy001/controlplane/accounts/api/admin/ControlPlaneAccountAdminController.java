@@ -23,6 +23,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,7 +41,6 @@ public class ControlPlaneAccountAdminController {
 
     private final AccountApiMapper accountApiMapper;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
-
     private final AccountUserApiMapper accountUserApiMapper;
 
     /**
@@ -107,7 +107,6 @@ public class ControlPlaneAccountAdminController {
                 new AccountStatusChangeCommand(req.status())
         );
 
-        // ✅ Response “flat” + tipado 
         return ResponseEntity.ok(AccountStatusChangeResponse.from(r));
     }
 
@@ -165,20 +164,19 @@ public class ControlPlaneAccountAdminController {
         );
     }
 
-  @GetMapping("/created-between")
-@PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
-public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
-        @RequestParam("start") Instant start,
-        @RequestParam("end") Instant end,
-        Pageable pageable
-) {
-    return ResponseEntity.ok(
-            accountAppService
-                    .listAccountsCreatedBetween(start, end, pageable)
-                    .map(accountApiMapper::toResponse)
-    );
-}
-
+    @GetMapping("/created-between")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
+    public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
+            @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
+            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                accountAppService
+                        .listAccountsCreatedBetween(start, end, pageable)
+                        .map(accountApiMapper::toResponse)
+        );
+    }
 
     @GetMapping("/search")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")

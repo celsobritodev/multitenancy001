@@ -8,3 +8,4 @@ public record TenantSelectionRequiredResponse(
         String challengeId,
         List<TenantSelectionOption> details
 ) { }
+

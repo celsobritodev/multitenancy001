@@ -121,3 +121,4 @@ public class TenantEndpointPreAuthorizeVerifier implements ApplicationRunner {
         return Set.of();
     }
 }
+

@@ -29,3 +29,4 @@ CREATE TABLE IF NOT EXISTS account_job_schedules (
 
 CREATE INDEX IF NOT EXISTS idx_account_job_schedules_next_run
     ON account_job_schedules (enabled, next_run_at);
+

@@ -17,7 +17,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getUserId();
         }
-        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado");
     }
 
     public Long getCurrentAccountId() {
@@ -25,7 +25,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getAccountId();
         }
-        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED);
     }
 
     public String getCurrentTenantSchema() {
@@ -33,7 +33,7 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getTenantSchema();
         }
-        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado");
     }
 
     public String getCurrentEmail() {
@@ -49,12 +49,12 @@ public class SecurityUtils {
         if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUserContext ctx) {
             return ctx.getRoleAuthority();
         }
-        throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário não autenticado", 401);
+        throw new ApiException(ApiErrorCode.UNAUTHENTICATED);
     }
 
     private String extractRoleName(String roleAuthority) {
         if (roleAuthority == null || roleAuthority.isBlank() || !roleAuthority.startsWith("ROLE_")) {
-            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role inválida no contexto", 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role inválida no contexto");
         }
         return roleAuthority.substring("ROLE_".length()).trim();
     }
@@ -64,7 +64,7 @@ public class SecurityUtils {
         try {
             return TenantRole.valueOf(roleName);
         } catch (IllegalArgumentException e) {
-            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role de tenant não reconhecida: " + roleName, 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN);
         }
     }
 
@@ -73,7 +73,8 @@ public class SecurityUtils {
         try {
             return ControlPlaneRole.valueOf(roleName);
         } catch (IllegalArgumentException e) {
-            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role de control plane não reconhecida: " + roleName, 403);
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Role de control plane não reconhecida: " + roleName);
         }
     }
 }
+

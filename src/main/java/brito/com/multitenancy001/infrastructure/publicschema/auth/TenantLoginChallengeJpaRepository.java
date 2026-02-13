@@ -11,3 +11,4 @@ public interface TenantLoginChallengeJpaRepository extends JpaRepository<TenantL
     Optional<TenantLoginChallengeEntity> findByIdAndExpiresAtAfterAndUsedAtIsNull(UUID id, Instant now);
 }
 
+

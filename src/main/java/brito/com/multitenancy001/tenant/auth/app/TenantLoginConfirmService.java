@@ -30,29 +30,26 @@ public class TenantLoginConfirmService {
 
     public JwtResult loginConfirm(TenantLoginConfirmCommand cmd) {
 
-        if (cmd == null) throw new ApiException("INVALID_REQUEST", "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.challengeId())) throw new ApiException("INVALID_CHALLENGE", "challengeId é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
+        if (!StringUtils.hasText(cmd.challengeId())) throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório");
 
         final UUID challengeId;
         try {
-            challengeId = UUID.fromString(cmd.challengeId());
+            challengeId = UUID.fromString(cmd.challengeId().trim());
         } catch (Exception e) {
-            throw new ApiException("INVALID_CHALLENGE", "challengeId inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId inválido");
         }
 
         TenantLoginChallenge challenge = tenantLoginChallengeService.requireValid(challengeId);
         final String email = challenge.email();
-
-        audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.ATTEMPT, email, null, null, null,
-                "{\"challengeId\":\"" + challengeId + "\"}");
 
         Long accountId = cmd.accountId();
         String slug = StringUtils.hasText(cmd.slug()) ? cmd.slug().trim() : null;
 
         if (accountId == null && slug == null) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
-                    "{\"reason\":\"missing_selection\"}");
-            throw new ApiException("INVALID_SELECTION", "Informe accountId ou slug", 400);
+                    "{\\\"reason\\\":\\\"missing_selection\\\"}");
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug");
         }
 
         AccountSnapshot account = (accountId != null)
@@ -60,16 +57,16 @@ public class TenantLoginConfirmService {
                 : accountResolver.resolveActiveAccountBySlug(slug);
 
         if (account == null || account.id() == null) {
-            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, null, null,
-                    "{\"reason\":\"account_not_found\"}");
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
+            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, accountId, null,
+                    "{\\\"reason\\\":\\\"account_not_found\\\"}");
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada");
         }
 
         Set<Long> allowedAccountIds = challenge.candidateAccountIds();
         if (allowedAccountIds == null || !allowedAccountIds.contains(account.id())) {
             audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_CONFIRM, AuditOutcome.FAILURE, email, null, account.id(), account.tenantSchema(),
-                    "{\"reason\":\"account_not_in_challenge\"}");
-            throw new ApiException("INVALID_SELECTION", "Conta não pertence ao challenge", 400);
+                    "{\\\"reason\\\":\\\"account_not_in_challenge\\\"}");
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Conta não pertence ao challenge");
         }
 
         tenantLoginChallengeService.markUsed(challengeId);
@@ -77,7 +74,7 @@ public class TenantLoginConfirmService {
         JwtResult jwt = authMechanics.issueJwtForAccountAndEmail(account, email);
 
         audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_SUCCESS, AuditOutcome.SUCCESS, email, jwt.userId(), account.id(), account.tenantSchema(),
-                "{\"mode\":\"challenge_confirm\"}");
+                "{\\\"flow\\\":\\\"challenge_confirm\\\"}");
 
         return jwt;
     }

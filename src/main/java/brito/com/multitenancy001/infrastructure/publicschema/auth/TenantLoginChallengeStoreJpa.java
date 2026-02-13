@@ -52,3 +52,4 @@ public class TenantLoginChallengeStoreJpa implements TenantLoginChallengeStore {
         );
     }
 }
+

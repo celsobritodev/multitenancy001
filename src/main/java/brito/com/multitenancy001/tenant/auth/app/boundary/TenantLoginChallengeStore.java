@@ -15,3 +15,4 @@ public interface TenantLoginChallengeStore {
 
     void markUsed(UUID id, Instant now);
 }
+

@@ -21,3 +21,4 @@ public record TenantChangeMyPasswordRequest(
         @Size(min = 8, max = 72, message = "Confirmar nova senha deve ter entre 8 e 72 caracteres")
         String confirmNewPassword
 ) {}
+

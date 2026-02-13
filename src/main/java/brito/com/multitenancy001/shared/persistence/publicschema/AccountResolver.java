@@ -1,9 +1,5 @@
 package brito.com.multitenancy001.shared.persistence.publicschema;
 
-import java.time.Instant;
-
-import org.springframework.stereotype.Service;
-
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountResolverProjection;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
@@ -11,6 +7,9 @@ import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -25,18 +24,23 @@ public class AccountResolver {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada"));
 
             if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+                throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa");
             }
 
-            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
+            return new AccountSnapshot(
+                    p.getId(),
+                    p.getTenantSchema(),
+                    p.getSlug(),
+                    p.getDisplayName()
+            );
         });
     }
 
     public AccountSnapshot resolveActiveAccountById(Long accountId) {
-        if (accountId == null) throw new ApiException("INVALID_ACCOUNT", "accountId inválido", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.INVALID_ACCOUNT, "accountId inválido");
         return resolveActiveAccountByIdInternal(accountId);
     }
 
@@ -45,13 +49,18 @@ public class AccountResolver {
             Instant now = appClock.instant();
 
             AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND));
 
             if (!isOperational(p, now)) {
-                throw new ApiException("ACCOUNT_INACTIVE", "Conta inativa", 403);
+                throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa");
             }
 
-            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
+            return new AccountSnapshot(
+                    p.getId(),
+                    p.getTenantSchema(),
+                    p.getSlug(),
+                    p.getDisplayName()
+            );
         });
     }
 

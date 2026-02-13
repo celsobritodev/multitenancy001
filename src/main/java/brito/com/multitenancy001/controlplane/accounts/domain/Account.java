@@ -273,3 +273,4 @@ public class Account implements Auditable, SoftDeletable {
         return "t_" + base + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 }
+

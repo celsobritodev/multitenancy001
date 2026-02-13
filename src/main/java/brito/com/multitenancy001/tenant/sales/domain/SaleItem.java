@@ -102,3 +102,4 @@ public class SaleItem implements Auditable, SoftDeletable {
         this.totalPrice = unitPrice.multiply(quantity);
     }
 }
+

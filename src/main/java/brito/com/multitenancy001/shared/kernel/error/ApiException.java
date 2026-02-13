@@ -6,116 +6,81 @@ import lombok.Getter;
 
 import java.util.List;
 
+/**
+ * Exceção padronizada para erros de API (enum-only).
+ *
+ * Regras:
+ * - O "código" é SEMPRE um {@link ApiErrorCode} (fonte de verdade).
+ * - O status HTTP é SEMPRE o status padrão do {@link ApiErrorCode}.
+ * - Não aceita status custom por chamada (evita divergência e "mágica").
+ */
 @Getter
 public class ApiException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    /**
-     * ✅ NOVO: código tipado (fonte de verdade)
-     */
     private final ApiErrorCode errorCode;
 
     /**
-     * ✅ Compatibilidade: seu JSON atual usa "error" como String
+     * Compatibilidade: campo JSON "error" como String (code textual do enum).
      */
     private final String error;
 
     /**
-     * ✅ HTTP status numérico
+     * Status HTTP numérico (sempre = errorCode.defaultHttpStatus()).
      */
     private final int status;
 
-    // ✅ extras padronizados (opcionais)
+    // extras padronizados (opcionais)
     private final String field;
     private final String invalidValue;
     private final List<String> allowedValues;
 
-    // ✅ qualquer payload extra (ex.: lista de tenants para seleção, etc.)
+    // payload extra (ex.: lista de tenants para seleção, etc.)
     private final Object details;
 
-    // ==========================================================
-    // Construtores NOVOS (tipados)
-    // ==========================================================
+    public ApiException(ApiErrorCode code) {
+        this(code, defaultMessageFor(code), null, null, null, null);
+    }
 
     public ApiException(ApiErrorCode code, String message) {
-        this(code, message, code != null ? code.defaultHttpStatus() : 500, null, null, null, null);
+        this(code, message, null, null, null, null);
     }
 
-    public ApiException(ApiErrorCode code, String message, int status) {
-        this(code, message, status, null, null, null, null);
-    }
-
-    public ApiException(ApiErrorCode code, String message, int status, Object details) {
-        this(code, message, status, null, null, null, details);
+    public ApiException(ApiErrorCode code, String message, Object details) {
+        this(code, message, null, null, null, details);
     }
 
     public ApiException(
             ApiErrorCode code,
             String message,
-            int status,
             String field,
             String invalidValue,
             List<String> allowedValues,
             Object details
     ) {
         super(message);
-        this.errorCode = code;
-        this.error = (code != null ? code.code() : "INTERNAL_SERVER_ERROR");
-        this.status = status;
+
+        ApiErrorCode resolved = (code != null ? code : ApiErrorCode.INTERNAL_SERVER_ERROR);
+
+        this.errorCode = resolved;
+        this.error = resolved.code();
+        this.status = resolved.defaultHttpStatus();
+
         this.field = field;
         this.invalidValue = invalidValue;
         this.allowedValues = allowedValues;
+
         this.details = details;
     }
 
-    // ==========================================================
-    // Construtores LEGADOS (String) — para não quebrar tudo agora
-    // ==========================================================
-
-    /**
-     * @deprecated Migre para ApiException(ApiErrorCode, ...)
-     */
-    @Deprecated
-    public ApiException(String error, String message, int status) {
-        this(tryResolve(error), message, status, null, null, null, null);
-    }
-
-    /**
-     * @deprecated Migre para ApiException(ApiErrorCode, ...)
-     */
-    @Deprecated
-    public ApiException(String error, String message, int status, Object details) {
-        this(tryResolve(error), message, status, null, null, null, details);
-    }
-
-    /**
-     * @deprecated Migre para ApiException(ApiErrorCode, ...)
-     */
-    @Deprecated
-    public ApiException(
-            String error,
-            String message,
-            int status,
-            String field,
-            String invalidValue,
-            List<String> allowedValues,
-            Object details
-    ) {
-        this(tryResolve(error), message, status, field, invalidValue, allowedValues, details);
-    }
-
-    private static ApiErrorCode tryResolve(String code) {
-        if (code == null || code.isBlank()) return ApiErrorCode.INTERNAL_SERVER_ERROR;
-        try {
-            return ApiErrorCode.valueOf(code.trim());
-        } catch (Exception ignored) {
-            // fallback compatível com o legado:
-            return ApiErrorCode.INTERNAL_SERVER_ERROR;
-        }
-    }
-
     public ApiErrorCategory getCategory() {
-        return (errorCode != null ? errorCode.category() : ApiErrorCategory.SYSTEM);
+        return errorCode.category();
+    }
+
+    private static String defaultMessageFor(ApiErrorCode code) {
+        ApiErrorCode resolved = (code != null ? code : ApiErrorCode.INTERNAL_SERVER_ERROR);
+        // Mensagem default determinística e governável (sem string mágica espalhada)
+        return resolved.code();
     }
 }

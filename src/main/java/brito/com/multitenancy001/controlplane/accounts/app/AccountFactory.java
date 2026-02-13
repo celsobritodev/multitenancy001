@@ -51,3 +51,4 @@ public final class AccountFactory {
         return s.isBlank() ? "tenant" : s;
     }
 }
+

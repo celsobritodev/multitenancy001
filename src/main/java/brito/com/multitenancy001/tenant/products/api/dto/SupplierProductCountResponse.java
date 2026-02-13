@@ -4,3 +4,4 @@ import java.util.UUID;
 
 public record SupplierProductCountResponse(UUID supplierId, long count) {}
 
+

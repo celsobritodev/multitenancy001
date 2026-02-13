@@ -43,3 +43,4 @@ public interface TenantCategoryRepository extends JpaRepository<Category, Long> 
                                  @Param("includeInactive") boolean includeInactive);
 }
 
+

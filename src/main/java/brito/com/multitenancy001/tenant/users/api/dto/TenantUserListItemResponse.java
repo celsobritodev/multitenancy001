@@ -19,3 +19,4 @@ public record TenantUserListItemResponse(
         boolean suspendedByAdmin,
         boolean enabled
 ) {}
+

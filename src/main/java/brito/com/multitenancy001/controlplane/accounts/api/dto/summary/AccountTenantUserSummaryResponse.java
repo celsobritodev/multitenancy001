@@ -19,3 +19,4 @@ public record AccountTenantUserSummaryResponse(
         boolean enabled
 ) {}
 
+

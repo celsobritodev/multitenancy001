@@ -34,19 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Orquestra o onboarding de uma nova conta (Control Plane), incluindo provisioning do schema Tenant e do usuário OWNER.
  *
- * <p>
  * Regras de arquitetura (bounded contexts):
- * <ul>
- *   <li>ControlPlane não depende de tenant.* diretamente.</li>
- *   <li>Qualquer ação cross-context CP -> Tenant passa por integration.*.</li>
- * </ul>
+ * - ControlPlane não depende de tenant.* diretamente.
+ * - Qualquer ação cross-context CP -> Tenant passa por integration.*.
  *
- * <p>
  * Observação:
- * <ul>
- *   <li>Você SEMPRE dropa o banco, então o fluxo precisa ser determinístico e reexecutável.</li>
- *   <li>Provisionamento de schema (DDL/Flyway) ocorre fora do TX do CP.</li>
- * </ul>
+ * - Provisionamento de schema (DDL/Flyway) ocorre fora do TX do CP.
  */
 @Service
 @RequiredArgsConstructor
@@ -58,7 +51,7 @@ public class AccountOnboardingService {
 
     private final TenantSchemaProvisioningService tenantSchemaProvisioningFacade;
 
-    /** Fronteira explícita de integração ControlPlane -> Tenant (sem leak de bounded context). */
+    /** Fronteira explícita CP -> Tenant. */
     private final TenantProvisioningIntegrationService tenantProvisioningIntegrationService;
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
@@ -92,7 +85,7 @@ public class AccountOnboardingService {
 
                 created.setStatus(AccountStatus.PROVISIONING);
 
-                // ✅ se a factory não setar tenantSchema, garante aqui
+                // Garante tenantSchema (idempotente)
                 created.ensureTenantSchema();
 
                 return accountRepository.save(created);
@@ -109,10 +102,10 @@ public class AccountOnboardingService {
                 buildDetailsJson(account, data, "STARTED", null, null)
         );
 
-        UserSummaryData tenantOwner = null;
+        UserSummaryData tenantOwner;
 
         try {
-            // 3) Provisionamento fora do TX do CP (envolve infra/DDL/migrations)
+            // 3) Provisionamento do schema fora da TX do CP (DDL/Flyway)
             String tenantSchema = account.getTenantSchema();
 
             try {
@@ -222,7 +215,7 @@ public class AccountOnboardingService {
         return publicSchemaUnitOfWork.tx(() -> {
 
             Account managed = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada após criação", 500));
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada após criação"));
 
             Instant now = appClock.instant();
 
@@ -230,6 +223,7 @@ public class AccountOnboardingService {
                 managed.setStatus(AccountStatus.FREE_TRIAL);
             }
 
+            // ✅ Instant + days (correto)
             if (managed.getStatus() == AccountStatus.FREE_TRIAL && managed.getTrialEndAt() == null) {
                 managed.setTrialEndAt(now.plus(DEFAULT_TRIAL_DAYS, ChronoUnit.DAYS));
             }
@@ -241,44 +235,44 @@ public class AccountOnboardingService {
     private SignupData validateAndNormalize(SignupCommand cmd) {
 
         if (cmd == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST_BODY, "Requisição inválida", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST_BODY, "Requisição inválida");
         }
 
         String displayName = safeTrim(cmd.displayName());
         if (!StringUtils.hasText(displayName)) {
-            throw new ApiException(ApiErrorCode.INVALID_COMPANY_NAME, "Nome da empresa é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_NAME, "displayName é obrigatório");
         }
 
         String loginEmail = EmailNormalizer.normalizeOrNull(cmd.loginEmail());
         if (!StringUtils.hasText(loginEmail)) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório");
         }
         if (!looksLikeEmail(loginEmail)) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido");
         }
 
         TaxIdType taxIdType = cmd.taxIdType();
         if (taxIdType == null) {
-            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_TYPE, "Tipo de documento é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_TYPE, "Tipo de documento é obrigatório");
         }
 
         String taxIdNumber = safeTrim(cmd.taxIdNumber());
         if (!StringUtils.hasText(taxIdNumber)) {
-            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_NUMBER, "Número do documento é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_COMPANY_DOC_NUMBER, "Número do documento é obrigatório");
         }
 
         String password = safeTrim(cmd.password());
         if (!StringUtils.hasText(password)) {
-            throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória");
         }
 
         String confirmPassword = safeTrim(cmd.confirmPassword());
         if (!StringUtils.hasText(confirmPassword)) {
-            throw new ApiException(ApiErrorCode.INVALID_CONFIRM_PASSWORD, "Confirmação de senha é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CONFIRM_PASSWORD, "Confirmação de senha é obrigatória");
         }
 
         if (!password.equals(confirmPassword)) {
-            throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Senha e confirmação não conferem", 400);
+            throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Senha e confirmação não conferem");
         }
 
         String taxCountryCode = DEFAULT_TAX_COUNTRY_CODE;

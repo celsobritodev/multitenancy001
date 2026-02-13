@@ -4,3 +4,4 @@ public interface SoftDeletable {
     boolean isDeleted();
 }
 
+

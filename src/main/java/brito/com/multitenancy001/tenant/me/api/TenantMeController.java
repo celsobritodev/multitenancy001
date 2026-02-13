@@ -50,3 +50,4 @@ public class TenantMeController {
         return ResponseEntity.noContent().build();
     }
 }
+

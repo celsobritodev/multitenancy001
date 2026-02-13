@@ -20,3 +20,4 @@ CREATE INDEX IF NOT EXISTS idx_account_prov_events_account_id
 CREATE INDEX IF NOT EXISTS idx_account_prov_events_created_at
     ON public.account_provisioning_events (created_at);
 
+

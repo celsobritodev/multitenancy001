@@ -27,7 +27,7 @@ public class TenantUserQueryService {
     // =========================================================
 
     public long countUsersForLimit(Long accountId, UserLimitPolicy policy) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
 
         return transactionExecutor.inTenantReadOnlyTx(() -> {
             if (policy == null) return tenantUserRepository.countByAccountIdAndDeletedFalse(accountId);
@@ -41,13 +41,13 @@ public class TenantUserQueryService {
     }
 
     public long countEnabledUsersByAccount(Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED);
         return transactionExecutor.inTenantReadOnlyTx(() -> tenantUserRepository.countEnabledUsersByAccount(accountId));
     }
 
     public long countActiveOwnersByAccountId(Long accountId, TenantRole ownerRole) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
-        if (ownerRole == null) throw new ApiException(ApiErrorCode.ROLE_REQUIRED, "role é obrigatório", ApiErrorCode.ROLE_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
+        if (ownerRole == null) throw new ApiException(ApiErrorCode.ROLE_REQUIRED);
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.countActiveOwnersByAccountId(accountId, ownerRole)
@@ -59,42 +59,42 @@ public class TenantUserQueryService {
     // =========================================================
 
     public TenantUser getUser(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", ApiErrorCode.USER_ID_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED);
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", ApiErrorCode.USER_NOT_FOUND.defaultHttpStatus()))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado"))
         );
     }
 
-    public TenantUser getEnabledUser(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", ApiErrorCode.USER_ID_REQUIRED.defaultHttpStatus());
+    public TenantUser getEnabledUser(Long userId) {
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED);
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário habilitado não encontrado", ApiErrorCode.USER_NOT_FOUND.defaultHttpStatus()))
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário habilitado não encontrado"))
         );
     }
 
-    public TenantUser getUserByEmail(String email, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
-        if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", ApiErrorCode.INVALID_EMAIL.defaultHttpStatus());
+    public TenantUser getUserByEmail(String email) {
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
+        if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_EMAIL);
 
         String normEmail = EmailNormalizer.normalizeOrNull(email);
         if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", ApiErrorCode.INVALID_EMAIL.defaultHttpStatus());
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido");
         }
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
-                tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(normEmail, accountId)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", ApiErrorCode.USER_NOT_FOUND.defaultHttpStatus()))
+                tenantUserRepository.findByEmailAndAccountIdAndDeletedFalse(normEmail)
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado"))
         );
     }
 
     public List<TenantUser> listUsers(Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED);
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.findByAccountIdAndDeletedFalse(accountId)
@@ -102,10 +102,11 @@ public class TenantUserQueryService {
     }
 
     public List<TenantUser> listEnabledUsers(Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", ApiErrorCode.ACCOUNT_REQUIRED.defaultHttpStatus());
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório");
 
         return transactionExecutor.inTenantReadOnlyTx(() ->
                 tenantUserRepository.findEnabledUsersByAccount(accountId)
         );
     }
 }
+

@@ -33,3 +33,4 @@ public class JsonDetailsMapper {
         return objectMapper.valueToTree(details);
     }
 }
+

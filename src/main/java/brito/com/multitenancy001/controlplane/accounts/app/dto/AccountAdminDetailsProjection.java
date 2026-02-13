@@ -9,3 +9,4 @@ public record AccountAdminDetailsProjection(
         long totalUsers
 ) {}
 
+

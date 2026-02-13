@@ -106,3 +106,4 @@ public class TenantSubcategoryController {
         return ResponseEntity.ok(tenantSubcategoryService.restore(id));
     }
 }
+

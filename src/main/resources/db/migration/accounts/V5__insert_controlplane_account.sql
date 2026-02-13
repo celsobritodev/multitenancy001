@@ -46,3 +46,4 @@ WHERE NOT EXISTS (
     SELECT 1 FROM accounts WHERE slug = 'controlplane'
 );
 
+

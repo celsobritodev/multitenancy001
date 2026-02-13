@@ -20,3 +20,4 @@ public interface AccountJobScheduleRepository extends JpaRepository<AccountJobSc
     """)
     List<AccountJobSchedule> findDue(Instant now);
 }
+

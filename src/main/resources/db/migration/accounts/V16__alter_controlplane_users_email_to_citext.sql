@@ -8,3 +8,4 @@ ALTER TABLE public.controlplane_users
     USING email::citext;
 
 -- opcional: índice já existe (idx_cp_users_email). Se quiser recriar como citext não precisa.
+

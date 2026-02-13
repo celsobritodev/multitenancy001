@@ -50,3 +50,4 @@ public class PublicSchemaUnitOfWork {
         publicExecutor.inPublic(() -> transactionExecutor.inPublicRequiresNewReadOnly(fn));
     }
 }
+

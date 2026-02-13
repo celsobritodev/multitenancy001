@@ -14,3 +14,4 @@ public record AccountStatusChangeResult(
         AccountStatusSideEffect action,
         int affectedUsers
 ) {}
+

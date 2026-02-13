@@ -94,3 +94,4 @@ public class ControlPlaneUserController {
         return ResponseEntity.ok(controlPlaneUserService.getEnabledControlPlaneUser(userId));
     }
 }
+
