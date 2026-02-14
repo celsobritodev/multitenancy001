@@ -207,7 +207,13 @@ public enum ApiErrorCode {
     // Internal
     // =========================
     INTERNAL_ERROR(ApiErrorCategory.INTERNAL, 500, "Erro interno"),
-    INTERNAL_SERVER_ERROR(ApiErrorCategory.INTERNAL, 500, "Erro interno inesperado");
+    INTERNAL_SERVER_ERROR(ApiErrorCategory.INTERNAL, 500, "Erro interno inesperado"),
+	FEATURE_NOT_IMPLEMENTED(
+	        ApiErrorCategory.INTERNAL,
+	        501,
+	        "Funcionalidade ainda não implementada"
+	);
+
 
     private final ApiErrorCategory category;
     private final int httpStatus;
