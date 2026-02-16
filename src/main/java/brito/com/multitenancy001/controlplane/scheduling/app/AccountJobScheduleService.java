@@ -6,9 +6,15 @@ import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.zone.ZoneOffsetTransition;
 import java.time.zone.ZoneRules;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,38 +28,49 @@ public class AccountJobScheduleService {
      * Regra: guarda LocalTime + ZoneId, e converte para Instant só na execução.
      */
     public Instant computeNextRun(Instant now, LocalTime localTime, ZoneId zoneId) {
-        ZonedDateTime zonedNow = now.atZone(zoneId);
+        var zonedNow = now.atZone(zoneId);
 
         LocalDate date = zonedNow.toLocalDate();
-        ZonedDateTime candidateToday = safeZoned(date, localTime, zoneId);
+        var candidateToday = safeZoned(date, localTime, zoneId);
 
         if (candidateToday.isAfter(zonedNow)) {
             return candidateToday.toInstant();
         }
 
-        ZonedDateTime candidateTomorrow = safeZoned(date.plusDays(1), localTime, zoneId);
+        var candidateTomorrow = safeZoned(date.plusDays(1), localTime, zoneId);
         return candidateTomorrow.toInstant();
     }
 
     /**
-     * Resolve problemas de DST (gap/overlap) sem explodir:
-     * - Se for "gap" (horário inexistente), anda para o próximo horário válido.
-     * - Se for "overlap" (horário duplicado), o Java resolve por padrão.
+     * Resolve DST (gap/overlap) de forma determinística:
+     * - gap (horário inexistente): ajusta para o primeiro horário válido após a transição.
+     * - overlap (horário duplicado): escolhe sempre o offset "mais cedo" (primeiro da lista).
      */
-    private ZonedDateTime safeZoned(LocalDate date, LocalTime time, ZoneId zoneId) {
+    private java.time.ZonedDateTime safeZoned(LocalDate date, LocalTime time, ZoneId zoneId) {
         LocalDateTime ldt = LocalDateTime.of(date, time);
-        try {
-            return ZonedDateTime.of(ldt, zoneId);
-        } catch (DateTimeException ex) {
-            // gap: pega o próximo instante válido após a transição
-            ZoneRules rules = zoneId.getRules();
-            ZoneOffsetTransition t = rules.nextTransition(ldt.atZone(zoneId).toInstant());
-            if (t != null) {
-                return t.getDateTimeAfter().atZone(zoneId);
-            }
-            // fallback extremo: joga +1h
-            return ZonedDateTime.of(ldt.plusHours(1), zoneId);
+
+        ZoneRules rules = zoneId.getRules();
+        List<ZoneOffset> offsets = rules.getValidOffsets(ldt);
+
+        // Normal: 1 offset válido
+        if (offsets.size() == 1) {
+            return java.time.ZonedDateTime.ofLocal(ldt, zoneId, offsets.get(0));
         }
+
+        // Overlap: 2 offsets válidos (horário duplicado)
+        if (offsets.size() == 2) {
+            // escolha determinística: offset "mais cedo"
+            return java.time.ZonedDateTime.ofLocal(ldt, zoneId, offsets.get(0));
+        }
+
+        // Gap: 0 offsets válidos (horário inexistente)
+        ZoneOffsetTransition transition = rules.getTransition(ldt);
+        if (transition != null) {
+            return transition.getDateTimeAfter().atZone(zoneId);
+        }
+
+        // Fallback extremo: se não houver transição (muito raro), joga +1h
+        return ldt.plusHours(1).atZone(zoneId);
     }
 
     public AccountJobSchedule ensureNextRun(AccountJobSchedule s) {
