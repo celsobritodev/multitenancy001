@@ -1,12 +1,7 @@
 package brito.com.multitenancy001.tenant.users.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
-import java.time.Instant;
-import java.util.List;
-
-import org.springframework.stereotype.Service;
 import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.TenantRoleName;
@@ -15,6 +10,10 @@ import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.List;
 
 /**
  * Tenant APP: regras e operações administrativas em massa/conta.
@@ -23,13 +22,11 @@ import lombok.RequiredArgsConstructor;
  * - Fica no Tenant (app), porque as regras (ex.: não suspender OWNER) pertencem ao Tenant.
  * - Integração apenas chama isso dentro do schema certo.
  *
- * Pré-condição: este serviço é chamado já dentro do schema do tenant (via TenantExecutor/TenantExecutor).
+ * Pré-condição: este serviço é chamado já dentro do schema do tenant (via TenantExecutor).
  */
 @Service
 @RequiredArgsConstructor
 public class TenantUserAdminTxService {
-
-    private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
 
     private final TxExecutor transactionExecutor;
     private final TenantUserRepository tenantUserRepository;
@@ -46,7 +43,7 @@ public class TenantUserAdminTxService {
             long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
             if (ownersNotDeleted <= 0) {
                 throw new ApiException(
-                        TENANT_OWNER_REQUIRED,
+                        ApiErrorCode.TENANT_OWNER_REQUIRED,
                         "Não é possível suspender usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
                         409
                 );
@@ -78,7 +75,7 @@ public class TenantUserAdminTxService {
             long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
             if (ownersNotDeleted <= 0) {
                 throw new ApiException(
-                        TENANT_OWNER_REQUIRED,
+                        ApiErrorCode.TENANT_OWNER_REQUIRED,
                         "Não é possível remover usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
                         409
                 );
@@ -135,7 +132,7 @@ public class TenantUserAdminTxService {
                     long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
                     if (activeOwners <= 1) {
                         throw new ApiException(
-                                TENANT_OWNER_REQUIRED,
+                                ApiErrorCode.TENANT_OWNER_REQUIRED,
                                 "Não é permitido suspender o último TENANT_OWNER ativo.",
                                 409
                         );
@@ -147,6 +144,7 @@ public class TenantUserAdminTxService {
             if (updated == 0) {
                 throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404);
             }
+            return null;
         });
     }
 

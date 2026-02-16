@@ -9,7 +9,7 @@ import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.billing.domain.Payment;
 import brito.com.multitenancy001.controlplane.billing.persistence.ControlPlanePaymentRepository;
-import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.integration.security.ControlPlaneRequestIdentityService;
 import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
@@ -38,7 +38,7 @@ public class ControlPlanePaymentService {
 
     private final AccountRepository accountRepository;
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
-    private final SecurityUtils securityUtils;
+    private final ControlPlaneRequestIdentityService requestIdentity;
     private final AppClock appClock;
     private final AccountStatusService accountStatusService;
 
@@ -51,7 +51,6 @@ public class ControlPlanePaymentService {
         log.info("Iniciando verificação de pagamentos...");
         Instant now = appClock.instant();
 
-        // ✅ Trials expirados: pega só IDs (evita carregar Account à toa)
         List<Long> expiredTrialIds = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findExpiredTrialIdsNotDeleted(now, AccountStatus.FREE_TRIAL)
         );
@@ -60,7 +59,6 @@ public class ControlPlanePaymentService {
             suspendAccountById(accountId, "Trial expirado");
         }
 
-        // ✅ Pagamentos vencidos: pega só IDs (evita carregar Account à toa)
         LocalDate todayUtc = LocalDate.ofInstant(now, ZoneOffset.UTC);
 
         List<Long> overdueAccountIds = publicSchemaUnitOfWork.readOnly(() ->
@@ -74,17 +72,12 @@ public class ControlPlanePaymentService {
         checkExpiredPendingPayments(now);
     }
 
-    /**
-     * ✅ Scheduler orquestra por ID.
-     * A mudança real de status fica encapsulada no AccountStatusService (UoW).
-     */
     private void suspendAccountById(Long accountId, String reason) {
         accountStatusService.changeAccountStatus(
                 accountId,
                 new AccountStatusChangeCommand(AccountStatus.SUSPENDED)
         );
 
-        // side-effect fora de transação: para isso precisamos do email => busca leve e explícita
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findAnyById(accountId)
                         .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
@@ -108,7 +101,7 @@ public class ControlPlanePaymentService {
     }
 
     // =========================================================
-    // Commands (ORCHESTRATION) => UnitOfWork boundary explícito
+    // Commands
     // =========================================================
 
     public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
@@ -118,7 +111,6 @@ public class ControlPlanePaymentService {
 
         Instant now = appClock.instant();
 
-        // 1) Valida e cria PENDING dentro do CP tx
         Long paymentId = publicSchemaUnitOfWork.tx(() -> {
             Account account = accountRepository.findById(adminPaymentRequest.accountId())
                     .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
@@ -138,7 +130,6 @@ public class ControlPlanePaymentService {
             return controlPlanePaymentRepository.save(payment).getId();
         });
 
-        // 2) Gateway fora de tx (side-effect)
         boolean ok = processWithPaymentGateway(
                 paymentId,
                 new PaymentRequest(
@@ -149,7 +140,6 @@ public class ControlPlanePaymentService {
                 )
         );
 
-        // 3) Finaliza dentro de tx (commit atômico)
         if (ok) {
             Payment payment = publicSchemaUnitOfWork.tx(() -> completePaymentById(paymentId, now));
             return mapToResponse(payment);
@@ -160,7 +150,7 @@ public class ControlPlanePaymentService {
     }
 
     public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
-        Long accountId = securityUtils.getCurrentAccountId();
+        Long accountId = requestIdentity.getCurrentAccountId();
         Instant now = appClock.instant();
 
         Long paymentId = publicSchemaUnitOfWork.tx(() -> {
@@ -242,11 +232,11 @@ public class ControlPlanePaymentService {
     }
 
     // =========================================================
-    // Queries (mantém como estavam: simples e baratas)
+    // Queries
     // =========================================================
 
     public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
-        Long accountId = securityUtils.getCurrentAccountId();
+        Long accountId = requestIdentity.getCurrentAccountId();
 
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findScopedByIdAndAccountId(paymentId, accountId)
@@ -257,12 +247,12 @@ public class ControlPlanePaymentService {
     }
 
     public List<PaymentResponse> getPaymentsByMyAccount() {
-        Long accountId = securityUtils.getCurrentAccountId();
+        Long accountId = requestIdentity.getCurrentAccountId();
         return getPaymentsByAccount(accountId);
     }
 
     public boolean hasActivePaymentMyAccount() {
-        Long accountId = securityUtils.getCurrentAccountId();
+        Long accountId = requestIdentity.getCurrentAccountId();
         return hasActivePayment(accountId);
     }
 
@@ -390,7 +380,7 @@ public class ControlPlanePaymentService {
     }
 
     // =========================================================
-    // Domain-ish helpers (executados dentro de tx)
+    // Domain-ish helpers
     // =========================================================
 
     private Payment completePaymentById(Long paymentId, Instant now) {
@@ -406,12 +396,9 @@ public class ControlPlanePaymentService {
         controlPlanePaymentRepository.save(payment);
 
         account.setStatus(AccountStatus.ACTIVE);
-
-        // ✅ paymentDueDate é LocalDate (civil)
         account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
         accountRepository.save(account);
 
-        // side-effect fora de tx (chamador)
         return payment;
     }
 
@@ -466,11 +453,6 @@ public class ControlPlanePaymentService {
             Thread.sleep(1000);
             boolean ok = Math.random() < 0.9;
 
-            if (ok) {
-                // side-effect de confirmação: fora de tx
-                // (envio real seria aqui)
-            }
-
             return ok;
 
         } catch (InterruptedException e) {
@@ -480,10 +462,6 @@ public class ControlPlanePaymentService {
         }
     }
 
-    /**
-     * ✅ PaymentResponse record (ordem e semântica):
-     * (id, accountId, amount, paymentMethod, paymentGateway, paymentStatus, description, paidAt, validUntil, refundedAt, createdAt, updatedAt)
-     */
     private PaymentResponse mapToResponse(Payment payment) {
         PaymentResponse response = new PaymentResponse(
                 payment.getId(),
@@ -496,17 +474,14 @@ public class ControlPlanePaymentService {
 
                 payment.getDescription(),
 
-                // paidAt: no seu domínio é paymentDate
                 payment.getPaymentDate(),
                 payment.getValidUntil(),
                 payment.getRefundedAt(),
 
-                // auditoria única
                 payment.getAudit() != null ? payment.getAudit().getCreatedAt() : null,
                 payment.getAudit() != null ? payment.getAudit().getUpdatedAt() : null
         );
 
-        // ✅ confirmação fora da tx (chamadores)
         if (payment.getStatus() == PaymentStatus.COMPLETED) {
             sendPaymentConfirmationEmail(payment.getAccount(), payment);
         }

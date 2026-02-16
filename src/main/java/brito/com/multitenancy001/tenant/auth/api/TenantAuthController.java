@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.shared.api.dto.auth.JwtResponse;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -69,7 +68,7 @@ public class TenantAuthController {
                     .toList();
 
             TenantSelectionRequiredResponse body = new TenantSelectionRequiredResponse(
-                    "TENANT_SELECTION_REQUIRED",
+                    ApiErrorCode.TENANT_SELECTION_REQUIRED.name(),
                     "Selecione a empresa/tenant para continuar",
                     sel.challengeId(),
                     details

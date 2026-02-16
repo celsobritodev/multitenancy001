@@ -13,10 +13,10 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 @Component
 public class TenantExecutor {
 
-    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningService;
+    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
 
     public TenantExecutor(TenantSchemaProvisioningWorker tenantSchemaProvisioningService) {
-        this.tenantSchemaProvisioningService = tenantSchemaProvisioningService;
+        this.tenantSchemaProvisioningWorker = tenantSchemaProvisioningService;
     }
 
     // ---------------------------------------------------------------------
@@ -47,8 +47,8 @@ public class TenantExecutor {
         String normalizedTenantSchema = normalizeTenantSchemaOrNull(tenantSchema);
 
         if (normalizedTenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(normalizedTenantSchema)) return defaultValue;
-        if (!tenantSchemaProvisioningService.schemaExists(normalizedTenantSchema)) return defaultValue;
-        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(normalizedTenantSchema, requiredTable)) return defaultValue;
+        if (!tenantSchemaProvisioningWorker.schemaExists(normalizedTenantSchema)) return defaultValue;
+        if (requiredTable != null && !tenantSchemaProvisioningWorker.tableExists(normalizedTenantSchema, requiredTable)) return defaultValue;
 
         return runInTenantSchema(normalizedTenantSchema, fn);
     }
@@ -71,10 +71,10 @@ public class TenantExecutor {
         if (normalizedTenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(normalizedTenantSchema)) {
             throw new ApiException(ApiErrorCode.TENANT_INVALID, "Tenant inválido", 404);
         }
-        if (!tenantSchemaProvisioningService.schemaExists(normalizedTenantSchema)) {
+        if (!tenantSchemaProvisioningWorker.schemaExists(normalizedTenantSchema)) {
             throw new ApiException(ApiErrorCode.TENANT_SCHEMA_NOT_FOUND, "Schema do tenant não existe", 404);
         }
-        if (requiredTable != null && !tenantSchemaProvisioningService.tableExists(normalizedTenantSchema, requiredTable)) {
+        if (requiredTable != null && !tenantSchemaProvisioningWorker.tableExists(normalizedTenantSchema, requiredTable)) {
             throw new ApiException(ApiErrorCode.TENANT_TABLE_NOT_FOUND, "Tabela " + requiredTable + " não existe no tenant", 404);
         }
     }

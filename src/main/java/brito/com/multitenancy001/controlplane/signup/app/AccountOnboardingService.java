@@ -21,14 +21,14 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountReposi
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.controlplane.signup.app.dto.TenantAdminResult;
-import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaProvisioningService;
+import brito.com.multitenancy001.integration.tenant.TenantProvisioningIntegrationService;
+import brito.com.multitenancy001.integration.tenant.TenantSchemaProvisioningIntegrationService;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.provisioning.app.TenantUserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,8 +40,8 @@ public class AccountOnboardingService {
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
     private static final long DEFAULT_TRIAL_DAYS = 14L;
 
-    private final TenantSchemaProvisioningService tenantSchemaProvisioningFacade;
-    private final TenantUserProvisioningService tenantUserProvisioningFacade;
+    private final TenantSchemaProvisioningIntegrationService tenantSchemaProvisioningIntegrationService;
+    private final TenantProvisioningIntegrationService  tenantProvisioningIntegrationService;
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
@@ -96,7 +96,7 @@ public class AccountOnboardingService {
             String tenantSchema = account.getTenantSchema();
 
             try {
-                tenantSchemaProvisioningFacade.ensureSchemaExistsAndMigrate(tenantSchema);
+                tenantSchemaProvisioningIntegrationService.ensureSchemaExistsAndMigrate(tenantSchema);
             } catch (FlywayException ex) {
                 throw provisioningFailed(ProvisioningFailureCode.TENANT_MIGRATION_ERROR, ex);
             } catch (DataAccessException ex) {
@@ -110,7 +110,7 @@ public class AccountOnboardingService {
 
             // 4) Criação do tenant owner
             try {
-                tenantOwner = tenantUserProvisioningFacade.createTenantOwner(
+                tenantOwner = tenantProvisioningIntegrationService.createTenantOwner(
                         tenantSchema,
                         account.getId(),
                         account.getDisplayName(),

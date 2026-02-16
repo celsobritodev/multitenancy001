@@ -189,7 +189,7 @@ public class TenantSubcategoryService {
         String tenantSchema = TenantContext.getOrNull();
         if (tenantSchema == null) {
             throw new ApiException(
-                    "TENANT_CONTEXT_REQUIRED",
+                    ApiErrorCode.TENANT_CONTEXT_REQUIRED,
                     "TenantContext não está bindado (tenantSchema=null). Operação requer contexto TENANT.",
                     500
             );

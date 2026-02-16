@@ -138,7 +138,8 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         String email = user.getEmail();
 
         if (!user.isEnabledForLogin(now)) {
-            throw new BadCredentialsException("USER_DISABLED");
+        	throw new BadCredentialsException(SecurityFailureCode.USER_DISABLED.name());
+
         }
 
         return new AuthenticatedUserContext(
@@ -169,7 +170,8 @@ public class AuthenticatedUserContext implements UserDetails, AuthenticatedPrinc
         String email = user.getEmail();
 
         if (!user.isEnabledForLogin(now)) {
-            throw new BadCredentialsException("USER_DISABLED");
+        	throw new BadCredentialsException(SecurityFailureCode.USER_DISABLED.name());
+
         }
 
         return new AuthenticatedUserContext(

@@ -3,7 +3,9 @@ package brito.com.multitenancy001.infrastructure.security.userdetails;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityFailureCode;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -36,7 +38,8 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     private static String normalizeEmailOrThrow(String raw) {
         String normalized = EmailNormalizer.normalizeOrNull(raw);
         if (normalized == null) {
-            throw new UsernameNotFoundException("INVALID_USER");
+        	throw new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name());
+
         }
         return normalized;
     }
@@ -56,7 +59,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         TenantUser user = tenantUserRepository
                 .findByEmailAndDeletedFalse(loginEmail)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, issuedAt, authorities);
@@ -67,12 +70,13 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(email);
         if (cpUserId == null) {
-            throw new UsernameNotFoundException("INVALID_USER");
+        	throw new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name());
+
         }
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByIdAndDeletedFalse(cpUserId)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, issuedAt, authorities);
@@ -83,7 +87,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         if (accountId == null) {
             throw new ApiException(
-                    "ACCOUNT_REQUIRED",
+                    ApiErrorCode.ACCOUNT_REQUIRED,
                     "accountId é obrigatório para autenticar usuário da controlplane",
                     400
             );
@@ -93,7 +97,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         ControlPlaneUser user = controlPlaneUserRepository
                 .findByEmailAndAccount_IdAndDeletedFalse(loginEmail, accountId)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
         var authorities = AuthoritiesFactory.forControlPlane(user);
         return AuthenticatedUserContext.fromControlPlaneUser(user, Schemas.CONTROL_PLANE, issuedAt, authorities);
@@ -104,7 +108,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         if (tenantSchema == null || Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
             throw new ApiException(
-                    "TENANT_CONTEXT_REQUIRED",
+                    ApiErrorCode.TENANT_CONTEXT_REQUIRED,
                     "TenantContext não está bindado para autenticar usuário tenant",
                     401
             );
@@ -112,7 +116,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         if (accountId == null) {
             throw new ApiException(
-                    "ACCOUNT_REQUIRED",
+                    ApiErrorCode.ACCOUNT_REQUIRED,
                     "accountId é obrigatório para autenticar usuário tenant",
                     400
             );
@@ -123,7 +127,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
 
         TenantUser user = tenantUserRepository
                 .findByEmailAndAccountIdAndDeletedFalse(loginEmail, accountId)
-                .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
         var authorities = AuthoritiesFactory.forTenant(user);
         return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, issuedAt, authorities);

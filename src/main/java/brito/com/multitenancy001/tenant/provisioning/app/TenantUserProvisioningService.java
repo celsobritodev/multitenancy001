@@ -1,16 +1,8 @@
 package brito.com.multitenancy001.tenant.provisioning.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
-import java.time.Instant;
-import java.util.List;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
 import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -21,6 +13,12 @@ import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.time.Instant;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -29,9 +27,6 @@ public class TenantUserProvisioningService {
 
     private static final String REQUIRED_TABLE = "tenant_users";
     private static final String OWNER_NAME_FALLBACK = "Owner";
-
-    // error codes padrão
-    private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
 
     private final TenantExecutor tenantExecutor;
     private final TxExecutor transactionExecutor;
@@ -106,7 +101,6 @@ public class TenantUserProvisioningService {
 
                     Instant now = appNow();
 
-
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
 
@@ -160,7 +154,7 @@ public class TenantUserProvisioningService {
                     long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
                     if (ownersNotDeleted <= 0) {
                         throw new ApiException(
-                                TENANT_OWNER_REQUIRED,
+                                ApiErrorCode.TENANT_OWNER_REQUIRED,
                                 "Não é possível suspender usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
                                 409
                         );
@@ -200,7 +194,7 @@ public class TenantUserProvisioningService {
                     long ownersNotDeleted = tenantUserRepository.countNotDeletedByAccountIdAndRole(accountId, TenantRole.TENANT_OWNER);
                     if (ownersNotDeleted <= 0) {
                         throw new ApiException(
-                                TENANT_OWNER_REQUIRED,
+                                ApiErrorCode.TENANT_OWNER_REQUIRED,
                                 "Não é possível remover usuários: não existe TENANT_OWNER não deletado para esta conta (estado inválido).",
                                 409
                         );
@@ -243,7 +237,7 @@ public class TenantUserProvisioningService {
                             long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
                             if (activeOwners <= 1) {
                                 throw new ApiException(
-                                        TENANT_OWNER_REQUIRED,
+                                        ApiErrorCode.TENANT_OWNER_REQUIRED,
                                         "Não é permitido suspender o último TENANT_OWNER ativo.",
                                         409
                                 );
@@ -297,9 +291,8 @@ public class TenantUserProvisioningService {
         if (user.isSuspendedByAdmin()) return false;
         return user.getRole() != null && user.getRole().isTenantOwner();
     }
-    
+
     private Instant appNow() {
         return appClock.instant();
     }
-
 }

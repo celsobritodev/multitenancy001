@@ -8,6 +8,7 @@ import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.tenant.provisioning.app.TenantUserProvisioningService;
 import brito.com.multitenancy001.tenant.users.app.TenantUserAdminTxService;
 import lombok.RequiredArgsConstructor;
 
@@ -19,7 +20,7 @@ import lombok.RequiredArgsConstructor;
  * - integration.* pode depender de tenant.* para executar casos de uso do contexto Tenant.
  *
  * Importante:
- * - Sempre faz "schema switch" via TenantExecutor.
+ * - Sempre faz "schema switch" via TenantExecutor quando chamar serviços que assumem contexto tenant.
  * - Não contém regra de negócio; regras ficam no Tenant (app).
  */
 @Service
@@ -27,7 +28,12 @@ import lombok.RequiredArgsConstructor;
 public class TenantProvisioningIntegrationService {
 
     private final TenantExecutor tenantExecutor;
+
+    // Tenant app services (executam dentro do schema do tenant)
     private final TenantUserAdminTxService tenantUserAdminTxService;
+
+    // Provisioning (já cuida de readiness + tx + schema switch internamente)
+    private final TenantUserProvisioningService tenantUserProvisioningService;
 
     public List<UserSummaryData> listUserSummaries(
             String tenantSchema,
@@ -49,9 +55,10 @@ public class TenantProvisioningIntegrationService {
         requireAccountId(accountId);
         requireUserId(userId);
 
-        tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserAdminTxService.setSuspendedByAdmin(accountId, userId, suspended)
-        );
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+            tenantUserAdminTxService.setSuspendedByAdmin(accountId, userId, suspended);
+            return null;
+        });
     }
 
     public int suspendAllUsersByAccount(String tenantSchema, Long accountId) {
@@ -83,29 +90,30 @@ public class TenantProvisioningIntegrationService {
     }
 
     /**
-     * ⚠️ Provisionamento de TENANT_OWNER:
-     * No seu HEAD atual, isso NÃO existe no TenantUserAdminTxService.
-     *
-     * Próximo passo: localizar o serviço correto de provisioning no Tenant
-     * (ex.: TenantUserProvisioning / onboarding worker) e delegar para ele aqui.
+     * ✅ Provisionamento do TENANT_OWNER (owner inicial).
+     * Delegado para o TenantUserProvisioningService, que já garante readiness + tx.
      */
-    public void createTenantOwner(
+    public UserSummaryData createTenantOwner(
             String tenantSchema,
             Long accountId,
             String name,
             String email,
             String rawPassword
     ) {
-    	throw new ApiException(
-    	        ApiErrorCode.FEATURE_NOT_IMPLEMENTED,
-    	        "createTenantOwner deve delegar para o serviço de provisioning do Tenant.",
-    	        501
-    	);
+        requireAccountId(accountId);
 
+        // Este service já faz assertTenantSchemaReady + runInTenantSchema + tx internamente
+        return tenantUserProvisioningService.createTenantOwner(
+                tenantSchema,
+                accountId,
+                name,
+                email,
+                rawPassword
+        );
     }
 
     // =========================================================
-    // Guards (accountId/userId). tenantSchema é validado pelo TenantExecutor.
+    // Guards
     // =========================================================
 
     private void requireAccountId(Long accountId) {

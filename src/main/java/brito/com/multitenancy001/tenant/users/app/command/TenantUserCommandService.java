@@ -1,3 +1,4 @@
+// src/main/java/brito/com/multitenancy001/tenant/users/app/command/TenantUserCommandService.java
 package brito.com.multitenancy001.tenant.users.app.command;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
@@ -39,9 +40,6 @@ public class TenantUserCommandService {
     private final SecurityUtils securityUtils;
     private final SecurityAuditService securityAuditService;
 
-    private static final String BUILT_IN_USER_IMMUTABLE = "BUILT_IN_USER_IMMUTABLE";
-    private static final String TENANT_OWNER_REQUIRED = "TENANT_OWNER_REQUIRED";
-
     // =========================================================
     // CREATE
     // =========================================================
@@ -62,7 +60,7 @@ public class TenantUserCommandService {
     ) {
         return transactionExecutor.inTenantTx(() -> {
 
-            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+            if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
             if (!StringUtils.hasText(name)) throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
             if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
             if (!StringUtils.hasText(rawPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
@@ -198,8 +196,8 @@ public class TenantUserCommandService {
     }
 
     private void setSuspension(Long accountId, Long userId, boolean suspended, boolean byAdmin) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
@@ -252,8 +250,8 @@ public class TenantUserCommandService {
             String timezone,
             Instant now // mantido por compat
     ) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         return transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
@@ -310,8 +308,8 @@ public class TenantUserCommandService {
     // =========================================================
 
     public TenantUser resetPassword(Long userId, Long accountId, String newPassword) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
         if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
@@ -335,7 +333,7 @@ public class TenantUserCommandService {
     }
 
     public void resetPasswordWithToken(Long accountId, String email, String token, String newPassword) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.TOKEN_REQUIRED, "token é obrigatório", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
@@ -375,8 +373,8 @@ public class TenantUserCommandService {
     }
 
     public void changeMyPassword(Long userId, Long accountId, String currentPassword, String newPassword, String confirmNewPassword) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         if (!StringUtils.hasText(currentPassword)) throw new ApiException(ApiErrorCode.CURRENT_PASSWORD_REQUIRED, "Senha atual é obrigatória", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.NEW_PASSWORD_REQUIRED, "Nova senha é obrigatória", 400);
@@ -428,8 +426,8 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void softDelete(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
@@ -468,8 +466,8 @@ public class TenantUserCommandService {
     }
 
     public TenantUser restore(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         return transactionExecutor.inTenantTx(() -> {
             Actor actor = resolveActorOrNull(accountId);
@@ -495,8 +493,8 @@ public class TenantUserCommandService {
     }
 
     public void hardDelete(Long userId, Long accountId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         transactionExecutor.inTenantTx(() -> {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
@@ -524,7 +522,7 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void transferTenantOwnerRole(Long accountId, Long fromUserId, Long toUserId) {
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (fromUserId == null) throw new ApiException(ApiErrorCode.FROM_USER_REQUIRED, "fromUserId é obrigatório", 400);
         if (toUserId == null) throw new ApiException(ApiErrorCode.TO_USER_REQUIRED, "toUserId é obrigatório", 400);
         if (fromUserId.equals(toUserId)) throw new ApiException(ApiErrorCode.INVALID_TRANSFER, "Não é possível transferir para si mesmo", 400);
@@ -685,7 +683,7 @@ public class TenantUserCommandService {
 
     private void requireNotBuiltInForMutation(TenantUser user, String message) {
         if (user != null && user.getOrigin() == EntityOrigin.BUILT_IN) {
-            throw new ApiException(BUILT_IN_USER_IMMUTABLE, message, 403);
+            throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, message, 409);
         }
     }
 
@@ -699,7 +697,7 @@ public class TenantUserCommandService {
 
     private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, Long removingUserId, String message) {
         long owners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
-        if (owners <= 1) throw new ApiException(TENANT_OWNER_REQUIRED, message, 409);
+        if (owners <= 1) throw new ApiException(ApiErrorCode.TENANT_OWNER_REQUIRED, message, 409);
     }
 
     // =========================================================

@@ -9,8 +9,8 @@ import brito.com.multitenancy001.controlplane.users.api.dto.*;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneBuiltInUsers;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
-import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.integration.audit.ControlPlaneSecurityAuditIntegrationService;
+import brito.com.multitenancy001.integration.security.ControlPlaneRequestIdentityService;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -30,19 +30,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
 
-    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
     private static final String BUILTIN_IMMUTABLE_MESSAGE =
             "Usuário BUILT_IN é protegido: não pode ser alterado/deletado/restaurado; apenas senha pode ser trocada.";
 
-    private static final String CP_ACCOUNT_INVALID_CODE = "CONTROLPLANE_ACCOUNT_INVALID";
-    private static final String CP_ACCOUNT_INVALID_MESSAGE =
+    private static final String MSG_CP_ACCOUNT_INVALID  =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
 
-    private final SecurityUtils securityUtils;
+    // ✅ integration (em vez de infrastructure.SecurityUtils)
+    private final ControlPlaneRequestIdentityService requestIdentity;
+
     private final ControlPlaneUserExplicitPermissionsService explicitPermissionsService;
 
     private final PasswordEncoder passwordEncoder;
@@ -50,8 +50,8 @@ public class ControlPlaneUserService {
 
     private final LoginIdentityProvisioningService loginIdentityProvisioningService;
 
-    // ✅ append-only security audit (public schema; geralmente REQUIRES_NEW por dentro)
-    private final SecurityAuditService securityAuditService;
+    // ✅ integration (em vez de infrastructure.SecurityAuditService)
+    private final ControlPlaneSecurityAuditIntegrationService securityAudit;
 
     // =========================================================
     // ADMIN ENDPOINTS
@@ -74,7 +74,6 @@ public class ControlPlaneUserService {
                 throw new ApiException(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
             }
 
-            // target ainda não existe (id null)
             AuditTarget target = new AuditTarget(email, null);
 
             return auditAttemptSuccessFail(
@@ -113,7 +112,6 @@ public class ControlPlaneUserService {
                         if (request.permissions() != null && !request.permissions().isEmpty()) {
                             explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
 
-                            // perms changed (create)
                             recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
@@ -128,7 +126,6 @@ public class ControlPlaneUserService {
 
                         loginIdentityProvisioningService.ensureControlPlaneIdentity(email, saved.getId());
 
-                        // log SUCCESS do create com role (sem duplicar o bloco inteiro)
                         recordAudit(
                                 SecurityAuditActionType.USER_CREATED,
                                 AuditOutcome.SUCCESS,
@@ -190,7 +187,7 @@ public class ControlPlaneUserService {
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             String beforeEmail = user.getEmail();
@@ -282,7 +279,6 @@ public class ControlPlaneUserService {
                             );
                         }
 
-                        // SUCCESS "final" de USER_UPDATED com diffs úteis
                         recordAudit(
                                 SecurityAuditActionType.USER_UPDATED,
                                 AuditOutcome.SUCCESS,
@@ -322,7 +318,7 @@ public class ControlPlaneUserService {
             }
 
             if (targetUser.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             int permCount = (request.permissions() == null) ? 0 : request.permissions().size();
@@ -400,7 +396,7 @@ public class ControlPlaneUserService {
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
@@ -440,7 +436,7 @@ public class ControlPlaneUserService {
             }
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
@@ -501,8 +497,8 @@ public class ControlPlaneUserService {
 
     public ControlPlaneMeResponse getMe() {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            Long accountId = securityUtils.getCurrentAccountId();
-            Long userId = securityUtils.getCurrentUserId();
+            Long accountId = requestIdentity.getCurrentAccountId();
+            Long userId = requestIdentity.getCurrentUserId();
 
             Account cp = getControlPlaneAccount();
             if (accountId == null || !cp.getId().equals(accountId)) {
@@ -542,8 +538,8 @@ public class ControlPlaneUserService {
                 throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Nova senha e confirmação não conferem", 400);
             }
 
-            Long accountId = securityUtils.getCurrentAccountId();
-            Long userId = securityUtils.getCurrentUserId();
+            Long accountId = requestIdentity.getCurrentAccountId();
+            Long userId = requestIdentity.getCurrentUserId();
 
             Account cp = getControlPlaneAccount();
             if (accountId == null || userId == null || !cp.getId().equals(accountId)) {
@@ -585,7 +581,7 @@ public class ControlPlaneUserService {
                     }
             );
 
-            return;
+            return null;
         });
     }
 
@@ -626,8 +622,8 @@ public class ControlPlaneUserService {
             return accountRepository.getSingleControlPlaneAccount();
         } catch (IllegalStateException e) {
             throw new ApiException(
-                    CP_ACCOUNT_INVALID_CODE,
-                    CP_ACCOUNT_INVALID_MESSAGE + " " + e.getMessage(),
+                    ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
+                    MSG_CP_ACCOUNT_INVALID  + " " + e.getMessage(),
                     500
             );
         }
@@ -652,13 +648,11 @@ public class ControlPlaneUserService {
             String successDetailsJson,
             AuditCallable<T> block
     ) {
-        // ATTEMPT
         recordAudit(actionType, AuditOutcome.ATTEMPT, actor, target.email(), target.userId(), accountId, tenantSchema, attemptDetailsJson);
 
         try {
             T result = block.call();
 
-            // SUCCESS
             recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, successDetailsJson);
 
             return result;
@@ -673,8 +667,8 @@ public class ControlPlaneUserService {
 
     private Actor resolveActorOrNull() {
         try {
-            Long actorId = securityUtils.getCurrentUserId();
-            Long accountId = securityUtils.getCurrentAccountId();
+            Long actorId = requestIdentity.getCurrentUserId();
+            Long accountId = requestIdentity.getCurrentAccountId();
             if (actorId == null || accountId == null) return Actor.anonymous();
 
             return publicSchemaUnitOfWork.readOnly(() -> controlPlaneUserRepository.findById(actorId)
@@ -695,7 +689,7 @@ public class ControlPlaneUserService {
             String tenantSchema,
             String detailsJson
     ) {
-        securityAuditService.record(
+        securityAudit.record(
                 actionType,
                 outcome,
                 actor == null ? null : actor.email(),

@@ -1,6 +1,8 @@
 package brito.com.multitenancy001.infrastructure.security.filter;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -87,7 +89,7 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
             Map<String, Object> body = Map.of(
-                    "error", "MUST_CHANGE_PASSWORD",
+                    "error",ApiErrorCode.MUST_CHANGE_PASSWORD.name(),
                     "message", "Você precisa alterar a senha antes de continuar.",
                     "status", 428,
                     "details", Map.of(

@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.shared.api.error.ApiEnumErrorResponse;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
@@ -32,7 +33,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
 
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
                 .timestamp(appClock.instant())
-                .error("FORBIDDEN")
+                .error(ApiErrorCode.FORBIDDEN.name())
                 .message(message)     // ✅ agora devolve a mensagem real quando existir
                 .details(null)
                 .build();

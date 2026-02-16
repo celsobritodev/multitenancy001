@@ -1,10 +1,9 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +28,8 @@ public class AccountEntitlementsProvisioningService {
      */
     public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {
+            // status e mensagem poderiam ser só "new ApiException(ApiErrorCode.ACCOUNT_REQUIRED)"
+            // mas mantive override porque você já fazia isso.
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
         }
 
@@ -51,7 +52,7 @@ public class AccountEntitlementsProvisioningService {
 
         return accountEntitlementsRepository.findByAccount_Id(account.getId())
                 .orElseThrow(() -> new ApiException(
-                        "ENTITLEMENTS_NOT_FOUND",
+                        ApiErrorCode.ENTITLEMENTS_NOT_FOUND,
                         "Entitlements não encontrados para a conta " + account.getId()
                                 + " (inserted=" + inserted + ")",
                         500

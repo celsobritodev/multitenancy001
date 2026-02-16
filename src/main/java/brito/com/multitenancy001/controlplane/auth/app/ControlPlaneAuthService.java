@@ -5,8 +5,8 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdminLoginCommand;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.publicschema.audit.AuthEventAuditService;
-import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.integration.audit.ControlPlaneAuthEventAuditIntegrationService;
+import brito.com.multitenancy001.integration.auth.ControlPlaneJwtIntegrationService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -35,13 +35,13 @@ public class ControlPlaneAuthService {
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final ControlPlaneJwtIntegrationService jwtIntegration;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final PublicSchemaExecutor publicExecutor;
 
     private final LoginIdentityResolver loginIdentityResolver;
 
-    private final AuthEventAuditService authEventAuditService;
+    private final ControlPlaneAuthEventAuditIntegrationService authAudit;
     private final AppClock appClock;
 
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
@@ -55,16 +55,7 @@ public class ControlPlaneAuthService {
 
         final String password = cmd.password();
 
-        authEventAuditService.record(
-                AuthDomain.CONTROLPLANE,
-                AuthEventType.LOGIN_INIT,
-                AuditOutcome.ATTEMPT,
-                emailNorm,
-                null,
-                null,
-                DEFAULT_SCHEMA,
-                "{\"stage\":\"init\",\"mode\":\"password\"}"
-        );
+        auditAttempt(emailNorm, "{\"stage\":\"init\",\"mode\":\"password\"}");
 
         try {
             return publicExecutor.inPublic(() -> {
@@ -72,16 +63,7 @@ public class ControlPlaneAuthService {
                 // (1) Resolve identity -> subject_id (CP user id)
                 Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
                 if (cpUserId == null) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_DENIED,
-                	        AuditOutcome.DENIED,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"reason\":\"identity_not_found\"}"
-                	);
+                    auditDenied(emailNorm, "{\"reason\":\"identity_not_found\"}");
                     throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
                 }
 
@@ -92,34 +74,16 @@ public class ControlPlaneAuthService {
 
                 Long accountId = user.getAccount().getId();
 
-                // (3) Status checks (semântico)
+                // (3) Status checks
                 Instant now = appClock.instant();
 
                 if (!user.isEnabled()) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_INIT,
-                	        AuditOutcome.ATTEMPT,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"stage\":\"init\",\"mode\":\"password\"}"
-                	);
+                    auditDenied(emailNorm, "{\"reason\":\"user_not_enabled\"}");
                     throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
                 if (!user.isEnabledForLogin(now)) {
-                	authEventAuditService.record(
-                	        AuthDomain.CONTROLPLANE,
-                	        AuthEventType.LOGIN_DENIED,
-                	        AuditOutcome.DENIED,
-                	        emailNorm,
-                	        null,
-                	        null,
-                	        DEFAULT_SCHEMA,
-                	        "{\"reason\":\"identity_not_found\"}"
-                	);
+                    auditDenied(emailNorm, "{\"reason\":\"user_not_enabled_for_login\"}");
                     throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
@@ -128,17 +92,9 @@ public class ControlPlaneAuthService {
                         new UsernamePasswordAuthenticationToken(emailNorm, password)
                 );
 
-                String accessToken = jwtTokenProvider.generateControlPlaneToken(
-                        authentication,
-                        accountId,
-                        DEFAULT_SCHEMA
-                );
+                String accessToken = jwtIntegration.generateControlPlaneToken(authentication, accountId, DEFAULT_SCHEMA);
 
-                String refreshToken = jwtTokenProvider.generateRefreshToken(
-                        user.getEmail(),
-                        DEFAULT_SCHEMA,
-                        accountId
-                );
+                String refreshToken = jwtIntegration.generateRefreshToken(user.getEmail(), DEFAULT_SCHEMA, accountId);
 
                 // (5) last_login + audit
                 user.markLastLogin(now);
@@ -146,16 +102,8 @@ public class ControlPlaneAuthService {
 
                 SystemRoleName role = SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name());
 
-                authEventAuditService.record(
-                        AuthDomain.CONTROLPLANE,
-                        AuthEventType.LOGIN_INIT,
-                        AuditOutcome.ATTEMPT,
-                        emailNorm,
-                        null,
-                        null,
-                        DEFAULT_SCHEMA,
-                        "{\"stage\":\"init\",\"mode\":\"password\"}"
-                );
+                auditSuccess(emailNorm, "{\"stage\":\"success\"}");
+
                 return new JwtResult(
                         accessToken,
                         refreshToken,
@@ -167,17 +115,47 @@ public class ControlPlaneAuthService {
                 );
             });
         } catch (BadCredentialsException e) {
-        	authEventAuditService.record(
-        	        AuthDomain.CONTROLPLANE,
-        	        AuthEventType.LOGIN_DENIED,
-        	        AuditOutcome.DENIED,
-        	        emailNorm,
-        	        null,
-        	        null,
-        	        DEFAULT_SCHEMA,
-        	        "{\"reason\":\"identity_not_found\"}"
-        	);
+            auditDenied(emailNorm, "{\"reason\":\"bad_credentials\"}");
             throw e;
         }
+    }
+
+    private void auditAttempt(String emailNorm, String detailsJson) {
+        authAudit.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.ATTEMPT,
+                emailNorm,
+                null,
+                null,
+                DEFAULT_SCHEMA,
+                detailsJson
+        );
+    }
+
+    private void auditDenied(String emailNorm, String detailsJson) {
+        authAudit.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.LOGIN_DENIED,
+                AuditOutcome.DENIED,
+                emailNorm,
+                null,
+                null,
+                DEFAULT_SCHEMA,
+                detailsJson
+        );
+    }
+
+    private void auditSuccess(String emailNorm, String detailsJson) {
+        authAudit.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.LOGIN_SUCCESS,
+                AuditOutcome.SUCCESS,
+                emailNorm,
+                null,
+                null,
+                DEFAULT_SCHEMA,
+                detailsJson
+        );
     }
 }

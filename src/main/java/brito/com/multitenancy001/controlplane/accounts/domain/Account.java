@@ -62,7 +62,6 @@ public class Account implements Auditable, SoftDeletable {
     @Column(name = "slug", nullable = false, unique = true, length = 80)
     private String slug;
 
-    // ✅ Alinhado com migration: VARCHAR(2) NOT NULL DEFAULT 'BR'
     @Column(name = "tax_country_code", nullable = false, length = 2)
     @Builder.Default
     private String taxCountryCode = "BR";
@@ -71,11 +70,9 @@ public class Account implements Auditable, SoftDeletable {
     @Column(name = "tax_id_type", length = 20)
     private TaxIdType taxIdType;
 
-    // ✅ Alinhado com migration: VARCHAR(40)
     @Column(name = "tax_id_number", length = 40)
     private String taxIdNumber;
 
-    // ✅ Alinhado com migration: CITEXT NOT NULL
     @Column(name = "login_email", nullable = false, columnDefinition = "citext")
     private String loginEmail;
 
@@ -89,24 +86,12 @@ public class Account implements Auditable, SoftDeletable {
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
-    /**
-     * Instante real (ex.: fim do trial como momento absoluto).
-     * Instant <-> TIMESTAMPTZ
-     */
     @Column(name = "trial_end_date", columnDefinition = "timestamptz")
     private Instant trialEndAt;
 
-    /**
-     * Data civil (vencimento no dia X, sem horário).
-     * LocalDate <-> DATE
-     */
     @Column(name = "payment_due_date", columnDefinition = "date")
     private LocalDate paymentDueDate;
 
-    /**
-     * Data civil (próxima cobrança no dia X).
-     * LocalDate <-> DATE
-     */
     @Column(name = "next_billing_date", columnDefinition = "date")
     private LocalDate nextBillingDate;
 
@@ -154,7 +139,7 @@ public class Account implements Auditable, SoftDeletable {
 
         this.deleted = true;
         if (this.audit != null) {
-            tryMarkDeleted(now);
+            this.audit.markDeleted(now);
         }
     }
 
@@ -163,39 +148,15 @@ public class Account implements Auditable, SoftDeletable {
 
         this.deleted = false;
         if (this.audit != null) {
-            tryClearDeleted();
+            this.audit.clearDeleted();
         }
     }
 
     public void setDeletedAt(Instant deletedAt) {
         if (this.audit != null) {
-            trySetDeletedAt(deletedAt);
+            this.audit.setDeletedAt(deletedAt);
         }
         this.deleted = deletedAt != null;
-    }
-
-    private void tryMarkDeleted(Instant now) {
-        try {
-            audit.markDeleted(now);
-        } catch (Throwable ignore) {
-            trySetDeletedAt(now);
-        }
-    }
-
-    private void tryClearDeleted() {
-        try {
-            audit.clearDeleted();
-        } catch (Throwable ignore) {
-            trySetDeletedAt(null);
-        }
-    }
-
-    private void trySetDeletedAt(Instant v) {
-        try {
-            audit.setDeletedAt(v);
-        } catch (Throwable ignore) {
-            // best-effort
-        }
     }
 
     // =========================
@@ -207,9 +168,7 @@ public class Account implements Auditable, SoftDeletable {
     }
 
     public void requireOperational() {
-        if (!isOperational()) {
-            throw new DomainException("Conta não está operacional");
-        }
+        if (!isOperational()) throw new DomainException("Conta não está operacional");
     }
 
     public void setDisplayNameSafe(String value) {
@@ -222,10 +181,6 @@ public class Account implements Auditable, SoftDeletable {
         this.slug = normalizeSlug(value);
     }
 
-    /**
-     * ✅ Antes: ensureSchemaName()
-     * ✅ Agora: ensureTenantSchema()
-     */
     public void ensureTenantSchema() {
         if (this.tenantSchema == null || this.tenantSchema.isBlank()) {
             this.tenantSchema = generateTenantSchemaFromSlug(this.slug);

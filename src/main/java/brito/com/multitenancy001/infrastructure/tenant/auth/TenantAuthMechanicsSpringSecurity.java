@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityFailureCode;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
@@ -57,7 +58,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
                 tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                        .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
                 return true;
             });
@@ -95,7 +96,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
                 TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException("INVALID_USER"));
+                        .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
 
                 ensureUserActive(user);
 

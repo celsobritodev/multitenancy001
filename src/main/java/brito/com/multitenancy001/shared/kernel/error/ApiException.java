@@ -5,17 +5,15 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Exceção padrão de API.
+ * Exceção padrão de API (VERSÃO ENFORCED).
  *
- * COMPATIBILIDADE:
- * - mantém o construtor legado (String error, String message, int status)
- * - adiciona construtores com ApiErrorCode
- *
- * Objetivo:
- * - permitir migração incremental de "String codes" para enum (ApiErrorCode)
- *   sem quebrar controllers/handlers existentes.
+ * Regras:
+ * - NÃO existe mais construtor legado com String code.
+ * - O "error" do payload é sempre code.name().
+ * - O status default vem de ApiErrorCode.httpStatus() quando não informado.
  */
 @Getter
 public class ApiException extends RuntimeException {
@@ -23,8 +21,7 @@ public class ApiException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     /**
-     * Código exposto no payload atual.
-     * Para enum: error = code.name()
+     * Código exposto no payload (sempre enum.name()).
      */
     private final String error;
 
@@ -34,7 +31,7 @@ public class ApiException extends RuntimeException {
     private final int status;
 
     /**
-     * Campos adicionais usados por ApiEnumErrorResponse (quando aplicável).
+     * Campos adicionais (quando aplicável).
      */
     private final String field;
     private final String invalidValue;
@@ -42,26 +39,29 @@ public class ApiException extends RuntimeException {
     private final Object details;
 
     /**
-     * Metadados tipados (novos, opcionais).
-     * Não quebram o contrato atual porque não precisam ser serializados.
+     * Metadados tipados.
      */
     private final ApiErrorCode code;
     private final ApiErrorCategory category;
 
     // =========================
-    // NOVO: enum (preferido)
+    // Construtores (preferidos)
     // =========================
 
     public ApiException(ApiErrorCode code) {
-        this(code, code != null ? code.defaultMessage() : null, code != null ? code.httpStatus() : 500, null, null, null, null);
+        this(code, null, 0, null, null, null, null);
     }
 
     public ApiException(ApiErrorCode code, String message) {
-        this(code, message, code != null ? code.httpStatus() : 500, null, null, null, null);
+        this(code, message, 0, null, null, null, null);
     }
 
     public ApiException(ApiErrorCode code, String message, int status) {
         this(code, message, status, null, null, null, null);
+    }
+
+    public ApiException(ApiErrorCode code, String message, int status, Object details) {
+        this(code, message, status, null, null, null, details);
     }
 
     public ApiException(
@@ -73,13 +73,15 @@ public class ApiException extends RuntimeException {
             List<String> allowedValues,
             Object details
     ) {
-        super(message);
+        super(resolveMessage(code, message));
 
-        this.code = code;
-        this.category = (code != null ? code.category() : ApiErrorCategory.INTERNAL);
+        ApiErrorCode safeCode = (code != null ? code : ApiErrorCode.INTERNAL_SERVER_ERROR);
 
-        this.error = (code != null ? code.name() : ApiErrorCode.INTERNAL_SERVER_ERROR.name());
-        this.status = status;
+        this.code = safeCode;
+        this.category = safeCode.category();
+
+        this.error = safeCode.name();
+        this.status = resolveStatus(safeCode, status);
 
         this.field = field;
         this.invalidValue = invalidValue;
@@ -88,38 +90,17 @@ public class ApiException extends RuntimeException {
     }
 
     // =========================
-    // LEGADO: String code
+    // Helpers
     // =========================
 
-    public ApiException(String error, String message, int status) {
-        this(error, message, status, null, null, null, null);
+    private static String resolveMessage(ApiErrorCode code, String message) {
+        if (message != null && !message.isBlank()) return message;
+        if (code != null && code.defaultMessage() != null && !code.defaultMessage().isBlank()) return code.defaultMessage();
+        return "Erro";
     }
 
-    public ApiException(String error, String message, int status, Object details) {
-        this(error, message, status, null, null, null, details);
-    }
-
-    public ApiException(
-            String error,
-            String message,
-            int status,
-            String field,
-            String invalidValue,
-            List<String> allowedValues,
-            Object details
-    ) {
-        super(message);
-
-        String safeError = (error != null && !error.isBlank()) ? error.trim() : ApiErrorCode.INTERNAL_SERVER_ERROR.name();
-        this.error = safeError;
-        this.status = status;
-
-        this.code = ApiErrorCode.tryParse(safeError).orElse(null);
-        this.category = (this.code != null ? this.code.category() : ApiErrorCategory.INTERNAL);
-
-        this.field = field;
-        this.invalidValue = invalidValue;
-        this.allowedValues = allowedValues;
-        this.details = details;
+    private static int resolveStatus(ApiErrorCode code, int status) {
+        if (status > 0) return status;
+        return Objects.requireNonNull(code, "code").httpStatus();
     }
 }

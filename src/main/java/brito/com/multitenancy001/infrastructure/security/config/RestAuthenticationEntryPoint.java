@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.infrastructure.security.config;
 
 import brito.com.multitenancy001.shared.api.error.ApiEnumErrorResponse;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,7 +30,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         ApiEnumErrorResponse body = ApiEnumErrorResponse.builder()
                 .timestamp(appClock.instant())
-                .error("UNAUTHORIZED")
+                .error(ApiErrorCode.UNAUTHENTICATED.name())
                 .message("Não autenticado ou token inválido")
                 .details(null)
                 .build();

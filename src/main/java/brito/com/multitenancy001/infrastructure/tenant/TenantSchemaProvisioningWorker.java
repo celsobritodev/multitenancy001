@@ -35,7 +35,6 @@ public class TenantSchemaProvisioningWorker {
     private static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(30);
 
     private final DataSource dataSource;
-    
 
     // =========================================================
     // Provisioning
@@ -54,7 +53,7 @@ public class TenantSchemaProvisioningWorker {
 
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
-                        "TENANT_SCHEMA_LOCK_TIMEOUT",
+                        ApiErrorCode.TENANT_SCHEMA_LOCK_TIMEOUT,
                         "Não foi possível obter lock de provisionamento do schema '" + tenantSchema + "'",
                         409
                 );
@@ -64,9 +63,16 @@ public class TenantSchemaProvisioningWorker {
                 createSchemaIfNotExists(conn, tenantSchema);
 
                 // Flyway do tenant usando a MESMA connection (lock continua válido)
-                var single = new SingleConnectionDataSource(conn, true);
-                TenantFlywayMigrator.migrate(single, tenantSchema);
-
+                SingleConnectionDataSource single = new SingleConnectionDataSource(conn, true);
+                try {
+                    TenantFlywayMigrator.migrate(single, tenantSchema);
+                } finally {
+                    try {
+                        single.destroy();
+                    } catch (Exception ignored) {
+                        // best-effort
+                    }
+                }
 
                 return true;
 
@@ -76,7 +82,7 @@ public class TenantSchemaProvisioningWorker {
 
         } catch (SQLException e) {
             throw new ApiException(
-                    "TENANT_SCHEMA_PROVISIONING_FAILED",
+                    ApiErrorCode.TENANT_SCHEMA_PROVISIONING_FAILED,
                     "Falha ao provisionar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
@@ -92,7 +98,7 @@ public class TenantSchemaProvisioningWorker {
 
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
-                        "TENANT_SCHEMA_LOCK_TIMEOUT",
+                        ApiErrorCode.TENANT_SCHEMA_LOCK_TIMEOUT,
                         "Não foi possível obter lock para drop do schema '" + tenantSchema + "'",
                         409
                 );
@@ -106,7 +112,7 @@ public class TenantSchemaProvisioningWorker {
 
         } catch (SQLException e) {
             throw new ApiException(
-                    "TENANT_SCHEMA_DROP_FAILED",
+                    ApiErrorCode.TENANT_SCHEMA_DROP_FAILED,
                     "Falha ao dropar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
@@ -138,7 +144,7 @@ public class TenantSchemaProvisioningWorker {
 
         } catch (SQLException e) {
             throw new ApiException(
-                    "TENANT_SCHEMA_EXISTS_CHECK_FAILED",
+                    ApiErrorCode.TENANT_SCHEMA_EXISTS_CHECK_FAILED,
                     "Falha ao verificar schema '" + tenantSchema + "': " + e.getMessage(),
                     500
             );
@@ -178,7 +184,7 @@ public class TenantSchemaProvisioningWorker {
 
         } catch (SQLException e) {
             throw new ApiException(
-                    "TENANT_TABLE_EXISTS_CHECK_FAILED",
+                    ApiErrorCode.TENANT_TABLE_EXISTS_CHECK_FAILED,
                     "Falha ao verificar tabela '" + tenantSchema + "." + t + "': " + e.getMessage(),
                     500
             );
@@ -260,7 +266,7 @@ public class TenantSchemaProvisioningWorker {
 
         if (!s.matches("^[a-z][a-z0-9_]*$")) {
             throw new ApiException(
-                    "SCHEMA_INVALID",
+                    ApiErrorCode.SCHEMA_INVALID,
                     "tenantSchema inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef",
                     400
             );

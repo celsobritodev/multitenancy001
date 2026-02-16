@@ -22,12 +22,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ControlPlaneUserExplicitPermissionsService {
 
-    private static final String BUILTIN_IMMUTABLE_CODE = "USER_BUILT_IN_IMMUTABLE";
     private static final String BUILTIN_IMMUTABLE_MESSAGE =
             "Usuário BUILT_IN é protegido: não pode ter permissões alteradas; apenas senha pode ser trocada.";
 
-    private static final String CP_ACCOUNT_INVALID_CODE = "CONTROLPLANE_ACCOUNT_INVALID";
-    private static final String CP_ACCOUNT_INVALID_MESSAGE =
+    private static final String MSG_CP_ACCOUNT_INVALID  =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
@@ -54,7 +52,7 @@ public class ControlPlaneUserExplicitPermissionsService {
                         return ControlPlanePermission.valueOf(code);
                     } catch (IllegalArgumentException e) {
                         throw new ApiException(
-                                "INVALID_PERMISSION",
+                                ApiErrorCode.INVALID_PERMISSION,
                                 "Permission não existe no enum ControlPlanePermission: " + code,
                                 400
                         );
@@ -69,8 +67,8 @@ public class ControlPlaneUserExplicitPermissionsService {
                 cp = accountRepository.getSingleControlPlaneAccount();
             } catch (IllegalStateException e) {
                 throw new ApiException(
-                        CP_ACCOUNT_INVALID_CODE,
-                        CP_ACCOUNT_INVALID_MESSAGE + " " + e.getMessage(),
+                        ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
+                        MSG_CP_ACCOUNT_INVALID  + " " + e.getMessage(),
                         500
                 );
             }
@@ -79,17 +77,15 @@ public class ControlPlaneUserExplicitPermissionsService {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            // NOT DELETED por contrato (deleted=false)
             ControlPlaneUser user = controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-            // escopo CP garantido
             if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
                 throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
             }
 
             if (user.isBuiltInUser()) {
-                throw new ApiException(BUILTIN_IMMUTABLE_CODE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
 
             user.replaceExplicitPermissions(perms);
