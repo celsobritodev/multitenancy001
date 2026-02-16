@@ -1,0 +1,624 @@
+{
+  "info": {
+    "_postman_id": "759648b4-fb58-4e17-b773-2bf7afa2e02a",
+    "name": "multitenancy001-e2e",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "22901965"
+  },
+  "item": [
+    {
+      "name": "00 - Bootstrap",
+      "item": [
+        {
+          "name": "00.01 health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Health OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "console.log(\"base_url =\", pm.variables.get(\"base_url\"));\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.02 signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Signup OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "// extrai dados do seu formato real\r",
+                  "const accountId = json.account?.id;\r",
+                  "const tenantSchema = json.account?.tenantSchema;\r",
+                  "const tenantEmail = json.tenantAdmin?.email;\r",
+                  "\r",
+                  "// pega a senha do próprio request (assim não fica duplicado)\r",
+                  "let req = {};\r",
+                  "try { req = pm.request.body ? JSON.parse(pm.request.body.raw) : {}; } catch (e) {}\r",
+                  "const tenantPassword = req.password;\r",
+                  "\r",
+                  "pm.expect(accountId, \"account.id ausente\").to.be.ok;\r",
+                  "pm.expect(tenantSchema, \"account.tenantSchema ausente\").to.be.ok;\r",
+                  "pm.expect(tenantEmail, \"tenantAdmin.email ausente\").to.be.ok;\r",
+                  "pm.expect(tenantPassword, \"password ausente no request\").to.be.ok;\r",
+                  "\r",
+                  "// salva para o resto da collection\r",
+                  "pm.collectionVariables.set(\"accountId\", String(accountId));\r",
+                  "pm.collectionVariables.set(\"tenantSchema\", String(tenantSchema));\r",
+                  "pm.collectionVariables.set(\"tenant_email\", String(tenantEmail));\r",
+                  "pm.collectionVariables.set(\"tenant_password\", String(tenantPassword));\r",
+                  "\r",
+                  "console.log(\"Saved accountId=\", accountId, \"tenantSchema=\", tenantSchema, \"tenant_email=\", tenantEmail);\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Foton Devices\",\n  \"loginEmail\": \"vendas@fotondevices.com\",\n  \"taxIdType\": \"CNPJ\",\n  \"taxIdNumber\": \"12345678000195\",\n  \"password\": \"admin123\",\n  \"confirmPassword\": \"admin123\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.03 tenant login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant login OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "// tokens\r",
+                  "pm.expect(json.accessToken, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(json.tokenType, \"tokenType ausente\").to.be.ok;\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"tenant_access_token\", String(json.accessToken));\r",
+                  "pm.collectionVariables.set(\"tenant_refresh_token\", String(json.refreshToken || \"\"));\r",
+                  "\r",
+                  "// ids/contexto (ótimo para encadear e validar)\r",
+                  "if (json.userId != null) pm.collectionVariables.set(\"tenantUserId\", String(json.userId));\r",
+                  "if (json.accountId != null) pm.collectionVariables.set(\"accountId\", String(json.accountId));\r",
+                  "if (json.tenantSchema) pm.collectionVariables.set(\"tenantSchema\", String(json.tenantSchema));\r",
+                  "if (json.email) pm.collectionVariables.set(\"tenant_email\", String(json.email));\r",
+                  "\r",
+                  "console.log(\"Tenant token saved. accountId=\", json.accountId, \"tenantSchema=\", json.tenantSchema);\r",
+                  "\r",
+                  "// valida consistência com o que o signup salvou (se existir)\r",
+                  "const expectedAccountId = pm.collectionVariables.get(\"accountId\");\r",
+                  "const expectedTenantSchema = pm.collectionVariables.get(\"tenantSchema\");\r",
+                  "\r",
+                  "if (expectedAccountId) {\r",
+                  "  pm.test(\"accountId consistente com signup\", function () {\r",
+                  "    pm.expect(String(json.accountId)).to.eql(String(expectedAccountId));\r",
+                  "  });\r",
+                  "}\r",
+                  "if (expectedTenantSchema) {\r",
+                  "  pm.test(\"tenantSchema consistente com signup\", function () {\r",
+                  "    pm.expect(String(json.tenantSchema)).to.eql(String(expectedTenantSchema));\r",
+                  "  });\r",
+                  "}\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tenant_email}}\",\n  \"password\": \"{{tenant_password}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 - Authorization",
+      "item": [
+        {
+          "name": "01.01 tenant me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_acess_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Control Plane Smoke",
+      "item": [
+        {
+          "name": "controlplane login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"ControlPlane login OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.expect(json.accessToken, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(json.tokenType, \"tokenType ausente\").to.be.ok;\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"cp_access_token\", String(json.accessToken));\r",
+                  "pm.collectionVariables.set(\"cp_refresh_token\", String(json.refreshToken || \"\"));\r",
+                  "\r",
+                  "if (json.userId != null) pm.collectionVariables.set(\"cpUserId\", String(json.userId));\r",
+                  "if (json.accountId != null) pm.collectionVariables.set(\"cpAccountId\", String(json.accountId));\r",
+                  "if (json.tenantSchema) pm.collectionVariables.set(\"cpTenantSchema\", String(json.tenantSchema));\r",
+                  "if (json.email) pm.collectionVariables.set(\"cp_email\", String(json.email));\r",
+                  "\r",
+                  "console.log(\"CP token saved. userId=\", json.userId, \"accountId=\", json.accountId, \"tenantSchema=\", json.tenantSchema);\r",
+                  "\r",
+                  "// sanity: CP deve ser public\r",
+                  "pm.test(\"CP tenantSchema = public\", function () {\r",
+                  "  pm.expect(String(json.tenantSchema)).to.eql(\"public\");\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"{{cp_email}}\",\r\n  \"password\": \"{{cp_password}}\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "controlplane me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"ControlPlane /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cp_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Category",
+      "item": [
+        {
+          "name": "create category",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();\r",
+                  "pm.collectionVariables.set(\"ts\", String(ts));\r",
+                  "pm.collectionVariables.set(\"category_name\", \"Medidores de fluxo E2E \" + ts);\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create category -> 201\", function () {\r",
+                  "  pm.expect(pm.response.code).to.eql(201);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Response has id\", function () {\r",
+                  "  pm.expect(json.id).to.be.a(\"number\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"deleted=false\", function () {\r",
+                  "  pm.expect(json.deleted).to.eql(false);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"audit.createdAt exists\", function () {\r",
+                  "  pm.expect(json.audit).to.be.an(\"object\");\r",
+                  "  pm.expect(json.audit.createdAt).to.be.ok;\r",
+                  "});\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"categoryId\", String(json.id));\r",
+                  "console.log(\"Saved categoryId=\", json.id, \"name=\", json.name);\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": ""
+    },
+    {
+      "key": "cp_acess_token",
+      "value": ""
+    },
+    {
+      "key": "tenant_acess_token",
+      "value": ""
+    },
+    {
+      "key": "signup_response_raw",
+      "value": ""
+    },
+    {
+      "key": "accountId",
+      "value": ""
+    },
+    {
+      "key": "tenantSchema",
+      "value": ""
+    },
+    {
+      "key": "tenant_email",
+      "value": ""
+    },
+    {
+      "key": "tenant_password",
+      "value": ""
+    },
+    {
+      "key": "tenant_access_token",
+      "value": ""
+    },
+    {
+      "key": "tenant_refresh_token",
+      "value": ""
+    },
+    {
+      "key": "tenantUserId",
+      "value": ""
+    },
+    {
+      "key": "cp_email",
+      "value": ""
+    },
+    {
+      "key": "cp_password",
+      "value": ""
+    },
+    {
+      "key": "cp_access_token",
+      "value": ""
+    },
+    {
+      "key": "cp_refresh_token",
+      "value": ""
+    },
+    {
+      "key": "cpUserId",
+      "value": ""
+    },
+    {
+      "key": "cpAccountId",
+      "value": ""
+    },
+    {
+      "key": "cpTenantSchema",
+      "value": ""
+    },
+    {
+      "key": "ts",
+      "value": ""
+    },
+    {
+      "key": "category_name",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    }
+  ]
+}

@@ -6,8 +6,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Configuration
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @EnableTransactionManagement
 @RequiredArgsConstructor
 public class TransactionManagementConfig implements TransactionManagementConfigurer, SmartInitializingSingleton {

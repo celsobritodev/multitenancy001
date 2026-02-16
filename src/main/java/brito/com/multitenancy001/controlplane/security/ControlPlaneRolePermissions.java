@@ -31,15 +31,21 @@ public final class ControlPlaneRolePermissions {
         admin.remove(ControlPlanePermission.CP_USER_DELETE);
         MAP.put(ControlPlaneRole.CONTROLPLANE_ADMIN, unmodifiable(admin));
 
-        // BILLING_MANAGER = billing + leitura básica do tenant
+        // BILLING_MANAGER = billing + leitura básica do tenant + self-service (/me)
         MAP.put(ControlPlaneRole.CONTROLPLANE_BILLING_MANAGER, unmodifiable(EnumSet.of(
+                ControlPlanePermission.CP_ME_READ,
+                ControlPlanePermission.CP_ME_PASSWORD_CHANGE,
+
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_BILLING_READ,
                 ControlPlanePermission.CP_BILLING_WRITE
         )));
 
-        // SUPPORT = READ + SUSPEND/RESUME + PASSWORD_RESET (sem deletes; sem write por padrão)
+        // SUPPORT = READ + SUSPEND/RESUME + PASSWORD_RESET + self-service (/me)
         MAP.put(ControlPlaneRole.CONTROLPLANE_SUPPORT, unmodifiable(EnumSet.of(
+                ControlPlanePermission.CP_ME_READ,
+                ControlPlanePermission.CP_ME_PASSWORD_CHANGE,
+
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_TENANT_SUSPEND,
                 ControlPlanePermission.CP_TENANT_RESUME,
@@ -47,14 +53,20 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_USER_PASSWORD_RESET
         )));
 
-        // OPERATOR = leitura operacional
+        // OPERATOR = leitura operacional + self-service (/me)
         MAP.put(ControlPlaneRole.CONTROLPLANE_OPERATOR, unmodifiable(EnumSet.of(
+                ControlPlanePermission.CP_ME_READ,
+                ControlPlanePermission.CP_ME_PASSWORD_CHANGE,
+
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_USER_READ
         )));
 
-        // VIEWER = somente leitura
+        // VIEWER = somente leitura + self-service (/me)
         MAP.put(ControlPlaneRole.CONTROLPLANE_VIEWER, unmodifiable(EnumSet.of(
+                ControlPlanePermission.CP_ME_READ,
+                ControlPlanePermission.CP_ME_PASSWORD_CHANGE,
+
                 ControlPlanePermission.CP_TENANT_READ,
                 ControlPlanePermission.CP_BILLING_READ,
                 ControlPlanePermission.CP_USER_READ

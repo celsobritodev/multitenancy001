@@ -4,9 +4,11 @@ import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 
 import brito.com.multitenancy001.shared.db.Schemas;
 
@@ -20,6 +22,7 @@ import brito.com.multitenancy001.shared.db.Schemas;
  * - bean "flyway" → usado pelo Spring Boot
  * - bean "flywayInitializer" → gatilho oficial de migração
  */
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @Configuration
 public class PublicFlywayConfig {
 
