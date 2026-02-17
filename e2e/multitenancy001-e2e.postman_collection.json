@@ -43,6 +43,9 @@
             "disableBodyPruning": true
           },
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [],
             "body": {
@@ -218,6 +221,33 @@
           },
           "response": []
         }
+      ],
+      "auth": {
+        "type": "noauth"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
       ]
     },
     {
@@ -242,16 +272,6 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{tenant_access_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "GET",
             "header": [],
             "url": {
@@ -274,7 +294,7 @@
         "bearer": [
           {
             "key": "token",
-            "value": "{{tenant_acess_token}}",
+            "value": "{{tenant_access_token}}",
             "type": "string"
           }
         ]
@@ -346,6 +366,9 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [],
             "body": {
@@ -391,16 +414,6 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{cp_access_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "GET",
             "header": [],
             "url": {
@@ -416,6 +429,40 @@
             }
           },
           "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{cp_access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
         }
       ]
     },
@@ -473,16 +520,6 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{tenant_access_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
             "header": [],
             "body": {
@@ -507,6 +544,42 @@
             }
           },
           "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              "console.log(\"Authorization header =\", pm.request.headers.get(\"Authorization\"));\r",
+              "console.log(\"tenant_access_token exists =\", pm.collectionVariables.get(\"tenant_access_token\") ? \"YES\" : \"NO\");\r",
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
         }
       ]
     }
@@ -542,10 +615,6 @@
     },
     {
       "key": "cp_acess_token",
-      "value": ""
-    },
-    {
-      "key": "tenant_acess_token",
       "value": ""
     },
     {
