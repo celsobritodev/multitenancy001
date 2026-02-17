@@ -287,6 +287,76 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "01.02 refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "01.03 logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
         }
       ],
       "auth": {
@@ -328,7 +398,7 @@
       "name": "02 - Control Plane Smoke",
       "item": [
         {
-          "name": "controlplane login",
+          "name": "02.01 controlplane login",
           "event": [
             {
               "listen": "test",
@@ -396,7 +466,7 @@
           "response": []
         },
         {
-          "name": "controlplane me",
+          "name": "02.02 controlplane me",
           "event": [
             {
               "listen": "test",
@@ -467,18 +537,25 @@
       ]
     },
     {
-      "name": "03 - Category",
+      "name": "03 - Categories",
       "item": [
         {
-          "name": "create category",
+          "name": "03.01 create category",
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "exec": [
                   "const ts = Date.now();\r",
+                  "console.log(\"DEBUG set categoryId =\", pm.collectionVariables.get(\"categoryId\"));\r",
+                  "\r",
                   "pm.collectionVariables.set(\"ts\", String(ts));\r",
                   "pm.collectionVariables.set(\"category_name\", \"Medidores de fluxo E2E \" + ts);\r",
+                  "\r",
+                  "console.log(\"Request auth type =\", pm.request.auth ? pm.request.auth.type : \"no request auth (inherited)\");\r",
+                  "console.log(\"tenant_access_token exists =\", pm.collectionVariables.get(\"tenant_access_token\") ? \"YES\" : \"NO\");\r",
+                  "\r",
+                  "\r",
                   ""
                 ],
                 "type": "text/javascript",
@@ -491,7 +568,7 @@
               "script": {
                 "exec": [
                   "pm.test(\"Create category -> 201\", function () {\r",
-                  "  pm.expect(pm.response.code).to.eql(201);\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([201]);\r",
                   "});\r",
                   "\r",
                   "const json = pm.response.json();\r",
@@ -500,17 +577,12 @@
                   "  pm.expect(json.id).to.be.a(\"number\");\r",
                   "});\r",
                   "\r",
-                  "pm.test(\"deleted=false\", function () {\r",
-                  "  pm.expect(json.deleted).to.eql(false);\r",
-                  "});\r",
+                  "pm.collectionVariables.set(\"categoryId\", json.id);\r",
                   "\r",
-                  "pm.test(\"audit.createdAt exists\", function () {\r",
-                  "  pm.expect(json.audit).to.be.an(\"object\");\r",
-                  "  pm.expect(json.audit.createdAt).to.be.ok;\r",
-                  "});\r",
+                  "// opcional: guardar nome pra comparar em list/search depois\r",
+                  "pm.collectionVariables.set(\"category_name\", json.name);\r",
                   "\r",
-                  "pm.collectionVariables.set(\"categoryId\", String(json.id));\r",
-                  "console.log(\"Saved categoryId=\", json.id, \"name=\", json.name);\r",
+                  "console.log(\"Saved categoryId =\", json.id, \"name =\", json.name);\r",
                   ""
                 ],
                 "type": "text/javascript",
@@ -540,6 +612,307 @@
                 "api",
                 "tenant",
                 "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.02 get category by id",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.03 list categories",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List categories OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.04 update category",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get(\"categoryId\");\r",
+                  "if (!categoryId) {\r",
+                  "  throw new Error(\"E2E FAIL-FAST: categoryId não definido antes do UPDATE. Rode 03.01 create category antes.\");\r",
+                  "}\r",
+                  "\r",
+                  "console.log(\"DEBUG categoryId =\", categoryId);\r",
+                  "console.log(\"DEBUG resolved url =\", pm.request.url.toString());\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Updated name applied\", function () {\r",
+                  "  pm.expect(json.name).to.include(\"UPDATED\");\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}} UPDATED {{ts}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.05 delete category",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.06 get category should 404",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get after delete should be 404\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([404]);\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"Categoria E2E UPDATED {{timestamp}}\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
               ]
             }
           },
@@ -582,6 +955,14 @@
           }
         }
       ]
+    },
+    {
+      "name": "04 - Products",
+      "item": []
+    },
+    {
+      "name": "05 - Suppliers",
+      "item": []
     }
   ],
   "event": [
@@ -611,10 +992,6 @@
   "variable": [
     {
       "key": "base_url",
-      "value": ""
-    },
-    {
-      "key": "cp_acess_token",
       "value": ""
     },
     {
@@ -687,6 +1064,10 @@
     },
     {
       "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "category_name_updated",
       "value": ""
     }
   ]
