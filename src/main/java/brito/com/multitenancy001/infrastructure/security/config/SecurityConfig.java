@@ -23,6 +23,19 @@ import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.List;
 
+/**
+ * Configuração de segurança (JWT stateless).
+ *
+ * Ordem de filtros:
+ * 1) RequestMetaContextFilter (correlation id / ip / user-agent)
+ * 2) JwtAuthenticationFilter (autenticação JWT)
+ * 3) MustChangePasswordFilter (política 428)
+ * 4) RequestLoggingFilter (log final)
+ *
+ * Ajuste:
+ * - libera /api/tenant/auth/logout e /api/controlplane/auth/logout como public endpoints
+ *   (logout é baseado em refreshToken no body, e não depende do access token).
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -119,11 +132,13 @@ public class SecurityConfig {
                     // ✅ CONTROL PLANE AUTH
                     "/api/controlplane/auth/login",
                     "/api/controlplane/auth/refresh",
+                    "/api/controlplane/auth/logout",
 
                     // ✅ TENANT AUTH
                     "/api/tenant/auth/login",
                     "/api/tenant/auth/login/confirm",
                     "/api/tenant/auth/refresh",
+                    "/api/tenant/auth/logout",
 
                     // ✅ TENANT: troca de senha (JWT, mas precisa passar pelo filtro 428)
                     // OBS: Security precisa deixar chegar no controller; o MustChangePasswordFilter decide 428 vs allow.

@@ -1,16 +1,6 @@
 package brito.com.multitenancy001.infrastructure.tenant.auth;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.InternalAuthenticationServiceException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityFailureCode;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
@@ -22,14 +12,31 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantRefreshIdentity;
 import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
+/**
+ * Implementação do TenantAuthMechanics usando Spring Security + JWT.
+ *
+ * Ajustes:
+ * - resolveRefreshIdentity(refreshToken) NÃO faz query (somente parse/validação JWT)
+ * - refreshTenantJwt(refreshToken) faz 1 query e emite NOVO refresh token (rotação)
+ */
 @Component
 @RequiredArgsConstructor
-public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics {
+public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
@@ -41,13 +48,13 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
     @Override
     public boolean verifyPasswordInTenant(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+        /** comentário: valida senha dentro do schema do tenant */
         if (account == null || account.id() == null) return false;
 
         String tenantSchema = account.tenantSchema();
         if (!StringUtils.hasText(tenantSchema)) return false;
 
         tenantSchema = tenantSchema.trim();
-
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
 
         try {
@@ -71,6 +78,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
     @Override
     public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+        /** comentário: autentica com senha e emite access+refresh */
         if (account == null || account.id() == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }
@@ -150,6 +158,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
     @Override
     public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
+        /** comentário: emite tokens sem senha (confirm) */
         if (account == null || account.id() == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }
@@ -215,7 +224,8 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
     }
 
     @Override
-    public JwtResult refreshTenantJwt(String refreshToken) {
+    public TenantRefreshIdentity resolveRefreshIdentity(String refreshToken) {
+        /** comentário: valida refresh e resolve identidade mínima (sem query) */
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
@@ -245,10 +255,18 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (accountId ausente)", 401);
         }
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+        return new TenantRefreshIdentity(email.trim(), accountId, tenantSchema);
+    }
+
+    @Override
+    public JwtResult refreshTenantJwt(String refreshToken) {
+        /** comentário: refresh do tenant com rotação (novo refresh token) */
+        TenantRefreshIdentity id = resolveRefreshIdentity(refreshToken);
+
+        return tenantExecutor.runInTenantSchema(id.tenantSchema(), () -> {
 
             TenantUser user = tenantUserRepository
-                    .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                    .findByEmailAndAccountIdAndDeletedFalse(id.email(), id.accountId())
                     .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401));
 
             ensureUserActive(user);
@@ -259,7 +277,7 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
 
             AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
                     user,
-                    tenantSchema,
+                    id.tenantSchema(),
                     appClock.instant(),
                     authorities
             );
@@ -270,23 +288,30 @@ public class TenantAuthMechanicsSpringSecurity implements brito.com.multitenancy
                     authorities
             );
 
-            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, accountId, tenantSchema);
+            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, id.accountId(), id.tenantSchema());
+
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(
+                    user.getEmail(),
+                    id.tenantSchema(),
+                    id.accountId()
+            );
 
             SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
 
             return new JwtResult(
                     newAccessToken,
-                    refreshToken,
+                    newRefreshToken,
                     user.getId(),
                     user.getEmail(),
                     role,
-                    accountId,
-                    tenantSchema
+                    id.accountId(),
+                    id.tenantSchema()
             );
         });
     }
 
     private static void ensureUserActive(TenantUser user) {
+        /** comentário: bloqueia usuário suspenso/inativo/deletado */
         if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
             throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo", 403);
         }

@@ -1,12 +1,12 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdminLoginCommand;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.integration.audit.ControlPlaneAuthEventAuditIntegrationService;
 import brito.com.multitenancy001.integration.auth.ControlPlaneJwtIntegrationService;
+import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -28,6 +28,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 
+/**
+ * Serviço de login do ControlPlane.
+ *
+ * Ajuste:
+ * - Ao emitir refreshToken no login, registra sessão server-side (logout forte / rotação).
+ */
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneAuthService {
@@ -44,8 +50,11 @@ public class ControlPlaneAuthService {
     private final ControlPlaneAuthEventAuditIntegrationService authAudit;
     private final AppClock appClock;
 
+    private final AuthRefreshSessionService refreshSessions;
+
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
+        /** comentário: valida entrada, autentica, emite tokens e registra sessão */
         if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Requisição inválida", 400);
         if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
         if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
@@ -60,21 +69,18 @@ public class ControlPlaneAuthService {
         try {
             return publicExecutor.inPublic(() -> {
 
-                // (1) Resolve identity -> subject_id (CP user id)
                 Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
                 if (cpUserId == null) {
                     auditDenied(emailNorm, "{\"reason\":\"identity_not_found\"}");
                     throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
                 }
 
-                // (2) Carrega o usuário CP por ID (não por email)
                 ControlPlaneUser user = controlPlaneUserRepository
                         .findByIdAndDeletedFalse(cpUserId)
                         .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404));
 
                 Long accountId = user.getAccount().getId();
 
-                // (3) Status checks
                 Instant now = appClock.instant();
 
                 if (!user.isEnabled()) {
@@ -87,7 +93,6 @@ public class ControlPlaneAuthService {
                     throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
                 }
 
-                // (4) Autentica
                 Authentication authentication = authenticationManager.authenticate(
                         new UsernamePasswordAuthenticationToken(emailNorm, password)
                 );
@@ -96,7 +101,15 @@ public class ControlPlaneAuthService {
 
                 String refreshToken = jwtIntegration.generateRefreshToken(user.getEmail(), DEFAULT_SCHEMA, accountId);
 
-                // (5) last_login + audit
+                // ✅ registra sessão server-side (logout forte / rotação)
+                refreshSessions.onRefreshIssued(
+                        "CONTROLPLANE",
+                        accountId,
+                        user.getId(),
+                        DEFAULT_SCHEMA,
+                        refreshToken
+                );
+
                 user.markLastLogin(now);
                 controlPlaneUserRepository.save(user);
 
@@ -121,6 +134,7 @@ public class ControlPlaneAuthService {
     }
 
     private void auditAttempt(String emailNorm, String detailsJson) {
+        /** comentário: audit attempt de login */
         authAudit.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_INIT,
@@ -134,6 +148,7 @@ public class ControlPlaneAuthService {
     }
 
     private void auditDenied(String emailNorm, String detailsJson) {
+        /** comentário: audit denied de login */
         authAudit.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_DENIED,
@@ -147,6 +162,7 @@ public class ControlPlaneAuthService {
     }
 
     private void auditSuccess(String emailNorm, String detailsJson) {
+        /** comentário: audit success de login */
         authAudit.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_SUCCESS,
