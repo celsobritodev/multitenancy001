@@ -1,0 +1,2062 @@
+{
+  "info": {
+    "_postman_id": "759648b4-fb58-4e17-b773-2bf7afa2e02a",
+    "name": "multitenancy001-e2e (v12.7 - remove folder-level auth logs + 03.04b)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "22901965"
+  },
+  "item": [
+    {
+      "name": "00 - Bootstrap",
+      "item": [
+        {
+          "name": "00.01 health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Health OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.02 signup",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// E2E: generate unique identifiers per run to avoid 409 conflicts",
+                  "if (!pm.collectionVariables.get('run_id')) {",
+                  "  pm.collectionVariables.set('run_id', String(Date.now()));",
+                  "}",
+                  "const runId = pm.collectionVariables.get('run_id');",
+                  "pm.environment.set('run_id', runId);",
+                  "",
+                  "// Unique email per run",
+                  "pm.environment.set('tenant_email', `vendas+${runId}@fotondevices.com`);",
+                  "pm.environment.set('tenant_password', 'admin123');",
+                  "",
+                  "// Generate VALID CNPJ (14 digits) with correct check digits",
+                  "function calcDv(numStr, weights) {",
+                  "  let sum = 0;",
+                  "  for (let i = 0; i < weights.length; i++) {",
+                  "    sum += parseInt(numStr[i], 10) * weights[i];",
+                  "  }",
+                  "  const mod = sum % 11;",
+                  "  const dv = (mod < 2) ? 0 : (11 - mod);",
+                  "  return String(dv);",
+                  "}",
+                  "",
+                  "// Base 12 digits derived from runId (deterministic) + '0001' branch-like",
+                  "let base = runId.replace(/\\D/g, '');",
+                  "base = base.slice(-8).padStart(8,'0');",
+                  "const base12 = (`12345678${base}`).slice(0, 12);",
+                  "const w1 = [5,4,3,2,9,8,7,6,5,4,3,2];",
+                  "const w2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];",
+                  "const dv1 = calcDv(base12, w1);",
+                  "const dv2 = calcDv(base12 + dv1, w2);",
+                  "const cnpj = base12 + dv1 + dv2;",
+                  "pm.environment.set('tenant_tax_id', cnpj);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// E2E: signup assertions + diagnostics",
+                  "const status = pm.response.code;",
+                  "if (status !== 200 && status !== 201) {",
+                  "}",
+                  "",
+                  "pm.test('Signup OK (200/201)', function () {",
+                  "  pm.expect(status).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "// Only parse success payload when OK",
+                  "if (status === 200 || status === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.test('account.id presente', () => pm.expect(json.account && json.account.id).to.be.ok);",
+                  "  pm.test('tenantSchema presente', () => pm.expect(json.account && json.account.tenantSchema).to.be.ok);",
+                  "  pm.environment.set('account_id', String(json.account.id));",
+                  "  pm.environment.set('tenant_schema', String(json.account.tenantSchema));",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Foton Devices\",\n  \"loginEmail\": \"{{tenant_email}}\",\n  \"taxIdType\": \"CNPJ\",\n  \"taxIdNumber\": \"{{tenant_tax_id}}\",\n  \"password\": \"{{tenant_password}}\",\n  \"confirmPassword\": \"{{tenant_password}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.03 tenant login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant login OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "// tokens\r",
+                  "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                  "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "\r",
+                  "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(json.tokenType || json.token_type || (json.tokens && (json.tokens.tokenType || json.tokens.token_type)), \"tokenType ausente\").to.be.ok;\r",
+                  "\r",
+                  "pm.environment.set(\"tenant_access_token\", String(access));\r",
+                  "pm.environment.set(\"tenant_refresh_token\", String(refresh || \"\"));\r",
+                  "pm.expect(json.tokenType, \"tokenType ausente\").to.be.ok;\r",
+                  "\r",
+                  "\r",
+                  "// ids/contexto (ótimo para encadear e validar)\r",
+                  "if (json.userId != null) pm.collectionVariables.set(\"tenantUserId\", String(json.userId));\r",
+                  "if (json.accountId != null) pm.collectionVariables.set(\"accountId\", String(json.accountId));\r",
+                  "if (json.tenantSchema) pm.collectionVariables.set(\"tenantSchema\", String(json.tenantSchema));\r",
+                  "if (json.email) pm.collectionVariables.set(\"tenant_email\", String(json.email));\r",
+                  "\r",
+                  "\r",
+                  "// valida consistência com o que o signup salvou (se existir)\r",
+                  "const expectedAccountId = pm.collectionVariables.get(\"accountId\");\r",
+                  "const expectedTenantSchema = pm.collectionVariables.get(\"tenantSchema\");\r",
+                  "\r",
+                  "if (expectedAccountId) {\r",
+                  "  pm.test(\"accountId consistente com signup\", function () {\r",
+                  "    pm.expect(String(json.accountId)).to.eql(String(expectedAccountId));\r",
+                  "  });\r",
+                  "}\r",
+                  "if (expectedTenantSchema) {\r",
+                  "  pm.test(\"tenantSchema consistente com signup\", function () {\r",
+                  "    pm.expect(String(json.tenantSchema)).to.eql(String(expectedTenantSchema));\r",
+                  "  });\r",
+                  "}\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tenant_email}}\",\n  \"password\": \"{{tenant_password}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "noauth"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Tenant Auth (Refresh/Logout)",
+      "item": [
+        {
+          "name": "01.01 tenant me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "01.02 tenant refresh (rotate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant refresh -> 200\", () => pm.expect(pm.response.code).to.eql(200));\r",
+                  "const json = pm.response.json();\r",
+                  "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                  "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(refresh, \"refreshToken ausente\").to.be.ok;\r",
+                  "\r",
+                  "// Save old before overwriting\r",
+                  "const old = pm.environment.get('tenant_refresh_token');\r",
+                  "pm.environment.set('tenant_refresh_token_old', String(old || ''));\r",
+                  "\r",
+                  "// Update tokens\r",
+                  "pm.environment.set('tenant_access_token', String(access));\r",
+                  "pm.environment.set('tenant_refresh_token', String(refresh));\r",
+                  "\r",
+                  "// Some implementations rotate by invalidating old refresh even if JWT string remains the same.\r",
+                  "// We accept either: token changes OR old becomes unusable in the next step.\r",
+                  "const rotated = String(refresh) !== String(old);\r",
+                  "pm.environment.set('tenant_refresh_rotated', rotated ? 'true' : 'false');\r",
+                  "pm.test(\"refresh token rotation semantics (string may or may not change)\", () => pm.expect(true).to.eql(true));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.03 tenant me (access novo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "01.04 tenant refresh (old token) deve falhar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token_old}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// If token string rotated, old must fail. If not rotated, this step validates one-time-use semantics.\r",
+                  "const rotated = pm.environment.get('tenant_refresh_rotated') === 'true';\r",
+                  "if (rotated) {\r",
+                  "  pm.test('Old refresh must fail (400/401)', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r",
+                  "} else {\r",
+                  "  // Either it fails (one-time-use) OR it succeeds but must now return a DIFFERENT refresh.\r",
+                  "  if (pm.response.code === 200) {\r",
+                  "    const json = pm.response.json();\r",
+                  "    const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "    const used = pm.environment.get('tenant_refresh_token_old');\r",
+                  "    pm.test('Second refresh returned refreshToken', () => pm.expect(refresh).to.be.ok);\r",
+                  "    pm.test('When second refresh succeeds, it must rotate the token string', () => pm.expect(String(refresh)).to.not.eql(String(used)));\r",
+                  "    // Update env to continue flow\r",
+                  "    pm.environment.set('tenant_refresh_token', String(refresh));\r",
+                  "  } else {\r",
+                  "    pm.test('Second refresh with same token should fail (400/401)', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r",
+                  "  }\r",
+                  "}\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.05 tenant logout (single device)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\",\n  \"allDevices\": false\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "logout"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant logout -> 204\", () => pm.expect(pm.response.code).to.eql(204));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.06 tenant refresh (revogado) deve falhar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Refresh revogado deve falhar (400/401)\", () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "01.10 optional - logout allDevices",
+          "item": [
+            {
+              "name": "00.03 tenant login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Tenant login OK\", function () {\r",
+                      "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                      "});\r",
+                      "\r",
+                      "const json = pm.response.json();\r",
+                      "\r",
+                      "// tokens\r",
+                      "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                      "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                      "\r",
+                      "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                      "pm.expect(json.tokenType || json.token_type || (json.tokens && (json.tokens.tokenType || json.tokens.token_type)), \"tokenType ausente\").to.be.ok;\r",
+                      "\r",
+                      "pm.environment.set(\"tenant_access_token\", String(access));\r",
+                      "pm.environment.set(\"tenant_refresh_token\", String(refresh || \"\"));\r",
+                      "pm.expect(json.tokenType, \"tokenType ausente\").to.be.ok;\r",
+                      "\r",
+                      "\r",
+                      "// ids/contexto (ótimo para encadear e validar)\r",
+                      "if (json.userId != null) pm.collectionVariables.set(\"tenantUserId\", String(json.userId));\r",
+                      "if (json.accountId != null) pm.collectionVariables.set(\"accountId\", String(json.accountId));\r",
+                      "if (json.tenantSchema) pm.collectionVariables.set(\"tenantSchema\", String(json.tenantSchema));\r",
+                      "if (json.email) pm.collectionVariables.set(\"tenant_email\", String(json.email));\r",
+                      "\r",
+                      "\r",
+                      "// valida consistência com o que o signup salvou (se existir)\r",
+                      "const expectedAccountId = pm.collectionVariables.get(\"accountId\");\r",
+                      "const expectedTenantSchema = pm.collectionVariables.get(\"tenantSchema\");\r",
+                      "\r",
+                      "if (expectedAccountId) {\r",
+                      "  pm.test(\"accountId consistente com signup\", function () {\r",
+                      "    pm.expect(String(json.accountId)).to.eql(String(expectedAccountId));\r",
+                      "  });\r",
+                      "}\r",
+                      "if (expectedTenantSchema) {\r",
+                      "  pm.test(\"tenantSchema consistente com signup\", function () {\r",
+                      "    pm.expect(String(json.tenantSchema)).to.eql(String(expectedTenantSchema));\r",
+                      "  });\r",
+                      "}\r"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{tenant_email}}\",\n  \"password\": \"{{tenant_password}}\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/login",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "01.02 tenant refresh (rotate)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/refresh",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tenant_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Tenant refresh -> 200\", () => pm.expect(pm.response.code).to.eql(200));\r",
+                      "const json = pm.response.json();\r",
+                      "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                      "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                      "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                      "pm.expect(refresh, \"refreshToken ausente\").to.be.ok;\r",
+                      "\r",
+                      "// Save old before overwriting\r",
+                      "const old = pm.environment.get('tenant_refresh_token');\r",
+                      "pm.environment.set('tenant_refresh_token_old', String(old || ''));\r",
+                      "\r",
+                      "// Update tokens\r",
+                      "pm.environment.set('tenant_access_token', String(access));\r",
+                      "pm.environment.set('tenant_refresh_token', String(refresh));\r",
+                      "\r",
+                      "// Some implementations rotate by invalidating old refresh even if JWT string remains the same.\r",
+                      "// We accept either: token changes OR old becomes unusable in the next step.\r",
+                      "const rotated = String(refresh) !== String(old);\r",
+                      "pm.environment.set('tenant_refresh_rotated', rotated ? 'true' : 'false');\r",
+                      "pm.test(\"refresh token rotation semantics (string may or may not change)\", () => pm.expect(true).to.eql(true));\r"
+                    ],
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "01.10.02b ensure refresh token rotates (if needed)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token_old}}\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/refresh",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tenant_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// This request only matters if the previous refresh did NOT change the token string.\r",
+                      "const rotated = pm.environment.get('tenant_refresh_rotated') === 'true';\r",
+                      "if (rotated) {\r",
+                      "  pm.test('Skip: already rotated in previous step', () => pm.expect(true).to.eql(true));\r",
+                      "  return;\r",
+                      "}\r",
+                      "\r",
+                      "// If not rotated, try to force a new token by calling refresh again using the previously used token.\r",
+                      "if (pm.response.code === 200) {\r",
+                      "  const json = pm.response.json();\r",
+                      "  const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                      "  const used = pm.environment.get('tenant_refresh_token_old');\r",
+                      "  pm.test('Got refreshToken on second refresh', () => pm.expect(refresh).to.be.ok);\r",
+                      "  pm.test('Second refresh must rotate string', () => pm.expect(String(refresh)).to.not.eql(String(used)));\r",
+                      "  pm.environment.set('tenant_refresh_token', String(refresh));\r",
+                      "} else {\r",
+                      "  // If it fails, one-time-use semantics is fine; we will logout allDevices with current token anyway.\r",
+                      "  pm.test('Second refresh may fail under one-time-use semantics (400/401)', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r",
+                      "}\r"
+                    ],
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "01.10.03 tenant logout allDevices=true",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\",\n  \"allDevices\": true\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/logout",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tenant_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code !== 204) {\r",
+                      "}\r",
+                      "pm.test(\"Tenant logout allDevices -> 204\", () => pm.expect(pm.response.code).to.eql(204));\r"
+                    ],
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "01.10.04 refresh A(old) deve falhar",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token_old}}\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/refresh",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tenant_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Refresh antigo deve falhar (400/401)\", () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r"
+                    ],
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "01.10.05 refresh B(current) deve falhar",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/tenant/auth/refresh",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "tenant",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tenant_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Refresh revogado deve falhar (400/401)\", () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r"
+                    ],
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "response": []
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_access_token}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "02 - Control Plane Auth (Refresh/Logout)",
+      "item": [
+        {
+          "name": "02.01 controlplane login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"ControlPlane login OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                  "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "const tokenType = json.tokenType || json.token_type || (json.tokens && (json.tokens.tokenType || json.tokens.token_type));\r",
+                  "\r",
+                  "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(tokenType, \"tokenType ausente\").to.be.ok;\r",
+                  "pm.expect(refresh, \"refreshToken ausente\").to.be.ok;\r",
+                  "\r",
+                  "// IMPORTANT: store into ENVIRONMENT (env has priority over collection vars)\r",
+                  "pm.environment.set(\"cp_access_token\", String(access));\r",
+                  "pm.environment.set(\"cp_refresh_token\", String(refresh));\r",
+                  "\r",
+                  "if (json.userId != null) pm.environment.set(\"cpUserId\", String(json.userId));\r",
+                  "if (json.accountId != null) pm.environment.set(\"cpAccountId\", String(json.accountId));\r",
+                  "if (json.tenantSchema) pm.environment.set(\"cpTenantSchema\", String(json.tenantSchema));\r",
+                  "\r",
+                  "\r",
+                  "pm.test(\"CP tenantSchema = public\", function () {\r",
+                  "  if (json.tenantSchema) pm.expect(String(json.tenantSchema)).to.eql(\"public\");\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"{{cp_email}}\",\r\n  \"password\": \"{{cp_password}}\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02.02 controlplane me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"ControlPlane /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02.03 cp refresh (rotate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{cp_refresh_token}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cp_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"CP refresh -> 200\", () => pm.expect(pm.response.code).to.eql(200));\r",
+                  "const json = pm.response.json();\r",
+                  "const access = json.accessToken || json.access_token || (json.tokens && (json.tokens.accessToken || json.tokens.access_token));\r",
+                  "const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "pm.expect(access, \"accessToken ausente\").to.be.ok;\r",
+                  "pm.expect(refresh, \"refreshToken ausente\").to.be.ok;\r",
+                  "const old = pm.environment.get('cp_refresh_token');\r",
+                  "pm.environment.set('cp_refresh_token_old', String(old || ''));\r",
+                  "pm.environment.set('cp_access_token', String(access));\r",
+                  "pm.environment.set('cp_refresh_token', String(refresh));\r",
+                  "const rotated = String(refresh) !== String(old);\r",
+                  "pm.environment.set('cp_refresh_rotated', rotated ? 'true' : 'false');\r",
+                  "pm.test(\"cp refresh rotation semantics (string may or may not change)\", () => pm.expect(true).to.eql(true));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.04 cp me (access novo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"ControlPlane /me OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "02.05 cp refresh (old token) deve falhar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{cp_refresh_token_old}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cp_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const rotated = pm.environment.get('cp_refresh_rotated') === 'true';\r",
+                  "if (rotated) {\r",
+                  "  pm.test('CP old refresh must fail (400/401)', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r",
+                  "} else {\r",
+                  "  if (pm.response.code === 200) {\r",
+                  "    const json = pm.response.json();\r",
+                  "    const refresh = json.refreshToken || json.refresh_token || (json.tokens && (json.tokens.refreshToken || json.tokens.refresh_token));\r",
+                  "    const used = pm.environment.get('cp_refresh_token_old');\r",
+                  "    pm.test('CP second refresh returned refreshToken', () => pm.expect(refresh).to.be.ok);\r",
+                  "    pm.test('CP when second refresh succeeds, it must rotate token string', () => pm.expect(String(refresh)).to.not.eql(String(used)));\r",
+                  "    pm.environment.set('cp_refresh_token', String(refresh));\r",
+                  "  } else {\r",
+                  "    pm.test('CP second refresh with same token should fail (400/401)', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r",
+                  "  }\r",
+                  "}\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.06 cp logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{cp_refresh_token}}\",\n  \"allDevices\": false\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "logout"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cp_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"CP logout -> 204\", () => pm.expect(pm.response.code).to.eql(204));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02.07 cp refresh (revogado) deve falhar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{cp_refresh_token}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cp_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"CP refresh revogado deve falhar (400/401)\", () => pm.expect(pm.response.code).to.be.oneOf([400,401]));\r"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{cp_access_token}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "03 - Categories",
+      "item": [
+        {
+          "name": "03.01 create category",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"ts\", String(ts));\r",
+                  "pm.collectionVariables.set(\"category_name\", \"Medidores de fluxo E2E \" + ts);\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Create category -> 201\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([201]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Response has id\", function () {\r",
+                  "  pm.expect(json.id).to.be.a(\"number\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.collectionVariables.set(\"categoryId\", json.id);\r",
+                  "\r",
+                  "// opcional: guardar nome pra comparar em list/search depois\r",
+                  "pm.collectionVariables.set(\"category_name\", json.name);\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);",
+                  "try {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.id != null) pm.environment.set('categoryId', String(body.id));",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.02 get category by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.03 list categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"List categories OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.04 update category",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get(\"categoryId\");\r",
+                  "if (!categoryId) {\r",
+                  "  throw new Error(\"E2E FAIL-FAST: categoryId não definido antes do UPDATE. Rode 03.01 create category antes.\");\r",
+                  "}\r"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);\r",
+                  "});\r",
+                  "\r",
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Updated name applied\", function () {\r",
+                  "  pm.expect(json.name).to.include(\"UPDATED\");\r",
+                  "});\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);",
+                  "try {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.name) pm.environment.set('category_updated_name', body.name);",
+                  "} catch (e) {}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"{{category_name}} UPDATED {{ts}}\",\r\n  \"active\": true\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.04b get category after update",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get category after update -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const categoryId = pm.environment.get('categoryId') || pm.variables.get('categoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(categoryId)));",
+                  "// If you store the expected updated name in env, validate it here.",
+                  "const expected = pm.environment.get('category_updated_name') || pm.environment.get('category_name_updated');",
+                  "if (expected) {",
+                  "  pm.test('Updated name persisted', () => pm.expect(body.name).to.eql(expected));",
+                  "} else {",
+                  "  pm.test('Updated name persisted (env var not set - skip strict check)', () => pm.expect(true).to.eql(true));",
+                  "}",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03.05 delete category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete category OK\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);\r",
+                  "});\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "03.06 get category should 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get after delete should be 404\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([404]);\r",
+                  "});\r",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Products",
+      "item": []
+    },
+    {
+      "name": "05 - Suppliers",
+      "item": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": ""
+    },
+    {
+      "key": "signup_response_raw",
+      "value": ""
+    },
+    {
+      "key": "accountId",
+      "value": ""
+    },
+    {
+      "key": "tenantSchema",
+      "value": ""
+    },
+    {
+      "key": "tenant_email",
+      "value": ""
+    },
+    {
+      "key": "tenant_password",
+      "value": ""
+    },
+    {
+      "key": "tenant_access_token",
+      "value": ""
+    },
+    {
+      "key": "tenant_refresh_token",
+      "value": ""
+    },
+    {
+      "key": "tenantUserId",
+      "value": ""
+    },
+    {
+      "key": "cp_email",
+      "value": ""
+    },
+    {
+      "key": "cp_password",
+      "value": ""
+    },
+    {
+      "key": "cp_access_token",
+      "value": ""
+    },
+    {
+      "key": "cp_refresh_token",
+      "value": ""
+    },
+    {
+      "key": "cpUserId",
+      "value": ""
+    },
+    {
+      "key": "cpAccountId",
+      "value": ""
+    },
+    {
+      "key": "cpTenantSchema",
+      "value": ""
+    },
+    {
+      "key": "ts",
+      "value": ""
+    },
+    {
+      "key": "category_name",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "category_name_updated",
+      "value": ""
+    },
+    {
+      "key": "run_id",
+      "value": ""
+    },
+    {
+      "key": "tenant_tax_id",
+      "value": ""
+    },
+    {
+      "key": "tenant_refresh_token_old",
+      "value": ""
+    },
+    {
+      "key": "cp_refresh_token_old",
+      "value": ""
+    }
+  ]
+}

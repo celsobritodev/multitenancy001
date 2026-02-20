@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -110,21 +111,26 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /**
-     * Refresh token NÃO precisa de authorities; ele serve para renovar sessão.
-     * Guardamos apenas: subject(email) + authDomain + context(tenantSchema) + accountId
-     */
-    public String generateRefreshToken(String email, String context, Long accountId) {
-        return Jwts.builder()
-                .subject(email)
-                .claim(CLAIM_AUTH_DOMAIN,SecurityConstants.AuthDomains.REFRESH)
-                .claim(CLAIM_CONTEXT, context)
-                .claim(CLAIM_ACCOUNT_ID, accountId)
-                .issuedAt(issuedAt())
-                .expiration(expiresAtInMs(refreshExpirationInMs))
-                .signWith(key, Jwts.SIG.HS512)
-                .compact();
-    }
+  /**
+ * Refresh token NÃO precisa de authorities; ele serve para renovar sessão.
+ * Guardamos apenas: subject(email) + authDomain + context(tenantSchema) + accountId
+ *
+ * IMPORTANTE:
+ * - Sempre incluir jti/id aleatório para garantir rotação real (token string muda)
+ *   mesmo quando emitido no mesmo millisecond.
+ */
+public String generateRefreshToken(String email, String context, Long accountId) {
+    return Jwts.builder()
+            .id(UUID.randomUUID().toString()) // ✅ garante token diferente sempre
+            .subject(email)
+            .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.REFRESH)
+            .claim(CLAIM_CONTEXT, context)
+            .claim(CLAIM_ACCOUNT_ID, accountId)
+            .issuedAt(issuedAt())
+            .expiration(expiresAtInMs(refreshExpirationInMs))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact();
+}
 
     public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;
