@@ -1,10 +1,11 @@
 package brito.com.multitenancy001.tenant.categories.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.tenant.categories.app.command.CreateCategoryCommand;
+import brito.com.multitenancy001.tenant.categories.app.command.UpdateCategoryCommand;
 import brito.com.multitenancy001.tenant.categories.domain.Category;
 import brito.com.multitenancy001.tenant.categories.persistence.TenantCategoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,14 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
+/**
+ * Application Service de Categories (Tenant).
+ *
+ * Padrão definitivo:
+ * - Recebe Commands (não DTO HTTP)
+ * - Aplica regras de negócio (unicidade, soft-delete, etc.)
+ * - Repositório fica somente com queries/persistência
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -27,12 +36,14 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public Category findById(Long id) {
+        // Comentário do método: contrato exige 400 para id null e 404 para deleted.
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category c = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada: " + id, 404));
 
         if (c.isDeleted()) {
+            // Padrão escolhido: deleted => 404 (esconde recurso removido)
             throw new ApiException(ApiErrorCode.CATEGORY_DELETED, "Categoria deletada não pode ser consultada", 404);
         }
 
@@ -41,16 +52,19 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public List<Category> findAll() {
+        // Comentário do método: NOT deleted.
         return tenantCategoryRepository.findNotDeleted();
     }
 
     @TenantReadOnlyTx
     public List<Category> findActive() {
+        // Comentário do método: NOT deleted e active=true.
         return tenantCategoryRepository.findNotDeletedActive();
     }
 
     @TenantReadOnlyTx
     public List<Category> searchByName(String name) {
+        // Comentário do método: valida input e retorna NOT deleted.
         if (!StringUtils.hasText(name)) {
             throw new ApiException(ApiErrorCode.CATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
         }
@@ -59,33 +73,30 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
+        // Comentário do método: endpoint admin (pode trazer deleted/inactive conforme flags).
         return tenantCategoryRepository.findWithFlags(includeDeleted, includeInactive);
     }
 
     // =========================================================
     // WRITE
     // =========================================================
-    //
-    // ✅ Mesmo critério aplicado:
-    // - Category é single-aggregate / single-repo
-    // - checks de unicidade e validações usam o MESMO repo
-    // => manter @TenantTx (não há ganho real em mover para TenantSchemaUnitOfWork aqui).
-    //
 
     @TenantTx
-    public Category create(Category category) {
-        if (category == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
-        if (!StringUtils.hasText(category.getName())) {
+    public Category create(CreateCategoryCommand cmd) {
+        // Comentário do método: Command -> Domain (cria entidade aqui).
+        if (cmd == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
+        if (!StringUtils.hasText(cmd.name())) {
             throw new ApiException(ApiErrorCode.CATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
         }
 
-        String name = category.getName().trim();
+        String name = cmd.name().trim();
 
         tenantCategoryRepository.findNotDeletedByNameIgnoreCase(name)
                 .ifPresent(existing -> {
                     throw new ApiException(ApiErrorCode.CATEGORY_NAME_ALREADY_EXISTS, "Categoria já existe: " + name, 409);
                 });
 
+        Category category = new Category();
         category.setName(name);
         category.setDeleted(false);
         category.setActive(true);
@@ -94,9 +105,10 @@ public class TenantCategoryService {
     }
 
     @TenantTx
-    public Category update(Long id, Category req) {
+    public Category update(Long id, UpdateCategoryCommand cmd) {
+        // Comentário do método: validações e regra de "não atualizar deletado".
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
-        if (req == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
 
         Category existing = tenantCategoryRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada: " + id, 404));
@@ -105,27 +117,27 @@ public class TenantCategoryService {
             throw new ApiException(ApiErrorCode.CATEGORY_DELETED, "Não é permitido alterar categoria deletada", 409);
         }
 
-        if (StringUtils.hasText(req.getName())) {
-            String newName = req.getName().trim();
-
-            tenantCategoryRepository.findNotDeletedByNameIgnoreCase(newName)
-                    .ifPresent(other -> {
-                        if (!other.getId().equals(id)) {
-                            throw new ApiException(ApiErrorCode.CATEGORY_NAME_ALREADY_EXISTS, "Categoria já existe: " + newName, 409);
-                        }
-                    });
-
-            existing.setName(newName);
+        if (!StringUtils.hasText(cmd.name())) {
+            throw new ApiException(ApiErrorCode.CATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
         }
 
-        // opcional: permitir atualizar active diretamente via payload (se existir no seu entity)
-        // (mantive o comportamento atual: toggleActive é o caminho)
+        String newName = cmd.name().trim();
+
+        tenantCategoryRepository.findNotDeletedByNameIgnoreCase(newName)
+                .ifPresent(other -> {
+                    if (!other.getId().equals(id)) {
+                        throw new ApiException(ApiErrorCode.CATEGORY_NAME_ALREADY_EXISTS, "Categoria já existe: " + newName, 409);
+                    }
+                });
+
+        existing.setName(newName);
 
         return tenantCategoryRepository.save(existing);
     }
 
     @TenantTx
     public Category toggleActive(Long id) {
+        // Comentário do método: mantém comportamento atual, apenas centraliza validações.
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category category = tenantCategoryRepository.findById(id)
@@ -141,17 +153,19 @@ public class TenantCategoryService {
 
     @TenantTx
     public void softDelete(Long id) {
+        // Comentário do método: CONTRATO IDÊMPOTENTE => sempre "ok" (controller retorna 204).
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
-        Category category = tenantCategoryRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada: " + id, 404));
-
-        category.softDelete();
-        tenantCategoryRepository.save(category);
+        tenantCategoryRepository.findById(id).ifPresent(category -> {
+            if (category.isDeleted()) return;
+            category.softDelete();
+            tenantCategoryRepository.save(category);
+        });
     }
 
     @TenantTx
     public Category restore(Long id) {
+        // Comentário do método: restauração mantém 404 se não existir (padrão atual).
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category category = tenantCategoryRepository.findById(id)
