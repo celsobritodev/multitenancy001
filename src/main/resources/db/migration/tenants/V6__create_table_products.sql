@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS products (
   max_stock INT,
 
   cost_price NUMERIC(10,2),
-  profit_margin NUMERIC(5,2),
+  profit_margin NUMERIC(12,2),
 
   category_id BIGINT NOT NULL,
   subcategory_id BIGINT NULL,

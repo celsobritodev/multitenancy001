@@ -15,6 +15,18 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Aggregate Root (Tenant): Product.
+ *
+ * Regra única de margem (definitiva):
+ * - profitMargin = "MARGEM %" (margin), não "markup".
+ * - Fórmula: margin% = ((price - costPrice) / price) * 100
+ *
+ * Persistência / consistência:
+ * - Para garantir que o retorno da API sempre traga profitMargin atualizado,
+ *   esta entidade recalcula automaticamente a margem em @PrePersist/@PreUpdate
+ *   (mesmo se alguém usar setters direto).
+ */
 @Entity
 @Table(name = "products")
 @EntityListeners(AuditEntityListener.class)
@@ -56,10 +68,12 @@ public class Product implements Auditable, SoftDeletable {
     private BigDecimal costPrice;
 
     /**
-     * Percentual (0..100) armazenado, calculado por regra.
-     * Ex.: 25.00 significa 25%
+     * Percentual de margem (0..100..), scale(2).
+     * Ex.: 25.00 significa 25% de margem sobre o preço.
+     *
+     * DDL atual: NUMERIC(12,2) está ótimo.
      */
-    @Column(name = "profit_margin", precision = 10, scale = 2)
+    @Column(name = "profit_margin", precision = 12, scale = 2)
     private BigDecimal profitMargin;
 
     @Column(length = 100)
@@ -131,106 +145,117 @@ public class Product implements Auditable, SoftDeletable {
     }
 
     // =========================
-    // DOMAIN METHODS (estoque/preço/delete)
+    // JPA LIFECYCLE (garantia)
+    // =========================
+
+    @PrePersist
+    @PreUpdate
+    private void onPersistOrUpdate() {
+        // método: garante consistência do campo derivado
+        recomputeProfitMargin();
+    }
+
+    // =========================
+    // DOMAIN METHODS (estoque)
     // =========================
 
     public void addToStock(Integer qty) {
-        if (qty == null) return;
-        if (qty <= 0) return;
-
+        // método: adiciona ao estoque de forma segura
+        if (qty == null || qty <= 0) return;
         if (this.stockQuantity == null) this.stockQuantity = 0;
         this.stockQuantity = this.stockQuantity + qty;
     }
 
     public void removeFromStock(int qty) {
+        // método: remove do estoque garantindo não-negativo
         if (qty <= 0) return;
-
         if (this.stockQuantity == null) this.stockQuantity = 0;
 
         int next = this.stockQuantity - qty;
-        if (next < 0) {
-            throw new IllegalStateException("Stock cannot be negative");
-        }
+        if (next < 0) throw new IllegalStateException("Stock cannot be negative");
         this.stockQuantity = next;
     }
 
+    // =========================
+    // DOMAIN METHODS (preço/custo/margem)
+    // =========================
+
     public void updatePrice(BigDecimal newPrice) {
+        // método: valida, aplica preço e recalcula margem
         if (newPrice == null) throw new IllegalArgumentException("newPrice is required");
-        if (newPrice.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("newPrice cannot be negative");
-        }
+        if (newPrice.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("newPrice cannot be negative");
+
         this.price = newPrice;
         recomputeProfitMargin();
     }
 
     public void updateCostPrice(BigDecimal newCostPrice) {
-        // custo pode ser null (sem custo informado)
-        if (newCostPrice != null && newCostPrice.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("costPrice cannot be negative");
-        }
+        // método: valida, aplica custo e recalcula margem
+        if (newCostPrice == null) throw new IllegalArgumentException("newCostPrice is required");
+        if (newCostPrice.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("newCostPrice cannot be negative");
+
         this.costPrice = newCostPrice;
         recomputeProfitMargin();
     }
 
     /**
-     * Compat: chamado por código que usa softDelete() sem now.
-     * Auditoria de deletedAt/deletedBy fica com o AuditEntityListener.
+     * Regra única (MARGEM %):
+     * margin% = ((price - costPrice) / price) * 100
+     *
+     * - Se price == null ou price <= 0 => profitMargin = null
+     * - Se costPrice == null => profitMargin = null
+     * - Se costPrice > price => margem negativa (aceito para sinalizar prejuízo)
      */
+    public void recomputeProfitMargin() {
+        // método: recalcula profitMargin de forma determinística
+        if (this.price == null || this.price.compareTo(BigDecimal.ZERO) <= 0) {
+            this.profitMargin = null;
+            return;
+        }
+        if (this.costPrice == null) {
+            this.profitMargin = null;
+            return;
+        }
+
+        BigDecimal profit = this.price.subtract(this.costPrice);
+
+        BigDecimal margin = profit
+                .divide(this.price, 10, RoundingMode.HALF_UP) // precisão interna
+                .multiply(new BigDecimal("100"))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        this.profitMargin = margin;
+    }
+
+    // =========================
+    // DOMAIN METHODS (soft delete / restore)
+    // =========================
+
     public void softDelete() {
+        // método: marca como deletado (idempotente)
         if (Boolean.TRUE.equals(this.deleted)) return;
         this.deleted = true;
         this.active = false;
     }
 
-    /**
-     * ✅ Novo: compat com seu service atual: product.softDelete(appClock.instant()).
-     * - Mantém deleted=true e active=false
-     * - Se quiser registrar deletedAt imediatamente, usa audit.markDeleted(now)
-     *   (seu AuditInfo já tem markDeleted(Instant)).
-     */
     public void softDelete(Instant now) {
+        // método: marca como deletado e registra deletedAt (quando possível)
         if (Boolean.TRUE.equals(this.deleted)) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
         this.deleted = true;
         this.active = false;
 
-        if (this.audit != null) {
-            this.audit.markDeleted(now);
-        }
+        if (this.audit != null) this.audit.markDeleted(now);
     }
 
     public void restore() {
+        // método: restaura soft-delete (idempotente)
         if (!Boolean.TRUE.equals(this.deleted)) return;
+
         this.deleted = false;
         this.active = true;
 
-        if (this.audit != null) {
-            this.audit.clearDeleted();
-        }
-    }
-
-    /**
-     * Regra de margem:
-     * - Se costPrice e price existirem, calcula a margem (0..100).
-     * - Se não, deixa null.
-     */
-    public void recomputeProfitMargin() {
-        if (costPrice == null || price == null) {
-            this.profitMargin = null;
-            return;
-        }
-        if (costPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            this.profitMargin = null;
-            return;
-        }
-
-        BigDecimal diff = price.subtract(costPrice);
-        BigDecimal pct = diff
-                .divide(costPrice, 6, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(2, RoundingMode.HALF_UP);
-
-        this.profitMargin = pct;
+        if (this.audit != null) this.audit.clearDeleted();
     }
 }

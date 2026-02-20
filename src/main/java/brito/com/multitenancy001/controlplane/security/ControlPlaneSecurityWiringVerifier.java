@@ -161,27 +161,14 @@ public class ControlPlaneSecurityWiringVerifier implements ApplicationRunner {
                 }
             }
 
-            // 2.2) referências por string literal: 'CP_...' / 'TEN_...'
-            for (String code : parsed.stringLiteralCodes()) {
-                if (!StringUtils.hasText(code)) continue;
+          // 2.2) referências por string literal: 'CP_...' / 'TEN_...'
+for (String code : parsed.stringLiteralCodes()) {
+    if (!StringUtils.hasText(code)) continue;
 
-                // Escopo CP_ estrito
-                try {
-                    PermissionScopeValidator.requireControlPlanePermission(code);
-                } catch (RuntimeException ex) {
-                    errors.add("[PREAUTH_REF] " + endpoint + " -> string permission fora do escopo CP_: "
-                            + code + " (" + ex.getMessage() + ")");
-                    continue;
-                }
-
-                // Existe no enum?
-                try {
-                    ControlPlanePermission.valueOf(code);
-                } catch (IllegalArgumentException ex) {
-                    errors.add("[PREAUTH_REF] " + endpoint + " -> permissão inexistente (string literal): "
-                            + code + " (expr=" + expr + ")");
-                }
-            }
+    // POLÍTICA: string literal é proibido (use enum + .asAuthority()).
+    errors.add("[PREAUTH_LITERAL] " + endpoint + " -> uso de string literal em @PreAuthorize é proibido: '"
+            + code + "' (expr=" + expr + ")");
+}
         }
     }
 

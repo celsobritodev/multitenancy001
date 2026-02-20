@@ -157,6 +157,15 @@ public enum ApiErrorCode {
     INVALID_STOCK_RANGE(ApiErrorCategory.PRODUCTS, 400, "Intervalo de estoque inválido"),
     INVALID_LEAD_TIME(ApiErrorCategory.PRODUCTS, 400, "Lead time inválido"),
     INVALID_STORAGE_DELTA(ApiErrorCategory.PRODUCTS, 400, "Delta de estoque inválido"),
+    
+    // =========================
+    // Generic fields (reutilizáveis)
+    // =========================
+    SKU_REQUIRED(ApiErrorCategory.PRODUCTS, 400, "sku é obrigatório"),
+    PRICE_REQUIRED(ApiErrorCategory.PRODUCTS, 400, "price é obrigatório"),
+    PRICE_RANGE_REQUIRED(ApiErrorCategory.PRODUCTS, 400, "minPrice e maxPrice são obrigatórios"),
+    STOCK_CHANGE_REQUIRED(ApiErrorCategory.PRODUCTS, 400, "quantityChange é obrigatório"),
+
 
     // =========================
     // Categories / Subcategories

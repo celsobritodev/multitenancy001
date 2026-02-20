@@ -12,6 +12,7 @@ import java.util.Set;
  * - sempre devolve Set imutável
  * - toda role deve estar mapeada explicitamente (evita "role nova = permissão vazia" por acidente)
  * - FAIL-FAST: role sem mapeamento explode na inicialização e/ou no uso
+ * - FAIL-FAST: role decorativa (set vazio) é bug
  */
 public final class ControlPlaneRolePermissions {
 
@@ -72,18 +73,36 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_USER_READ
         )));
 
-        // FAIL-FAST: garante que todas as roles do enum estão mapeadas
+        // FAIL-FAST: garante que todas as roles do enum estão mapeadas e não são vazias
         for (ControlPlaneRole role : ControlPlaneRole.values()) {
-            if (!MAP.containsKey(role)) {
+            Set<ControlPlanePermission> perms = MAP.get(role);
+            if (perms == null) {
                 throw new IllegalStateException("Role do ControlPlane sem mapeamento em ControlPlaneRolePermissions: " + role);
+            }
+            if (perms.isEmpty()) {
+                throw new IllegalStateException("Role do ControlPlane com set de permissões vazio (role decorativa): " + role);
             }
         }
     }
 
+    /**
+     * Obtém permissões da role do Control Plane.
+     *
+     * @param role role do Control Plane (obrigatória)
+     * @return set imutável de permissões
+     */
     public static Set<ControlPlanePermission> permissionsFor(ControlPlaneRole role) {
+        // método: valida parâmetros e devolve set imutável
+        if (role == null) {
+            throw new IllegalArgumentException("Role do ControlPlane é obrigatória (null)");
+        }
+
         Set<ControlPlanePermission> perms = MAP.get(role);
         if (perms == null) {
-            throw new IllegalArgumentException("Role do ControlPlane sem permissões mapeadas: " + role);
+            throw new IllegalStateException("Role do ControlPlane sem mapeamento em ControlPlaneRolePermissions: " + role);
+        }
+        if (perms.isEmpty()) {
+            throw new IllegalStateException("Role do ControlPlane com set de permissões vazio (role decorativa): " + role);
         }
         return perms;
     }

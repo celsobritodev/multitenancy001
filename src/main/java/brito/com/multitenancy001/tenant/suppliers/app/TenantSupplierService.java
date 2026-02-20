@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.tenant.suppliers.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.suppliers.app.command.CreateSupplierCommand;
+import brito.com.multitenancy001.tenant.suppliers.app.command.UpdateSupplierCommand;
 import brito.com.multitenancy001.tenant.suppliers.domain.Supplier;
 import brito.com.multitenancy001.tenant.suppliers.persistence.TenantSupplierRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,13 +18,25 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Application Service para Suppliers (contexto Tenant).
+ *
+ * Papel:
+ * - Orquestrar casos de uso (commands)
+ * - Aplicar regras de negócio (unicidade, bloqueios por deleted, etc.)
+ * - Delegar regras intrínsecas para o Domain quando aplicável (softDelete/restore)
+ *
+ * Regras:
+ * - Controller chama Service usando Command (não Entity, não DTO)
+ * - Repository é usado apenas aqui (não no Controller)
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TenantSupplierService {
 
     private final TenantSupplierRepository tenantSupplierRepository;
-    private final AppClock appClock;
+    
 
     // =========================================================
     // READ (por padrão: NÃO retorna deletados)
@@ -32,52 +44,50 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public Supplier findById(UUID id) {
+        // Comentário do método: busca por id sem retornar deletados.
         if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
         Supplier s = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com ID: " + id, 404));
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado com ID: " + id, 404));
 
-        if (s.isDeleted()) {
-            throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Fornecedor deletado não pode ser consultado", 404);
-        }
-
+        if (s.isDeleted()) throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Fornecedor removido", 404);
         return s;
     }
 
     @TenantReadOnlyTx
     public List<Supplier> findAll() {
-        return tenantSupplierRepository.findNotDeleted();
+        // Comentário do método: lista não-deletados.
+        return tenantSupplierRepository.findAllNotDeleted();
     }
 
     @TenantReadOnlyTx
     public List<Supplier> findActive() {
-        return tenantSupplierRepository.findActiveNotDeleted();
+        // Comentário do método: lista ativos e não-deletados.
+        return tenantSupplierRepository.findAllActiveNotDeleted();
     }
 
     @TenantReadOnlyTx
     public Supplier findByDocument(String document) {
+        // Comentário do método: busca por document (não-deletado).
         if (!StringUtils.hasText(document)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_REQUIRED, "document é obrigatório", 400);
         }
-
-        String doc = document.trim();
-
-        return tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com document: " + doc, 404));
+        return tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(document.trim())
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado", 404));
     }
 
     @TenantReadOnlyTx
     public List<Supplier> searchByName(String name) {
+        // Comentário do método: busca por nome (não-deletados).
         if (!StringUtils.hasText(name)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_NAME_REQUIRED, "name é obrigatório", 400);
         }
-        return tenantSupplierRepository.findNotDeletedByNameContainingIgnoreCase(name.trim());
+        return tenantSupplierRepository.searchNotDeletedByName(name.trim());
     }
 
     @TenantReadOnlyTx
     public List<Supplier> findByEmail(String email) {
+        // Comentário do método: busca por email (não-deletados).
         if (!StringUtils.hasText(email)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
@@ -85,24 +95,25 @@ public class TenantSupplierService {
     }
 
     // =========================================================
-    // WRITE
+    // WRITE (Command-based)
     // =========================================================
-    //
-    // ✅ Aqui NÃO migramos para TenantSchemaUnitOfWork por semântica,
-    // porque a escrita é "single-aggregate/single-repo".
-    // As validações e checks usam o mesmo repositório.
-    //
 
     @TenantTx
-    public Supplier create(Supplier supplier) {
+    public Supplier create(CreateSupplierCommand cmd) {
+        // Comentário do método: cria Supplier via Command + valida regras (unicidade, normalização).
+        Supplier supplier = mapToNewEntity(cmd);
+
         validateForCreate(supplier);
 
         if (StringUtils.hasText(supplier.getDocument())) {
             String doc = supplier.getDocument().trim();
             Optional<Supplier> existing = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(doc);
             if (existing.isPresent()) {
-                throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
-                        "Já existe fornecedor com document: " + doc, 409);
+                throw new ApiException(
+                        ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
+                        "Já existe fornecedor com document: " + doc,
+                        409
+                );
             }
             supplier.setDocument(doc);
         } else {
@@ -116,47 +127,53 @@ public class TenantSupplierService {
     }
 
     @TenantTx
-    public Supplier update(UUID id, Supplier req) {
+    public Supplier update(UUID id, UpdateSupplierCommand cmd) {
+        // Comentário do método: atualiza Supplier via Command (campos null não alteram).
         if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
-        if (req == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "payload é obrigatório", 400);
+        if (cmd == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "payload é obrigatório", 400);
 
         Supplier existing = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com ID: " + id, 404));
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado com ID: " + id, 404));
 
         if (existing.isDeleted()) {
             throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Não é permitido alterar fornecedor deletado", 409);
         }
 
-        if (StringUtils.hasText(req.getName())) {
-            existing.setName(req.getName().trim());
+        if (cmd.name() != null) {
+            if (!StringUtils.hasText(cmd.name())) {
+                throw new ApiException(ApiErrorCode.SUPPLIER_NAME_REQUIRED, "name é obrigatório", 400);
+            }
+            existing.setName(cmd.name().trim());
         }
 
-        if (req.getContactPerson() != null) {
-            existing.setContactPerson(StringUtils.hasText(req.getContactPerson()) ? req.getContactPerson().trim() : null);
+        if (cmd.contactPerson() != null) {
+            existing.setContactPerson(StringUtils.hasText(cmd.contactPerson()) ? cmd.contactPerson().trim() : null);
         }
 
-        if (req.getEmail() != null) {
-            existing.setEmail(StringUtils.hasText(req.getEmail()) ? req.getEmail().trim() : null);
+        if (cmd.email() != null) {
+            existing.setEmail(StringUtils.hasText(cmd.email()) ? cmd.email().trim() : null);
         }
 
-        if (req.getPhone() != null) {
-            existing.setPhone(StringUtils.hasText(req.getPhone()) ? req.getPhone().trim() : null);
+        if (cmd.phone() != null) {
+            existing.setPhone(StringUtils.hasText(cmd.phone()) ? cmd.phone().trim() : null);
         }
 
-        if (req.getAddress() != null) {
-            existing.setAddress(StringUtils.hasText(req.getAddress()) ? req.getAddress().trim() : null);
+        if (cmd.address() != null) {
+            existing.setAddress(StringUtils.hasText(cmd.address()) ? cmd.address().trim() : null);
         }
 
-        if (req.getDocument() != null) {
-            String newDoc = req.getDocument();
+        if (cmd.document() != null) {
+            String newDoc = cmd.document();
             if (StringUtils.hasText(newDoc)) {
                 newDoc = newDoc.trim();
 
                 Optional<Supplier> other = tenantSupplierRepository.findNotDeletedByDocumentIgnoreCase(newDoc);
                 if (other.isPresent() && !other.get().getId().equals(id)) {
-                    throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
-                            "Já existe fornecedor com document: " + newDoc, 409);
+                    throw new ApiException(
+                            ApiErrorCode.SUPPLIER_DOCUMENT_ALREADY_EXISTS,
+                            "Já existe fornecedor com document: " + newDoc,
+                            409
+                    );
                 }
 
                 existing.setDocument(newDoc);
@@ -165,32 +182,32 @@ public class TenantSupplierService {
             }
         }
 
-        if (req.getDocumentType() != null) {
-            existing.setDocumentType(StringUtils.hasText(req.getDocumentType()) ? req.getDocumentType().trim() : null);
+        if (cmd.documentType() != null) {
+            existing.setDocumentType(StringUtils.hasText(cmd.documentType()) ? cmd.documentType().trim() : null);
         }
 
-        if (req.getWebsite() != null) {
-            existing.setWebsite(StringUtils.hasText(req.getWebsite()) ? req.getWebsite().trim() : null);
+        if (cmd.website() != null) {
+            existing.setWebsite(StringUtils.hasText(cmd.website()) ? cmd.website().trim() : null);
         }
 
-        if (req.getPaymentTerms() != null) {
-            existing.setPaymentTerms(StringUtils.hasText(req.getPaymentTerms()) ? req.getPaymentTerms().trim() : null);
+        if (cmd.paymentTerms() != null) {
+            existing.setPaymentTerms(StringUtils.hasText(cmd.paymentTerms()) ? cmd.paymentTerms().trim() : null);
         }
 
-        if (req.getLeadTimeDays() != null) {
-            if (req.getLeadTimeDays() < 0) {
+        if (cmd.leadTimeDays() != null) {
+            if (cmd.leadTimeDays() < 0) {
                 throw new ApiException(ApiErrorCode.INVALID_LEAD_TIME, "leadTimeDays não pode ser negativo", 400);
             }
-            existing.setLeadTimeDays(req.getLeadTimeDays());
+            existing.setLeadTimeDays(cmd.leadTimeDays());
         }
 
-        if (req.getRating() != null) {
-            validateRating(req.getRating());
-            existing.setRating(req.getRating());
+        if (cmd.rating() != null) {
+            validateRating(cmd.rating());
+            existing.setRating(cmd.rating());
         }
 
-        if (req.getNotes() != null) {
-            existing.setNotes(StringUtils.hasText(req.getNotes()) ? req.getNotes().trim() : null);
+        if (cmd.notes() != null) {
+            existing.setNotes(StringUtils.hasText(cmd.notes()) ? cmd.notes().trim() : null);
         }
 
         return tenantSupplierRepository.save(existing);
@@ -198,43 +215,89 @@ public class TenantSupplierService {
 
     @TenantTx
     public Supplier toggleActive(UUID id) {
-        Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com ID: " + id, 404));
+        // Comentário do método: alterna active; bloqueia se deletado.
+        if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
-        if (supplier.isDeleted()) {
-            throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Não é permitido alterar fornecedor deletado", 409);
+        Supplier s = tenantSupplierRepository.findById(id)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado com ID: " + id, 404));
+
+        if (s.isDeleted()) throw new ApiException(ApiErrorCode.SUPPLIER_DELETED, "Fornecedor removido", 409);
+
+        s.setActive(!s.isActive());
+        return tenantSupplierRepository.save(s);
+    }
+
+  @TenantTx
+public void softDelete(UUID id) {
+    // Comentário do método: soft-delete idempotente (204 sempre que existir, mesmo se já deletado).
+    if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
+
+    Supplier s = tenantSupplierRepository.findById(id)
+            .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado com ID: " + id, 404));
+
+    // Idempotência: se já está deletado, não faz nada e mantém o contrato (controller retorna 204).
+    if (s.isDeleted()) {
+        return;
+    }
+
+    s.softDelete();
+    tenantSupplierRepository.save(s);
+}
+
+@TenantTx
+public Supplier restore(UUID id) {
+    // Comentário do método: restore idempotente (200 com body, mesmo se já estiver restaurado).
+    if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
+
+    Supplier s = tenantSupplierRepository.findById(id)
+            .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado com ID: " + id, 404));
+
+    // Idempotência: se não está deletado, retorna como está (200).
+    if (!s.isDeleted()) {
+        return s;
+    }
+
+    s.restore();
+    return tenantSupplierRepository.save(s);
+}
+
+    @TenantReadOnlyTx
+    public List<Supplier> findAnyByEmail(String email) {
+        // Comentário do método: consulta "any" (inclui deletados) para diagnósticos/admin.
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
-
-        supplier.setActive(!supplier.isActive());
-        return tenantSupplierRepository.save(supplier);
-    }
-
-    @TenantTx
-    public void softDelete(UUID id) {
-        Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com ID: " + id, 404));
-
-        supplier.softDelete(appClock.instant());
-        tenantSupplierRepository.save(supplier);
-    }
-
-    @TenantTx
-    public Supplier restore(UUID id) {
-        Supplier supplier = tenantSupplierRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND,
-                        "Fornecedor não encontrado com ID: " + id, 404));
-
-        supplier.restore();
-        return tenantSupplierRepository.save(supplier);
+        return tenantSupplierRepository.findAnyByEmail(email.trim());
     }
 
     // =========================================================
-    // Validation
+    // Helpers
     // =========================================================
 
-    private void validateForCreate(Supplier supplier) {
+    private Supplier mapToNewEntity(CreateSupplierCommand cmd) {
+        // Comentário do método: cria entity "nova" a partir do command (sem persistência).
+        if (cmd == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "Fornecedor é obrigatório", 400);
+
+        return Supplier.builder()
+                .name(cmd.name())
+                .contactPerson(cmd.contactPerson())
+                .email(cmd.email())
+                .phone(cmd.phone())
+                .address(cmd.address())
+                .document(cmd.document())
+                .documentType(cmd.documentType())
+                .website(cmd.website())
+                .paymentTerms(cmd.paymentTerms())
+                .leadTimeDays(cmd.leadTimeDays())
+                .rating(cmd.rating())
+                .notes(cmd.notes())
+                .active(true)
+                .deleted(false)
+                .build();
+    }
+
+    void validateForCreate(Supplier supplier) {
+        // Comentário do método: valida payload de criação + normaliza campos string.
         if (supplier == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "Fornecedor é obrigatório", 400);
 
         if (!StringUtils.hasText(supplier.getName())) {
@@ -278,19 +341,12 @@ public class TenantSupplierService {
     }
 
     private void validateRating(BigDecimal rating) {
+        // Comentário do método: valida range permitido do rating.
         if (rating.compareTo(BigDecimal.ZERO) < 0) {
             throw new ApiException(ApiErrorCode.INVALID_RATING, "rating não pode ser negativo", 400);
         }
         if (rating.compareTo(new BigDecimal("9.99")) > 0) {
             throw new ApiException(ApiErrorCode.INVALID_RATING, "rating máximo é 9.99", 400);
         }
-    }
-
-    @TenantReadOnlyTx
-    public List<Supplier> findAnyByEmail(String email) {
-        if (!StringUtils.hasText(email)) {
-            throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
-        }
-        return tenantSupplierRepository.findAnyByEmail(email);
     }
 }

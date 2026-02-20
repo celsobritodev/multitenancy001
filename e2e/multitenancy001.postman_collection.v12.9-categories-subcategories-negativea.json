@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "759648b4-fb58-4e17-b773-2bf7afa2e02a",
-    "name": "multitenancy001-e2e (v12.7 - remove folder-level auth logs + 03.04b)",
+    "name": "multitenancy001-e2e (v12.9 - categories/subcategories negative cases)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "22901965"
   },
@@ -1496,7 +1496,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n  \"name\": \"{{category_name}}\",\r\n  \"active\": true\r\n}\r\n",
+              "raw": "{\n  \"name\": \"{{category_name}}\"\n}\n",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1692,7 +1692,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n  \"name\": \"{{category_name}} UPDATED {{ts}}\",\r\n  \"active\": true\r\n}\r\n",
+              "raw": "{\n  \"name\": \"{{category_name}} UPDATED {{ts}}\"\n}\n",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1784,11 +1784,11 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Delete category OK\", function () {\r",
-                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);\r",
+                  "pm.test(\"Delete category -> 204\", function () {\r",
+                  "  pm.expect(pm.response.code).to.be.oneOf([204]);\r",
                   "});\r",
-                  "const tok = pm.environment.get('tenant_access_token');",
-                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                  "const tok = pm.environment.get('tenant_access_token');\r",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);\r"
                 ],
                 "type": "text/javascript",
                 "packages": {},
@@ -1891,6 +1891,389 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "03.06b update category (deleted) should 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Category SHOULD FAIL (deleted) {{ts}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }",
+                  "const ts = pm.collectionVariables.get('ts') || Date.now();",
+                  "pm.collectionVariables.set('ts', String(ts));"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update deleted category must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.06c toggle-active category (deleted) should 409",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}/toggle-active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}",
+                "toggle-active"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Toggle-active deleted category must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.07 delete category (idempotent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido. Rode 03.01 antes.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete category idempotent -> 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.07b create subcategory in deleted category should 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/category/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "category",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Subcat SHOULD FAIL (parent deleted) {{ts_sub_fail}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }",
+                  "pm.collectionVariables.set('ts_sub_fail', String(Date.now()));"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create subcategory under deleted category must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.08 restore category",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}",
+                "restore"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Restore category -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(categoryId)));",
+                  "if (body.deleted !== undefined) pm.test('deleted=false', () => pm.expect(body.deleted).to.eql(false));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.09 get category after restore",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get category after restore -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(categoryId)));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
         }
       ],
       "auth": {
@@ -1927,6 +2310,732 @@
           }
         }
       ]
+    },
+    {
+      "name": "04 - Subcategories",
+      "item": [
+        {
+          "name": "04.01 create subcategory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/category/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "category",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{subcategory_name}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido. Rode 03 - Categories antes.'); }",
+                  "const ts = Date.now();",
+                  "pm.collectionVariables.set('ts_sub', String(ts));",
+                  "pm.collectionVariables.set('subcategory_name', 'Subcat E2E ' + ts);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create subcategory -> 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Response has id', () => pm.expect(json.id).to.be.a('number'));",
+                  "pm.collectionVariables.set('subcategoryId', json.id);",
+                  "pm.environment.set('subcategoryId', String(json.id));",
+                  "pm.collectionVariables.set('subcategory_name', json.name);",
+                  "const catId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (json.categoryId != null) pm.test('categoryId echoed', () => pm.expect(String(json.categoryId)).to.eql(String(catId)));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.02 get subcategory by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido. Rode 04.01 antes.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get subcategory OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(id)));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.03 list subcategories by category (not-deleted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/category/{{categoryId}}/not-deleted",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "category",
+                "{{categoryId}}",
+                "not-deleted"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const categoryId = pm.collectionVariables.get('categoryId') || pm.environment.get('categoryId');",
+                  "if (!categoryId) { throw new Error('E2E FAIL-FAST: categoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('List subcategories OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const arr = pm.response.json();",
+                  "pm.test('Response is array', () => pm.expect(Array.isArray(arr)).to.eql(true));",
+                  "const subId = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (subId) {",
+                  "  pm.test('Contains created subcategory', () => {",
+                  "    const found = arr.find(x => String(x.id) === String(subId));",
+                  "    pm.expect(found).to.be.ok;",
+                  "  });",
+                  "}",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.04 update subcategory",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{subcategory_name}} UPDATED {{ts_sub}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido antes do UPDATE. Rode 04.01 antes.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update subcategory OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Updated name applied', () => pm.expect(String(json.name)).to.include('UPDATED'));",
+                  "pm.environment.set('subcategory_updated_name', String(json.name));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.04b get subcategory after update",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get subcategory after update -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(id)));",
+                  "const expected = pm.environment.get('subcategory_updated_name');",
+                  "if (expected) pm.test('Updated name persisted', () => pm.expect(body.name).to.eql(expected));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.05 delete subcategory",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete subcategory -> 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.06 get subcategory should 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get subcategory after delete should be 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.06b update subcategory (deleted) should 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Subcat SHOULD FAIL (deleted) {{ts_sub_deleted}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }",
+                  "pm.collectionVariables.set('ts_sub_deleted', String(Date.now()));"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update deleted subcategory must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.07 delete subcategory (idempotent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete subcategory idempotent -> 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.08 restore subcategory",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}",
+                "restore"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Restore subcategory -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(id)));",
+                  "if (body.deleted !== undefined) pm.test('deleted=false', () => pm.expect(body.deleted).to.eql(false));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.09 get subcategory after restore",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "if (!id) { throw new Error('E2E FAIL-FAST: subcategoryId não definido.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get subcategory after restore -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const id = pm.collectionVariables.get('subcategoryId') || pm.environment.get('subcategoryId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(id)));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_access_token}}",
+            "type": "string"
+          }
+        ]
+      }
     },
     {
       "name": "04 - Products",
@@ -2056,6 +3165,22 @@
     },
     {
       "key": "cp_refresh_token_old",
+      "value": ""
+    },
+    {
+      "key": "subcategoryId",
+      "value": ""
+    },
+    {
+      "key": "subcategory_name",
+      "value": ""
+    },
+    {
+      "key": "subcategory_name_updated",
+      "value": ""
+    },
+    {
+      "key": "ts_sub",
       "value": ""
     }
   ]

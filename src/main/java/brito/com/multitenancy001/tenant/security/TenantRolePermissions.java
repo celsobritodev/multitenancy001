@@ -14,6 +14,8 @@ import static brito.com.multitenancy001.tenant.security.TenantPermission.*;
  * - sempre devolve Set imutável
  * - toda role deve estar mapeada explicitamente
  * - FAIL-FAST: role sem mapeamento explode na inicialização e/ou no uso
+ * - FAIL-FAST: role decorativa (set vazio) é bug
+ * - FAIL-FAST: permissão duplicada no mapeamento é bug (evita erro humano escondido por Set)
  */
 public final class TenantRolePermissions {
 
@@ -23,8 +25,8 @@ public final class TenantRolePermissions {
         // OWNER = tudo
         MAP.put(TenantRole.TENANT_OWNER, unmodifiable(EnumSet.allOf(TenantPermission.class)));
 
-        // ADMIN = "admin total" do tenant (coerente com delete user + settings write + role transfer)
-        MAP.put(TenantRole.TENANT_ADMIN, unmodifiable(EnumSet.of(
+        // ADMIN = "admin total" do tenant
+        MAP.put(TenantRole.TENANT_ADMIN, unmodifiable(strict(
                 // Users
                 TEN_USER_READ,
                 TEN_USER_CREATE,
@@ -64,11 +66,8 @@ public final class TenantRolePermissions {
 
         /**
          * MANAGER = "admin operacional" (sem poderes sensíveis/destrutivos).
-         * - NÃO transfere ownership/admin (TEN_ROLE_TRANSFER)
-         * - NÃO deleta usuário (TEN_USER_DELETE)
-         * - NÃO escreve billing/settings (TEN_BILLING_WRITE / TEN_SETTINGS_WRITE)
          */
-        MAP.put(TenantRole.TENANT_MANAGER, unmodifiable(EnumSet.of(
+        MAP.put(TenantRole.TENANT_MANAGER, unmodifiable(strict(
                 // Users (sem delete)
                 TEN_USER_READ,
                 TEN_USER_CREATE,
@@ -100,14 +99,14 @@ public final class TenantRolePermissions {
                 TEN_SETTINGS_READ
         )));
 
-        MAP.put(TenantRole.TENANT_PRODUCT_MANAGER, unmodifiable(EnumSet.of(
+        MAP.put(TenantRole.TENANT_PRODUCT_MANAGER, unmodifiable(strict(
                 TEN_PRODUCT_READ,
                 TEN_PRODUCT_WRITE,
                 TEN_INVENTORY_READ,
                 TEN_INVENTORY_WRITE
         )));
 
-        MAP.put(TenantRole.TENANT_SALES_MANAGER, unmodifiable(EnumSet.of(
+        MAP.put(TenantRole.TENANT_SALES_MANAGER, unmodifiable(strict(
                 TEN_SALE_READ,
                 TEN_SALE_WRITE,
                 TEN_SALE_ISSUES_READ,
@@ -115,13 +114,13 @@ public final class TenantRolePermissions {
                 TEN_REPORT_SALES_READ
         )));
 
-        MAP.put(TenantRole.TENANT_BILLING_MANAGER, unmodifiable(EnumSet.of(
+        MAP.put(TenantRole.TENANT_BILLING_MANAGER, unmodifiable(strict(
                 TEN_BILLING_READ,
                 TEN_BILLING_WRITE
         )));
 
         // READ_ONLY = auditor/consulta (sem write)
-        MAP.put(TenantRole.TENANT_READ_ONLY, unmodifiable(EnumSet.of(
+        MAP.put(TenantRole.TENANT_READ_ONLY, unmodifiable(strict(
                 TEN_PRODUCT_READ,
                 TEN_INVENTORY_READ,
                 TEN_CATEGORY_READ,
@@ -134,8 +133,8 @@ public final class TenantRolePermissions {
                 TEN_SETTINGS_READ
         )));
 
-        // USER = usuário comum (opera o sistema)
-        MAP.put(TenantRole.TENANT_USER, unmodifiable(EnumSet.of(
+        // USER = usuário comum
+        MAP.put(TenantRole.TENANT_USER, unmodifiable(strict(
                 TEN_PRODUCT_READ,
                 TEN_CATEGORY_READ,
                 TEN_SUPPLIER_READ,
@@ -144,16 +143,16 @@ public final class TenantRolePermissions {
                 TEN_SALE_WRITE
         )));
 
-        // OPERATOR operacional (não administra usuários/config/billing)
-        MAP.put(TenantRole.TENANT_OPERATOR, unmodifiable(EnumSet.of(
+        // OPERATOR operacional
+        MAP.put(TenantRole.TENANT_OPERATOR, unmodifiable(strict(
                 TEN_PRODUCT_READ,
                 TEN_INVENTORY_READ,
                 TEN_INVENTORY_WRITE,
                 TEN_SALE_READ
         )));
 
-        // SUPPORT (tenant) – suporte interno sem “poder destrutivo total”
-        MAP.put(TenantRole.TENANT_SUPPORT, unmodifiable(EnumSet.of(
+        // SUPPORT (tenant)
+        MAP.put(TenantRole.TENANT_SUPPORT, unmodifiable(strict(
                 TEN_USER_READ,
                 TEN_USER_UPDATE,
                 TEN_USER_SUSPEND,
@@ -169,17 +168,30 @@ public final class TenantRolePermissions {
                 TEN_BILLING_READ
         )));
 
-        // FAIL-FAST: garante que todas as roles do enum estão mapeadas.
-        assertAllRolesMapped();
+        // FAIL-FAST: garante que todas as roles do enum estão mapeadas e não vazias.
+        assertAllRolesMappedAndNonEmpty();
     }
 
     private TenantRolePermissions() {}
 
+    /**
+     * Obtém permissões base de uma role do Tenant.
+     *
+     * @param role role do tenant (obrigatória)
+     * @return set imutável de permissões
+     */
     public static Set<TenantPermission> permissionsFor(TenantRole role) {
-        if (role == null) return Set.of();
+        // método: valida parâmetros e devolve set imutável
+        if (role == null) {
+            throw new IllegalArgumentException("Role do Tenant é obrigatória (null)");
+        }
+
         Set<TenantPermission> set = MAP.get(role);
         if (set == null) {
             throw new IllegalStateException("Role do Tenant sem mapeamento em TenantRolePermissions: " + role);
+        }
+        if (set.isEmpty()) {
+            throw new IllegalStateException("Role do Tenant com set de permissões vazio (role decorativa): " + role);
         }
         return set;
     }
@@ -188,10 +200,30 @@ public final class TenantRolePermissions {
         return Collections.unmodifiableSet(set);
     }
 
-    private static void assertAllRolesMapped() {
+    /**
+     * Constrói um EnumSet com fail-fast para duplicatas.
+     */
+    @SafeVarargs
+    private static EnumSet<TenantPermission> strict(TenantPermission... perms) {
+        // método: monta set e explode se houver duplicata por erro humano
+        EnumSet<TenantPermission> set = EnumSet.noneOf(TenantPermission.class);
+        for (TenantPermission p : perms) {
+            if (p == null) continue;
+            if (!set.add(p)) {
+                throw new IllegalStateException("Permissão duplicada no mapeamento TenantRolePermissions: " + p.name());
+            }
+        }
+        return set;
+    }
+
+    private static void assertAllRolesMappedAndNonEmpty() {
         for (TenantRole role : TenantRole.values()) {
-            if (!MAP.containsKey(role)) {
+            Set<TenantPermission> perms = MAP.get(role);
+            if (perms == null) {
                 throw new IllegalStateException("Role do Tenant sem mapeamento em TenantRolePermissions: " + role);
+            }
+            if (perms.isEmpty()) {
+                throw new IllegalStateException("Role do Tenant com set de permissões vazio (role decorativa): " + role);
             }
         }
     }

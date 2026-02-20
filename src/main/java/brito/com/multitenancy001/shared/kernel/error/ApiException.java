@@ -11,63 +11,51 @@ import java.util.Objects;
  * Exceção padrão de API (VERSÃO ENFORCED).
  *
  * Regras:
- * - NÃO existe mais construtor legado com String code.
  * - O "error" do payload é sempre code.name().
- * - O status default vem de ApiErrorCode.httpStatus() quando não informado.
+ * - O status default vem de ApiErrorCode.httpStatus().
+ * - Não existe construtor público que permita "inventar" status no call site.
+ * - A mensagem default vem de ApiErrorCode.defaultMessage() quando não informada.
  */
 @Getter
 public class ApiException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    /**
-     * Código exposto no payload (sempre enum.name()).
-     */
+    /** Código exposto no payload (sempre enum.name()). */
     private final String error;
 
-    /**
-     * Status HTTP a ser retornado.
-     */
+    /** Status HTTP a ser retornado (sempre derivado do enum). */
     private final int status;
 
-    /**
-     * Campos adicionais (quando aplicável).
-     */
+    /** Campos adicionais (quando aplicável). */
     private final String field;
     private final String invalidValue;
     private final List<String> allowedValues;
     private final Object details;
 
-    /**
-     * Metadados tipados.
-     */
+    /** Metadados tipados. */
     private final ApiErrorCode code;
     private final ApiErrorCategory category;
 
     // =========================
-    // Construtores (preferidos)
+    // Construtores (enforced)
     // =========================
 
     public ApiException(ApiErrorCode code) {
-        this(code, null, 0, null, null, null, null);
+        this(code, null, null, null, null, null);
     }
 
     public ApiException(ApiErrorCode code, String message) {
-        this(code, message, 0, null, null, null, null);
+        this(code, message, null, null, null, null);
     }
 
-    public ApiException(ApiErrorCode code, String message, int status) {
-        this(code, message, status, null, null, null, null);
-    }
-
-    public ApiException(ApiErrorCode code, String message, int status, Object details) {
-        this(code, message, status, null, null, null, details);
+    public ApiException(ApiErrorCode code, String message, Object details) {
+        this(code, message, null, null, null, details);
     }
 
     public ApiException(
             ApiErrorCode code,
             String message,
-            int status,
             String field,
             String invalidValue,
             List<String> allowedValues,
@@ -81,7 +69,7 @@ public class ApiException extends RuntimeException {
         this.category = safeCode.category();
 
         this.error = safeCode.name();
-        this.status = resolveStatus(safeCode, status);
+        this.status = resolveStatus(safeCode);
 
         this.field = field;
         this.invalidValue = invalidValue;
@@ -99,8 +87,7 @@ public class ApiException extends RuntimeException {
         return "Erro";
     }
 
-    private static int resolveStatus(ApiErrorCode code, int status) {
-        if (status > 0) return status;
+    private static int resolveStatus(ApiErrorCode code) {
         return Objects.requireNonNull(code, "code").httpStatus();
     }
 }

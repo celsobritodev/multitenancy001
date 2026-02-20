@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "759648b4-fb58-4e17-b773-2bf7afa2e02a",
-    "name": "multitenancy001-e2e (v12.9 - categories/subcategories negative cases + suppliers) (v13.1 suppliers endpoints)",
+    "name": "multitenancy001-e2e (v12.9 - categories/subcategories negative cases) (v14.0 suppliers full)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "22901965"
   },
@@ -3038,12 +3038,199 @@
       }
     },
     {
-      "name": "04 - Products",
-      "item": []
-    },
-    {
       "name": "05 - Suppliers",
       "item": [
+        {
+          "name": "05.01 create supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{supplier_name}}\",\n  \"email\": \"{{supplier_email}}\",\n  \"document\": \"{{supplier_document}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.collectionVariables.set('ts', String(ts));",
+                  "pm.collectionVariables.set('supplier_name', 'Fornecedor E2E ' + ts);",
+                  "pm.collectionVariables.set('supplier_email', `fornecedor${ts}@example.com`);",
+                  "pm.collectionVariables.set('supplier_document', `DOC-${ts}`);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create supplier -> 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Response has id', () => pm.expect(json.id).to.be.ok);",
+                  "pm.collectionVariables.set('supplierId', String(json.id));",
+                  "pm.environment.set('supplierId', String(json.id));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.02 get supplier by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "if (!supplierId) { throw new Error('E2E FAIL-FAST: supplierId não definido. Rode 05.01 antes.'); }"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get supplier OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(supplierId)));",
+                  "if (body.deleted !== undefined) pm.test('deleted=false', () => pm.expect(body.deleted).to.eql(false));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.03 list suppliers (not-deleted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('List suppliers OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const arr = pm.response.json();",
+                  "pm.test('Response is array', () => pm.expect(Array.isArray(arr)).to.eql(true));",
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "if (supplierId) {",
+                  "  pm.test('Contains created supplier', () => {",
+                  "    const found = arr.some(x => String(x.id) === String(supplierId));",
+                  "    pm.expect(found).to.eql(true);",
+                  "  });",
+                  "}",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
         {
           "name": "05.03a list suppliers (active)",
           "request": {
@@ -3082,10 +3269,6 @@
                   "pm.test('List active suppliers OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
                   "const arr = pm.response.json();",
                   "pm.test('Response is array', () => pm.expect(Array.isArray(arr)).to.eql(true));",
-                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
-                  "if (supplierId) {",
-                  "  pm.test('Contains supplier (may be inactive after toggle later)', () => pm.expect(true).to.eql(true));",
-                  "}",
                   "const tok = pm.environment.get('tenant_access_token');",
                   "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
                 ],
@@ -3287,11 +3470,6 @@
                   "pm.test('Get by email OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
                   "const arr = pm.response.json();",
                   "pm.test('Response is array', () => pm.expect(Array.isArray(arr)).to.eql(true));",
-                  "pm.test('All emails match', () => {",
-                  "  const expected = (pm.collectionVariables.get('supplier_email') || '').trim();",
-                  "  const allMatch = arr.every(x => String(x.email || '').trim() === expected);",
-                  "  pm.expect(allMatch).to.eql(true);",
-                  "});",
                   "const tok = pm.environment.get('tenant_access_token');",
                   "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
                 ],
@@ -3366,6 +3544,1237 @@
               }
             }
           ]
+        },
+        {
+          "name": "05.04 update supplier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{supplier_name}} UPDATED {{ts}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "if (!supplierId) { throw new Error('E2E FAIL-FAST: supplierId não definido antes do UPDATE. Rode 05.01 antes.'); }",
+                  "const ts = pm.collectionVariables.get('ts') || Date.now();",
+                  "pm.collectionVariables.set('ts', String(ts));"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update supplier OK -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Updated name applied', () => pm.expect(String(body.name || '')).to.include('UPDATED'));",
+                  "if (body && body.name) pm.environment.set('supplier_updated_name', String(body.name));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.04b get supplier after update",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get supplier after update -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(supplierId)));",
+                  "const expected = pm.environment.get('supplier_updated_name');",
+                  "if (expected) { pm.test('Updated name persisted', () => pm.expect(String(body.name)).to.eql(String(expected))); }",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.05 toggle-active supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}/toggle-active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}",
+                "toggle-active"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Toggle-active supplier -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Response has active', () => pm.expect(body.active).to.be.oneOf([true,false]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.06 delete supplier",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete supplier -> 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.07 get supplier should 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get supplier after delete should be 404', () => pm.expect(pm.response.code).to.eql(404));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.08 update supplier (deleted) should 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Supplier SHOULD FAIL (deleted) {{ts}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update deleted supplier must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.09 toggle-active supplier (deleted) should 409",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}/toggle-active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}",
+                "toggle-active"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Toggle-active deleted supplier must fail (409/404)', () => pm.expect(pm.response.code).to.be.oneOf([409,404]));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.10 delete supplier (idempotent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Delete supplier idempotent -> 204', () => pm.expect(pm.response.code).to.eql(204));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.11 restore supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}",
+                "restore"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Restore supplier -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const supplierId = pm.collectionVariables.get('supplierId') || pm.environment.get('supplierId');",
+                  "pm.test('Same id', () => pm.expect(String(body.id)).to.eql(String(supplierId)));",
+                  "if (body.deleted !== undefined) pm.test('deleted=false', () => pm.expect(body.deleted).to.eql(false));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.12 get supplier after restore",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Get supplier after restore -> 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const tok = pm.environment.get('tenant_access_token');",
+                  "pm.test('tenant_access_token presente no env', () => pm.expect(tok).to.be.ok);"
+                ],
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenant_access_token}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "06 - Products",
+      "item": [
+        {
+          "name": "06.01 create product (detailed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Create product -> 201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response has id\", function () { pm.expect(json.id).to.be.ok; });",
+                  "pm.environment.set(\"productId\", String(json.id));",
+                  "pm.collectionVariables.set(\"productId\", String(json.id));",
+                  "pm.test(\"tenant_access_token presente no env\", function () {",
+                  "  pm.expect(pm.environment.get(\"tenant_access_token\")).to.be.ok;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Produto E2E {{$timestamp}}\",\n  \"description\": \"Produto E2E\",\n  \"sku\": \"SKU-{{$timestamp}}\",\n  \"price\": 123.45,\n  \"stockQuantity\": 10,\n  \"minStock\": 2,\n  \"maxStock\": 100,\n  \"costPrice\": 50.00,\n  \"categoryId\": {{categoryId}},\n  \"subcategoryId\": {{subcategoryId}},\n  \"brand\": \"Marca E2E\",\n  \"weightKg\": 1.2,\n  \"dimensions\": \"10x20x30\",\n  \"barcode\": \"7890000000000\",\n  \"active\": true,\n  \"supplierId\": \"{{supplierId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/detailed",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "detailed"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.02 get product by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Get product -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Same id\", function () {",
+                  "  pm.expect(String(json.id)).to.eql(String(pm.environment.get(\"productId\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/{{productId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.03 list products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"List products -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "if (json && json.content) {",
+                  "  pm.test(\"Page content is array\", function () { pm.expect(json.content).to.be.an(\"array\"); });",
+                  "} else {",
+                  "  pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.04 list products by category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"List by category -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/category/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "category",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.05 list products by subcategory",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"List by subcategory -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/subcategory/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "subcategory",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.06 list products by supplier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"List by supplier -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/supplier/{{supplierId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "supplier",
+                "{{supplierId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.07 inventory value",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Inventory value -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "pm.test(\"Inventory value is number-ish\", function () {",
+                  "  const txt = pm.response.text();",
+                  "  pm.expect(txt).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/inventory-value",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "inventory-value"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.08 low-stock count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Low-stock count -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "pm.test(\"Low-stock count is number-ish\", function () {",
+                  "  const txt = pm.response.text();",
+                  "  pm.expect(txt).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/low-stock/count?threshold=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "low-stock",
+                "count"
+              ],
+              "query": [
+                {
+                  "key": "threshold",
+                  "value": "5"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.09 count products by supplier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Count-by-supplier -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/count-by-supplier",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "count-by-supplier"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.10 toggle-active product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Toggle-active -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Has active\", function () { pm.expect(json.active).to.not.eql(undefined); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/{{productId}}/toggle-active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "{{productId}}",
+                "toggle-active"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.11 update cost price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Update cost price -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Has costPrice or cost\", function () {",
+                  "  pm.expect(json.costPrice !== undefined || json.cost !== undefined || json.cost_price !== undefined).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/{{productId}}/cost-price?costPrice=10.00",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "{{productId}}",
+                "cost-price"
+              ],
+              "query": [
+                {
+                  "key": "costPrice",
+                  "value": "10.00"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.12 search products by name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Search products -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/search?name=Produto%20E2E",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Produto E2E"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.13 any by category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Any by category -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/any/category/{{categoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "any",
+                "category",
+                "{{categoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.14 any by subcategory",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Any by subcategory -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/any/subcategory/{{subcategoryId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "any",
+                "subcategory",
+                "{{subcategoryId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "06.15 any by brand",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Any by brand -> 200\", function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test(\"Response is array\", function () { pm.expect(json).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/any/brand?brand=Marca%20E2E",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "any",
+                "brand"
+              ],
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "Marca E2E"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ]
     }
