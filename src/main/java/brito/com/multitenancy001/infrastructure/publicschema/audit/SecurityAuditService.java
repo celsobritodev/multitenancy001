@@ -2,339 +2,165 @@ package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
-import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.time.AppClock;
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.net.InetAddress;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
 /**
- * Serviço de auditoria de segurança (append-only).
+ * Serviço central de auditoria de segurança (append-only) gravado em PUBLIC schema.
  *
- * SOC2-like:
- * - Registra ações sensíveis (CRUD de usuários, roles/perms, reset/troca de senha, ownership transfer).
- * - Details estruturado em JSON (motivo, alvo, mudanças, deltas).
- * - Captura IP/UA/correlationId via RequestMeta (já persistido no evento).
+ * Objetivo:
+ * - Registrar eventos sensíveis de segurança/billing/users com outcome: ATTEMPT/SUCCESS/DENIED/FAILURE.
+ * - Produzir trilha SOC2-like para investigação e compliance.
  *
  * Regras:
- * - NÃO logar segredos (senha, refresh token, JWT, etc).
- * - Deve ser chamado a partir de AppServices/UseCases (não do Controller).
- * - Mantém compatibilidade com a assinatura `record(...)` existente.
+ * - Deve ser chamado por AppServices/UseCases (não Controller).
+ * - Details deve ser JSON estruturado e nunca conter segredos (tokens, senhas, hashes, etc.).
+ * - occurredAt deve vir do AppClock (Instant -> timestamptz).
  */
 @Service
 @RequiredArgsConstructor
 public class SecurityAuditService {
 
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final SecurityAuditEventRepository securityAuditEventRepository;
     private final AppClock appClock;
     private final JsonDetailsMapper jsonDetailsMapper;
 
     /**
-     * API de baixo nível (mantida) — grava um evento de auditoria com JSON pronto.
+     * Registra um evento append-only de segurança.
      */
-    public void record(SecurityAuditActionType actionType,
-                       AuditOutcome outcome,
-                       String actorEmail,
-                       Long actorUserId,
-                       String targetEmail,
-                       Long targetUserId,
-                       Long accountId,
-                       String tenantSchema,
-                       String detailsJson) {
+    @Transactional
+    public void record(
+            SecurityAuditActionType actionType,
+            AuditOutcome outcome,
+            String actorEmail,
+            Long actorUserId,
+            String targetEmail,
+            Long targetUserId,
+            Long accountId,
+            String tenantSchema,
+            String detailsJson
+    ) {
+        /* Comentário do método: cria e persiste um evento append-only com request meta e occurredAt via AppClock. */
 
-        /* Resolve RequestMeta e tenant schema efetivo antes de persistir. */
+        Instant now = appClock.instant();
+
         RequestMeta meta = RequestMetaContext.getOrNull();
-        String resolvedTenant = StringUtils.hasText(tenantSchema)
-                ? tenantSchema
-                : TenantContext.getOrNull();
+        UUID requestId = meta != null ? meta.requestId() : null;
+        InetAddress ip = meta != null ? parseInetAddressOrNull(meta.ip()) : null;
+        String userAgent = meta != null ? meta.userAgent() : null;
+        String method = meta != null ? meta.method() : null;
+        String uri = meta != null ? meta.uri() : null;
 
-        publicSchemaUnitOfWork.requiresNew(() -> {
-            /* Persiste evento append-only em transação REQUIRES_NEW (não polui tx do caso de uso). */
-            SecurityAuditEvent ev = new SecurityAuditEvent();
+        SecurityAuditEvent e = new SecurityAuditEvent();
+        e.setOccurredAt(now);
 
-            Instant occurredAt = appClock.instant();
-            ev.setOccurredAt(occurredAt);
+        e.setRequestId(requestId);
+        e.setMethod(trimOrNull(method));
+        e.setUri(trimOrNull(uri));
+        e.setIp(ip);
+        e.setUserAgent(trimOrNull(userAgent));
 
-            if (meta != null) {
-                ev.setRequestId(meta.requestId());
-                ev.setMethod(meta.method());
-                ev.setUri(meta.uri());
-                ev.setIp(parseInetOrNull(meta.ip()));
-                ev.setUserAgent(meta.userAgent());
-            }
+        e.setActionType(actionType);
+        e.setOutcome(outcome);
 
-            ev.setActionType(actionType);
-            ev.setOutcome(outcome);
+        e.setActorEmail(normalizeEmailOrNull(actorEmail));
+        e.setActorUserId(actorUserId);
 
-            ev.setActorEmail(actorEmail);
-            ev.setActorUserId(actorUserId);
+        e.setTargetEmail(normalizeEmailOrNull(targetEmail));
+        e.setTargetUserId(targetUserId);
 
-            ev.setTargetEmail(targetEmail);
-            ev.setTargetUserId(targetUserId);
+        e.setAccountId(accountId);
+        e.setTenantSchema(trimOrNull(tenantSchema));
 
-            ev.setAccountId(accountId);
-            ev.setTenantSchema(resolvedTenant);
+        // garante JSON válido (se vier null, fica null)
+        e.setDetailsJson(normalizeDetailsJson(detailsJson));
 
-            ev.setDetailsJson(detailsJson);
-
-            securityAuditEventRepository.save(ev);
-        });
+        securityAuditEventRepository.save(e);
     }
 
-    // =========================================================
-    // Convenience API (SOC2-like)
-    // =========================================================
+    /**
+     * Helper para quem quer passar Map/record diretamente e deixar o serviço converter em JSON.
+     */
+    @Transactional
+    public void recordStructured(
+            SecurityAuditActionType actionType,
+            AuditOutcome outcome,
+            String actorEmail,
+            Long actorUserId,
+            String targetEmail,
+            Long targetUserId,
+            Long accountId,
+            String tenantSchema,
+            Object details
+    ) {
+        /* Comentário do método: converte details tipado (Map/record) em JSON e delega para record(). */
 
-    public void success(SecurityAuditActionType actionType,
-                        String actorEmail,
-                        Long actorUserId,
-                        String targetEmail,
-                        Long targetUserId,
-                        Long accountId,
-                        String tenantSchema,
-                        Map<String, Object> details) {
-        /* Registra ação sensível com outcome SUCCESS. */
+        String detailsJson = (details == null)
+                ? null
+                : jsonDetailsMapper.toJsonNode(details).toString();
+
         record(
                 actionType,
-                AuditOutcome.SUCCESS,
+                outcome,
                 actorEmail,
                 actorUserId,
                 targetEmail,
                 targetUserId,
                 accountId,
                 tenantSchema,
-                toDetailsJson(details)
+                detailsJson
         );
     }
 
-    public void failure(SecurityAuditActionType actionType,
-                        String actorEmail,
-                        Long actorUserId,
-                        String targetEmail,
-                        Long targetUserId,
-                        Long accountId,
-                        String tenantSchema,
-                        Map<String, Object> details) {
-        /* Registra ação sensível com outcome FAILURE (sem segredos). */
-        record(
-                actionType,
-                AuditOutcome.FAILURE,
-                actorEmail,
-                actorUserId,
-                targetEmail,
-                targetUserId,
-                accountId,
-                tenantSchema,
-                toDetailsJson(details)
-        );
-    }
-
-    // =========================
-    // CRUD de usuários (SOC2)
-    // =========================
-
-    public void userCreated(String actorEmail, Long actorUserId,
-                            String targetEmail, Long targetUserId,
-                            Long accountId, String tenantSchema,
-                            String reason) {
-        success(SecurityAuditActionType.USER_CREATED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "create")));
-    }
-
-    public void userUpdated(String actorEmail, Long actorUserId,
-                            String targetEmail, Long targetUserId,
-                            Long accountId, String tenantSchema,
-                            String reason,
-                            Map<String, Object> changes) {
-        success(SecurityAuditActionType.USER_UPDATED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "update", "changes", changes)));
-    }
-
-    public void userSuspended(String actorEmail, Long actorUserId,
-                              String targetEmail, Long targetUserId,
-                              Long accountId, String tenantSchema,
-                              String reason) {
-        success(SecurityAuditActionType.USER_SUSPENDED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "suspend")));
-    }
-
-    public void userRestored(String actorEmail, Long actorUserId,
-                             String targetEmail, Long targetUserId,
-                             Long accountId, String tenantSchema,
-                             String reason) {
-        success(SecurityAuditActionType.USER_RESTORED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "restore")));
-    }
-
-    public void userSoftDeleted(String actorEmail, Long actorUserId,
-                                String targetEmail, Long targetUserId,
-                                Long accountId, String tenantSchema,
-                                String reason) {
-        success(SecurityAuditActionType.USER_SOFT_DELETED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "soft_delete")));
-    }
-
-    public void userSoftRestored(String actorEmail, Long actorUserId,
-                                 String targetEmail, Long targetUserId,
-                                 Long accountId, String tenantSchema,
-                                 String reason) {
-        success(SecurityAuditActionType.USER_SOFT_RESTORED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("operation", "soft_restore")));
-    }
-
-    // =========================
-    // Mudanças sensíveis
-    // =========================
-
-    public void roleChanged(String actorEmail, Long actorUserId,
-                            String targetEmail, Long targetUserId,
-                            Long accountId, String tenantSchema,
-                            String reason,
-                            String roleBefore, String roleAfter) {
-        success(SecurityAuditActionType.ROLE_CHANGED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("roleBefore", roleBefore, "roleAfter", roleAfter)));
-    }
-
-    public void permissionsChanged(String actorEmail, Long actorUserId,
-                                   String targetEmail, Long targetUserId,
-                                   Long accountId, String tenantSchema,
-                                   String reason,
-                                   List<String> permissionsAdded,
-                                   List<String> permissionsRemoved) {
-        success(SecurityAuditActionType.PERMISSIONS_CHANGED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m(
-                        "permissionsAdded", permissionsAdded,
-                        "permissionsRemoved", permissionsRemoved
-                )));
-    }
-
-    public void passwordResetRequested(String actorEmail, Long actorUserId,
-                                       String targetEmail, Long targetUserId,
-                                       Long accountId, String tenantSchema,
-                                       String reason) {
-        success(SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("flow", "reset_requested")));
-    }
-
-    public void passwordResetCompleted(String actorEmail, Long actorUserId,
-                                       String targetEmail, Long targetUserId,
-                                       Long accountId, String tenantSchema,
-                                       String reason) {
-        success(SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("flow", "reset_completed")));
-    }
-
-    public void passwordChanged(String actorEmail, Long actorUserId,
-                                String targetEmail, Long targetUserId,
-                                Long accountId, String tenantSchema,
-                                String reason) {
-        success(SecurityAuditActionType.PASSWORD_CHANGED,
-                actorEmail, actorUserId,
-                targetEmail, targetUserId,
-                accountId, tenantSchema,
-                details(reason, m("flow", "password_changed")));
-    }
-
-    public void ownershipTransferred(String actorEmail, Long actorUserId,
-                                     Long accountId, String tenantSchema,
-                                     String reason,
-                                     Long fromUserId, String fromEmail,
-                                     Long toUserId, String toEmail) {
-        success(SecurityAuditActionType.OWNERSHIP_TRANSFERRED,
-                actorEmail, actorUserId,
-                null, null,
-                accountId, tenantSchema,
-                details(reason, m(
-                        "fromUserId", fromUserId,
-                        "fromEmail", fromEmail,
-                        "toUserId", toUserId,
-                        "toEmail", toEmail
-                )));
-    }
-
-    // =========================================================
-    // Internals
-    // =========================================================
-
-    private String toDetailsJson(Map<String, Object> details) {
-        /* Serializa details para JSON usando JsonDetailsMapper (JsonNode -> String). */
-        if (details == null || details.isEmpty()) return null;
-
-        JsonNode node = jsonDetailsMapper.toJsonNode(details);
-        if (node == null || node.isNull()) return null;
-
-        return node.toString();
-    }
-
-    private static Map<String, Object> details(String reason, Map<String, Object> more) {
-        /* Monta details padrão com reason (quando existir) + extras. */
-        Map<String, Object> m = new LinkedHashMap<>();
-        if (StringUtils.hasText(reason)) m.put("reason", reason);
-        if (more != null && !more.isEmpty()) m.putAll(more);
-        return m;
-    }
-
-    private static Map<String, Object> m(Object... kv) {
-        /* Cria Map em pares key/value, preservando ordem (bom para leitura de logs). */
-        Map<String, Object> m = new LinkedHashMap<>();
-        if (kv == null) return m;
-        for (int i = 0; i + 1 < kv.length; i += 2) {
-            Object k = kv[i];
-            Object v = kv[i + 1];
-            if (k != null) m.put(String.valueOf(k), v);
-        }
-        return m;
-    }
-
-    private static InetAddress parseInetOrNull(String rawIp) {
-        /* Converte IP string para InetAddress, tolerando valores inválidos. */
-        if (!StringUtils.hasText(rawIp)) return null;
+    private static InetAddress parseInetAddressOrNull(String ip) {
+        /* Comentário do método: converte String IP para InetAddress de forma defensiva. */
+        if (!StringUtils.hasText(ip)) return null;
         try {
-            return InetAddress.getByName(rawIp);
+            return InetAddress.getByName(ip.trim());
         } catch (Exception ex) {
+            // auditoria nunca deve falhar por IP inválido
             return null;
         }
+    }
+
+    private static String trimOrNull(String s) {
+        /* Comentário do método: trim defensivo para evitar lixo em auditoria. */
+        if (!StringUtils.hasText(s)) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static String normalizeEmailOrNull(String email) {
+        /* Comentário do método: normaliza email para auditoria (minúsculo + trim). */
+        if (!StringUtils.hasText(email)) return null;
+        String t = email.trim().toLowerCase();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static String normalizeDetailsJson(String json) {
+        /* Comentário do método: valida minimamente o formato para não persistir "toString()" acidental. */
+        if (!StringUtils.hasText(json)) return null;
+        String t = json.trim();
+        if (t.isEmpty()) return null;
+
+        if (!(t.startsWith("{") || t.startsWith("["))) {
+            return "{\"raw\":\"" + escapeJsonString(t) + "\"}";
+        }
+        return t;
+    }
+
+    private static String escapeJsonString(String s) {
+        /* Comentário do método: escape básico para embutir texto em JSON. */
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

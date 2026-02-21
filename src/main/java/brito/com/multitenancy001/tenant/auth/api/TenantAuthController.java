@@ -1,3 +1,4 @@
+// src/main/java/brito/com/multitenancy001/tenant/auth/api/TenantAuthController.java
 package brito.com.multitenancy001.tenant.auth.api;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;

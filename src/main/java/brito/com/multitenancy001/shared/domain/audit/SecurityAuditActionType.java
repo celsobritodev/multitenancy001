@@ -5,11 +5,11 @@ package brito.com.multitenancy001.shared.domain.audit;
  *
  * Regras:
  * - NÃO remover/renomear valores (quebra histórico).
- * - Só adicionar novos valores.
+ * - SÓ adicionar novos valores, preferencialmente no final.
  *
  * Observação:
- * - Os tipos antigos (USER_CREATED etc) permanecem válidos.
- * - Os novos tipos adicionados dão granularidade SOC2-like (ex.: delete, ownership transfer, separação por contexto).
+ * - Os tipos antigos permanecem válidos.
+ * - Os novos tipos adicionados dão granularidade SOC2-like.
  */
 public enum SecurityAuditActionType {
 
@@ -59,7 +59,38 @@ public enum SecurityAuditActionType {
 
     /**
      * Mudança de status administrativa em Account/Tenant (suspend/resume).
-     * Útil quando você quer auditar o ato administrativo além do efeito em users.
      */
-    ACCOUNT_STATUS_CHANGED
+    ACCOUNT_STATUS_CHANGED,
+    
+    // =========================================================
+    // Accounts (append-only)
+    // =========================================================
+
+    ACCOUNT_SUSPENDED,
+    ACCOUNT_RESTORED,
+    
+
+    // =========================================================
+    // Billing / Payments (append-only)
+    // =========================================================
+
+    /**
+     * Pagamento criado (ex.: geração de cobrança).
+     */
+    PAYMENT_CREATED,
+
+    /**
+     * Status do pagamento alterado (ex.: PENDING -> PAID).
+     */
+    PAYMENT_STATUS_CHANGED,
+
+    /**
+     * Reembolso solicitado (futuro).
+     */
+    PAYMENT_REFUND_REQUESTED,
+
+    /**
+     * Reembolso concluído (futuro).
+     */
+    PAYMENT_REFUNDED
 }

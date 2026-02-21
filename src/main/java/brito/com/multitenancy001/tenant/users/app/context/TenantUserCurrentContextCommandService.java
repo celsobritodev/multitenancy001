@@ -5,10 +5,12 @@ import brito.com.multitenancy001.integration.security.TenantRequestIdentityServi
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
+import brito.com.multitenancy001.tenant.users.app.audit.TenantUserSecurityAuditRecorder;
 import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
 import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashSet;
+import java.util.Map;
 
 /**
  * Application Service (Tenant): Users no "current context" (identidade do request).
@@ -25,6 +28,7 @@ import java.util.LinkedHashSet;
  * - Resolve accountId/userId/tenantSchema da identidade do request.
  * - Aplica entitlements (limite de usuários) antes de criar.
  * - Executa dentro do schema via TenantExecutor.
+ * - Auditoria SOC2-like: ATTEMPT + SUCCESS/DENIED/FAILURE (append-only em public schema).
  */
 @Service
 @RequiredArgsConstructor
@@ -37,21 +41,49 @@ public class TenantUserCurrentContextCommandService {
     private final TenantRequestIdentityService requestIdentity;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
+    private final TenantUserSecurityAuditRecorder securityAudit;
+
     public void transferTenantOwner(Long toUserId) {
         /* Transfere TENANT_OWNER do usuário autenticado (from) para outro usuário (to). */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
         Long fromUserId = requestIdentity.getCurrentUserId();
 
-        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            // ✅ FIX: assinatura correta: (accountId, tenantSchema, fromUserId, toUserId)
-            tenantUserCommandService.transferTenantOwnerRole(accountId, tenantSchema, fromUserId, toUserId);
-            return null;
-        });
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(toUserId, accountId));
+
+        Map<String, Object> details = securityAudit.baseDetails("ownership_transfer", toUserId, target.getEmail());
+        details.put("fromUserId", fromUserId);
+        details.put("toUserId", toUserId);
+
+        securityAudit.recordAttempt(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
+
+        try {
+            tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                /** comentário do método: chama o command e executa a transferência no schema do tenant */
+                tenantUserCommandService.transferTenantOwnerRole(accountId, tenantSchema, fromUserId, toUserId);
+                return null;
+            });
+
+            securityAudit.recordSuccess(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
+            throw ex;
+        }
     }
 
     public TenantUser createTenantUser(TenantUserCreateRequest req) {
-        /* Cria usuário no tenant (respeita limite/entitlements). */
+        /* Cria usuário no tenant (respeita limite/entitlements) + audita USER_CREATED. */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
@@ -87,83 +119,217 @@ public class TenantUserCurrentContextCommandService {
         String finalLocale = locale;
         String finalTimezone = timezone;
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                // ✅ FIX: assinatura correta: (accountId, tenantSchema, name, email, rawPassword, role, ...)
-                tenantUserCommandService.createTenantUser(
-                        accountId,
-                        tenantSchema,
-                        name,
-                        email,
-                        req.password(),
-                        req.role(),
-                        req.phone(),
-                        req.avatarUrl(),
-                        finalLocale,
-                        finalTimezone,
-                        perms,
-                        mustChangePassword,
-                        origin
-                )
-        );
+        Map<String, Object> details = securityAudit.baseDetails("user_create", null, email);
+        details.put("name", name);
+        details.put("origin", origin.name());
+        details.put("mustChangePassword", mustChangePassword);
+        details.put("role", req.role() != null ? req.role().name() : null);
+        details.put("permissionsCount", perms != null ? perms.size() : 0);
+
+        securityAudit.recordAttempt(SecurityAuditActionType.USER_CREATED, null, email, details);
+
+        try {
+            TenantUser created = tenantExecutor.runInTenantSchema(tenantSchema, () ->
+                    /** comentário do método: delega para o command com assinatura padrão do projeto */
+                    tenantUserCommandService.createTenantUser(
+                            accountId,
+                            tenantSchema,
+                            name,
+                            email,
+                            req.password(),
+                            req.role(),
+                            req.phone(),
+                            req.avatarUrl(),
+                            finalLocale,
+                            finalTimezone,
+                            perms,
+                            mustChangePassword,
+                            origin
+                    )
+            );
+
+            details.put("createdUserId", created.getId());
+            securityAudit.recordSuccess(SecurityAuditActionType.USER_CREATED, created.getId(), created.getEmail(), details);
+            return created;
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(SecurityAuditActionType.USER_CREATED, null, email, details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(SecurityAuditActionType.USER_CREATED, null, email, details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(SecurityAuditActionType.USER_CREATED, null, email, details);
+            throw ex;
+        }
     }
 
     public TenantUser setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
-        /* Suspende/reativa usuário por admin (flag suspendedByAdmin). */
+        /* Suspende/reativa usuário por admin (flag suspendedByAdmin) + audita USER_SUSPENDED/USER_RESTORED. */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            // ✅ FIX: assinatura correta: (accountId, tenantSchema, userId, suspended)
-            tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
-            return tenantUserQueryService.getUser(userId, accountId);
-        });
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+
+        SecurityAuditActionType type = suspended ? SecurityAuditActionType.USER_SUSPENDED : SecurityAuditActionType.USER_RESTORED;
+
+        Map<String, Object> details = securityAudit.baseDetails("user_suspend_by_admin", userId, target.getEmail());
+        details.put("suspended", suspended);
+        details.put("mode", "by_admin");
+
+        securityAudit.recordAttempt(type, userId, target.getEmail(), details);
+
+        try {
+            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                /** comentário do método: aplica suspensão e retorna o usuário atualizado */
+                tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
+                return tenantUserQueryService.getUser(userId, accountId);
+            });
+
+            securityAudit.recordSuccess(type, userId, target.getEmail(), details);
+            return result;
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(type, userId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(type, userId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(type, userId, target.getEmail(), details);
+            throw ex;
+        }
     }
 
     public TenantUser setTenantUserSuspendedByAccount(Long userId, boolean suspended) {
-        /* Suspende/reativa usuário por conta (flag suspendedByAccount). */
+        /* Suspende/reativa usuário por conta (flag suspendedByAccount) + audita USER_SUSPENDED/USER_RESTORED. */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            // ✅ FIX: assinatura correta: (accountId, tenantSchema, userId, suspended)
-            tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
-            return tenantUserQueryService.getUser(userId, accountId);
-        });
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+
+        SecurityAuditActionType type = suspended ? SecurityAuditActionType.USER_SUSPENDED : SecurityAuditActionType.USER_RESTORED;
+
+        Map<String, Object> details = securityAudit.baseDetails("user_suspend_by_account", userId, target.getEmail());
+        details.put("suspended", suspended);
+        details.put("mode", "by_account");
+
+        securityAudit.recordAttempt(type, userId, target.getEmail(), details);
+
+        try {
+            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                /** comentário do método: aplica suspensão e retorna o usuário atualizado */
+                tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
+                return tenantUserQueryService.getUser(userId, accountId);
+            });
+
+            securityAudit.recordSuccess(type, userId, target.getEmail(), details);
+            return result;
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(type, userId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(type, userId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(type, userId, target.getEmail(), details);
+            throw ex;
+        }
     }
 
     public void softDeleteTenantUser(Long userId) {
-        /* Soft delete do usuário (deleção lógica). */
+        /* Soft delete do usuário (deleção lógica) + audita USER_SOFT_DELETED. */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema)
-            tenantUserCommandService.softDelete(userId, accountId, tenantSchema);
-            return null;
-        });
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+
+        Map<String, Object> details = securityAudit.baseDetails("user_soft_delete", userId, target.getEmail());
+        securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
+
+        try {
+            tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+                /** comentário do método: aplica soft delete no command */
+                tenantUserCommandService.softDelete(userId, accountId, tenantSchema);
+                return null;
+            });
+
+            securityAudit.recordSuccess(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
+            throw ex;
+        }
     }
 
     public void hardDeleteTenantUser(Long userId) {
-        /* Hard delete do usuário (deleção física). */
+        /* Hard delete do usuário (deleção física). (Opcional auditar via USER_SOFT_DELETED ou tipo novo; aqui mantive sem audit). */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            // Mantém assinatura existente do seu command service (não estava no erro atual).
+            /** comentário do método: mantém assinatura existente do seu command service */
             tenantUserCommandService.hardDelete(userId, accountId);
             return null;
         });
     }
 
     public TenantUser restoreTenantUser(Long userId) {
-        /* Restaura usuário após soft delete. */
+        /* Restaura usuário após soft delete + audita USER_SOFT_RESTORED. */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema)
-                tenantUserCommandService.restore(userId, accountId, tenantSchema)
-        );
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+
+        Map<String, Object> details = securityAudit.baseDetails("user_soft_restore", userId, target.getEmail());
+        securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
+
+        try {
+            TenantUser restored = tenantExecutor.runInTenantSchema(tenantSchema, () ->
+                    /** comentário do método: executa restore no command */
+                    tenantUserCommandService.restore(userId, accountId, tenantSchema)
+            );
+
+            securityAudit.recordSuccess(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
+            return restored;
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
+            throw ex;
+        }
     }
 
     public TenantUser resetTenantUserPassword(Long userId, String newPassword) {
@@ -173,9 +339,36 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema, newPassword)
-                tenantUserCommandService.resetPassword(userId, accountId, tenantSchema, newPassword)
-        );
+        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+
+        Map<String, Object> details = securityAudit.baseDetails("user_password_reset_admin", userId, target.getEmail());
+        details.put("mode", "admin_reset");
+
+        // IMPORTANTE: não logar senha.
+        securityAudit.recordAttempt(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
+
+        try {
+            TenantUser updated = tenantExecutor.runInTenantSchema(tenantSchema, () ->
+                    /** comentário do método: executa reset sem expor senha em logs/audit */
+                    tenantUserCommandService.resetPassword(userId, accountId, tenantSchema, newPassword)
+            );
+
+            securityAudit.recordSuccess(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
+            return updated;
+
+        } catch (ApiException ex) {
+            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+                securityAudit.recordDenied(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
+            } else {
+                details.put("error", ex.getError());
+                details.put("status", ex.getStatus());
+                securityAudit.recordFailure(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
+            }
+            throw ex;
+        } catch (Exception ex) {
+            details.put("exception", ex.getClass().getSimpleName());
+            securityAudit.recordFailure(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
+            throw ex;
+        }
     }
 }

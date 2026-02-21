@@ -26,8 +26,8 @@ public class TenantLoginChallengeEntity {
     @Column(name = "email", nullable = false, columnDefinition = "citext")
     private String email;
 
-    @Column(name = "candidate_account_ids_csv", nullable = false, columnDefinition = "text")
-    private String candidateAccountIdsCsv;
+    @Column(name = "candidate_account_ids", nullable = false, columnDefinition = "text")
+    private String candidateAccountIds;
 
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamptz")
     private Instant createdAt;
@@ -89,9 +89,9 @@ public class TenantLoginChallengeEntity {
     }
 
     public Set<Long> candidateAccountIds() {
-        if (candidateAccountIdsCsv == null || candidateAccountIdsCsv.isBlank()) return Set.of();
+        if (candidateAccountIds == null || candidateAccountIds.isBlank()) return Set.of();
 
-        return Arrays.stream(candidateAccountIdsCsv.split(","))
+        return Arrays.stream(candidateAccountIds.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .map(Long::valueOf)
@@ -100,10 +100,10 @@ public class TenantLoginChallengeEntity {
 
     public void setCandidateAccountIds(Set<Long> ids) {
         if (ids == null || ids.isEmpty()) {
-            this.candidateAccountIdsCsv = "";
+            this.candidateAccountIds = "";
             return;
         }
-        this.candidateAccountIdsCsv = ids.stream()
+        this.candidateAccountIds = ids.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .sorted()

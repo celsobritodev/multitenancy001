@@ -9,7 +9,11 @@ import org.springframework.stereotype.Service;
  *
  * Objetivo:
  * - Evitar tenant.* (application) importar infrastructure.security.* diretamente.
- * - Centralizar leitura da identidade do request (accountId, userId, tenantSchema).
+ * - Centralizar leitura da identidade do request (accountId, userId, tenantSchema, email).
+ *
+ * Regras:
+ * - Este serviço é "thin": apenas delega para SecurityUtils.
+ * - Lança ApiException (UNAUTHENTICATED/INVALID_USER etc.) conforme as regras do SecurityUtils.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,5 +34,15 @@ public class TenantRequestIdentityService {
     public String getCurrentTenantSchema() {
         /* Lê tenantSchema do principal autenticado (ou lança UNAUTHENTICATED). */
         return securityUtils.getCurrentTenantSchema();
+    }
+
+    public String getCurrentEmail() {
+        /* Lê email do principal autenticado (ou lança UNAUTHENTICATED). */
+        return securityUtils.getAuthenticatedEmail();
+    }
+
+    public boolean isAuthenticated() {
+        /* Indica se existe principal autenticado no contexto atual. */
+        return securityUtils.isAuthenticated();
     }
 }

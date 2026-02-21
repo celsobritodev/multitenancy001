@@ -1,7 +1,7 @@
+// src/main/java/brito/com/multitenancy001/tenant/auth/app/TenantLoginInitService.java
 package brito.com.multitenancy001.tenant.auth.app;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -28,6 +28,20 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Serviço de login INIT do Tenant.
+ *
+ * Regras:
+ * - Resolve candidatos no PUBLIC (LoginIdentityResolver)
+ * - Single-tenant: autentica direto e emite JWT
+ * - Multi-tenant: valida password nos candidatos e:
+ *     - se 1 passou -> autentica e emite JWT
+ *     - se >1 passou -> cria challenge e exige seleção (409)
+ *
+ * Correção crítica pós-refactor multi-EMF:
+ * - Tudo que acessa PUBLIC (LoginIdentityResolver e AccountResolver) deve rodar dentro do PublicSchemaExecutor.
+ *   Caso contrário, pode cair no EntityManager/Tx errado e quebrar o contrato do login (401 “misterioso”).
+ */
 @Service
 @RequiredArgsConstructor
 public class TenantLoginInitService {
@@ -45,6 +59,7 @@ public class TenantLoginInitService {
 
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
 
+        /** comentário: valida request e inicia resolução de candidatos */
         if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
         if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
         if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
@@ -56,6 +71,7 @@ public class TenantLoginInitService {
                 "{\"stage\":\"init\"}");
 
         try {
+            /** comentário: resolve candidatos no PUBLIC */
             List<LoginIdentityRow> identities = publicExecutor.inPublic(() ->
                     loginIdentityResolver.findTenantAccountsByEmail(email)
             );
@@ -77,10 +93,14 @@ public class TenantLoginInitService {
                 throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
-            // 1 tenant -> autentica direto
+            /** comentário: se single-tenant, autentica diretamente */
             if (candidateAccountIds.size() == 1) {
                 Long accountId = candidateAccountIds.iterator().next();
-                AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
+
+                // ✅ PUBLIC: resolve account snapshot dentro do executor
+                AccountSnapshot account = publicExecutor.inPublic(() ->
+                        accountResolver.resolveActiveAccountById(accountId)
+                );
 
                 var jwt = authMechanics.authenticateWithPassword(account, email, password);
 
@@ -90,11 +110,15 @@ public class TenantLoginInitService {
                 return new TenantLoginResult.LoginSuccess(jwt);
             }
 
-            // MULTI: validar password em cada tenant candidato
+            /** comentário: multi-tenant -> filtra candidatos que batem password */
             LinkedHashSet<Long> allowedAccountIds = new LinkedHashSet<>();
 
             for (Long accountId : candidateAccountIds) {
-                AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
+                // ✅ PUBLIC: resolve account snapshot dentro do executor
+                AccountSnapshot account = publicExecutor.inPublic(() ->
+                        accountResolver.resolveActiveAccountById(accountId)
+                );
+
                 boolean ok = authMechanics.verifyPasswordInTenant(account, email, password);
                 if (ok) allowedAccountIds.add(accountId);
             }
@@ -105,10 +129,13 @@ public class TenantLoginInitService {
                 throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
-            // se só 1 passou -> autentica e emite jwt
+            /** comentário: se sobrou 1 candidato, autentica e emite JWT */
             if (allowedAccountIds.size() == 1) {
                 Long accountId = allowedAccountIds.iterator().next();
-                AccountSnapshot account = accountResolver.resolveActiveAccountById(accountId);
+
+                AccountSnapshot account = publicExecutor.inPublic(() ->
+                        accountResolver.resolveActiveAccountById(accountId)
+                );
 
                 var jwt = authMechanics.authenticateWithPassword(account, email, password);
 
@@ -118,7 +145,7 @@ public class TenantLoginInitService {
                 return new TenantLoginResult.LoginSuccess(jwt);
             }
 
-            // >1 passou -> cria challenge com SOMENTE allowedAccountIds
+            /** comentário: >1 candidato válido -> exige seleção via challenge */
             UUID challengeId = tenantLoginChallengeService.createChallenge(email, allowedAccountIds);
 
             List<TenantSelectionOptionData> details = identities.stream()
@@ -143,6 +170,7 @@ public class TenantLoginInitService {
     }
 
     private static String normalizeEmailRequired(String email) {
+        /** comentário: normaliza e valida email */
         String normalized = EmailNormalizer.normalizeOrNull(email);
         if (!StringUtils.hasText(normalized)) {
             throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);

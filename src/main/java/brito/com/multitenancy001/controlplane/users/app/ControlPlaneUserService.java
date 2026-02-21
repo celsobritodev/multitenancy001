@@ -1,6 +1,6 @@
+// src/main/java/brito/com/multitenancy001/controlplane/users/app/ControlPlaneUserService.java
 package brito.com.multitenancy001.controlplane.users.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
@@ -10,6 +10,7 @@ import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.integration.security.ControlPlaneRequestIdentityService;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -34,7 +35,7 @@ import java.util.Map;
  * Use cases de usuários do Control Plane.
  *
  * Objetivos:
- * - CRUD administrativo (create/update/permissions/reset password/soft delete/restore).
+ * - CRUD administrativo (create/update/permissions/reset password/soft delete/restore/suspend/unsuspend).
  * - Endpoints "enabled" (somente usuários habilitados).
  * - Endpoint "me" e troca de senha do próprio usuário.
  *
@@ -44,7 +45,7 @@ import java.util.Map;
  * - IP/UA/requestId são capturados pelo SecurityAuditService via RequestMetaContext.
  *
  * Regras:
- * - Usuário BUILT_IN é protegido: não altera/deleta/restaura; apenas troca de senha.
+ * - Usuário BUILT_IN é protegido: não altera/deleta/restaura/suspende; apenas troca de senha.
  * - Todas as operações são restritas ao account "Control Plane" (single CP account).
  */
 @Service
@@ -52,7 +53,7 @@ import java.util.Map;
 public class ControlPlaneUserService {
 
     private static final String BUILTIN_IMMUTABLE_MESSAGE =
-            "Usuário BUILT_IN é protegido: não pode ser alterado/deletado/restaurado; apenas senha pode ser trocada.";
+            "Usuário BUILT_IN é protegido: não pode ser alterado/deletado/restaurado/suspenso; apenas senha pode ser trocada.";
 
     private static final String MSG_CP_ACCOUNT_INVALID =
             "Configuração inválida: conta do Control Plane ausente ou duplicada.";
@@ -110,6 +111,13 @@ public class ControlPlaneUserService {
                     "permissionsCount", request.permissions() == null ? 0 : request.permissions().size()
             );
 
+            Map<String, Object> success = m(
+                    "scope", SCOPE,
+                    "stage", "after_save",
+                    "role", request.role() == null ? null : request.role().name(),
+                    "permissionsCount", request.permissions() == null ? 0 : request.permissions().size()
+            );
+
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_CREATED,
                     actor,
@@ -117,7 +125,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    null,
+                    success,
                     () -> {
                         boolean emailExists = controlPlaneUserRepository
                                 .findByEmailAndAccount_IdAndDeletedFalse(email, cp.getId())
@@ -145,7 +153,7 @@ public class ControlPlaneUserService {
                         if (request.permissions() != null && !request.permissions().isEmpty()) {
                             explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
 
-                            // SOC2-like: permissions changed no create
+                            // SOC2-like: permissions changed no create (evento separado)
                             recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
@@ -165,23 +173,7 @@ public class ControlPlaneUserService {
 
                         loginIdentityProvisioningService.ensureControlPlaneIdentity(email, saved.getId());
 
-                        // SUCCESS do create (com dados finais)
-                        recordAudit(
-                                SecurityAuditActionType.USER_CREATED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                saved.getEmail(),
-                                saved.getId(),
-                                cp.getId(),
-                                null,
-                                m(
-                                        "scope", SCOPE,
-                                        "stage", "after_save",
-                                        "role", role == null ? null : role.name(),
-                                        "permissionsCount", request.permissions() == null ? 0 : request.permissions().size()
-                                )
-                        );
-
+                        // ✅ NÃO registrar USER_CREATED SUCCESS aqui (o helper já registra).
                         return getControlPlaneUser(saved.getId());
                     }
             );
@@ -248,6 +240,11 @@ public class ControlPlaneUserService {
                     "hasPermissions", request.permissions() != null
             );
 
+            // ✅ SUCCESS mutável: será preenchido dentro do bloco com "changes" (delta)
+            Map<String, Object> success = new LinkedHashMap<>();
+            success.put("scope", SCOPE);
+            success.put("reason", "update");
+
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_UPDATED,
                     actor,
@@ -255,18 +252,18 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    null,
+                    success,
                     () -> {
-                        boolean anyChange = false;
                         boolean roleChanged = false;
-
+                        boolean permissionsChanged = request.permissions() != null;
                         Map<String, Object> changes = new LinkedHashMap<>();
 
                         if (request.name() != null) {
                             String newName = normalizeNameOrThrow(request.name());
-                            user.rename(newName);
-                            anyChange = true;
-                            changes.put("name", "changed");
+                            if (!newName.equals(user.getName())) {
+                                user.rename(newName);
+                                changes.put("name", "changed");
+                            }
                         }
 
                         if (request.email() != null) {
@@ -291,7 +288,6 @@ public class ControlPlaneUserService {
                                 user.changeEmail(newEmail);
                                 loginIdentityProvisioningService.moveControlPlaneIdentity(user.getId(), newEmail);
 
-                                anyChange = true;
                                 changes.put("emailBefore", beforeEmail);
                                 changes.put("emailAfter", newEmail);
                             }
@@ -300,16 +296,15 @@ public class ControlPlaneUserService {
                         if (request.role() != null) {
                             if (beforeRole == null || !beforeRole.equals(request.role())) {
                                 user.changeRole(request.role());
-                                anyChange = true;
                                 roleChanged = true;
+                                changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
+                                changes.put("roleAfter", user.getRole() == null ? null : user.getRole().name());
                             }
                         }
 
                         controlPlaneUserRepository.save(user);
 
-                        // Permissões explícitas: neste endpoint você aplica o conjunto recebido.
-                        // (Delta real exigiria ler as permissões atuais antes; aqui ao menos registramos o payload.)
-                        if (request.permissions() != null) {
+                        if (permissionsChanged) {
                             explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
 
                             recordAudit(
@@ -323,7 +318,7 @@ public class ControlPlaneUserService {
                                     m(
                                             "scope", SCOPE,
                                             "reason", "update",
-                                            "permissionsCount", request.permissions().size(),
+                                            "permissionsCount", request.permissions() == null ? 0 : request.permissions().size(),
                                             "permissions", request.permissions()
                                     )
                             );
@@ -346,21 +341,10 @@ public class ControlPlaneUserService {
                             );
                         }
 
-                        // SUCCESS do update com changes (safe)
-                        recordAudit(
-                                SecurityAuditActionType.USER_UPDATED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                user.getEmail(),
-                                user.getId(),
-                                cp.getId(),
-                                null,
-                                m(
-                                        "scope", SCOPE,
-                                        "changed", anyChange,
-                                        "changes", changes
-                                )
-                        );
+                        // ✅ aqui “fecha” o delta do USER_UPDATED SUCCESS (sem duplicar evento)
+                        success.put("changed", !changes.isEmpty() || permissionsChanged);
+                        success.put("changes", changes);
+                        success.put("permissionsChanged", permissionsChanged);
 
                         return getControlPlaneUser(userId);
                     }
@@ -409,23 +393,6 @@ public class ControlPlaneUserService {
                     null,
                     () -> {
                         explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
-
-                        recordAudit(
-                                SecurityAuditActionType.PERMISSIONS_CHANGED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                targetUser.getEmail(),
-                                targetUser.getId(),
-                                cp.getId(),
-                                null,
-                                m(
-                                        "scope", SCOPE,
-                                        "reason", "permissions_endpoint",
-                                        "permissionsCount", permCount,
-                                        "permissions", request.permissions()
-                                )
-                        );
-
                         return getControlPlaneUser(userId);
                     }
             );
@@ -452,6 +419,10 @@ public class ControlPlaneUserService {
             ControlPlaneUser user = controlPlaneUserRepository
                     .findNotDeletedByIdAndAccountId(userId, cp.getId())
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.isBuiltInUser()) {
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
@@ -570,6 +541,108 @@ public class ControlPlaneUserService {
         });
     }
 
+    public void suspendControlPlaneUserByAdmin(Long userId, ControlPlaneUserSuspendRequest request) {
+        /* Suspende usuário por ação administrativa (ADMIN). */
+        publicSchemaUnitOfWork.tx(() -> {
+            Actor actor = resolveActorOrNull();
+
+            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+
+            Account cp = getControlPlaneAccount();
+
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.isBuiltInUser()) {
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
+
+            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
+
+            Map<String, Object> attempt = m(
+                    "scope", SCOPE,
+                    "reason", request == null ? null : request.reason(),
+                    "by", "admin",
+                    "suspendedByAdminBefore", user.isSuspendedByAdmin(),
+                    "suspendedByAccount", user.isSuspendedByAccount()
+            );
+
+            Map<String, Object> success = new LinkedHashMap<>(attempt);
+
+            auditAttemptSuccessFail(
+                    SecurityAuditActionType.USER_SUSPENDED,
+                    actor,
+                    target,
+                    cp.getId(),
+                    null,
+                    attempt,
+                    success,
+                    () -> {
+                        user.suspendByAdmin();
+                        controlPlaneUserRepository.save(user);
+
+                        success.put("suspendedByAdminAfter", user.isSuspendedByAdmin());
+                        success.put("enabledAfter", user.isEnabled());
+                        return null;
+                    }
+            );
+
+            return null;
+        });
+    }
+
+    public void restoreControlPlaneUserByAdmin(Long userId, ControlPlaneUserSuspendRequest request) {
+        /* Remove suspensão administrativa (ADMIN) => reabilita usuário (se não houver outras suspensões). */
+        publicSchemaUnitOfWork.tx(() -> {
+            Actor actor = resolveActorOrNull();
+
+            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+
+            Account cp = getControlPlaneAccount();
+
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.isBuiltInUser()) {
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
+
+            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
+
+            Map<String, Object> attempt = m(
+                    "scope", SCOPE,
+                    "reason", request == null ? null : request.reason(),
+                    "by", "admin",
+                    "suspendedByAdminBefore", user.isSuspendedByAdmin(),
+                    "suspendedByAccount", user.isSuspendedByAccount()
+            );
+
+            Map<String, Object> success = new LinkedHashMap<>(attempt);
+
+            auditAttemptSuccessFail(
+                    SecurityAuditActionType.USER_RESTORED,
+                    actor,
+                    target,
+                    cp.getId(),
+                    null,
+                    attempt,
+                    success,
+                    () -> {
+                        user.unsuspendByAdmin();
+                        controlPlaneUserRepository.save(user);
+
+                        success.put("suspendedByAdminAfter", user.isSuspendedByAdmin());
+                        success.put("enabledAfter", user.isEnabled());
+                        return null;
+                    }
+            );
+
+            return null;
+        });
+    }
+
     // =========================================================
     // ENABLED ENDPOINTS
     // =========================================================
@@ -578,12 +651,8 @@ public class ControlPlaneUserService {
         /* Lista usuários habilitados do Control Plane. */
         return publicSchemaUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
-
             List<ControlPlaneUser> users = controlPlaneUserRepository.findEnabledByAccountId(cp.getId());
-
-            return users.stream()
-                    .map(this::mapToResponse)
-                    .toList();
+            return users.stream().map(this::mapToResponse).toList();
         });
     }
 
@@ -776,7 +845,6 @@ public class ControlPlaneUserService {
         try {
             T result = block.call();
 
-            // Se successDetails for nulo, reaproveita o attempt (comum em operações simples).
             Map<String, Object> sd = (successDetails != null ? successDetails : attemptDetails);
             recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, sd);
 
@@ -833,7 +901,6 @@ public class ControlPlaneUserService {
         /* Serializa details (Map/record/String) para JSON string compatível com detailsJson do evento. */
         if (details == null) return null;
 
-        // Compat: se já vier String, o JsonDetailsMapper converte para JsonNode (json válido vira node, texto vira string json).
         JsonNode node = jsonDetailsMapper.toJsonNode(details);
         if (node == null || node.isNull()) return null;
 

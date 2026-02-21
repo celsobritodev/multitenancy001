@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS tenant_login_challenges (
     email CITEXT NOT NULL,
 
     -- CSV simples de accountIds válidos (ex: "1,2,3")
-    candidate_account_ids_csv TEXT NOT NULL,
+    candidate_account_ids TEXT NOT NULL,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL,

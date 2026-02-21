@@ -1,10 +1,7 @@
+// src/main/java/brito/com/multitenancy001/controlplane/users/api/admin/ControlPlaneUserController.java
 package brito.com.multitenancy001.controlplane.users.api.admin;
 
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserCreateRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDetailsResponse;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPasswordResetRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPermissionsUpdateRequest;
-import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserUpdateRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.*;
 import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +78,34 @@ public class ControlPlaneUserController {
     public ResponseEntity<ControlPlaneUserDetailsResponse> restoreControlPlaneUser(@PathVariable Long userId) {
         return ResponseEntity.ok(controlPlaneUserService.restoreControlPlaneUser(userId));
     }
+
+    // =========================================================
+    // SUSPEND / RESTORE (ADMIN)
+    // =========================================================
+
+    @PostMapping("/{userId}/suspend-by-admin")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.asAuthority())")
+    public ResponseEntity<Void> suspendByAdmin(
+            @PathVariable Long userId,
+            @Valid @RequestBody(required = false) ControlPlaneUserSuspendRequest request
+    ) {
+        controlPlaneUserService.suspendControlPlaneUserByAdmin(userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{userId}/restore-by-admin")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.asAuthority())")
+    public ResponseEntity<Void> restoreByAdmin(
+            @PathVariable Long userId,
+            @Valid @RequestBody(required = false) ControlPlaneUserSuspendRequest request
+    ) {
+        controlPlaneUserService.restoreControlPlaneUserByAdmin(userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    // =========================================================
+    // ENABLED
+    // =========================================================
 
     @GetMapping("/enabled")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_READ.asAuthority())")

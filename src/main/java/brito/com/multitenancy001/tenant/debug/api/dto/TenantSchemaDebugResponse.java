@@ -1,19 +1,17 @@
 package brito.com.multitenancy001.tenant.debug.api.dto;
 
 /**
- * Payload tipado para endpoints de debug do tenant.
+ * DTO de resposta para diagnóstico do schema do Tenant.
  *
- * Motivação:
- * - Evitar Map<String,Object> no controller (contrato explícito e versionável).
- * - Facilitar testes E2E e evoluções sem quebrar consumidores por "chave solta".
- *
- * Observação:
- * - Este DTO é DEV-only (usado em endpoints sob profile "dev").
+ * Campos:
+ * - tenantHeader: valor do header recebido (se houver)
+ * - currentSchema: resultado de current_schema()
+ * - searchPath: resultado do SHOW search_path
+ * - valid: sanity-check simples do contexto
  */
 public record TenantSchemaDebugResponse(
         String tenantHeader,
         String currentSchema,
         String searchPath,
-        boolean headerValid
-) {
-}
+        boolean valid
+) {}
