@@ -13,12 +13,8 @@ import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.users.domain.permission.TenantUserPermission;
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -30,9 +26,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TenantUser implements UserDetails, Auditable, SoftDeletable {
-
-    private static final long serialVersionUID = 1L;
+public class TenantUser implements Auditable, SoftDeletable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -138,42 +132,47 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     private AuditInfo audit = new AuditInfo();
 
     // ==========
-    // DOMAIN HELPERS
+    // DOMAIN HELPERS (DDD puro)
     // ==========
+
     public void normalizeEmail() {
+        /* Normaliza email para login/identidade. */
         this.email = EmailNormalizer.normalizeOrNull(this.email);
     }
 
+    /**
+     * Enabled no sentido de domínio (sem considerar lock).
+     */
     public boolean isEnabledDomain() {
+        /* Enabled = não deletado e não suspenso. */
         return !deleted && !suspendedByAccount && !suspendedByAdmin;
     }
 
     /**
-     * ✅ Regra de lock com "now" explícito (preferida).
+     * ✅ Regra de lock com "now" explícito (AppClock é a fonte única).
      */
-    public boolean isAccountNonLocked(Instant now) {
+    public boolean isAccountNonLockedAt(Instant now) {
+        /* Avalia lock com base no instante informado (AppClock). */
         if (now == null) throw new IllegalArgumentException("now is required");
         return lockedUntil == null || !now.isBefore(lockedUntil);
     }
 
     /**
-     * ✅ Helper para login (enabled + não locked), usado pelo AuthenticatedUserContext.
+     * ✅ Helper de login (enabled + não locked) com "now" explícito.
      */
-    public boolean isEnabledForLogin(Instant now) {
-        return isEnabledDomain() && isAccountNonLocked(now);
+    public boolean isEnabledForLoginAt(Instant now) {
+        /* Regra de login: enabled e não locked no instante informado. */
+        return isEnabledDomain() && isAccountNonLockedAt(now);
     }
 
-    /**
-     * ⚠️ UserDetails contract (sem "now"): mantido por compat.
-     * Evite usar em fluxos críticos; prefira isAccountNonLocked(Instant).
-     */
-    @Override
-    public boolean isAccountNonLocked() {
-        // fallback "now" local (compat)
-        return isAccountNonLocked(Instant.now());
+    public Set<TenantPermission> getPermissions() {
+        /* Valida e devolve permissões tipadas no escopo TEN_. */
+        if (permissions == null) return Set.of();
+        return PermissionScopeValidator.validateTenantPermissionsStrict(permissions);
     }
 
     public void grantPermission(TenantPermission permission) {
+        /* Concede permissão explícita ao usuário (fail-fast no escopo). */
         if (permission == null) return;
         if (this.permissions == null) this.permissions = new LinkedHashSet<>();
 
@@ -184,6 +183,7 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     public void revokePermission(TenantPermission permission) {
+        /* Revoga permissão explícita do usuário. */
         if (permission == null) return;
         if (this.permissions == null || this.permissions.isEmpty()) return;
         this.permissions.remove(permission);
@@ -191,9 +191,9 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
 
     /**
      * ✅ Mantido só para leitura/compat (ex.: DTO legado).
-     * ❌ Sem setters por code no domínio.
      */
     public Set<TenantUserPermission> getExplicitPermissions() {
+        /* Exporta permissões explícitas como "TEN_*" (compat). */
         if (permissions == null || permissions.isEmpty()) return Set.of();
         LinkedHashSet<TenantUserPermission> out = new LinkedHashSet<>();
         for (TenantPermission p : permissions) {
@@ -204,24 +204,33 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     // ==========
-    // Password reset (compat com seus call-sites)
+    // Password reset (compat com call-sites)
     // ==========
+
     public void setPasswordResetExpires(Instant expiresAt) {
+        /* Define expiração do token de reset. */
         this.passwordResetExpiresAt = expiresAt;
     }
 
     public Instant getPasswordResetExpires() {
+        /* Retorna expiração do token de reset. */
         return this.passwordResetExpiresAt;
     }
 
     // ==========
-    // Soft delete
+    // Soft delete (DDD + compat)
     // ==========
+
     public void softDelete() {
+        /* Soft delete simples (flag). */
         this.deleted = true;
     }
 
-    public void softDelete(Instant now, long epochMillis) {
+    /**
+     * ✅ Canonical no domínio: soft delete com "now" explícito.
+     */
+    public void softDeleteAt(Instant now) {
+        /* Soft delete com marcação no audit (quando disponível). */
         if (this.deleted) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
@@ -230,23 +239,28 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     }
 
     public void restore() {
+        /* Restaura (remove delete e limpa audit.deletedAt). */
         this.deleted = false;
         if (this.audit != null) this.audit.clearDeleted();
     }
 
     public void clearSecurityLockState() {
+        /* Limpa lock. */
         this.lockedUntil = null;
     }
 
     // ==========
     // Optional: helpers de normalização
     // ==========
+
     public void rename(String newName) {
+        /* Renomeia com validação mínima. */
         if (newName == null || newName.isBlank()) throw new IllegalArgumentException("name é obrigatório");
         this.name = newName.trim();
     }
 
     public void changeEmail(String newEmail) {
+        /* Altera email com normalização/validação. */
         String normalized = EmailNormalizer.normalizeOrNull(newEmail);
         if (normalized == null) throw new IllegalArgumentException("email inválido");
         this.email = normalized;
@@ -255,47 +269,58 @@ public class TenantUser implements UserDetails, Auditable, SoftDeletable {
     // ==========
     // Contracts
     // ==========
+
     @Override
     public boolean isDeleted() {
+        /* Soft delete flag. */
         return deleted;
     }
 
     @Override
     public AuditInfo getAudit() {
+        /* Audit embutido. */
         return audit;
     }
 
     // ==========
-    // UserDetails
+    // COMPAT LAYER (para não quebrar call-sites existentes)
     // ==========
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        Set<GrantedAuthority> out = new LinkedHashSet<>();
-        if (role != null) out.add(new SimpleGrantedAuthority(role.asAuthority()));
-        for (TenantPermission p : getPermissions()) {
-            if (p == null) continue;
-            out.add(new SimpleGrantedAuthority(p.asAuthority()));
-        }
-        return out;
+    // IMPORTANTE:
+    // - NÃO usa Instant.now() aqui.
+    // - Apenas delega para os métodos canônicos "*At(Instant now)".
+    // - Mantém assinaturas que já existem no código (AuthenticatedUserContext, mappers, services).
+
+    /**
+     * COMPAT: assinatura antiga usada por AuthenticatedUserContext.
+     */
+    public boolean isEnabledForLogin(Instant now) {
+        /* Compat para call-sites existentes (sem Instant.now). */
+        return isEnabledForLoginAt(now);
     }
 
-    @Override
-    public String getUsername() {
-        return email;
+    /**
+     * COMPAT: assinatura antiga usada por AuthenticatedUserContext.
+     */
+    public boolean isAccountNonLocked(Instant now) {
+        /* Compat para call-sites existentes (sem Instant.now). */
+        return isAccountNonLockedAt(now);
     }
 
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
-
-    @Override
+    /**
+     * COMPAT: assinatura antiga usada por TenantUserApiMapper e outros.
+     * (Sem necessidade de clock)
+     */
     public boolean isEnabled() {
+        /* Compat: enabled de domínio (sem lock). */
         return isEnabledDomain();
+    }
+
+    /**
+     * COMPAT: assinatura antiga usada por TenantUserCommandService.
+     * Observação: epochMillis era redundante; mantemos só para compat e ignoramos.
+     */
+    public void softDelete(Instant now, long epochMillis) {
+        /* Compat para call-sites existentes (ignora epochMillis). */
+        softDeleteAt(now);
     }
 }

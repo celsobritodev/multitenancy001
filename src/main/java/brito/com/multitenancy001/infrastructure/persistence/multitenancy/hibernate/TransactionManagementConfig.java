@@ -40,7 +40,7 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
 
     /**
      * ✅ Regra 1: qualquer @Transactional "pelado" (sem especificar manager) deve cair no PUBLIC.
-     * Isso torna o comportamento estável e previsível (e evita surpresas se alguém mexer em @Primary).
+     * Isso torna o comportamento estável e previsível .
      */
     @Override
     public PlatformTransactionManager annotationDrivenTransactionManager() {

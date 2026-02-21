@@ -16,7 +16,7 @@ import java.util.List;
 public class TenantPaymentService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-    private final PaymentQueryService paymentQueryFacade;
+    private final PaymentQueryService paymentQueryService;
 
     /**
      * ✅ Tenant service chamando PUBLIC de forma explícita, sem @Transactional meta-annotation aqui.
@@ -25,19 +25,19 @@ public class TenantPaymentService {
     public List<PaymentResponse> listPaymentsForAccount(Long accountId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
 
-        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.listByAccount(accountId));
+        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryService.listByAccount(accountId));
     }
 
     public PaymentResponse getPaymentForAccount(Long accountId, Long paymentId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         if (paymentId == null) throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
 
-        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.getByAccount(accountId, paymentId));
+        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryService.getByAccount(accountId, paymentId));
     }
 
     public boolean hasActivePayment(Long accountId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
 
-        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryFacade.hasActivePayment(accountId));
+        return publicSchemaUnitOfWork.readOnly(() -> paymentQueryService.hasActivePayment(accountId));
     }
 }

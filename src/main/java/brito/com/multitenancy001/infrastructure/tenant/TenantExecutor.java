@@ -15,8 +15,8 @@ public class TenantExecutor {
 
     private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
 
-    public TenantExecutor(TenantSchemaProvisioningWorker tenantSchemaProvisioningService) {
-        this.tenantSchemaProvisioningWorker = tenantSchemaProvisioningService;
+    public TenantExecutor(TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker) {
+        this.tenantSchemaProvisioningWorker = tenantSchemaProvisioningWorker;
     }
 
     // ---------------------------------------------------------------------

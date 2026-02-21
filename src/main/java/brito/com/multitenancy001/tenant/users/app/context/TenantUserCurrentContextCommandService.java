@@ -1,10 +1,9 @@
 package brito.com.multitenancy001.tenant.users.app.context;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
-import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.integration.security.TenantRequestIdentityService;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
@@ -19,6 +18,14 @@ import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashSet;
 
+/**
+ * Application Service (Tenant): Users no "current context" (identidade do request).
+ *
+ * Regras:
+ * - Resolve accountId/userId/tenantSchema da identidade do request.
+ * - Aplica entitlements (limite de usuários) antes de criar.
+ * - Executa dentro do schema via TenantExecutor.
+ */
 @Service
 @RequiredArgsConstructor
 public class TenantUserCurrentContextCommandService {
@@ -27,23 +34,26 @@ public class TenantUserCurrentContextCommandService {
     private final TenantUserQueryService tenantUserQueryService;
 
     private final TenantExecutor tenantExecutor;
-    private final SecurityUtils securityUtils;
+    private final TenantRequestIdentityService requestIdentity;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
 
     public void transferTenantOwner(Long toUserId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
-        Long fromUserId = securityUtils.getCurrentUserId();
+        /* Transfere TENANT_OWNER do usuário autenticado (from) para outro usuário (to). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
+        Long fromUserId = requestIdentity.getCurrentUserId();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserCommandService.transferTenantOwnerRole(accountId, fromUserId, toUserId);
+            // ✅ FIX: assinatura correta: (accountId, tenantSchema, fromUserId, toUserId)
+            tenantUserCommandService.transferTenantOwnerRole(accountId, tenantSchema, fromUserId, toUserId);
             return null;
         });
     }
 
     public TenantUser createTenantUser(TenantUserCreateRequest req) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Cria usuário no tenant (respeita limite/entitlements). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         if (req == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Request inválido", 400);
 
@@ -78,8 +88,10 @@ public class TenantUserCurrentContextCommandService {
         String finalTimezone = timezone;
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
+                // ✅ FIX: assinatura correta: (accountId, tenantSchema, name, email, rawPassword, role, ...)
                 tenantUserCommandService.createTenantUser(
                         accountId,
+                        tenantSchema,
                         name,
                         email,
                         req.password(),
@@ -96,62 +108,74 @@ public class TenantUserCurrentContextCommandService {
     }
 
     public TenantUser setTenantUserSuspendedByAdmin(Long userId, boolean suspended) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Suspende/reativa usuário por admin (flag suspendedByAdmin). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserCommandService.setSuspendedByAdmin(accountId, userId, suspended);
+            // ✅ FIX: assinatura correta: (accountId, tenantSchema, userId, suspended)
+            tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
             return tenantUserQueryService.getUser(userId, accountId);
         });
     }
 
     public TenantUser setTenantUserSuspendedByAccount(Long userId, boolean suspended) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Suspende/reativa usuário por conta (flag suspendedByAccount). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserCommandService.setSuspendedByAccount(accountId, userId, suspended);
+            // ✅ FIX: assinatura correta: (accountId, tenantSchema, userId, suspended)
+            tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
             return tenantUserQueryService.getUser(userId, accountId);
         });
     }
 
     public void softDeleteTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Soft delete do usuário (deleção lógica). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            tenantUserCommandService.softDelete(userId, accountId);
+            // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema)
+            tenantUserCommandService.softDelete(userId, accountId, tenantSchema);
             return null;
         });
     }
 
     public void hardDeleteTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Hard delete do usuário (deleção física). */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         tenantExecutor.runInTenantSchema(tenantSchema, () -> {
+            // Mantém assinatura existente do seu command service (não estava no erro atual).
             tenantUserCommandService.hardDelete(userId, accountId);
             return null;
         });
     }
 
     public TenantUser restoreTenantUser(Long userId) {
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        /* Restaura usuário após soft delete. */
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserCommandService.restore(userId, accountId)
+                // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema)
+                tenantUserCommandService.restore(userId, accountId, tenantSchema)
         );
     }
 
     public TenantUser resetTenantUserPassword(Long userId, String newPassword) {
+        /* Reset administrativo de senha (sem senha atual). */
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Nova senha é obrigatória", 400);
 
-        Long accountId = securityUtils.getCurrentAccountId();
-        String tenantSchema = securityUtils.getCurrentTenantSchema();
+        Long accountId = requestIdentity.getCurrentAccountId();
+        String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
         return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                tenantUserCommandService.resetPassword(userId, accountId, newPassword)
+                // ✅ FIX: assinatura correta: (userId, accountId, tenantSchema, newPassword)
+                tenantUserCommandService.resetPassword(userId, accountId, tenantSchema, newPassword)
         );
     }
 }

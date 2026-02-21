@@ -83,7 +83,7 @@ public class TenantAuthController {
 
             // ✅ /login pode retornar JWT final => registra sessão server-side
             refreshSessions.onRefreshIssued(
-                    "TENANT",
+                    brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.TENANT,
                     jwt.accountId(),
                     jwt.userId(),
                     jwt.tenantSchema(),
@@ -129,7 +129,7 @@ public class TenantAuthController {
 
         // ✅ registra sessão server-side (logout forte / rotação)
         refreshSessions.onRefreshIssued(
-                "TENANT",
+                brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.TENANT,
                 jwt.accountId(),
                 jwt.userId(),
                 jwt.tenantSchema(),

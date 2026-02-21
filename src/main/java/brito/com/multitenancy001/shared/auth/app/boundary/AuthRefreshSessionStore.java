@@ -1,4 +1,7 @@
+// src/main/java/brito/com/multitenancy001/shared/auth/app/boundary/AuthRefreshSessionStore.java
 package brito.com.multitenancy001.shared.auth.app.boundary;
+
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -44,7 +47,7 @@ public interface AuthRefreshSessionStore {
     /**
      * Revoga todas as sessões do usuário no domínio + account.
      */
-    int revokeAllForUser(String sessionDomain,
+    int revokeAllForUser(AuthSessionDomain sessionDomain,
                          Long accountId,
                          Long userId,
                          Instant now,

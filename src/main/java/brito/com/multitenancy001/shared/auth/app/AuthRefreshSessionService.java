@@ -1,12 +1,14 @@
+// src/main/java/brito/com/multitenancy001/shared/auth/app/AuthRefreshSessionService.java
 package brito.com.multitenancy001.shared.auth.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.boundary.AuthRefreshSessionData;
 import brito.com.multitenancy001.shared.auth.app.boundary.AuthRefreshSessionStore;
 import brito.com.multitenancy001.shared.auth.app.boundary.RefreshTokenHasher;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,10 @@ import java.util.UUID;
  * - Emitir sessão ao fazer login (refresh gerado)
  * - Rotacionar sessão a cada refresh (troca do hash)
  * - Revogar sessão ao logout forte
+ *
+ * Semântica:
+ * - CONTROLPLANE: tenantSchema deve ser null.
+ * - TENANT: tenantSchema é obrigatório.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,13 +40,13 @@ public class AuthRefreshSessionService {
     /**
      * Registra uma sessão nova no servidor quando um refresh token é emitido.
      */
-    public void onRefreshIssued(String sessionDomain,
+    public void onRefreshIssued(AuthSessionDomain sessionDomain,
                                Long accountId,
                                Long userId,
                                String tenantSchemaOrNull,
                                String refreshToken) {
-        // Comentário: validação de entrada e persistência de sessão
-        if (!StringUtils.hasText(sessionDomain)) {
+        /* Validação + persistência de sessão (server-side refresh sessions). */
+        if (sessionDomain == null) {
             throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "sessionDomain ausente", 500);
         }
         if (accountId == null || userId == null) {
@@ -49,6 +55,8 @@ public class AuthRefreshSessionService {
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken ausente", 400);
         }
+
+        String tenantSchema = normalizeTenantSchema(sessionDomain, tenantSchemaOrNull);
 
         Instant now = appClock.instant();
         RequestMeta meta = RequestMetaContext.getOrNull();
@@ -59,10 +67,10 @@ public class AuthRefreshSessionService {
 
         AuthRefreshSessionData data = new AuthRefreshSessionData(
                 UUID.randomUUID(),
-                sessionDomain.trim().toUpperCase(),
+                sessionDomain,
                 accountId,
                 userId,
-                (tenantSchemaOrNull != null ? tenantSchemaOrNull : null),
+                tenantSchema,
                 hasher.hash(refreshToken),
                 now,
                 now,
@@ -83,13 +91,16 @@ public class AuthRefreshSessionService {
     /**
      * Rotaciona o refresh token (old -> new) validando que o old existe e não está revogado.
      */
-    public void rotateOrThrow(String sessionDomain,
+    public void rotateOrThrow(AuthSessionDomain sessionDomain,
                               String oldRefreshToken,
                               String newRefreshToken,
                               Long expectedAccountId,
                               Long expectedUserId,
                               String expectedTenantSchemaOrNull) {
-        // Comentário: valida old, busca sessão, valida ownership e rotaciona hash
+        /* Valida old, busca sessão, valida ownership e rotaciona hash. */
+        if (sessionDomain == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (domínio)", 401);
+        }
         if (!StringUtils.hasText(oldRefreshToken) || !StringUtils.hasText(newRefreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
         }
@@ -103,8 +114,7 @@ public class AuthRefreshSessionService {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken revogado", 401);
         }
 
-        String dom = (sessionDomain != null ? sessionDomain.trim().toUpperCase() : null);
-        if (dom == null || !dom.equals(s.sessionDomain())) {
+        if (s.sessionDomain() != sessionDomain) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (domínio)", 401);
         }
         if (expectedAccountId != null && !expectedAccountId.equals(s.accountId())) {
@@ -114,10 +124,10 @@ public class AuthRefreshSessionService {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (user)", 401);
         }
 
-        String expectedTenant = expectedTenantSchemaOrNull != null ? expectedTenantSchemaOrNull.trim() : null;
+        String expectedTenant = normalizeTenantSchema(sessionDomain, expectedTenantSchemaOrNull);
         String actualTenant = s.tenantSchema() != null ? s.tenantSchema().trim() : null;
 
-        if (expectedTenant != null && (actualTenant == null || !expectedTenant.equals(actualTenant))) {
+        if (sessionDomain == AuthSessionDomain.TENANT && !expectedTenant.equals(actualTenant)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (tenantSchema)", 401);
         }
 
@@ -142,7 +152,7 @@ public class AuthRefreshSessionService {
      * Logout forte: revoga uma sessão pelo refresh token.
      */
     public void revokeByRefreshTokenOrThrow(String refreshToken, String revokedReasonJson) {
-        // Comentário: resolve sessão pelo hash e revoga
+        /* Resolve sessão pelo hash e revoga (idempotente). */
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
@@ -162,14 +172,27 @@ public class AuthRefreshSessionService {
     /**
      * Logout forte (all devices): revoga todas as sessões do usuário naquele domínio.
      */
-    public int revokeAllForUser(String sessionDomain,
+    public int revokeAllForUser(AuthSessionDomain sessionDomain,
                                 Long accountId,
                                 Long userId,
                                 String revokedReasonJson) {
-        // Comentário: revoga em massa por domínio + user
-        if (!StringUtils.hasText(sessionDomain) || accountId == null || userId == null) {
+        /* Revoga em massa por domínio + user. */
+        if (sessionDomain == null || accountId == null || userId == null) {
             throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "Parâmetros inválidos para revokeAll", 500);
         }
-        return store.revokeAllForUser(sessionDomain.trim().toUpperCase(), accountId, userId, appClock.instant(), revokedReasonJson);
+        return store.revokeAllForUser(sessionDomain, accountId, userId, appClock.instant(), revokedReasonJson);
+    }
+
+    private static String normalizeTenantSchema(AuthSessionDomain sessionDomain, String tenantSchemaOrNull) {
+        /* Normaliza regra TENANT vs CONTROLPLANE para tenantSchema. */
+        if (sessionDomain == AuthSessionDomain.CONTROLPLANE) {
+            return null;
+        }
+
+        String schema = tenantSchemaOrNull != null ? tenantSchemaOrNull.trim() : null;
+        if (!StringUtils.hasText(schema)) {
+            throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "tenantSchema ausente para sessão TENANT", 500);
+        }
+        return schema;
     }
 }

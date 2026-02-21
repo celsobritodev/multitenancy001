@@ -8,17 +8,17 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantSchemaProvisioningService {
 
-    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningService;
+    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
 
     /**
      * Account.tenantSchema é o identificador persistido do schema do tenant.
      * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
      */
     public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {
-        return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(tenantSchema);
+        return tenantSchemaProvisioningWorker.ensureSchemaExistsAndMigrate(tenantSchema);
     }
 
     public void tryDropSchema(String tenantSchema) {
-        tenantSchemaProvisioningService.tryDropSchema(tenantSchema);
+        tenantSchemaProvisioningWorker.tryDropSchema(tenantSchema);
     }
 }

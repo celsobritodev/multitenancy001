@@ -26,7 +26,7 @@ public final class AccountFactory {
         String baseSlug = slugify(cmd.displayName());
         account.setSlug(baseSlug + "-" + shortId());
 
-        // ✅ Antes: account.setSchemaName(...)
+        // ✅ Antes: account.setTenantSchema(...)
         // ✅ Agora: o Aggregate gera tenantSchema de forma consistente
         account.ensureTenantSchema();
 

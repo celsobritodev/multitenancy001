@@ -41,16 +41,16 @@ public class ControlPlaneAuthService {
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
     private final AuthenticationManager authenticationManager;
-    private final ControlPlaneJwtIntegrationService jwtIntegration;
+    private final ControlPlaneJwtIntegrationService controlPlaneJwtIntegrationService;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final PublicSchemaExecutor publicExecutor;
+    private final PublicSchemaExecutor publicSchemaExecutor;
 
     private final LoginIdentityResolver loginIdentityResolver;
 
-    private final ControlPlaneAuthEventAuditIntegrationService authAudit;
+    private final ControlPlaneAuthEventAuditIntegrationService controlPlaneAuthEventAuditIntegrationService;
     private final AppClock appClock;
 
-    private final AuthRefreshSessionService refreshSessions;
+    private final AuthRefreshSessionService authRefreshSessionService;
 
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
@@ -67,7 +67,7 @@ public class ControlPlaneAuthService {
         auditAttempt(emailNorm, "{\"stage\":\"init\",\"mode\":\"password\"}");
 
         try {
-            return publicExecutor.inPublic(() -> {
+            return publicSchemaExecutor.inPublic(() -> {
 
                 Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
                 if (cpUserId == null) {
@@ -97,16 +97,16 @@ public class ControlPlaneAuthService {
                         new UsernamePasswordAuthenticationToken(emailNorm, password)
                 );
 
-                String accessToken = jwtIntegration.generateControlPlaneToken(authentication, accountId, DEFAULT_SCHEMA);
+                String accessToken = controlPlaneJwtIntegrationService.generateControlPlaneToken(authentication, accountId, DEFAULT_SCHEMA);
 
-                String refreshToken = jwtIntegration.generateRefreshToken(user.getEmail(), DEFAULT_SCHEMA, accountId);
+                String refreshToken = controlPlaneJwtIntegrationService.generateRefreshToken(user.getEmail(), DEFAULT_SCHEMA, accountId);
 
-                // ✅ registra sessão server-side (logout forte / rotação)
-                refreshSessions.onRefreshIssued(
-                        "CONTROLPLANE",
+             // ✅ registra sessão server-side (logout forte / rotação)
+                authRefreshSessionService.onRefreshIssued(
+                        brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.CONTROLPLANE,
                         accountId,
                         user.getId(),
-                        DEFAULT_SCHEMA,
+                        null,
                         refreshToken
                 );
 
@@ -135,7 +135,7 @@ public class ControlPlaneAuthService {
 
     private void auditAttempt(String emailNorm, String detailsJson) {
         /** comentário: audit attempt de login */
-        authAudit.record(
+        controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_INIT,
                 AuditOutcome.ATTEMPT,
@@ -149,7 +149,7 @@ public class ControlPlaneAuthService {
 
     private void auditDenied(String emailNorm, String detailsJson) {
         /** comentário: audit denied de login */
-        authAudit.record(
+        controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_DENIED,
                 AuditOutcome.DENIED,
@@ -163,7 +163,7 @@ public class ControlPlaneAuthService {
 
     private void auditSuccess(String emailNorm, String detailsJson) {
         /** comentário: audit success de login */
-        authAudit.record(
+        controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_SUCCESS,
                 AuditOutcome.SUCCESS,

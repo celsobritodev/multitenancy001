@@ -1,5 +1,7 @@
+// src/main/java/brito/com/multitenancy001/infrastructure/publicschema/auth/AuthRefreshSessionJpaRepository.java
 package brito.com.multitenancy001.infrastructure.publicschema.auth;
 
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -35,5 +37,5 @@ public interface AuthRefreshSessionJpaRepository extends JpaRepository<AuthRefre
            AND s.userId = :userId
            AND s.revokedAt IS NULL
     """)
-    int revokeAllForUser(String domain, Long accountId, Long userId, Instant now, String reasonJson);
+    int revokeAllForUser(AuthSessionDomain domain, Long accountId, Long userId, Instant now, String reasonJson);
 }

@@ -1,8 +1,10 @@
 package brito.com.multitenancy001.tenant.debug.api;
 
 import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.tenant.debug.api.dto.TenantSchemaDebugResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -10,8 +12,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-
+/**
+ * Endpoints DEV-only para depuração do multi-tenant.
+ *
+ * Regras:
+ * - Somente no profile "dev".
+ * - Não depende de JWT para bind de schema (permite validar resolução de schema isoladamente).
+ * - Retorna payload tipado (DTO) para contrato consistente.
+ */
 @RestController
 @RequiredArgsConstructor
 @Profile("dev")
@@ -29,9 +37,10 @@ public class TenantDebugController {
      */
     @GetMapping("/api/tenant/_debug/schema")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SETTINGS_READ.asAuthority())")
-    public Map<String, Object> schema(
+    public ResponseEntity<TenantSchemaDebugResponse> schema(
             @RequestHeader(name = "X-Tenant", required = false) String tenantHeaderRaw
     ) {
+        /* Normaliza e valida o header de tenant para bind seguro do schema. */
         String tenantHeader = (tenantHeaderRaw == null ? null : tenantHeaderRaw.trim());
         String tenantNormalized = StringUtils.hasText(tenantHeader) ? tenantHeader : null;
 
@@ -46,12 +55,14 @@ public class TenantDebugController {
             String currentSchema = jdbcTemplate.queryForObject("select current_schema()", String.class);
             String searchPath = jdbcTemplate.queryForObject("show search_path", String.class);
 
-            return Map.of(
-                    "tenant_header", tenantNormalized, // null se não veio / veio vazio
-                    "current_schema", currentSchema,
-                    "search_path", searchPath,
-                    "header_valid", valid
+            TenantSchemaDebugResponse response = new TenantSchemaDebugResponse(
+                    tenantNormalized, // null se não veio / veio vazio
+                    currentSchema,
+                    searchPath,
+                    valid
             );
+
+            return ResponseEntity.ok(response);
         }
     }
 }

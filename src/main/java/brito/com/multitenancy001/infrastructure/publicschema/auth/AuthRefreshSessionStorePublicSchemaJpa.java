@@ -1,7 +1,9 @@
+// src/main/java/brito/com/multitenancy001/infrastructure/publicschema/auth/AuthRefreshSessionStorePublicSchemaJpa.java
 package brito.com.multitenancy001.infrastructure.publicschema.auth;
 
 import brito.com.multitenancy001.shared.auth.app.boundary.AuthRefreshSessionData;
 import brito.com.multitenancy001.shared.auth.app.boundary.AuthRefreshSessionStore;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -22,7 +24,7 @@ public class AuthRefreshSessionStorePublicSchemaJpa implements AuthRefreshSessio
 
     @Override
     public void insert(AuthRefreshSessionData data) {
-        // Comentário: insere sessão no public schema
+        /* Insere sessão no public schema. */
         uow.tx(() -> {
             AuthRefreshSessionEntity e = new AuthRefreshSessionEntity();
             e.setId(data.id());
@@ -55,7 +57,7 @@ public class AuthRefreshSessionStorePublicSchemaJpa implements AuthRefreshSessio
 
     @Override
     public Optional<AuthRefreshSessionData> findByRefreshTokenHash(String refreshTokenHash) {
-        // Comentário: busca sessão no public schema
+        /* Busca sessão no public schema. */
         return uow.readOnly(() ->
                 repo.findByRefreshTokenHash(refreshTokenHash).map(AuthRefreshSessionStorePublicSchemaJpa::toData)
         );
@@ -68,7 +70,7 @@ public class AuthRefreshSessionStorePublicSchemaJpa implements AuthRefreshSessio
                        UUID requestId,
                        String ip,
                        String userAgent) {
-        // Comentário: rotação do refresh hash + last_used
+        /* Rotação do refresh hash + last_used. */
         uow.tx(() -> {
             AuthRefreshSessionEntity e = repo.findById(sessionId).orElse(null);
             if (e == null) return null;
@@ -89,7 +91,7 @@ public class AuthRefreshSessionStorePublicSchemaJpa implements AuthRefreshSessio
 
     @Override
     public void revoke(UUID sessionId, Instant now, String revokedReasonJson) {
-        // Comentário: revoga sessão (idempotente)
+        /* Revoga sessão (idempotente). */
         uow.tx(() -> {
             repo.revokeIfNotRevoked(sessionId, now, revokedReasonJson);
             return null;
@@ -97,8 +99,8 @@ public class AuthRefreshSessionStorePublicSchemaJpa implements AuthRefreshSessio
     }
 
     @Override
-    public int revokeAllForUser(String sessionDomain, Long accountId, Long userId, Instant now, String revokedReasonJson) {
-        // Comentário: revoga todas as sessões do usuário naquele domínio
+    public int revokeAllForUser(AuthSessionDomain sessionDomain, Long accountId, Long userId, Instant now, String revokedReasonJson) {
+        /* Revoga todas as sessões do usuário naquele domínio. */
         return uow.tx(() -> repo.revokeAllForUser(sessionDomain, accountId, userId, now, revokedReasonJson));
     }
 

@@ -3,6 +3,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
@@ -54,7 +55,7 @@ public class TenantTokenRefreshService {
         JwtResult result = authMechanics.refreshTenantJwt(refreshToken);
 
         refreshSessions.rotateOrThrow(
-                "TENANT",
+                AuthSessionDomain.TENANT,
                 refreshToken,
                 result.refreshToken(),
                 id.accountId(),

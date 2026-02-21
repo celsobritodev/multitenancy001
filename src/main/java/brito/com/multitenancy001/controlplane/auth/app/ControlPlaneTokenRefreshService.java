@@ -9,6 +9,7 @@ import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContex
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -42,7 +43,7 @@ public class ControlPlaneTokenRefreshService {
     private final ControlPlaneJwtIntegrationService jwtIntegration;
 
     private final AuthRefreshSessionService refreshSessions;
-    private final ControlPlaneAuthEventAuditIntegrationService authAudit;
+    private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
 
     public JwtResult refresh(String refreshToken) {
         /** comentário: valida request, emite novos tokens e rotaciona sessão server-side */
@@ -50,7 +51,7 @@ public class ControlPlaneTokenRefreshService {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
 
-        authAudit.record(
+        authAuditService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.TOKEN_REFRESH,
                 AuditOutcome.ATTEMPT,
@@ -75,15 +76,15 @@ public class ControlPlaneTokenRefreshService {
             SystemRoleName role = SystemRoleName.fromString(roleName);
 
             refreshSessions.rotateOrThrow(
-                    "CONTROLPLANE",
+                    AuthSessionDomain.CONTROLPLANE,
                     refreshToken,
                     newRefresh,
                     id.accountId(),
                     userId,
-                    DEFAULT_SCHEMA
+                    null // ✅ CONTROLPLANE não tem tenantSchema
             );
 
-            authAudit.record(
+            authAuditService.record(
                     AuthDomain.CONTROLPLANE,
                     AuthEventType.TOKEN_REFRESH,
                     AuditOutcome.SUCCESS,

@@ -5,6 +5,7 @@ import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshIdentity;
 import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshTokenIntrospectionIntegrationService;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
@@ -29,12 +30,12 @@ public class ControlPlaneLogoutService {
 
     private static final String DEFAULT_SCHEMA = Schemas.CONTROL_PLANE;
 
-    private final PublicSchemaExecutor publicExecutor;
+    private final PublicSchemaExecutor publicSchemaExecutor;
     private final ControlPlaneRefreshTokenIntrospectionIntegrationService refreshIntrospection;
     private final LoginIdentityResolver loginIdentityResolver;
 
     private final AuthRefreshSessionService refreshSessions;
-    private final ControlPlaneAuthEventAuditIntegrationService authAudit;
+    private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
 
     public void logout(String refreshToken, boolean allDevices) {
         /** comentário: resolve identidade e revoga sessão(ões) no servidor */
@@ -42,7 +43,7 @@ public class ControlPlaneLogoutService {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
 
-        publicExecutor.inPublic(() -> {
+        publicSchemaExecutor.inPublic(() -> {
             ControlPlaneRefreshIdentity id = refreshIntrospection.parseOrThrow(refreshToken);
 
             Long userId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(id.email());
@@ -50,7 +51,7 @@ public class ControlPlaneLogoutService {
                 throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
             }
 
-            authAudit.record(
+            authAuditService.record(
                     AuthDomain.CONTROLPLANE,
                     AuthEventType.LOGOUT,
                     AuditOutcome.ATTEMPT,
@@ -63,7 +64,7 @@ public class ControlPlaneLogoutService {
 
             if (allDevices) {
                 refreshSessions.revokeAllForUser(
-                        "CONTROLPLANE",
+                        AuthSessionDomain.CONTROLPLANE,
                         id.accountId(),
                         userId,
                         "{\"reason\":\"logout_all_devices\"}"
@@ -75,7 +76,7 @@ public class ControlPlaneLogoutService {
                 );
             }
 
-            authAudit.record(
+            authAuditService.record(
                     AuthDomain.CONTROLPLANE,
                     AuthEventType.LOGOUT,
                     AuditOutcome.SUCCESS,

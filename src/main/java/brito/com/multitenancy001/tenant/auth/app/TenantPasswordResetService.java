@@ -1,10 +1,9 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -20,6 +19,14 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 
+/**
+ * Application Service (Tenant): Password Reset.
+ *
+ * Regras:
+ * - O token contém (email, tenantSchema, accountId).
+ * - Reset com token executa no schema do tenant via TenantExecutor.
+ * - Auditoria append-only (public schema) em ATTEMPT/SUCCESS/FAILURE.
+ */
 @Service
 @RequiredArgsConstructor
 public class TenantPasswordResetService {
@@ -34,6 +41,7 @@ public class TenantPasswordResetService {
     private final SecurityAuditService securityAuditService;
 
     public String generatePasswordResetToken(String slug, String email) {
+        /* Gera token de reset (password reset request) para um usuário ativo. */
         if (!StringUtils.hasText(slug)) throw new ApiException(ApiErrorCode.INVALID_SLUG, "Slug é obrigatório", 400);
         if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Email é obrigatório", 400);
 
@@ -83,15 +91,15 @@ public class TenantPasswordResetService {
             });
 
             securityAuditService.record(
-                    SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
-                    AuditOutcome.SUCCESS,
-                    null,
-                    null,
-                    normalizedEmail,
-                    null,
-                    account.id(),
-                    finalTenantSchema,
-                    "{\"expiresHours\":1}"
+                SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
+                AuditOutcome.SUCCESS,
+                null,
+                null,
+                normalizedEmail,
+                null,
+                account.id(),
+                finalTenantSchema,
+                "{\"expiresHours\":1}"
             );
 
             return token;
@@ -113,6 +121,7 @@ public class TenantPasswordResetService {
     }
 
     public void resetPasswordWithToken(String token, String newPassword) {
+        /* Executa reset com token (valida token e troca senha). */
         if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.INVALID_TOKEN, "Token inválido", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Nova senha é obrigatória", 400);
 
@@ -134,7 +143,8 @@ public class TenantPasswordResetService {
 
         try {
             tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                tenantUserCommandService.resetPasswordWithToken(accountId, email, token, newPassword);
+                // ✅ FIX: assinatura correta (accountId, tenantSchema, email, token, newPassword)
+                tenantUserCommandService.resetPasswordWithToken(accountId, tenantSchema, email, token, newPassword);
                 return null;
             });
 

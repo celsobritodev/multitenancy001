@@ -2,6 +2,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
@@ -56,7 +57,7 @@ public class TenantLogoutService {
             Long userId = resolveUserIdOrThrow(id);
 
             refreshSessions.revokeAllForUser(
-                    "TENANT",
+                    AuthSessionDomain.TENANT,
                     id.accountId(),
                     userId,
                     "{\"reason\":\"logout_all_devices\"}"

@@ -1,5 +1,7 @@
+// src/main/java/brito/com/multitenancy001/infrastructure/publicschema/auth/AuthRefreshSessionEntity.java
 package brito.com.multitenancy001.infrastructure.publicschema.auth;
 
+import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,6 +15,7 @@ import java.util.UUID;
  * IMPORTANTE:
  * - Mantém dados mínimos para rotação/revogação
  * - Não armazena token puro (somente hash)
+ * - sessionDomain é enum persistido como STRING
  */
 @Entity
 @Table(name = "auth_refresh_sessions")
@@ -24,8 +27,9 @@ public class AuthRefreshSessionEntity {
     @Column(name = "id", nullable = false)
     private UUID id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "session_domain", nullable = false, length = 32)
-    private String sessionDomain;
+    private AuthSessionDomain sessionDomain;
 
     @Column(name = "account_id", nullable = false)
     private Long accountId;

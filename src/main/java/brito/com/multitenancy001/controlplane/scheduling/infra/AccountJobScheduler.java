@@ -1,44 +1,61 @@
 package brito.com.multitenancy001.controlplane.scheduling.infra;
 
-import java.time.Instant;
-
-import org.springframework.context.annotation.DependsOn;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
+import brito.com.multitenancy001.controlplane.scheduling.domain.AccountJobSchedule;
 import brito.com.multitenancy001.controlplane.scheduling.persistence.AccountJobScheduleRepository;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.util.List;
 
 /**
- * Scheduler do Control Plane.
+ * Scheduler de jobs do Control Plane.
  *
- * ✅ DependsOn("flywayInitializer") garante que o Flyway do PUBLIC já rodou
- * antes deste bean existir/rodar (sem sleep/delay).
+ * Regras:
+ * - Nunca pode derrubar a aplicação.
+ * - Se schema não estiver pronto, loga e retorna.
+ * - Infra NÃO bloqueia Newman / E2E.
+ * - AppClock é a única fonte de tempo.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
-@Slf4j
-@DependsOn("flywayInitializer")
 public class AccountJobScheduler {
 
-    private final AccountJobScheduleRepository accountJobScheduleRepository;
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    private final AccountJobScheduleRepository repository;
     private final AppClock appClock;
 
-    @Scheduled(fixedDelayString = "PT30S")
+    /**
+     * Executa jobs vencidos.
+     *
+     * IMPORTANTE:
+     * - Fail-soft: se tabela não existir ou DB não estiver pronto, apenas loga e sai.
+     */
+    @Scheduled(fixedDelayString = "${app.jobs.scan-delay-ms:60000}")
     public void runDueJobs() {
-        publicSchemaUnitOfWork.requiresNew(() -> {
+        /* Busca jobs "due" usando AppClock e não deixa infra travar o E2E. */
+        try {
             Instant now = appClock.instant();
-            var due = accountJobScheduleRepository.findDue(now);
 
+            List<AccountJobSchedule> due = repository.findDue(now);
+
+            // Execução real do job (se existir) ficaria aqui.
+            // Por enquanto, apenas log/debug para não mudar semântica do projeto.
             if (!due.isEmpty()) {
-                log.info("⏱️ Encontrados {} jobs vencidos (now={})", due.size(), now);
+                log.debug("AccountJobScheduler: {} job(s) due (now={})", due.size(), now);
             }
 
-            // TODO: executar jobs
-        });
+        } catch (DataAccessException ex) {
+            log.warn(
+                    "Scheduler ignorado (schema ainda não pronto ou migration ausente). Motivo: {}",
+                    ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage()
+            );
+        } catch (Exception ex) {
+            log.error("Erro inesperado no AccountJobScheduler", ex);
+        }
     }
 }
