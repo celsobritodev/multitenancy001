@@ -62,6 +62,7 @@ public enum ApiErrorCode {
     // =========================
     INVALID_CREDENTIALS(ApiErrorCategory.AUTH, 401, "Usuário ou senha inválidos"),
     INVALID_LOGIN(ApiErrorCategory.AUTH, 401, "Login inválido"),
+    INVALID_USER(ApiErrorCategory.AUTH, 401, "Usuário inválido"),
     UNAUTHENTICATED(ApiErrorCategory.AUTH, 401, "Não autenticado"),
     UNAUTHORIZED(ApiErrorCategory.SECURITY, 401, "Não autorizado"),
     FORBIDDEN(ApiErrorCategory.SECURITY, 403, "Acesso negado"),

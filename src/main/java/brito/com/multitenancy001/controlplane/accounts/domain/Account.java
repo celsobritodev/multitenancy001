@@ -54,9 +54,9 @@ public class Account implements Auditable, SoftDeletable {
 
     /**
      * ✅ Semântica no código: tenantSchema
-     * ✅ Banco permanece: schema_name
+     * ✅ Banco permanece: tenant_schema
      */
-    @Column(name = "schema_name", nullable = false, unique = true, length = 100)
+    @Column(name = "tenant_schema", nullable = false, unique = true, length = 100)
     private String tenantSchema;
 
     @Column(name = "slug", nullable = false, unique = true, length = 80)
@@ -86,7 +86,7 @@ public class Account implements Auditable, SoftDeletable {
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.FREE;
 
-    @Column(name = "trial_end_date", columnDefinition = "timestamptz")
+    @Column(name = "trial_end_at", columnDefinition = "timestamptz")
     private Instant trialEndAt;
 
     @Column(name = "payment_due_date", columnDefinition = "date")

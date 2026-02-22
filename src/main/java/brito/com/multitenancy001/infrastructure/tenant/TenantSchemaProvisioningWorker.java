@@ -131,7 +131,7 @@ public class TenantSchemaProvisioningWorker {
                  select exists (
                      select 1
                        from information_schema.schemata
-                      where schema_name = ?
+                      where tenant_schema = ?
                  )
              """)) {
 

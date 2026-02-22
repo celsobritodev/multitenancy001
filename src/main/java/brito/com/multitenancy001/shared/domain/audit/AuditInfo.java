@@ -46,6 +46,7 @@ public class AuditInfo {
     @Column(name = "deleted_at", columnDefinition = "timestamptz")
     private Instant deletedAt;
 
+    // ✅ NOVOS CAMPOS: Adicionados para o AuditEntityListener poder preencher
     @Column(name = "deleted_by")
     private Long deletedBy;
 

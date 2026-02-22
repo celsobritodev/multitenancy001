@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AccountJobScheduler {
 
-    private final AccountJobScheduleRepository repository;
+    private final AccountJobScheduleRepository accountJobScheduleRepository;
     private final AppClock appClock;
 
     /**
@@ -35,7 +35,7 @@ public class AccountJobScheduler {
     public void runDueJobs() {
         /* comentário: varre jobs vencidos e nunca derruba a aplicação */
         try {
-            repository.findDue(appClock.instant())
+            accountJobScheduleRepository.findDue(appClock.instant())
                     .forEach(job -> {
                         // execução real do job (se existir)
                     });

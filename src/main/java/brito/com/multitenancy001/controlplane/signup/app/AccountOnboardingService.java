@@ -32,6 +32,29 @@ import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+
+/**
+ * Serviço de orquestração do onboarding de uma Account (Control Plane).
+ *
+ * Responsabilidades:
+ * - Criar a Account no Public Schema.
+ * - Criar o usuário administrador inicial.
+ * - Disparar o provisionamento do schema do tenant.
+ * - Inicializar entitlements, planos e estado inicial da conta.
+ *
+ * Papel arquitetural:
+ * - Atua como um "Application Service composto".
+ * - Coordena múltiplos serviços especializados sem conter lógica técnica.
+ *
+ * Regras:
+ * - Toda criação de Account deve passar por este serviço.
+ * - Não é permitido criar Account "parcial" fora deste fluxo.
+ * - Falhas intermediárias devem gerar eventos auditáveis.
+ *
+ * Importante:
+ * - Controllers nunca devem criar Account diretamente.
+ * - Regras de consistência entre Account, Tenant e Admin são garantidas aqui.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

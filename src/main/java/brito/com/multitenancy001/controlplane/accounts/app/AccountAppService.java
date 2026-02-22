@@ -29,17 +29,22 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 /**
- * Application Service do Control Plane para Accounts.
+ * Application Service central do Control Plane para o agregado Account.
  *
  * Responsabilidades:
- * - Orquestrar casos de uso (signup/consultas/admin).
- * - Aplicar constraints de consulta (paginação/range) sem vazar detalhes para controllers.
- * - Delegar mudanças de estado e side-effects (tenant users) para serviços especializados.
+ * - Orquestrar casos de uso relacionados a contas (signup, consultas administrativas, mudança de status).
+ * - Garantir fronteira clara entre Controller e Domínio (DDD layered).
+ * - Coordenar múltiplos serviços especializados (onboarding, status, usuários, auditoria).
  *
- * Regras:
- * - Controllers não acessam repositórios diretamente.
- * - Leituras devem preferir readOnly() e comandos devem preferir tx().
- * - Status HTTP e mensagens default derivam de ApiErrorCode (evita duplicação semântica).
+ * Regras arquiteturais:
+ * - Controllers NUNCA acessam repositórios diretamente.
+ * - Todas as leituras passam por UnitOfWork readOnly().
+ * - Todas as mutações passam por UnitOfWork transacional.
+ *
+ * Regras de domínio:
+ * - Account deletada logicamente não pode ser operada.
+ * - Validações semânticas usam ApiErrorCode como fonte única.
+ * - O tempo é sempre obtido via AppClock.
  */
 @Service
 @RequiredArgsConstructor

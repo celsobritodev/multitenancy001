@@ -1,0 +1,329 @@
+{
+  "info": {
+    "_postman_id": "e4dcf52c-1d68-4913-96fc-4489739664c0",
+    "name": "multitenancy001-e2e",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "22901965"
+  },
+  "item": [
+    {
+      "name": "00 - Bootstrap",
+      "item": [
+        {
+          "name": "00.01 health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.02 signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "/**",
+                  " * Salva dados do signup no environment para o restante do E2E.",
+                  " */",
+                  "pm.test(\"Signup: status esperado\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "// Ajuste estes paths se seu payload mudar",
+                  "const accountId = json?.account?.id;",
+                  "const tenantSchema = json?.account?.tenantSchema;",
+                  "const tenantSlug = json?.account?.slug;",
+                  "const tenantAdminEmail = json?.tenantAdmin?.email;",
+                  "",
+                  "pm.test(\"Signup: account.id presente\", function () {",
+                  "  pm.expect(accountId, \"account.id\").to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Signup: tenantSchema presente\", function () {",
+                  "  pm.expect(tenantSchema, \"account.tenantSchema\").to.exist;",
+                  "});",
+                  "",
+                  "// Salva no environment",
+                  "pm.environment.set(\"account_id\", String(accountId));",
+                  "pm.environment.set(\"tenant_schema\", tenantSchema);",
+                  "pm.environment.set(\"tenantSchema\", String(json.account?.tenantSchema || json.tenantSchema || \"\"));",
+                  "pm.environment.set(\"tenant_slug\", tenantSlug || \"\");",
+                  "pm.environment.set(\"tenant_admin_email\", tenantAdminEmail || \"\");",
+                  "",
+                  "// Log útil",
+                  "console.log(\"signup account_id=\", accountId, \"tenant_schema=\", tenantSchema, \"tenant_email=\", pm.environment.get(\"tenant_email\"));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "/**\r",
+                  " * Gera tenant_email automaticamente se estiver vazio.\r",
+                  " * Mantém compatível com Newman e Postman.\r",
+                  " */\r",
+                  "if (!pm.environment.get(\"tenant_email\")) {\r",
+                  "    const ts = Date.now();\r",
+                  "    const email = `e2e_${ts}@tenant.local`;\r",
+                  "    pm.environment.set(\"tenant_email\", email);\r",
+                  "    console.log(\"Generated tenant_email =\", email);\r",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Tenant E2E\",\n  \"loginEmail\": \"{{tenant_email}}\",\n  \"taxIdType\": \"{{tenant_tax_id_type}}\",\n  \"taxIdNumber\": \"{{tenant_tax_id_number}}\",\n  \"password\": \"{{tenant_password}}\",\n  \"confirmPassword\": \"{{tenant_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.03 tenant login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Tenant login status\", function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.environment.set(\"tenant_access_token\", json.accessToken);",
+                  "pm.environment.set(\"tenant_refresh_token\", json.refreshToken);",
+                  "pm.environment.set(\"tenantSchema\", String(json.account?.tenantSchema || json.tenantSchema || \"\"));",
+                  "pm.environment.set(\"tenant_schema\", json.tenantSchema);",
+                  "pm.environment.set(\"account_id\", String(json.accountId));",
+                  "pm.environment.set(\"tenant_email\", json.email);",
+                  "",
+                  "console.log(\"Saved tenant_access_token length=\", (json.accessToken || \"\").length);",
+                  "console.log(\"Saved tenant_schema=\", json.tenantSchema);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tenant_email}}\",\n  \"password\": \"{{tenant_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.04 tenant me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenant me OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.id, 'me: id ausente').to.exist;",
+                  "pm.expect(json.email, 'me: email ausente').to.exist;",
+                  "console.log('tenant me userId=', json.id, 'email=', json.email);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tenant_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenantSchema}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              "// ================================\r",
+              "// Bootstrap - Header X-Tenant auto\r",
+              "// ================================\r",
+              "\r",
+              "const tenantSchema =\r",
+              "  pm.environment.get(\"tenantSchema\") ||\r",
+              "  pm.environment.get(\"tenant_schema\") ||\r",
+              "  pm.environment.get(\"tenant_schema_name\");\r",
+              "\r",
+              "if (tenantSchema && tenantSchema.trim() !== \"\") {\r",
+              "  pm.request.headers.upsert({\r",
+              "    key: \"X-Tenant\",\r",
+              "    value: tenantSchema\r",
+              "  });\r",
+              "\r",
+              "  console.log(\"X-Tenant aplicado automaticamente:\", tenantSchema);\r",
+              "} else {\r",
+              "  console.log(\"X-Tenant não definido (ok para signup/health/login)\");\r",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          "// Garante que tenant routes sempre mandem os headers corretos.\r",
+          "// (Funciona mesmo que você esqueça de setar manualmente em algum request.)\r",
+          "const token = pm.environment.get(\"tenant_access_token\");\r",
+          "const schema = pm.environment.get(\"tenant_schema\");\r",
+          "\r",
+          "if (token) {\r",
+          "  pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + token });\r",
+          "}\r",
+          "if (schema) {\r",
+          "  pm.request.headers.upsert({ key: \"X-Tenant\", value: schema });\r",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "X-Tenant",
+      "value": ""
+    }
+  ]
+}

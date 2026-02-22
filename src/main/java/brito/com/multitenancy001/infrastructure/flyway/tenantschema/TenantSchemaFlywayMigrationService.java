@@ -8,8 +8,17 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Linguagem ubíqua:
- * - tenantSchema = identificador persistido do schema do tenant (accounts.schema_name)
+ * Serviço de infraestrutura responsável por aplicar migrations Flyway
+ * em schemas de tenants.
+ *
+ * Responsabilidades:
+ * - Configurar Flyway dinamicamente por schema.
+ * - Executar migrations versionadas do tenant.
+ * - Garantir que apenas migrations compatíveis sejam aplicadas.
+ *
+ * Regras:
+ * - Não deve conter lógica de negócio.
+ * - Atua exclusivamente na camada de infraestrutura.
  */
 @Service
 @RequiredArgsConstructor

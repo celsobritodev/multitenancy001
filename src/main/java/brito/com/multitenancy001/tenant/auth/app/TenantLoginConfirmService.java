@@ -20,6 +20,31 @@ import org.springframework.util.StringUtils;
 import java.util.Set;
 import java.util.UUID;
 
+
+/**
+ * Application Service responsável por CONFIRMAR login de Tenant quando o INIT retornou ambiguidade.
+ *
+ * <p>Fluxo suportado:</p>
+ * <ul>
+ *   <li><b>INIT</b> (email+senha) retorna {@code 409 TENANT_SELECTION_REQUIRED} quando há mais de um tenant válido.</li>
+ *   <li>O backend cria um {@code challengeId} (prova temporária) vinculando email + tenants permitidos.</li>
+ *   <li><b>CONFIRM</b> recebe {@code challengeId} + {@code slug} (ou {@code accountId}) para selecionar o tenant.</li>
+ *   <li>O backend valida o challenge e então emite JWT somente para o tenant escolhido.</li>
+ * </ul>
+ *
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Nunca emite token no INIT quando houver ambiguidade.</li>
+ *   <li>O CONFIRM não revalida senha; a validade do challenge prova que a senha já foi checada no INIT.</li>
+ *   <li>Deve registrar auditoria de tentativa/sucesso/falha (auth audit) com detalhes do challenge.</li>
+ * </ul>
+ *
+ * <p>Arquitetura:</p>
+ * <ul>
+ *   <li>Não deve conhecer detalhes de JWT/Spring Security diretamente; delega para {@code TenantAuthMechanics}.</li>
+ *   <li>Resolução de conta (slug/accountId) usa camada de leitura do Control Plane (public schema).</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class TenantLoginConfirmService {

@@ -9,11 +9,11 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
-public class PublicTransactionExecutor {
+public class PublicTransactionTemplateProvider {
 
     private final PlatformTransactionManager txManager;
 
-    public PublicTransactionExecutor(
+    public PublicTransactionTemplateProvider(
             @Qualifier("publicTransactionManager") PlatformTransactionManager txManager
     ) {
         this.txManager = txManager;

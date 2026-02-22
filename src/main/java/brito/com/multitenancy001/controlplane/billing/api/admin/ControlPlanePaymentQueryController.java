@@ -13,6 +13,21 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Controller ADMIN (Control Plane) para consultas de Billing/Payments.
+ *
+ * Responsabilidade:
+ * - Expor endpoints de leitura (query) para relatórios e filtros operacionais.
+ *
+ * Regras:
+ * - Somente leitura: delega para Query Service dedicado.
+ * - Não expõe entidades JPA; retorna DTOs estáveis para API.
+ * - Autorização por permissions do Control Plane.
+ *
+ * Observação:
+ * - Para filtros por período, usar Instant (ISO-8601) no contrato HTTP e armazenar em timestamptz.
+ */
+
 @RestController
 @RequestMapping("/api/admin/billing/payments/query")
 @RequiredArgsConstructor

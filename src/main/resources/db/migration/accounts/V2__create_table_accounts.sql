@@ -4,18 +4,20 @@ SET search_path TO public;
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
 
-    account_type   VARCHAR(20) NOT NULL DEFAULT 'TENANT',
-    account_origin VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
+    -- Removido o DEFAULT e o CHECK será gerenciado pela aplicação
+    account_type   VARCHAR(20) NOT NULL,
+    -- Removido o DEFAULT e o CHECK será gerenciado pela aplicação
+    account_origin VARCHAR(20) NOT NULL,
 
     display_name VARCHAR(150) NOT NULL,
     legal_name   VARCHAR(200),
-    legal_entity_type VARCHAR(20) NOT NULL DEFAULT 'COMPANY', -- INDIVIDUAL | COMPANY
+    legal_entity_type VARCHAR(20) NOT NULL,
 
-    schema_name VARCHAR(100) NOT NULL,
+    tenant_schema VARCHAR(100) NOT NULL,
     slug        VARCHAR(80)  NOT NULL,
 
-    status            VARCHAR(50) NOT NULL DEFAULT 'FREE_TRIAL',
-    subscription_plan VARCHAR(50) NOT NULL DEFAULT 'FREE',
+    status            VARCHAR(50) NOT NULL,
+    subscription_plan VARCHAR(50) NOT NULL,
 
     -- emails case-insensitive
     login_email   CITEXT NOT NULL,
@@ -47,10 +49,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     updated_by_email CITEXT,
     deleted_by_email CITEXT,
 
-    -- domínio: misto (instante real x data civil)
-    trial_end_date    TIMESTAMPTZ, -- instante real
-    payment_due_date  DATE,        -- data civil
-    next_billing_date DATE,        -- data civil
+    trial_end_at    TIMESTAMPTZ,
+    payment_due_date  DATE,
+    next_billing_date DATE,
 
     settings_json TEXT,
     metadata_json TEXT,
@@ -60,46 +61,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 -- =========================
--- CHECK constraints (idempotente)
--- =========================
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_account_type') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_account_type
-            CHECK (account_type IN ('TENANT', 'PLATFORM'));
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_account_origin') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_account_origin
-            CHECK (account_origin IN ('BUILT_IN', 'ADMIN', 'API'));
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_status') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_status
-            CHECK (status IN ('PROVISIONING', 'FREE_TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELLED'));
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_subscription_plan') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_subscription_plan
-            CHECK (subscription_plan IN ('FREE', 'PRO', 'ENTERPRISE', 'BUILT_IN_PLAN'));
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_accounts_legal_entity_type') THEN
-        ALTER TABLE accounts
-            ADD CONSTRAINT chk_accounts_legal_entity_type
-            CHECK (legal_entity_type IN ('INDIVIDUAL', 'COMPANY'));
-    END IF;
-END $$;
-
--- =========================
 -- Índices/Uniqueness (soft-delete aware)
 -- =========================
-CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_schema_name_active
-    ON accounts (schema_name)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tenant_schema_active
+    ON accounts (tenant_schema)
     WHERE deleted = false;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_slug_active
@@ -116,5 +81,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_tax_id_active
     WHERE deleted = false AND tax_id_number IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts (status);
+CREATE INDEX IF NOT EXISTS idx_accounts_deleted ON accounts (deleted);
 CREATE INDEX IF NOT EXISTS idx_accounts_created_at ON accounts (created_at);
-
+CREATE INDEX IF NOT EXISTS idx_accounts_payment_due_date ON accounts (payment_due_date) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_accounts_trial_end_at ON accounts (trial_end_at) WHERE deleted = false;

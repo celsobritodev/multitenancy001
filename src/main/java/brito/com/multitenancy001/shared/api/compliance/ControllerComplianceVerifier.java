@@ -24,21 +24,23 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Verificador fail-fast para garantir "Controller compliance" no padrão DDD/layered simples.
+ * Verificador automático de compliance arquitetural de Controllers.
  *
- * O que valida:
- * - Controller NÃO pode depender de Repository/EntityManager/JdbcTemplate (controller -> app service apenas).
- * - Controller NÃO pode ter @Transactional (classe ou método).
- * - @RequestBody deve vir com @Valid (quando tem DTO com constraints).
- * - Controller NÃO pode retornar entidades JPA (@Entity) (API deve expor DTO).
- * - Controller NÃO deve retornar Optional (API deve retornar 404/200, não Optional).
+ * Objetivo:
+ * - Garantir que Controllers sigam regras mínimas de arquitetura e DDD.
  *
- * Regras:
- * - Se encontrar violações, a aplicação falha no startup com uma lista detalhada.
- * - Pode ignorar controllers/métodos/campos com @ControllerComplianceExempt.
+ * Regras verificadas:
+ * - Controller não pode acessar Repository diretamente.
+ * - Controller deve expor DTOs (request/response), não entidades.
+ * - Controller deve depender apenas de Application Services.
  *
- * Observação:
- * - Alguns checks são heurísticos por reflexão (intencional): o objetivo é impedir regressões comuns.
+ * Papel arquitetural:
+ * - Mecanismo de "fail fast" durante startup.
+ * - Evita regressões arquiteturais silenciosas ao longo do tempo.
+ *
+ * Importante:
+ * - Controllers explicitamente excepcionais devem usar @ControllerComplianceExempt.
+ * - Este verificador protege a integridade do projeto a longo prazo.
  */
 @Component
 @RequiredArgsConstructor

@@ -208,149 +208,173 @@ public class ControlPlaneUserService {
         });
     }
 
-    public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
-        /* Atualiza dados do usuário do Control Plane (ADMIN). */
-        return publicSchemaUnitOfWork.tx(() -> {
-            Actor actor = resolveActorOrNull();
+   public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
+    /* Atualiza dados do usuário do Control Plane (ADMIN) com SUCCESS contendo delta/changes. */
+    return publicSchemaUnitOfWork.tx(() -> {
+        Actor actor = resolveActorOrNull();
 
-            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            if (request == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+        if (request == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
 
-            Account cp = getControlPlaneAccount();
+        Account cp = getControlPlaneAccount();
 
-            ControlPlaneUser user = controlPlaneUserRepository
-                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+        ControlPlaneUser user = controlPlaneUserRepository
+                .findNotDeletedByIdAndAccountId(userId, cp.getId())
+                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-            if (user.isBuiltInUser()) {
-                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
-            }
+        if (user.isBuiltInUser()) {
+            throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+        }
 
-            String beforeEmail = user.getEmail();
-            ControlPlaneRole beforeRole = user.getRole();
+        String beforeName = user.getName();
+        String beforeEmail = user.getEmail();
+        ControlPlaneRole beforeRole = user.getRole();
 
-            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
+        AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = m(
-                    "scope", SCOPE,
-                    "reason", "update",
-                    "hasName", request.name() != null,
-                    "hasEmail", request.email() != null,
-                    "hasRole", request.role() != null,
-                    "hasPermissions", request.permissions() != null
-            );
+        Map<String, Object> attempt = m(
+                "scope", SCOPE,
+                "reason", "update",
+                "hasName", request.name() != null,
+                "hasEmail", request.email() != null,
+                "hasRole", request.role() != null,
+                "hasPermissions", request.permissions() != null
+        );
 
-            // ✅ SUCCESS mutável: será preenchido dentro do bloco com "changes" (delta)
-            Map<String, Object> success = new LinkedHashMap<>();
-            success.put("scope", SCOPE);
-            success.put("reason", "update");
+        // ✅ SUCCESS mutável preenchido dentro do bloco com delta/changes (sem duplicar USER_UPDATED)
+        Map<String, Object> success = new LinkedHashMap<>();
+        success.put("scope", SCOPE);
+        success.put("reason", "update");
 
-            return auditAttemptSuccessFail(
-                    SecurityAuditActionType.USER_UPDATED,
-                    actor,
-                    target,
-                    cp.getId(),
-                    null,
-                    attempt,
-                    success,
-                    () -> {
-                        boolean roleChanged = false;
-                        boolean permissionsChanged = request.permissions() != null;
-                        Map<String, Object> changes = new LinkedHashMap<>();
+        return auditAttemptSuccessFail(
+                SecurityAuditActionType.USER_UPDATED,
+                actor,
+                target,
+                cp.getId(),
+                null,
+                attempt,
+                success,
+                () -> {
+                    boolean roleChanged = false;
+                    boolean permissionsChanged = request.permissions() != null;
 
-                        if (request.name() != null) {
-                            String newName = normalizeNameOrThrow(request.name());
-                            if (!newName.equals(user.getName())) {
-                                user.rename(newName);
-                                changes.put("name", "changed");
-                            }
+                    Map<String, Object> changes = new LinkedHashMap<>();
+
+                    // -------------------------
+                    // NAME
+                    // -------------------------
+                    if (request.name() != null) {
+                        String newName = normalizeNameOrThrow(request.name());
+                        String currentName = user.getName();
+
+                        if (currentName == null || !currentName.equals(newName)) {
+                            user.rename(newName);
+                            changes.put("nameBefore", beforeName);
+                            changes.put("nameAfter", newName);
                         }
-
-                        if (request.email() != null) {
-                            String newEmail = normalizeEmailOrThrow(request.email());
-
-                            if (ControlPlaneBuiltInUsers.isReservedEmail(newEmail)) {
-                                throw new ApiException(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
-                            }
-
-                            String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
-                            if (currentEmail == null || !currentEmail.equals(newEmail)) {
-
-                                boolean emailExists = controlPlaneUserRepository
-                                        .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
-                                        .filter(u -> !u.getId().equals(user.getId()))
-                                        .isPresent();
-
-                                if (emailExists) {
-                                    throw new ApiException(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
-                                }
-
-                                user.changeEmail(newEmail);
-                                loginIdentityProvisioningService.moveControlPlaneIdentity(user.getId(), newEmail);
-
-                                changes.put("emailBefore", beforeEmail);
-                                changes.put("emailAfter", newEmail);
-                            }
-                        }
-
-                        if (request.role() != null) {
-                            if (beforeRole == null || !beforeRole.equals(request.role())) {
-                                user.changeRole(request.role());
-                                roleChanged = true;
-                                changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
-                                changes.put("roleAfter", user.getRole() == null ? null : user.getRole().name());
-                            }
-                        }
-
-                        controlPlaneUserRepository.save(user);
-
-                        if (permissionsChanged) {
-                            explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
-
-                            recordAudit(
-                                    SecurityAuditActionType.PERMISSIONS_CHANGED,
-                                    AuditOutcome.SUCCESS,
-                                    actor,
-                                    user.getEmail(),
-                                    user.getId(),
-                                    cp.getId(),
-                                    null,
-                                    m(
-                                            "scope", SCOPE,
-                                            "reason", "update",
-                                            "permissionsCount", request.permissions() == null ? 0 : request.permissions().size(),
-                                            "permissions", request.permissions()
-                                    )
-                            );
-                        }
-
-                        if (roleChanged) {
-                            recordAudit(
-                                    SecurityAuditActionType.ROLE_CHANGED,
-                                    AuditOutcome.SUCCESS,
-                                    actor,
-                                    user.getEmail(),
-                                    user.getId(),
-                                    cp.getId(),
-                                    null,
-                                    m(
-                                            "scope", SCOPE,
-                                            "from", beforeRole == null ? null : beforeRole.name(),
-                                            "to", user.getRole() == null ? null : user.getRole().name()
-                                    )
-                            );
-                        }
-
-                        // ✅ aqui “fecha” o delta do USER_UPDATED SUCCESS (sem duplicar evento)
-                        success.put("changed", !changes.isEmpty() || permissionsChanged);
-                        success.put("changes", changes);
-                        success.put("permissionsChanged", permissionsChanged);
-
-                        return getControlPlaneUser(userId);
                     }
-            );
-        });
-    }
+
+                    // -------------------------
+                    // EMAIL
+                    // -------------------------
+                    if (request.email() != null) {
+                        String newEmail = normalizeEmailOrThrow(request.email());
+
+                        if (ControlPlaneBuiltInUsers.isReservedEmail(newEmail)) {
+                            throw new ApiException(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
+                        }
+
+                        String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
+                        if (currentEmail == null || !currentEmail.equals(newEmail)) {
+
+                            boolean emailExists = controlPlaneUserRepository
+                                    .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
+                                    .filter(u -> !u.getId().equals(user.getId()))
+                                    .isPresent();
+
+                            if (emailExists) {
+                                throw new ApiException(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
+                            }
+
+                            user.changeEmail(newEmail);
+                            loginIdentityProvisioningService.moveControlPlaneIdentity(user.getId(), newEmail);
+
+                            changes.put("emailBefore", beforeEmail);
+                            changes.put("emailAfter", newEmail);
+                        }
+                    }
+
+                    // -------------------------
+                    // ROLE
+                    // -------------------------
+                    if (request.role() != null) {
+                        if (beforeRole == null || !beforeRole.equals(request.role())) {
+                            user.changeRole(request.role());
+                            roleChanged = true;
+
+                            changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
+                            changes.put("roleAfter", user.getRole() == null ? null : user.getRole().name());
+                        }
+                    }
+
+                    // Persistimos o usuário sempre (mantém semântica atual do seu método)
+                    controlPlaneUserRepository.save(user);
+
+                    // -------------------------
+                    // PERMISSIONS (evento separado)
+                    // -------------------------
+                    if (permissionsChanged) {
+                        explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
+
+                        recordAudit(
+                                SecurityAuditActionType.PERMISSIONS_CHANGED,
+                                AuditOutcome.SUCCESS,
+                                actor,
+                                user.getEmail(),
+                                user.getId(),
+                                cp.getId(),
+                                null,
+                                m(
+                                        "scope", SCOPE,
+                                        "reason", "update",
+                                        "permissionsCount", request.permissions() == null ? 0 : request.permissions().size(),
+                                        "permissions", request.permissions()
+                                )
+                        );
+
+                        changes.put("permissionsChanged", true);
+                        changes.put("permissionsCount", request.permissions() == null ? 0 : request.permissions().size());
+                    }
+
+                    // -------------------------
+                    // ROLE_CHANGED (evento separado)
+                    // -------------------------
+                    if (roleChanged) {
+                        recordAudit(
+                                SecurityAuditActionType.ROLE_CHANGED,
+                                AuditOutcome.SUCCESS,
+                                actor,
+                                user.getEmail(),
+                                user.getId(),
+                                cp.getId(),
+                                null,
+                                m(
+                                        "scope", SCOPE,
+                                        "from", beforeRole == null ? null : beforeRole.name(),
+                                        "to", user.getRole() == null ? null : user.getRole().name()
+                                )
+                        );
+                    }
+
+                    // ✅ fecha SUCCESS do USER_UPDATED com delta/changes
+                    success.put("changed", !changes.isEmpty());
+                    success.put("changes", changes);
+
+                    return getControlPlaneUser(userId);
+                }
+        );
+    });
+}
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(Long userId, ControlPlaneUserPermissionsUpdateRequest request) {
         /* Atualiza permissões explícitas (ADMIN endpoint dedicado). */

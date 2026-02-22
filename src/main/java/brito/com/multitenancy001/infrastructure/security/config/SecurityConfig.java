@@ -6,6 +6,8 @@ import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFi
 import brito.com.multitenancy001.infrastructure.security.filter.RequestMetaContextFilter;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,7 +45,17 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+
+    /**
+     * Mantido para CONTROLPLANE (e outros contextos que você use).
+     */
     private final MultiContextUserDetailsService multiContextUserDetailsService;
+
+    /**
+     * NOVO: usado pelo JwtAuthenticationFilter para TENANT (carregar user via repository).
+     */
+    private final TenantUserRepository tenantUserRepository;
+    private final AppClock appClock;
 
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
     private final RestAccessDeniedHandler restAccessDeniedHandler;
@@ -53,6 +65,8 @@ public class SecurityConfig {
         return new JwtAuthenticationFilter(
                 jwtTokenProvider,
                 multiContextUserDetailsService,
+                tenantUserRepository,
+                appClock,
                 restAuthenticationEntryPoint,
                 restAccessDeniedHandler
         );

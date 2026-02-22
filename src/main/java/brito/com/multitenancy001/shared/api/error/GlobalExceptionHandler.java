@@ -122,8 +122,8 @@ public class GlobalExceptionHandler {
             );
         }
 
-        if (errorMessage.contains("schema_name")) {
-            String schema = extractValue(errorMessage, "schema_name");
+        if (errorMessage.contains("tenant_schema")) {
+            String schema = extractValue(errorMessage, "tenant_schema");
             return ResponseEntity.status(409).body(
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)

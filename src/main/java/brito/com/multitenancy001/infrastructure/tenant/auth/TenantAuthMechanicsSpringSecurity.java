@@ -2,7 +2,6 @@ package brito.com.multitenancy001.infrastructure.tenant.auth;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
-import brito.com.multitenancy001.infrastructure.security.SecurityFailureCode;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
@@ -18,17 +17,18 @@ import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.InternalAuthenticationServiceException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Implementação do TenantAuthMechanics usando Spring Security + JWT.
+ * Implementação do TenantAuthMechanics usando Repository + PasswordEncoder + JWT.
+ *
+ * Motivação (Rota 1):
+ * - Em schema-per-tenant, o caminho AuthenticationManager -> UserDetailsService pode cair em um EntityManager
+ *   sem mapeamento de TenantUser e falhar com UnknownEntityException (convertendo em 401 indevido).
+ * - Para destravar E2E de forma robusta, validamos credenciais via repository no schema do tenant
+ *   e usamos passwordEncoder.matches(raw, encoded).
  *
  * Ajustes:
  * - resolveRefreshIdentity(refreshToken) NÃO faz query (somente parse/validação JWT)
@@ -41,9 +41,9 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
     private final TenantExecutor tenantExecutor;
-    private final AuthenticationManager authenticationManager;
     private final TenantUserRepository tenantUserRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
 
     @Override
@@ -55,22 +55,28 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
         if (!StringUtils.hasText(tenantSchema)) return false;
 
         tenantSchema = tenantSchema.trim();
+
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
 
+        String finalTenantSchema = tenantSchema;
+
         try {
-            String finalTenantSchema = tenantSchema;
             return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
-                Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
-                authenticationManager.authenticate(authRequest);
 
-                tenantUserRepository
+                TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
+                        .orElse(null);
 
-                return true;
+                if (user == null) return false;
+
+                // Opcional: não vaza motivo, só retorna false
+                if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) return false;
+
+                String encoded = user.getPassword(); // ajuste se seu entity usar outro nome
+                if (!StringUtils.hasText(encoded)) return false;
+
+                return passwordEncoder.matches(rawPassword, encoded);
             });
-        } catch (BadCredentialsException | UsernameNotFoundException | InternalAuthenticationServiceException e) {
-            return false;
         } catch (Exception e) {
             return false;
         }
@@ -78,7 +84,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
 
     @Override
     public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
-        /** comentário: autentica com senha e emite access+refresh */
+        /** comentário: autentica com senha e emite access+refresh (sem AuthenticationManager) */
         if (account == null || account.id() == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }
@@ -99,14 +105,16 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
         try {
             return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
 
-                Authentication authRequest = new UsernamePasswordAuthenticationToken(normalizedEmail, rawPassword);
-                authenticationManager.authenticate(authRequest);
-
                 TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
-                        .orElseThrow(() -> new UsernameNotFoundException(SecurityFailureCode.INVALID_USER.name()));
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_USER, INVALID_CREDENTIALS_MSG, 401));
 
                 ensureUserActive(user);
+
+                String encoded = user.getPassword(); // ajuste se seu entity usar outro nome
+                if (!StringUtils.hasText(encoded) || !passwordEncoder.matches(rawPassword, encoded)) {
+                    throw new ApiException(ApiErrorCode.INVALID_USER, INVALID_CREDENTIALS_MSG, 401);
+                }
 
                 tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
 
@@ -119,13 +127,13 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
                         authorities
                 );
 
-                Authentication finalAuth = new UsernamePasswordAuthenticationToken(
+                var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         principal,
                         null,
                         authorities
                 );
 
-                String accessToken = jwtTokenProvider.generateTenantToken(finalAuth, account.id(), finalTenantSchema);
+                String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), finalTenantSchema);
 
                 String refreshToken = jwtTokenProvider.generateRefreshToken(
                         user.getEmail(),
@@ -145,10 +153,6 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
                         finalTenantSchema
                 );
             });
-        } catch (BadCredentialsException e) {
-            throw e;
-        } catch (UsernameNotFoundException | InternalAuthenticationServiceException e) {
-            throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -195,7 +199,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
                     authorities
             );
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
+            var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                     principal,
                     null,
                     authorities
@@ -282,7 +286,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
                     authorities
             );
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
+            var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                     principal,
                     null,
                     authorities

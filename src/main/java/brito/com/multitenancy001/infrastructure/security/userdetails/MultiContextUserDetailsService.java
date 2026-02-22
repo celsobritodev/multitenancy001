@@ -1,73 +1,157 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/MultiContextUserDetailsService.java
 package brito.com.multitenancy001.infrastructure.security.userdetails;
 
+import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * UserDetailsService multi-contexto (Tenant + Control Plane).
  *
- * Regras:
- * - NÃO injeta EntityManager "genérico" (há múltiplos EMFs: public + tenant).
- * - Usa EntityManagerFactory qualificado para criar EntityManager sob demanda (fecha sempre).
- * - Tenant queries usam o EMF do TENANT (multi-tenancy por schema via resolver do Hibernate).
- * - Public queries usam o EMF do PUBLIC (schema public/control-plane).
- * - Não usa Instant.now(): usa AppClock.
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Resolver o tipo de usuário (Control Plane vs Tenant) via tabela {@code login_identities}.</li>
+ *   <li>Carregar o usuário apropriado do schema correto.</li>
+ *   <li>Retornar um {@link AuthenticatedUserContext} que implementa {@link UserDetails}.</li>
+ * </ul>
  *
- * Observação (importante para o seu 401 pós-refactor):
- * - Se você consultar TenantUser usando o EMF/EM do PUBLIC, o resultado será sempre "não encontrado",
- *   e o login tenant vira 401 mesmo após signup.
- * - Este serviço garante explicitamente o EMF correto em cada consulta.
+ * <p>Fluxo de Resolução:</p>
+ * <ol>
+ *   <li>Consulta a tabela {@code public.login_identities} pelo email para obter o {@code subject_type}.</li>
+ *   <li>Se {@code subject_type} for {@code CONTROLPLANE_USER}, carrega do schema PUBLIC.</li>
+ *   <li>Se {@code subject_type} for {@code TENANT_USER}, carrega do schema do tenant (que deve estar bindado via {@code X-Tenant}).</li>
+ *   <li>Fallback: se não encontrar na identidade, tenta carregar como Tenant (compatibilidade).</li>
+ * </ol>
+ *
+ * <p>Regras de Tempo:</p>
+ * <ul>
+ *   <li>Não usa {@code Instant.now()}. A fonte de tempo é {@link AppClock}.</li>
+ * </ul>
+ *
+ * <p>Tratamento de Erros:</p>
+ * <ul>
+ *   <li>Se o usuário não for encontrado, lança {@link UsernameNotFoundException} (compatível com Spring Security).</li>
+ *   <li>Erros internos são encapsulados em {@link ApiException}.</li>
+ * </ul>
+ *
+ * @see AuthenticatedUserContext
+ * @see AuthoritiesFactory
  */
 @Service
 @RequiredArgsConstructor
 public class MultiContextUserDetailsService implements UserDetailsService {
 
+    private static final String SUBJECT_TYPE_CONTROLPLANE_USER = "CONTROLPLANE_USER";
+    private static final String SUBJECT_TYPE_TENANT_USER = "TENANT_USER";
+
     /**
      * EMF do PUBLIC (Control Plane).
-     * Nome do bean vem do seu PublicPersistenceConfig: "publicEntityManagerFactory".
      */
     private final @Qualifier("publicEntityManagerFactory") EntityManagerFactory publicEmf;
 
     /**
      * EMF do TENANT (schema-per-tenant).
-     * Nome do bean vem do seu TenantSchemaHibernateConfig: "tenantEntityManagerFactory".
      */
     private final @Qualifier("tenantEntityManagerFactory") EntityManagerFactory tenantEmf;
 
     private final AppClock appClock;
 
+    /**
+     * Carrega um usuário pelo username (email) conforme contrato do Spring Security.
+     *
+     * @param username O email do usuário.
+     * @return Um {@link UserDetails} representando o usuário autenticado.
+     * @throws UsernameNotFoundException Se o usuário não for encontrado.
+     */
     @Override
-    public UserDetails loadUserByUsername(String username) {
-        /*
-         * Método padrão do Spring.
-         * No seu projeto, o fluxo real usa os métodos loadTenantUserByEmail/loadControlPlaneUserByEmail.
-         * Aqui mantemos um fallback tenant "sem accountId" (busca por email) para compat.
-         */
-        return loadTenantUserByEmail(username, null);
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        if (username == null || username.isBlank()) {
+            throw new UsernameNotFoundException("Email é obrigatório");
+        }
+
+        String normalized = username.trim().toLowerCase(Locale.ROOT);
+
+        try {
+            String subjectType = resolveSubjectTypeByEmail(normalized);
+
+            if (SUBJECT_TYPE_CONTROLPLANE_USER.equals(subjectType)) {
+                return loadControlPlaneUserByEmail(normalized, null);
+            }
+
+            if (SUBJECT_TYPE_TENANT_USER.equals(subjectType)) {
+                return loadTenantUserByEmail(normalized, null);
+            }
+
+            // Fallback: tenta carregar como Tenant (compatibilidade)
+            return loadTenantUserByEmail(normalized, null);
+
+        } catch (ApiException e) {
+            throw new UsernameNotFoundException(e.getMessage(), e);
+        }
     }
 
     /**
-     * Usado por JwtAuthenticationFilter (tenant) / fluxos tenant.
+     * Resolve o tipo de sujeito (subject_type) a partir do email, consultando a tabela login_identities.
+     *
+     * @param normalizedEmail Email normalizado.
+     * @return O tipo de sujeito, ou {@code null} se não encontrado.
+     */
+    private String resolveSubjectTypeByEmail(String normalizedEmail) {
+        return withPublicEntityManager(em -> {
+            try {
+                // Abordagem 1: Usando getSingleResult com tratamento de exceção
+                String sql = """
+                    SELECT li.subject_type
+                    FROM public.login_identities li
+                    WHERE li.email = :email
+                """;
+
+                @SuppressWarnings("unchecked")
+                List<Object> results = em.createNativeQuery(sql)
+                        .setParameter("email", normalizedEmail)
+                        .setMaxResults(1)
+                        .getResultList();
+
+                if (results.isEmpty()) {
+                    return null;
+                }
+
+                Object result = results.get(0);
+                return result != null ? result.toString() : null;
+
+            } catch (Exception e) {
+                // Log do erro se necessário, mas não propaga
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Carrega um usuário do Tenant pelo email e accountId.
+     *
+     * @param email     O email do usuário.
+     * @param accountId O ID da conta (pode ser {@code null} se não fornecido).
+     * @return Um {@link UserDetails} representando o usuário do tenant.
+     * @throws ApiException Se o usuário não for encontrado.
      */
     public UserDetails loadTenantUserByEmail(String email, Long accountId) {
-        /* Carrega tenant user (no schema tenant atual) e retorna AuthenticatedUserContext. */
         if (email == null || email.isBlank()) {
             throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
         }
@@ -76,93 +160,86 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         String normalized = email.trim().toLowerCase(Locale.ROOT);
 
         TenantUser user = withTenantEntityManager(em -> {
+            TypedQuery<TenantUser> query;
+
             if (accountId == null) {
-                return em.createQuery(
-                                "select u from TenantUser u " +
-                                        "where lower(u.email) = :email and u.deleted = false",
-                                TenantUser.class
-                        )
-                        .setParameter("email", normalized)
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado"));
+                query = em.createQuery(
+                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                        TenantUser.class
+                );
+            } else {
+                query = em.createQuery(
+                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.accountId = :accountId AND u.deleted = false",
+                        TenantUser.class
+                );
+                query.setParameter("accountId", accountId);
             }
 
-            return em.createQuery(
-                            "select u from TenantUser u " +
-                                    "where lower(u.email) = :email and u.accountId = :accountId and u.deleted = false",
-                            TenantUser.class
-                    )
-                    .setParameter("email", normalized)
-                    .setParameter("accountId", accountId)
-                    .setMaxResults(1)
-                    .getResultStream()
-                    .findFirst()
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado"));
+            query.setParameter("email", normalized);
+            query.setMaxResults(1);
+
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
         });
 
-        // tenantSchema: em muitos fluxos o schema já está em claims/thread-local; aqui mantemos null (compat).
-        String tenantSchema = null;
-
-        // Authorities: deixe o fromTenantUser montar o fallback se set vazio.
-        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        String tenantSchema = null; // Será preenchido pelo JwtAuthenticationFilter
+        var authorities = AuthoritiesFactory.forTenant(user);
 
         return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 
     /**
-     * Usado por JwtAuthenticationFilter / refresh do Control Plane.
+     * Carrega um usuário do Control Plane pelo email e userId.
+     *
+     * @param email  O email do usuário.
+     * @param userId O ID do usuário (pode ser {@code null} se não fornecido).
+     * @return Um {@link UserDetails} representando o usuário do Control Plane.
+     * @throws ApiException Se o usuário não for encontrado.
      */
     public UserDetails loadControlPlaneUserByEmail(String email, Long userId) {
-        /*
-         * Importante:
-         * - Aqui retornamos AuthenticatedUserContext também (ele implementa UserDetails),
-         *   pois o resto do stack faz cast para AuthenticatedUserContext.
-         */
         if (email == null || email.isBlank()) {
             throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
         }
 
         String normalized = email.trim().toLowerCase(Locale.ROOT);
 
-        Object cpUser = withPublicEntityManager(em ->
-                em.createQuery(
-                                "select u from ControlPlaneUser u " +
-                                        "where lower(u.email) = :email and u.deleted = false",
-                                Object.class
-                        )
-                        .setParameter("email", normalized)
-                        .setMaxResults(1)
-                        .getResultStream()
-                        .findFirst()
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado"))
-        );
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery(
+                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                    ControlPlaneUser.class
+            );
+            query.setParameter("email", normalized);
+            query.setMaxResults(1);
 
-        // Extrai dados via reflexão para evitar dependência do tipo concreto aqui.
-        Long resolvedUserId = (userId != null) ? userId : ReflectionSupport.getLong(cpUser, "getId");
-        String roleName = ReflectionSupport.getString(cpUser, "getRole");
-        String roleAuthority = ReflectionSupport.getString(cpUser, "getRoleAuthority");
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
+        });
 
-        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
-        if (roleAuthority != null && !roleAuthority.isBlank()) {
-            authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(roleAuthority));
-        }
+        var authorities = AuthoritiesFactory.forControlPlane(user);
 
         return AuthenticatedUserContext.fromControlPlaneClaims(
-                resolvedUserId != null ? resolvedUserId : 0L,
-                normalized,
-                roleName,
-                roleAuthority,
+                user.getId(),
+                user.getEmail(),
+                user.getRole() != null ? user.getRole().name() : null,
+                user.getRole() != null ? user.getRole().asAuthority() : null,
                 authorities
         );
     }
 
     /**
-     * Executa uma função usando um EntityManager do PUBLIC, garantindo close.
+     * Executa uma função usando um EntityManager do PUBLIC, garantindo fechamento.
+     *
+     * @param cb A função a ser executada.
+     * @param <T> O tipo de retorno.
+     * @return O resultado da função.
      */
     private <T> T withPublicEntityManager(EntityManagerCallback<T> cb) {
-        /* Cria EntityManager do PUBLIC e fecha sempre. */
         EntityManager em = publicEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -176,10 +253,13 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Executa uma função usando um EntityManager do TENANT, garantindo close.
+     * Executa uma função usando um EntityManager do TENANT, garantindo fechamento.
+     *
+     * @param cb A função a ser executada.
+     * @param <T> O tipo de retorno.
+     * @return O resultado da função.
      */
     private <T> T withTenantEntityManager(EntityManagerCallback<T> cb) {
-        /* Cria EntityManager do TENANT e fecha sempre. */
         EntityManager em = tenantEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -193,41 +273,12 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Callback tipado para uso com EntityManager.
+     * Callback funcional para operações com EntityManager.
+     *
+     * @param <T> O tipo de retorno.
      */
     @FunctionalInterface
     private interface EntityManagerCallback<T> {
-        /* Aplica operação com EntityManager. */
         T apply(EntityManager em);
-    }
-
-    /**
-     * Helper de reflexão (isolado).
-     */
-    static final class ReflectionSupport {
-        private ReflectionSupport() {}
-
-        static Long getLong(Object target, String methodName) {
-            try {
-                Object v = target.getClass().getMethod(methodName).invoke(target);
-                if (v == null) return null;
-                if (v instanceof Long l) return l;
-                if (v instanceof Integer i) return i.longValue();
-                if (v instanceof Number n) return n.longValue();
-                return null;
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-
-        static String getString(Object target, String methodName) {
-            try {
-                Object v = target.getClass().getMethod(methodName).invoke(target);
-                if (v == null) return null;
-                return String.valueOf(v);
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
     }
 }

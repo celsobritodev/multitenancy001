@@ -21,20 +21,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Fail-fast: amarra regras de segurança do Control Plane.
+ * Verificador de wiring de segurança do Control Plane.
  *
- * Validações:
- *  1) Nenhuma role tem set vazio (role "decorativa" é bug)
- *  2) Nenhuma permissão fora do escopo CP_ aparece na matriz role->perms
- *  3) Toda permissão referenciada por @PreAuthorize existe no enum ControlPlanePermission
- *     e não há referências a TenantPermission / TEN_ por engano.
+ * Responsabilidades:
+ * - Validar que todas as roles possuem permissões explicitamente mapeadas.
+ * - Garantir que não existam permissões "decorativas".
+ * - Falhar a aplicação no startup em caso de inconsistência.
  *
- * Liga/desliga:
- *  app.security.controlplane.enforce-wiring-verifier=true|false
- *
- * Observação:
- * - Você já tem ControlPlaneEndpointPreAuthorizeVerifier (presença de @PreAuthorize).
- * - Este verifier NÃO substitui; ele complementa (conteúdo/coerência).
+ * Objetivo:
+ * - Fail-fast de configuração de segurança.
+ * - Evitar erros silenciosos em produção.
  */
 @Component
 public class ControlPlaneSecurityWiringVerifier implements ApplicationRunner {

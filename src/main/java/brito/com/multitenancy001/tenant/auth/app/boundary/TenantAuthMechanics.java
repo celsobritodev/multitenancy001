@@ -6,9 +6,22 @@ import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot
 /**
  * Boundary de mecânica de autenticação do Tenant.
  *
- * Responsabilidade:
- * - Operações de autenticação/refresco baseadas em infra (Spring Security/JWT)
- *   sem “vazar” detalhes para o app service.
+ * Responsabilidades:
+ * - Definir contratos técnicos para login, refresh e logout no contexto Tenant.
+ * - Isolar a camada de aplicação dos detalhes de JWT, Spring Security ou filtros.
+ *
+ * Papel arquitetural:
+ * - Boundary (porta interna) entre Application Layer e Infrastructure Layer.
+ * - Permite testar serviços de autenticação sem dependência de SecurityContext.
+ *
+ * Regras:
+ * - NÃO contém lógica de persistência.
+ * - NÃO depende de HTTP, filtros ou controllers.
+ * - Implementações concretas vivem na camada infrastructure.
+ *
+ * Observação:
+ * - Este contrato existe para manter o domínio e a aplicação desacoplados
+ *   de frameworks de segurança.
  */
 public interface TenantAuthMechanics {
 

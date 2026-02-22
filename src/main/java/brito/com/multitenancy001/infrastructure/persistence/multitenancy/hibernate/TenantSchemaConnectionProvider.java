@@ -147,7 +147,7 @@ public class TenantSchemaConnectionProvider
         }
 
         try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT 1 FROM information_schema.schemata WHERE schema_name = ?")) {
+                "SELECT 1 FROM information_schema.schemata WHERE tenant_schema = ?")) {
             ps.setString(1, tenantSchema);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {

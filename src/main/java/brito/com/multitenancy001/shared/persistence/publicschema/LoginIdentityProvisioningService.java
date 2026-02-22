@@ -29,20 +29,8 @@ public class LoginIdentityProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    // =========================================================
-    // TENANT (email -> conta)
-    // =========================================================
-
-    /**
-     * Garante a identity TENANT_ACCOUNT para o par (email, accountId).
-     *
-     * Uso típico:
-     * - após criar o usuário tenant (ex.: tenant owner) na provisão de account/signup
-     * - após trocar e-mail de um usuário tenant (se você suportar isso)
-     */
     @Transactional
     public void ensureTenantIdentity(String email, Long accountId) {
-        /* comentário: cria identity TENANT_ACCOUNT (idempotente) */
         if (accountId == null) return;
 
         String emailNorm = EmailNormalizer.normalizeOrNull(email);
@@ -50,20 +38,17 @@ public class LoginIdentityProvisioningService {
 
         String sql =
                 "INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)\n" +
-                "VALUES (?, 'TENANT_ACCOUNT', ?, ?)\n" +
-                "ON CONFLICT (email, account_id) WHERE subject_type = 'TENANT_ACCOUNT'\n" +
+                "VALUES (?, ?::text, ?, ?)\n" +
+                "ON CONFLICT (email, account_id) WHERE subject_type = ?::text\n" +
                 "DO NOTHING";
 
-        jdbcTemplate.update(sql, emailNorm, accountId, accountId);
+        jdbcTemplate.update(sql, emailNorm,
+                LoginIdentitySubjectType.TENANT_ACCOUNT.name(), accountId, accountId,
+                LoginIdentitySubjectType.TENANT_ACCOUNT.name());
     }
 
-    /**
-     * Remove a identity TENANT_ACCOUNT de um e-mail específico em uma conta específica.
-     * (Útil se você implementar remoção/soft-delete + limpeza de identity.)
-     */
     @Transactional
     public void deleteTenantIdentity(String email, Long accountId) {
-        /* comentário: remove identity TENANT_ACCOUNT de forma segura */
         if (accountId == null) return;
 
         String emailNorm = EmailNormalizer.normalizeOrNull(email);
@@ -71,27 +56,15 @@ public class LoginIdentityProvisioningService {
 
         String sql =
                 "DELETE FROM public.login_identities\n" +
-                " WHERE subject_type = 'TENANT_ACCOUNT'\n" +
+                " WHERE subject_type = ?::text\n" +
                 "   AND email = ?\n" +
                 "   AND account_id = ?";
 
-        jdbcTemplate.update(sql, emailNorm, accountId);
+        jdbcTemplate.update(sql, LoginIdentitySubjectType.TENANT_ACCOUNT.name(), emailNorm, accountId);
     }
 
-    // =========================================================
-    // CONTROL PLANE (email -> subject_id(userId))
-    // =========================================================
-
-    /**
-     * Garante a identity CONTROLPLANE_USER apontando para o userId do Control Plane.
-     *
-     * Regras:
-     * - Um CP user (subject_id) sempre deve ter uma identity.
-     * - Se o e-mail mudar, atualiza por subject.
-     */
     @Transactional
     public void ensureControlPlaneIdentity(String email, Long controlPlaneUserId) {
-        /* comentário: cria/atualiza identity CONTROLPLANE_USER (idempotente) */
         if (controlPlaneUserId == null) return;
 
         String emailNorm = EmailNormalizer.normalizeOrNull(email);
@@ -99,36 +72,29 @@ public class LoginIdentityProvisioningService {
 
         String sql =
                 "INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)\n" +
-                "VALUES (?, 'CONTROLPLANE_USER', ?, NULL)\n" +
-                "ON CONFLICT (subject_type, subject_id) WHERE subject_type = 'CONTROLPLANE_USER'\n" +
+                "VALUES (?, ?::text, ?, NULL)\n" +
+                "ON CONFLICT (subject_type, subject_id) WHERE subject_type = ?::text\n" +
                 "DO UPDATE SET email = EXCLUDED.email";
 
-        jdbcTemplate.update(sql, emailNorm, controlPlaneUserId);
+        jdbcTemplate.update(sql, emailNorm,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name(), controlPlaneUserId,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name());
     }
 
-    /**
-     * Remove identity CONTROLPLANE_USER pelo userId.
-     */
     @Transactional
     public void deleteControlPlaneIdentityByUserId(Long controlPlaneUserId) {
-        /* comentário: remove identity do CP por subject_id */
         if (controlPlaneUserId == null) return;
 
         String sql =
                 "DELETE FROM public.login_identities\n" +
-                " WHERE subject_type = 'CONTROLPLANE_USER'\n" +
+                " WHERE subject_type = ?::text\n" +
                 "   AND subject_id = ?";
 
-        jdbcTemplate.update(sql, controlPlaneUserId);
+        jdbcTemplate.update(sql, LoginIdentitySubjectType.CONTROLPLANE_USER.name(), controlPlaneUserId);
     }
 
-    /**
-     * Troca de e-mail no Control Plane: atualiza a identity do subject (userId).
-     * Executar dentro da mesma TX do update do usuário CP.
-     */
     @Transactional
     public void moveControlPlaneIdentity(Long controlPlaneUserId, String newEmail) {
-        /* comentário: atualiza email da identity do CP; cria se não existir */
         if (controlPlaneUserId == null) return;
 
         String emailNorm = EmailNormalizer.normalizeOrNull(newEmail);
@@ -137,10 +103,11 @@ public class LoginIdentityProvisioningService {
         String updateSql =
                 "UPDATE public.login_identities\n" +
                 "   SET email = ?\n" +
-                " WHERE subject_type = 'CONTROLPLANE_USER'\n" +
+                " WHERE subject_type = ?::text\n" +
                 "   AND subject_id = ?";
 
-        int updated = jdbcTemplate.update(updateSql, emailNorm, controlPlaneUserId);
+        int updated = jdbcTemplate.update(updateSql, emailNorm,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name(), controlPlaneUserId);
 
         if (updated == 0) {
             ensureControlPlaneIdentity(emailNorm, controlPlaneUserId);

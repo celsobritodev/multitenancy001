@@ -7,7 +7,7 @@ INSERT INTO accounts (
     display_name,
     legal_name,
     legal_entity_type,
-    schema_name,
+    tenant_schema,
     slug,
     status,
     subscription_plan,

@@ -18,6 +18,23 @@ import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+
+/**
+ * Controller do Tenant para operações do "usuário logado" (perfil e credenciais).
+ *
+ * Responsabilidade:
+ * - Expor endpoints HTTP para consultar/alterar dados do usuário autenticado.
+ *
+ * Regras:
+ * - Controller não acessa repository/JPA diretamente (somente Application Service).
+ * - RequestBody deve ser DTO e validado com @Valid.
+ * - Respostas devem ser DTO (nunca Entity).
+ * - Autorização deve ser feita via permissions (hasAuthority(...asAuthority())).
+ *
+ * Observação:
+ * - Alterações sensíveis (ex.: troca de senha) devem gerar auditoria no serviço de aplicação.
+ */
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/tenant/me")

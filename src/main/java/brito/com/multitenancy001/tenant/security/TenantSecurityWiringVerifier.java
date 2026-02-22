@@ -21,17 +21,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Fail-fast: amarra regras de segurança do Tenant.
+ * Verificador de wiring de segurança do Tenant.
  *
- * Validações: 1) Nenhuma role tem set vazio (role "decorativa" é bug) 2)
- * Nenhuma permissão fora do escopo TEN_ aparece na matriz role->perms 3) Toda
- * permissão referenciada por @PreAuthorize existe no enum TenantPermission e
- * não há referências a ControlPlanePermission / CP_ por engano.
+ * Responsabilidades:
+ * - Garantir coerência entre TenantRole, TenantPermission e mapeamentos.
+ * - Validar que todas as permissões usadas em @PreAuthorize existem.
  *
- * Liga/desliga: app.security.tenant.enforce-wiring-verifier=true|false
+ * Benefícios:
+ * - Segurança verificável em tempo de startup.
+ * - Redução drástica de bugs de autorização.
  *
- * Observação: - Você já tem TenantEndpointPreAuthorizeVerifier (presença
- * de @PreAuthorize). - Este verifier complementa (conteúdo/coerência).
+ * Escopo:
+ * - Executado automaticamente durante a inicialização da aplicação.
  */
 @Component
 public class TenantSecurityWiringVerifier implements ApplicationRunner {

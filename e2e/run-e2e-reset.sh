@@ -3,290 +3,163 @@ set -euo pipefail
 
 # =========================================================
 # multitenancy001 - E2E RESET + RUN (Postgres local)
-#
-# Goals:
-# - Drop and recreate the database
-# - Start the Spring Boot app
-# - Wait for STARTED + /actuator/health
-# - Run Postman collection via Newman
-# - Stop the app (even on error)
-#
-# Usage:
-#   COLLECTION=e2e/<collection.json> \
-#   ENV_FILE=e2e/<env.json> \
-#   ./e2e/run-e2e-reset.sh
-#
-# Optional overrides:
-#   DB_HOST=localhost DB_PORT=5432 DB_USER=postgres DB_PASSWORD=admin DB_NAME=db_multitenancy
-#   BASE_URL=http://localhost:8080    (optional; overrides env parsing)
-#   APP_PORT=8080                     (optional; used for port-check)
 # =========================================================
 
+# Always run from project root (relative paths are stable)
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 # ---------------------------------------------------------
-# Postgres connection (psql) configuration
+# Config (Postgres)
 # ---------------------------------------------------------
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-db_multitenancy}"
 DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-admin}"
+DB_NAME="${DB_NAME:-db_multitenancy}"
 
-# Keep PG* aligned with DB_* (avoid accidental overrides)
 export PGHOST="${PGHOST:-$DB_HOST}"
 export PGPORT="${PGPORT:-$DB_PORT}"
-export PGDATABASE="${PGDATABASE:-$DB_NAME}"
 export PGUSER="${PGUSER:-$DB_USER}"
 export PGPASSWORD="${PGPASSWORD:-$DB_PASSWORD}"
 
-psql_cmd() {
-  # Method-level comment: run psql fail-fast and quieter.
-  psql -v ON_ERROR_STOP=1 -q "$@"
-}
-
-psql_auth_hint() {
-  # Method-level comment: print actionable auth hints.
-  cat <<'EOF'
-[HINT] Falha de autenticação no Postgres (usuário/senha).
-       Este script usa por default:
-         DB_USER=postgres
-         DB_PASSWORD=admin
-
-       Ajuste assim (exemplo):
-         DB_PASSWORD=SUA_SENHA ./e2e/run-e2e-reset.sh
-
-       Ou crie um arquivo ~/.pgpass (recomendado) e não passe senha na linha de comando.
-
-       Verifique também se o Postgres está aceitando senha (pg_hba.conf) e se a senha do usuário está correta.
-EOF
-}
-
 # ---------------------------------------------------------
-# Paths
+# Paths (relative by default)
 # ---------------------------------------------------------
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-E2E_DIR="${ROOT_DIR}/e2e"
+COLLECTION="${COLLECTION:-e2e/multitenancy001.postman_collection.json}"
+ENV_FILE="${ENV_FILE:-e2e/multitenancy001.postman_environment.json}"
 
-COLLECTION="${COLLECTION:-${E2E_DIR}/multitenancy001.postman_collection.v15.4-categories-subcategories-suppliers-products-full.json}"
-ENV_FILE="${ENV_FILE:-${E2E_DIR}/multitenancy001.local.postman_environment.v15.4.json}"
-
-APP_LOG="${ROOT_DIR}/.e2e-app.log"
+APP_LOG=".e2e-app.log"
 APP_PID=""
-
 APP_PORT="${APP_PORT:-8080}"
-
-log() { printf "%s\n" "$*"; }
-
-require_cmd() {
-  # Method-level comment: checks required tools are available in PATH (or as executable path).
-  local cmd="$1"
-  if [[ "${cmd}" == ./* || "${cmd}" == */* ]]; then
-    if [[ ! -x "${cmd}" ]]; then
-      log "ERROR: executable not found or not executable: ${cmd}"
-      return 1
-    fi
-    return 0
-  fi
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    log "ERROR: command not found: ${cmd}"
-    return 1
-  fi
-  return 0
-}
-
-try_find_psql_windows() {
-  # Method-level comment: tries to locate psql.exe in common Windows paths (Git Bash).
-  local found=""
-  for p in /c/Program\ Files/PostgreSQL/*/bin/psql.exe /c/Program\ Files/PostgreSQL/*/bin/psql; do
-    if [[ -f "${p}" ]]; then
-      found="${p}"
-    fi
-  done
-  if [[ -n "${found}" ]]; then
-    export PATH="$(dirname "${found}"):${PATH}"
-    return 0
-  fi
-  return 1
-}
-
-ensure_psql() {
-  # Method-level comment: ensures 'psql' is available; attempts auto-detection on Windows.
-  if command -v psql >/dev/null 2>&1; then
-    return 0
-  fi
-
-  log "INFO: psql not found in PATH; trying Windows auto-detection..."
-  if try_find_psql_windows && command -v psql >/dev/null 2>&1; then
-    log "INFO: psql found via auto-detection."
-    return 0
-  fi
-
-  log "ERROR: psql not found."
-  log "Fix options:"
-  log "  1) Install PostgreSQL client tools (psql)."
-  log "  2) Add PostgreSQL 'bin' to PATH."
-  log "     Example (Git Bash):"
-  log "       export PATH=\"/c/Program Files/PostgreSQL/18/bin:$PATH\""
-  return 1
-}
+ENV_EFFECTIVE=".env.effective.json"
 
 cleanup() {
-  # Method-level comment: stop Spring Boot app if it was started.
   if [[ -n "${APP_PID}" ]]; then
-    log "==> Stopping app (pid=${APP_PID})..."
+    echo "==> Stopping app (pid=${APP_PID})..."
     kill "${APP_PID}" >/dev/null 2>&1 || true
     wait "${APP_PID}" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
-is_port_in_use() {
-  # Method-level comment: checks if APP_PORT is in use (Windows Git Bash friendly).
-  if command -v lsof >/dev/null 2>&1; then
-    if lsof -iTCP:"${APP_PORT}" -sTCP:LISTEN -n -P >/dev/null 2>&1; then
-      return 0
-    fi
-    return 1
-  fi
+log() { echo "$*"; }
 
-  if command -v netstat >/dev/null 2>&1; then
-    if netstat -an 2>/dev/null | grep -E "[:.]${APP_PORT}[[:space:]].*LISTEN" >/dev/null 2>&1; then
-      return 0
-    fi
-    return 1
-  fi
-
-  return 1
-}
-
-print_port_hint() {
-  # Method-level comment: shows how to free port 8080 (Windows + Linux).
+psql_auth_hint() {
   cat <<EOF
-[HINT] A porta ${APP_PORT} parece estar em uso.
+[HINT] psql pediu senha / falhou autenticação.
+       Ajuste assim:
+         DB_PASSWORD=SUA_SENHA ./e2e/run-e2e-reset.sh
 
-Windows (PowerShell):
-  netstat -ano | findstr :${APP_PORT}
-  taskkill /PID <PID> /F
-
-Windows (cmd):
-  netstat -ano | findstr :${APP_PORT}
-  taskkill /PID <PID> /F
-
-Linux/macOS:
-  lsof -i :${APP_PORT}
-  kill -9 <PID>
+       Config atual:
+         DB_HOST=${DB_HOST}
+         DB_PORT=${DB_PORT}
+         DB_USER=${DB_USER}
+         DB_NAME=${DB_NAME}
 EOF
 }
 
-# ---------------------------------------------------------
-# Start
-# ---------------------------------------------------------
-log "==> E2E RESET + RUN (Postgres local)"
+log "==> Drop DB (${DB_NAME})"
 
-# Validate inputs
 if [[ ! -f "${COLLECTION}" ]]; then
-  log "ERROR: COLLECTION file not found: ${COLLECTION}"
+  log "ERROR: collection not found: ${COLLECTION}"
+  ls -la e2e || true
   exit 2
 fi
+
 if [[ ! -f "${ENV_FILE}" ]]; then
-  log "ERROR: ENV_FILE file not found: ${ENV_FILE}"
+  log "ERROR: env not found: ${ENV_FILE}"
+  ls -la e2e || true
   exit 2
 fi
 
-# Ensure required tools
-require_cmd ./mvnw || { log "ERROR: ./mvnw not found at repo root"; exit 2; }
-require_cmd node || { log "ERROR: Node.js is required for Newman"; exit 2; }
-require_cmd newman || { log "ERROR: Newman not found. Install: npm i -g newman"; exit 2; }
-require_cmd curl || { log "ERROR: curl is required for health check"; exit 2; }
-require_cmd python || { log "ERROR: python is required for ENV parsing"; exit 2; }
-ensure_psql || { log "ERROR: cannot continue without psql."; exit 2; }
-
-# Preflight port check
-if is_port_in_use; then
-  log "ERROR: port ${APP_PORT} is already in use (before starting app)."
-  print_port_hint
-  exit 6
-fi
-
-# Drop/recreate DB
-log "==> Dropping database '${PGDATABASE}' and recreating..."
-psql_cmd -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d postgres -v ON_ERROR_STOP=1 <<SQL || { psql_auth_hint; exit 1; }
-SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${PGDATABASE}';
-DROP DATABASE IF EXISTS "${PGDATABASE}";
-CREATE DATABASE "${PGDATABASE}";
+psql -v ON_ERROR_STOP=1 -d postgres <<SQL || { psql_auth_hint; exit 1; }
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}';
+DROP DATABASE IF EXISTS "${DB_NAME}";
+CREATE DATABASE "${DB_NAME}";
 SQL
-log "==> DB recreated: ${PGDATABASE}"
 
-# Start the app
-log "==> Starting app: ./mvnw -DskipTests spring-boot:run"
+log "==> Start app"
 : > "${APP_LOG}"
-( cd "${ROOT_DIR}" && ./mvnw -DskipTests spring-boot:run > "${APP_LOG}" 2>&1 ) &
+( ./mvnw -DskipTests spring-boot:run > "${APP_LOG}" 2>&1 ) &
 APP_PID="$!"
 log "==> App started (pid=${APP_PID}). Logs: ${APP_LOG}"
 
-# Wait for STARTED line
-log "==> Waiting for Spring Boot 'Started ...Application' log line..."
-timeout_s=180
-start_ts="$(date +%s)"
-while true; do
-  if grep -qE "Started .*Application" "${APP_LOG}" 2>/dev/null; then
-    log "==> App log indicates STARTED."
-    break
-  fi
-  now_ts="$(date +%s)"
-  if (( now_ts - start_ts > timeout_s )); then
-    log "ERROR: app did not start within ${timeout_s}s. Last 120 lines:"
-    tail -n 120 "${APP_LOG}" || true
-    if grep -q "Port ${APP_PORT} was already in use" "${APP_LOG}" 2>/dev/null; then
-      print_port_hint
-    fi
-    exit 3
-  fi
-  sleep 1
-done
+log "==> Wait for STARTED"
+until grep -qE "Started .*Application" "${APP_LOG}" 2>/dev/null; do sleep 1; done
+log "==> App STARTED."
 
-# Determine base_url
-if [[ -n "${BASE_URL:-}" ]]; then
-  resolved_base_url="${BASE_URL}"
-else
-  resolved_base_url="$(ENV_FILE_PATH="${ENV_FILE}" python - <<'PY'
-import json, os
-p = os.environ.get("ENV_FILE_PATH")
-if not p:
-    raise SystemExit("ENV_FILE_PATH not set")
-with open(p, "r", encoding="utf-8") as f:
+log "==> Health check"
+until curl -fsS "http://localhost:${APP_PORT}/actuator/health" >/dev/null 2>&1; do sleep 1; done
+log "==> Health OK."
+
+log "==> Patch ENV (effective env for Newman)"
+ENV_FILE="${ENV_FILE}" ENV_EFFECTIVE="${ENV_EFFECTIVE}" python - <<'PY'
+import json, time, uuid, os
+
+src = os.environ["ENV_FILE"]
+out = os.environ["ENV_EFFECTIVE"]
+
+with open(src, "r", encoding="utf-8") as f:
     d = json.load(f)
-vals = {v.get("key"): v.get("value") for v in d.get("values", [])}
-print(vals.get("base_url", "http://localhost:8080"))
+
+vals = d.get("values", [])
+by_key = {v.get("key"): v for v in vals if isinstance(v, dict) and "key" in v}
+
+def get(key):
+    v = by_key.get(key)
+    return None if not v else v.get("value")
+
+def setv(key, value):
+    if key in by_key:
+        by_key[key]["value"] = value
+        by_key[key]["enabled"] = True
+    else:
+        by_key[key] = {"key": key, "value": value, "enabled": True}
+
+if not get("base_url"):
+    setv("base_url", "http://localhost:8080")
+
+tenant_email = get("tenant_email")
+if not tenant_email or str(tenant_email).strip() == "":
+    ts = int(time.time())
+    generated = f"e2e_{ts}_{uuid.uuid4().hex[:6]}@tenant.local"
+    setv("tenant_email", generated)
+
+tenant_password = get("tenant_password")
+if not tenant_password or str(tenant_password).strip() == "":
+    setv("tenant_password", "admin123")
+
+if not get("tenant_tax_id_type"):
+    setv("tenant_tax_id_type", "CNPJ")
+if not get("tenant_tax_id_number"):
+    setv("tenant_tax_id_number", "12345678000199")
+
+for k in ["tenant_access_token","tenant_refresh_token","account_id","tenantSchema"]:
+    if k not in by_key:
+        setv(k, "")
+
+original_keys = [v.get("key") for v in vals if isinstance(v, dict) and "key" in v]
+new_vals, seen = [], set()
+for k in original_keys:
+    if k in by_key and k not in seen:
+        new_vals.append(by_key[k]); seen.add(k)
+for k, v in by_key.items():
+    if k not in seen:
+        new_vals.append(v); seen.add(k)
+
+d["values"] = new_vals
+
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(d, f, ensure_ascii=False, indent=2)
+
+print("tenant_email =", get("tenant_email"))
+print("tenant_password = ***")
+print("tenant_tax_id_type =", get("tenant_tax_id_type"))
+print("tenant_tax_id_number =", get("tenant_tax_id_number"))
+print("effective_env_written =", out)
 PY
-)"
-fi
 
-log "==> Using base_url: ${resolved_base_url}"
+log "==> Run Newman"
+newman run "${COLLECTION}" -e "${ENV_EFFECTIVE}" --bail
 
-# Health check
-log "==> Waiting for health at ${resolved_base_url}/actuator/health ..."
-health_timeout_s=90
-health_start="$(date +%s)"
-while true; do
-  if curl -fsS "${resolved_base_url}/actuator/health" >/dev/null 2>&1; then
-    log "==> Health OK."
-    break
-  fi
-  now_ts="$(date +%s)"
-  if (( now_ts - health_start > health_timeout_s )); then
-    log "ERROR: health check did not become OK within ${health_timeout_s}s. Last 120 lines:"
-    tail -n 120 "${APP_LOG}" || true
-    exit 4
-  fi
-  sleep 1
-done
-
-log "==> Warm-up (2s) ..."
-sleep 2
-
-# Run Newman
-log "==> Running Newman..."
-newman run "${COLLECTION}" -e "${ENV_FILE}" --bail
-
-log "==> Newman OK."
 log "==> DONE ✅"

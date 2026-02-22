@@ -14,6 +14,26 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Application Service responsável por criar e validar challenges de seleção de tenant no login.
+ *
+ * <p>Responsabilidade:</p>
+ * <ul>
+ *   <li>Criar um challenge temporário para {@code email} com um conjunto de {@code accountIds} candidatos.</li>
+ *   <li>Validar challenge por id e verificar expiração/uso único.</li>
+ *   <li>Marcar challenge como usado após confirmação bem-sucedida.</li>
+ * </ul>
+ *
+ * <p>Regras de tempo:</p>
+ * <ul>
+ *   <li>{@code AppClock} deve ser a única fonte de tempo; esta classe não deve usar {@code Instant.now()}.</li>
+ * </ul>
+ *
+ * <p>Persistência:</p>
+ * <ul>
+ *   <li>Não define tecnologia; persiste via {@code TenantLoginChallengeStore} (boundary).</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class TenantLoginChallengeService {

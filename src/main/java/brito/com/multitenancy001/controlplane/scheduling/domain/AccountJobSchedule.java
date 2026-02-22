@@ -7,6 +7,24 @@ import lombok.Setter;
 import java.time.Instant;
 import java.time.LocalTime;
 
+/**
+ * Entidade de agendamento de jobs por Account (Control Plane / schema public).
+ *
+ * Responsabilidade:
+ * - Persistir a configuração de execução recorrente de um job por account.
+ *
+ * Regras:
+ * - Horário civil do tenant é representado por (localTime + zoneId).
+ * - Os instantes calculados para execução (lastRunAt/nextRunAt) são armazenados como Instant.
+ * - Persistência deve usar timestamptz para todos os Instant.
+ *
+ * Observações:
+ * - A entidade não executa jobs; apenas descreve quando um job deve rodar.
+ * - Cálculo de próximo run pertence ao Application Service (ex.: AccountJobScheduleService).
+ */
+
+
+
 @Getter
 @Setter
 @Entity
