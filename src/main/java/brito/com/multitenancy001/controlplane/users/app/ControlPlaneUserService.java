@@ -699,37 +699,35 @@ public class ControlPlaneUserService {
     // ME
     // =========================================================
 
-    public ControlPlaneMeResponse getMe() {
-        /* Retorna informações do usuário autenticado no Control Plane. */
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            Long accountId = requestIdentity.getCurrentAccountId();
-            Long userId = requestIdentity.getCurrentUserId();
-
-            Account cp = getControlPlaneAccount();
-            if (accountId == null || !cp.getId().equals(accountId)) {
-                throw new ApiException(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
-            }
-
-            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
-
-            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
-            }
-
-            return new ControlPlaneMeResponse(
-                    user.getId(),
-                    user.getAccount().getId(),
-                    user.getName(),
-                    user.getEmail(),
-                    SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
-                    user.isSuspendedByAccount(),
-                    user.isSuspendedByAdmin(),
-                    user.isDeleted(),
-                    user.isEnabled()
-            );
-        });
-    }
+   public ControlPlaneMeResponse getMe() {
+    return publicSchemaUnitOfWork.readOnly(() -> {
+        Long userId = requestIdentity.getCurrentUserId();
+        
+        // Busca a conta do Control Plane (sempre existe)
+        Account cp = getControlPlaneAccount();
+        
+        // Busca o usuário diretamente pelo ID
+        ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+        
+        // Verifica se o usuário pertence à conta do Control Plane
+        if (user.getAccount() == null || !cp.getId().equals(user.getAccount().getId())) {
+            throw new ApiException(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
+        }
+        
+        return new ControlPlaneMeResponse(
+                user.getId(),
+                user.getAccount().getId(),
+                user.getName(),
+                user.getEmail(),
+                SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
+                user.isSuspendedByAccount(),
+                user.isSuspendedByAdmin(),
+                user.isDeleted(),
+                user.isEnabled()
+        );
+    });
+}
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
         /* Troca de senha autenticada (self). */

@@ -2,8 +2,10 @@ package brito.com.multitenancy001.infrastructure.security.jwt;
 
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -13,6 +15,7 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -25,6 +28,16 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Provider central de JWT da aplicação.
+ *
+ * Regras:
+ * - Usa AppClock como fonte única de tempo.
+ * - NÃO assume que authentication.getPrincipal() é sempre AuthenticatedUserContext:
+ *   em alguns fluxos pode vir UserDetails (ex.: org.springframework.security.core.userdetails.User).
+ * - Para manter claims consistentes (userId/roleName/roleAuthority), o caller pode (e deve)
+ *   passar o userId (subject_id) quando o principal não for AuthenticatedUserContext.
+ */
 @Component
 public class JwtTokenProvider {
 
@@ -71,73 +84,104 @@ public class JwtTokenProvider {
         return Date.from(exp);
     }
 
+    /**
+     * Gera Access Token do Control Plane.
+     *
+     * IMPORTANTE:
+     * - Se o principal NÃO for AuthenticatedUserContext, você DEVE passar userId (subject_id),
+     *   senão o token não consegue preencher CLAIM_USER_ID com segurança.
+     */
+    public String generateControlPlaneToken(Authentication authentication, Long accountId, String context, Long userId) {
+        /* Resolve principal de forma segura */
+        ResolvedPrincipal p = resolvePrincipal(authentication, userId);
+
+        return Jwts.builder()
+                .subject(p.email())
+                .claim(CLAIM_AUTHORITIES, p.authoritiesCsv())
+                .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.CONTROLPLANE)
+                .claim(CLAIM_CONTEXT, context)
+                .claim(CLAIM_ACCOUNT_ID, accountId)
+                .claim(CLAIM_USER_ID, p.userId())
+                .claim(CLAIM_ROLE_NAME, p.roleName())
+                .claim(CLAIM_ROLE_AUTHORITY, p.roleAuthority())
+                .issuedAt(issuedAt())
+                .expiration(expiresAtInMs(jwtExpirationInMs))
+                .signWith(key, Jwts.SIG.HS512)
+                .compact();
+    }
+
+    /**
+     * Backward-compatible (mantém assinatura antiga).
+     *
+     * Regras:
+     * - Mantido para não quebrar callers antigos.
+     * - Se o principal não for AuthenticatedUserContext, vai falhar com erro claro,
+     *   porque esta assinatura não permite informar userId.
+     */
     public String generateControlPlaneToken(Authentication authentication, Long accountId, String context) {
-        AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
+        return generateControlPlaneToken(authentication, accountId, context, null);
+    }
+
+    /**
+     * Gera Access Token de Tenant.
+     *
+     * IMPORTANTE:
+     * - Se o principal NÃO for AuthenticatedUserContext, você DEVE passar userId (subject_id),
+     *   senão o token não consegue preencher CLAIM_USER_ID com segurança.
+     */
+    public String generateTenantToken(Authentication authentication, Long accountId, String context, Long userId) {
+        /* Resolve principal de forma segura */
+        ResolvedPrincipal p = resolvePrincipal(authentication, userId);
 
         return Jwts.builder()
-                .subject(user.getEmail())
-                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN,  SecurityConstants.AuthDomains.CONTROLPLANE)
+                .subject(p.email())
+                .claim(CLAIM_AUTHORITIES, p.authoritiesCsv())
+                .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.TENANT)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
-                .claim(CLAIM_USER_ID, user.getUserId())
-                .claim(CLAIM_ROLE_NAME, user.getRoleName())
-                .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
+                .claim(CLAIM_USER_ID, p.userId())
+                .claim(CLAIM_ROLE_NAME, p.roleName())
+                .claim(CLAIM_ROLE_AUTHORITY, p.roleAuthority())
                 .issuedAt(issuedAt())
                 .expiration(expiresAtInMs(jwtExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
 
+    /**
+     * Backward-compatible (mantém assinatura antiga).
+     */
     public String generateTenantToken(Authentication authentication, Long accountId, String context) {
-        AuthenticatedUserContext user = (AuthenticatedUserContext) authentication.getPrincipal();
+        return generateTenantToken(authentication, accountId, context, null);
+    }
 
+    /**
+     * Refresh token NÃO precisa de authorities; ele serve para renovar sessão.
+     * Guardamos apenas: subject(email) + authDomain + context(tenantSchema) + accountId
+     *
+     * IMPORTANTE:
+     * - Sempre incluir jti/id aleatório para garantir rotação real (token string muda)
+     *   mesmo quando emitido no mesmo millisecond.
+     */
+    public String generateRefreshToken(String email, String context, Long accountId) {
         return Jwts.builder()
-                .subject(user.getEmail())
-                .claim(CLAIM_AUTHORITIES, user.getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .collect(Collectors.joining(",")))
-                .claim(CLAIM_AUTH_DOMAIN,  SecurityConstants.AuthDomains.TENANT)
+                .id(UUID.randomUUID().toString()) // ✅ garante token diferente sempre
+                .subject(email)
+                .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.REFRESH)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
-                .claim(CLAIM_USER_ID, user.getUserId())
-                .claim(CLAIM_ROLE_NAME, user.getRoleName())
-                .claim(CLAIM_ROLE_AUTHORITY, user.getRoleAuthority())
                 .issuedAt(issuedAt())
-                .expiration(expiresAtInMs(jwtExpirationInMs))
+                .expiration(expiresAtInMs(refreshExpirationInMs))
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
-
-  /**
- * Refresh token NÃO precisa de authorities; ele serve para renovar sessão.
- * Guardamos apenas: subject(email) + authDomain + context(tenantSchema) + accountId
- *
- * IMPORTANTE:
- * - Sempre incluir jti/id aleatório para garantir rotação real (token string muda)
- *   mesmo quando emitido no mesmo millisecond.
- */
-public String generateRefreshToken(String email, String context, Long accountId) {
-    return Jwts.builder()
-            .id(UUID.randomUUID().toString()) // ✅ garante token diferente sempre
-            .subject(email)
-            .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.REFRESH)
-            .claim(CLAIM_CONTEXT, context)
-            .claim(CLAIM_ACCOUNT_ID, accountId)
-            .issuedAt(issuedAt())
-            .expiration(expiresAtInMs(refreshExpirationInMs))
-            .signWith(key, Jwts.SIG.HS512)
-            .compact();
-}
 
     public String generatePasswordResetToken(String email, String context, Long accountId) {
         long oneHourMs = 3_600_000L;
 
         return Jwts.builder()
                 .subject(email)
-                .claim(CLAIM_AUTH_DOMAIN,SecurityConstants.AuthDomains.PASSWORD_RESET)
+                .claim(CLAIM_AUTH_DOMAIN, SecurityConstants.AuthDomains.PASSWORD_RESET)
                 .claim(CLAIM_CONTEXT, context)
                 .claim(CLAIM_ACCOUNT_ID, accountId)
                 .issuedAt(issuedAt())
@@ -174,11 +218,10 @@ public String generateRefreshToken(String email, String context, Long accountId)
 
         return context;
     }
-    
+
     public AuthDomain getAuthDomainEnum(String token) {
         return SecurityConstants.AuthDomains.parseOrNull(getAuthDomain(token));
     }
-
 
     public String getTenantSchemaFromToken(String token) {
         return getContextFromToken(token);
@@ -255,9 +298,142 @@ public String generateRefreshToken(String email, String context, Long accountId)
         return SecurityConstants.AuthDomains.is(getAuthDomain(token), AuthDomain.CONTROLPLANE);
     }
 
-
     public boolean isTenantToken(String token) {
         return SecurityConstants.AuthDomains.is(getAuthDomain(token), AuthDomain.TENANT);
     }
-}
 
+    /**
+     * Resolve o "principal" de forma segura para geração do token.
+     *
+     * Regras:
+     * - Se for AuthenticatedUserContext: usa tudo dele (userId, roleName, roleAuthority, authorities).
+     * - Se for UserDetails/qualquer outro: usa email + authorities do Authentication, e exige userId explícito.
+     */
+    private ResolvedPrincipal resolvePrincipal(Authentication authentication, Long explicitUserId) {
+
+        Object principal = authentication == null ? null : authentication.getPrincipal();
+
+        // Caso 1: seu principal custom (melhor cenário)
+        if (principal instanceof AuthenticatedUserContext user) {
+            String authoritiesCsv = user.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .collect(Collectors.joining(","));
+
+            return new ResolvedPrincipal(
+                    user.getEmail(),
+                    authoritiesCsv,
+                    user.getUserId(),
+                    user.getRoleName(),
+                    user.getRoleAuthority()
+            );
+        }
+
+        // Caso 2: principal do Spring (org.springframework.security.core.userdetails.User etc.)
+        // Aqui NÃO existe userId/roleName/roleAuthority, então o caller deve passar userId (subject_id).
+        if (explicitUserId == null) {
+            throw new ApiException(
+                    ApiErrorCode.INTERNAL_SERVER_ERROR,
+                    "Principal não é AuthenticatedUserContext; informe userId (subject_id) ao gerar o token",
+                    new PrincipalDetails(principal, authentication)
+            );
+        }
+
+        String email = resolveEmail(authentication, principal);
+
+        String authoritiesCsv = (authentication == null ? List.<GrantedAuthority>of() : authentication.getAuthorities())
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.joining(","));
+
+        // Tentativa best-effort de roleAuthority para manter claim preenchida:
+        // pega a primeira authority que pareça ser "role".
+        String roleAuthority = guessRoleAuthority(authentication);
+        String roleName = null; // não dá para inferir com 100% de certeza sem seu principal custom
+
+        return new ResolvedPrincipal(
+                email,
+                authoritiesCsv,
+                explicitUserId,
+                roleName,
+                roleAuthority
+        );
+    }
+
+    /**
+     * Resolve o email (subject) de forma robusta.
+     */
+    private String resolveEmail(Authentication authentication, Object principal) {
+        // 1) principal UserDetails
+        if (principal instanceof UserDetails ud && StringUtils.hasText(ud.getUsername())) {
+            return ud.getUsername();
+        }
+
+        // 2) authentication.getName()
+        if (authentication != null && StringUtils.hasText(authentication.getName())) {
+            return authentication.getName();
+        }
+
+        // 3) fallback hard
+        throw new ApiException(
+                ApiErrorCode.INTERNAL_SERVER_ERROR,
+                "Não foi possível resolver email do principal para geração de token",
+                new PrincipalDetails(principal, authentication)
+        );
+    }
+
+    /**
+     * Heurística para tentar manter "roleAuthority" preenchida quando o principal não é o seu contexto custom.
+     */
+    private String guessRoleAuthority(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities() == null) return null;
+
+        List<String> auths = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(StringUtils::hasText)
+                .toList();
+
+        // Preferência 1: ROLE_*
+        for (String a : auths) {
+            if (a.startsWith("ROLE_")) return a;
+        }
+
+        // Preferência 2: algo com CONTROLPLANE_ ou TENANT_ (depende do seu padrão)
+        for (String a : auths) {
+            if (a.contains("CONTROLPLANE_") || a.contains("TENANT_")) return a;
+        }
+
+        // Fallback: primeira authority, se existir
+        return auths.isEmpty() ? null : auths.get(0);
+    }
+
+    /**
+     * DTO interno para evitar casts e manter claims consistentes.
+     */
+    private record ResolvedPrincipal(
+            String email,
+            String authoritiesCsv,
+            Long userId,
+            String roleName,
+            String roleAuthority
+    ) {}
+
+    /**
+     * Details estruturado para facilitar debug/observability.
+     */
+    private record PrincipalDetails(
+            String principalType,
+            String authName,
+            List<String> authorities
+    ) {
+        private PrincipalDetails(Object principal, Authentication authentication) {
+            this(
+                    principal == null ? "null" : principal.getClass().getName(),
+                    authentication == null ? null : authentication.getName(),
+                    authentication == null ? List.of()
+                            : authentication.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .toList()
+            );
+        }
+    }
+}

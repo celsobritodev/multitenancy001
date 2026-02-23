@@ -1,9 +1,9 @@
 package brito.com.multitenancy001.tenant.users.app.command;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
+import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaUnitOfWork;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -49,6 +49,10 @@ import java.util.Set;
  * Regras:
  * - Não permitir mutações em BUILT_IN.
  * - Não permitir remover/suspender/excluir o último TENANT_OWNER ativo.
+ *
+ * Regra arquitetural (multi-tenant):
+ * - Este service NÃO usa TxExecutor diretamente.
+ * - Toda execução de tenant deve ocorrer via TenantSchemaUnitOfWork (schema + tx em um único contrato).
  */
 @Service
 @RequiredArgsConstructor
@@ -59,7 +63,13 @@ public class TenantUserCommandService {
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
-    private final TxExecutor transactionExecutor;
+
+    /**
+     * Unit of Work que garante:
+     * - bind do tenantSchema (TenantExecutor)
+     * - transação tenant (TxExecutor)
+     */
+    private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
 
     /** Mantido por compat (ainda usado para resolver actor). */
     private final SecurityUtils securityUtils;
@@ -90,9 +100,11 @@ public class TenantUserCommandService {
             EntityOrigin origin
     ) {
         /* Cria um usuário de tenant, aplicando permissões base + requested (validadas). */
-        return transactionExecutor.inTenantTx(() -> {
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
 
             if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+            if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
+
             if (!StringUtils.hasText(name)) throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
             if (!StringUtils.hasText(email)) throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatório", 400);
             if (!StringUtils.hasText(rawPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
@@ -106,7 +118,7 @@ public class TenantUserCommandService {
                 throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
             }
 
-            Actor actor = resolveActorOrNull(accountId);
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             final int requestedCount = (requestedPermissions == null) ? 0 : requestedPermissions.size();
 
@@ -236,10 +248,11 @@ public class TenantUserCommandService {
     private void setSuspension(Long accountId, String tenantSchema, Long userId, boolean suspended, boolean byAdmin) {
         /* Aplica suspensão com guardrails (owner) e auditoria ATTEMPT+SUCCESS/FAIL. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
-        transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
@@ -297,10 +310,11 @@ public class TenantUserCommandService {
     ) {
         /* Atualiza perfil do usuário (sem alterar role/perms). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
-        return transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
@@ -384,6 +398,7 @@ public class TenantUserCommandService {
     public TenantUser resetPassword(Long userId, Long accountId, String tenantSchema, String newPassword) {
         /* Reset administrativo (sem senha atual), sem auditoria de secrets. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
@@ -391,8 +406,8 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
-        return transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
@@ -429,6 +444,7 @@ public class TenantUserCommandService {
     public void resetPasswordWithToken(Long accountId, String tenantSchema, String email, String token, String newPassword) {
         /* Reset via token (self). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.TOKEN_REQUIRED, "token é obrigatório", 400);
         if (!StringUtils.hasText(newPassword)) throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatória", 400);
 
@@ -436,11 +452,11 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
-        transactionExecutor.inTenantTx(() -> {
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             TenantUser user = tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400));
 
-            Actor actor = resolveActorOrNull(accountId);
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             Map<String, Object> attempt = m(
                     "scope", SCOPE,
@@ -491,6 +507,7 @@ public class TenantUserCommandService {
     public void changeMyPassword(Long userId, Long accountId, String tenantSchema, String currentPassword, String newPassword, String confirmNewPassword) {
         /* Troca autenticada (self). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         if (!StringUtils.hasText(currentPassword)) throw new ApiException(ApiErrorCode.CURRENT_PASSWORD_REQUIRED, "Senha atual é obrigatória", 400);
@@ -500,11 +517,11 @@ public class TenantUserCommandService {
         if (!newPassword.equals(confirmNewPassword)) throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Nova senha e confirmação não conferem", 400);
         if (!newPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
 
-        transactionExecutor.inTenantTx(() -> {
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-            Actor actor = resolveActorOrNull(accountId);
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             Map<String, Object> details = m(
                     "scope", SCOPE,
@@ -550,10 +567,11 @@ public class TenantUserCommandService {
     public void softDelete(Long userId, Long accountId, String tenantSchema) {
         /* Soft delete (não suspender; deletar logicamente). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
-        transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
@@ -596,10 +614,11 @@ public class TenantUserCommandService {
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
         /* Restore após soft delete. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
-        return transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
@@ -626,12 +645,13 @@ public class TenantUserCommandService {
         });
     }
 
-    public void hardDelete(Long userId, Long accountId) {
+    public void hardDelete(Long userId, Long accountId, String tenantSchema) {
         /* Hard delete (remoção física). Atenção: normalmente não é SOC2-friendly em produção. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
-        transactionExecutor.inTenantTx(() -> {
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
@@ -647,10 +667,11 @@ public class TenantUserCommandService {
         });
     }
 
-    public TenantUser save(TenantUser user) {
+    public TenantUser save(String tenantSchema, TenantUser user) {
         /* Persiste usuário (guard mínimo). */
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (user == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Usuário inválido", 400);
-        return transactionExecutor.inTenantTx(() -> tenantUserRepository.save(user));
+        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> tenantUserRepository.save(user));
     }
 
     // =========================================================
@@ -660,12 +681,13 @@ public class TenantUserCommandService {
     public void transferTenantOwnerRole(Long accountId, String tenantSchema, Long fromUserId, Long toUserId) {
         /* Transfere ownership (TENANT_OWNER) para outro usuário habilitado. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (fromUserId == null) throw new ApiException(ApiErrorCode.FROM_USER_REQUIRED, "fromUserId é obrigatório", 400);
         if (toUserId == null) throw new ApiException(ApiErrorCode.TO_USER_REQUIRED, "toUserId é obrigatório", 400);
         if (fromUserId.equals(toUserId)) throw new ApiException(ApiErrorCode.INVALID_TRANSFER, "Não é possível transferir para si mesmo", 400);
 
-        transactionExecutor.inTenantTx(() -> {
-            Actor actor = resolveActorOrNull(accountId);
+        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser from = tenantUserRepository.findEnabledByIdAndAccountId(fromUserId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário origem não encontrado/habilitado", 404));
@@ -863,7 +885,7 @@ public class TenantUserCommandService {
         return node.toString();
     }
 
-    private Actor resolveActorOrNull(Long accountId) {
+    private Actor resolveActorOrNull(Long accountId, String tenantSchema) {
         /* Resolve actor do request (best-effort) sem depender de controller. */
         try {
             Long actorUserId = securityUtils.getCurrentUserId();
@@ -872,7 +894,10 @@ public class TenantUserCommandService {
             if (actorUserId == null || actorAccountId == null) return Actor.anonymous();
             if (!actorAccountId.equals(accountId)) return new Actor(actorUserId, null);
 
-            String actorEmail = transactionExecutor.inTenantReadOnlyTx(() ->
+            // Se não tiver tenantSchema, não tenta lookup (evita consulta no schema errado)
+            if (!StringUtils.hasText(tenantSchema)) return new Actor(actorUserId, null);
+
+            String actorEmail = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
                     tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(actorUserId, accountId)
                             .map(TenantUser::getEmail)
                             .orElse(null)

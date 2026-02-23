@@ -25,64 +25,64 @@
 [INFO] 
 [INFO] --- spring-boot:3.5.9:run (default-cli) @ multitenancy001 ---
 [INFO] Attaching agents: []
-2026-02-21T19:14:08.931-03:00  INFO 148 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : Starting Multitenancy001Application using Java 21.0.8 with PID 148 (C:\Users\Usuario\eclipse-workspace\multitenancy001\target\classes started by Usuario in C:\Users\Usuario\eclipse-workspace\multitenancy001)
-2026-02-21T19:14:08.937-03:00  INFO 148 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : The following 1 profile is active: "dev"
-2026-02-21T19:14:09.011-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-02-21T19:14:09.011-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-02-21T19:14:10.913-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-02-21T19:14:11.020-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 93 ms. Found 10 JPA repository interfaces.
-2026-02-21T19:14:11.021-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-02-21T19:14:11.106-03:00  INFO 148 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 83 ms. Found 5 JPA repository interfaces.
-2026-02-21T19:14:12.510-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.jdbc.DataSourceConfiguration$Hikari' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceConfiguration$Hikari] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.544-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'spring.datasource-org.springframework.boot.autoconfigure.jdbc.DataSourceProperties' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceProperties] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.552-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration$PooledDataSourceConfiguration' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration$PooledDataSourceConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.556-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'jdbcConnectionDetails' of type [org.springframework.boot.autoconfigure.jdbc.PropertiesJdbcConnectionDetails] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.576-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'dataSource' of type [com.zaxxer.hikari.HikariDataSource] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.763-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'flyway' of type [org.flywaydb.core.Flyway] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:12.779-03:00  INFO 148 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-02-21T19:14:13.020-03:00  INFO 148 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@d5f15f5
-2026-02-21T19:14:13.024-03:00  INFO 148 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-02-21T19:14:13.051-03:00  INFO 148 --- [multitenancy001] [  restartedMain] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/db_multitenancy (PostgreSQL 18.1)
-2026-02-21T19:14:13.138-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-02-21T19:14:13.145-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbValidate     : Successfully validated 20 migrations (execution time 00:00.040s)
-2026-02-21T19:14:13.178-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-02-21T19:14:13.342-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-02-21T19:14:13.357-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create extension"
-2026-02-21T19:14:13.555-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - create table accounts"
-2026-02-21T19:14:13.605-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create table account entitlements"
-2026-02-21T19:14:13.635-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - create table controlplane users"
-2026-02-21T19:14:13.660-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - insert controlplane account"
-2026-02-21T19:14:13.674-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - insert controlplane users"
-2026-02-21T19:14:13.689-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - create table controlplane user permissions"
-2026-02-21T19:14:13.702-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - create table payments"
-2026-02-21T19:14:13.731-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - create table login identities"
-2026-02-21T19:14:13.766-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - create table account provisioning events"
-2026-02-21T19:14:13.787-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - create table tenant login challenges"
-2026-02-21T19:14:13.808-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed account entitlements for existing accounts"
-2026-02-21T19:14:13.818-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "13 - create table auth events"
-2026-02-21T19:14:13.844-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "14 - create table security audit events"
-2026-02-21T19:14:13.868-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "15 - create table account job schedules"
-2026-02-21T19:14:13.886-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "16 - alter controlplane users email to citext"
-2026-02-21T19:14:13.897-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "17 - protect builtin controlplane users"
-2026-02-21T19:14:13.903-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: gatilho "trg_cp_users_protect_builtin" para relação "controlplane_users" não existe, ignorando
-2026-02-21T19:14:13.905-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: gatilho "trg_cp_user_permissions_protect_builtin" para relação "controlplane_user_permissions" não existe, ignorando
-2026-02-21T19:14:13.921-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "18 - create table auth refresh sessions"
-2026-02-21T19:14:13.943-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "19 - add check auth refresh sessions domain"
-2026-02-21T19:14:13.954-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20 - create account job schedules"
-2026-02-21T19:14:13.959-03:00  WARN 148 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: relação "account_job_schedules" já existe, ignorando (SQL State: 42P07 - Error Code: 0)
-2026-02-21T19:14:13.973-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Successfully applied 20 migrations to schema "public", now at version v20 (execution time 00:00.430s)
-2026-02-21T19:14:13.983-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'flywayInitializer' of type [org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:13.985-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.sql.init.DataSourceInitializationConfiguration' of type [org.springframework.boot.autoconfigure.sql.init.DataSourceInitializationConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:13.990-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'spring.sql.init-org.springframework.boot.autoconfigure.sql.init.SqlInitializationProperties' of type [org.springframework.boot.autoconfigure.sql.init.SqlInitializationProperties] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:13.997-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'dataSourceScriptDatabaseInitializer' of type [org.springframework.boot.autoconfigure.sql.init.SqlDataSourceScriptDatabaseInitializer] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:14.003-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration' of type [org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:14.008-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'inMemoryDatabaseShutdownExecutor' of type [org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration$NonEmbeddedInMemoryDatabaseShutdownExecutor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:14.011-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicSchemaHibernateConfig' of type [brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate.PublicSchemaHibernateConfig$$SpringCGLIB$$0] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:14.093-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: PUBLIC_PU]
-2026-02-21T19:14:14.156-03:00  INFO 148 --- [multitenancy001] [  restartedMain] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.39.Final
-2026-02-21T19:14:14.198-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-02-21T19:14:14.921-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-02-21T19:14:15.026-03:00  INFO 148 --- [multitenancy001] [  restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+2026-02-22T23:14:21.284-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : Starting Multitenancy001Application using Java 21.0.8 with PID 14904 (C:\Users\Usuario\eclipse-workspace\multitenancy001\target\classes started by Usuario in C:\Users\Usuario\eclipse-workspace\multitenancy001)
+2026-02-22T23:14:21.287-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : The following 1 profile is active: "dev"
+2026-02-22T23:14:21.343-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-02-22T23:14:21.343-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-02-22T23:14:22.672-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-02-22T23:14:22.759-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 75 ms. Found 10 JPA repository interfaces.
+2026-02-22T23:14:22.760-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-02-22T23:14:22.819-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 57 ms. Found 5 JPA repository interfaces.
+2026-02-22T23:14:23.960-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.jdbc.DataSourceConfiguration$Hikari' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceConfiguration$Hikari] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:23.988-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'spring.datasource-org.springframework.boot.autoconfigure.jdbc.DataSourceProperties' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceProperties] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:23.995-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration$PooledDataSourceConfiguration' of type [org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration$PooledDataSourceConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:23.999-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'jdbcConnectionDetails' of type [org.springframework.boot.autoconfigure.jdbc.PropertiesJdbcConnectionDetails] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:24.020-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'dataSource' of type [com.zaxxer.hikari.HikariDataSource] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:24.209-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'flyway' of type [org.flywaydb.core.Flyway] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:24.224-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-02-22T23:14:24.461-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@414205a6
+2026-02-22T23:14:24.463-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-02-22T23:14:24.487-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/db_multitenancy (PostgreSQL 18.1)
+2026-02-22T23:14:24.601-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-02-22T23:14:24.606-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbValidate     : Successfully validated 20 migrations (execution time 00:00.064s)
+2026-02-22T23:14:24.630-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-02-22T23:14:24.766-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-02-22T23:14:24.778-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create extension"
+2026-02-22T23:14:24.958-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - create table accounts"
+2026-02-22T23:14:25.013-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create table account entitlements"
+2026-02-22T23:14:25.047-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - create table controlplane users"
+2026-02-22T23:14:25.077-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - insert controlplane account"
+2026-02-22T23:14:25.092-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - insert controlplane users"
+2026-02-22T23:14:25.105-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - create table controlplane user permissions"
+2026-02-22T23:14:25.118-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - create table payments"
+2026-02-22T23:14:25.144-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "9 - create table login identities"
+2026-02-22T23:14:25.183-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - create table account provisioning events"
+2026-02-22T23:14:25.202-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - create table tenant login challenges"
+2026-02-22T23:14:25.223-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed account entitlements for existing accounts"
+2026-02-22T23:14:25.233-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "13 - create table auth events"
+2026-02-22T23:14:25.257-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "14 - create table security audit events"
+2026-02-22T23:14:25.279-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "15 - create table account job schedules"
+2026-02-22T23:14:25.295-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "16 - alter controlplane users email to citext"
+2026-02-22T23:14:25.304-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "17 - protect builtin controlplane users"
+2026-02-22T23:14:25.310-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: gatilho "trg_cp_users_protect_builtin" para relação "controlplane_users" não existe, ignorando
+2026-02-22T23:14:25.312-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: gatilho "trg_cp_user_permissions_protect_builtin" para relação "controlplane_user_permissions" não existe, ignorando
+2026-02-22T23:14:25.319-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "18 - create table auth refresh sessions"
+2026-02-22T23:14:25.338-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "19 - add check auth refresh sessions domain"
+2026-02-22T23:14:25.348-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "20 - create account job schedules"
+2026-02-22T23:14:25.351-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] o.f.c.i.s.DefaultSqlScriptExecutor       : DB: relação "account_job_schedules" já existe, ignorando (SQL State: 42P07 - Error Code: 0)
+2026-02-22T23:14:25.364-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.f.core.internal.command.DbMigrate      : Successfully applied 20 migrations to schema "public", now at version v20 (execution time 00:00.410s)
+2026-02-22T23:14:25.373-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'flywayInitializer' of type [org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.375-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.autoconfigure.sql.init.DataSourceInitializationConfiguration' of type [org.springframework.boot.autoconfigure.sql.init.DataSourceInitializationConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.380-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'spring.sql.init-org.springframework.boot.autoconfigure.sql.init.SqlInitializationProperties' of type [org.springframework.boot.autoconfigure.sql.init.SqlInitializationProperties] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.386-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'dataSourceScriptDatabaseInitializer' of type [org.springframework.boot.autoconfigure.sql.init.SqlDataSourceScriptDatabaseInitializer] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.392-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration' of type [org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.396-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'inMemoryDatabaseShutdownExecutor' of type [org.springframework.boot.devtools.autoconfigure.DevToolsDataSourceAutoConfiguration$NonEmbeddedInMemoryDatabaseShutdownExecutor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.399-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicSchemaHibernateConfig' of type [brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibernate.PublicSchemaHibernateConfig$$SpringCGLIB$$0] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:25.459-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: PUBLIC_PU]
+2026-02-22T23:14:25.517-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.39.Final
+2026-02-22T23:14:25.556-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-02-22T23:14:26.230-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-02-22T23:14:26.336-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
 	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
 	Database driver: undefined/unknown
 	Database version: 18.1
@@ -90,23 +90,23 @@
 	Isolation level: undefined/unknown
 	Minimum pool size: undefined/unknown
 	Maximum pool size: undefined/unknown
-2026-02-21T19:14:15.416-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'brito.com.multitenancy001.shared.domain.audit.AuthDomainConverter' of type [brito.com.multitenancy001.shared.domain.audit.AuthDomainConverter] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:15.509-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener' of type [brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:16.591-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-02-21T19:14:16.595-03:00  INFO 148 --- [multitenancy001] [  restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'PUBLIC_PU'
-2026-02-21T19:14:16.601-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'entityManagerFactory' of type [org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:16.614-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'entityManagerFactory' of type [jdk.proxy4.$Proxy170] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:16.623-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicEntityManagerFactory' of type [jdk.proxy4.$Proxy170] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:16.632-03:00  WARN 148 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicTransactionManager' of type [org.springframework.orm.jpa.JpaTransactionManager] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
-2026-02-21T19:14:17.046-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
-2026-02-21T19:14:17.063-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-02-21T19:14:17.063-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
-2026-02-21T19:14:17.117-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-02-21T19:14:17.117-03:00  INFO 148 --- [multitenancy001] [  restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 8105 ms
-2026-02-21T19:14:17.424-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: TENANT_PU]
-2026-02-21T19:14:17.427-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-02-21T19:14:17.648-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-02-21T19:14:17.652-03:00  INFO 148 --- [multitenancy001] [  restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+2026-02-22T23:14:26.710-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'brito.com.multitenancy001.shared.domain.audit.AuthDomainConverter' of type [brito.com.multitenancy001.shared.domain.audit.AuthDomainConverter] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:26.798-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener' of type [brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:27.816-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-02-22T23:14:27.820-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'PUBLIC_PU'
+2026-02-22T23:14:27.826-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'entityManagerFactory' of type [org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:27.847-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'entityManagerFactory' of type [jdk.proxy4.$Proxy170] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:27.856-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicEntityManagerFactory' of type [jdk.proxy4.$Proxy170] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:27.864-03:00  WARN 14904 --- [multitenancy001] [  restartedMain] trationDelegate$BeanPostProcessorChecker : Bean 'publicTransactionManager' of type [org.springframework.orm.jpa.JpaTransactionManager] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [healthEndpointGroupsBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-02-22T23:14:28.262-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-02-22T23:14:28.280-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-02-22T23:14:28.280-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-02-22T23:14:28.332-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-02-22T23:14:28.332-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 6988 ms
+2026-02-22T23:14:28.649-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: TENANT_PU]
+2026-02-22T23:14:28.653-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-02-22T23:14:28.858-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-02-22T23:14:28.861-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
 	Database JDBC URL [undefined/unknown]
 	Database driver: undefined/unknown
 	Database version: 18.1
@@ -114,42 +114,42 @@
 	Isolation level: undefined/unknown
 	Minimum pool size: undefined/unknown
 	Maximum pool size: undefined/unknown
-2026-02-21T19:14:17.895-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-02-21T19:14:17.896-03:00  INFO 148 --- [multitenancy001] [  restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'TENANT_PU'
-2026-02-21T19:14:18.254-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-02-21T19:14:20.944-03:00  INFO 148 --- [multitenancy001] [  restartedMain] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name multiContextUserDetailsService
-2026-02-21T19:14:22.975-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
-2026-02-21T19:14:24.156-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
-2026-02-21T19:14:24.487-03:00  INFO 148 --- [multitenancy001] [  restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
-2026-02-21T19:14:24.510-03:00  INFO 148 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : Started Multitenancy001Application in 16.199 seconds (process running for 16.848)
-2026-02-21T19:14:24.683-03:00  INFO 148 --- [multitenancy001] [  restartedMain] b.c.m.i.f.p.PublicSchemaVerifier         : 🔍 Verificando tabelas criadas pelo Flyway...
-2026-02-21T19:14:24.686-03:00 DEBUG 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
-2026-02-21T19:14:24.687-03:00 DEBUG 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'accounts']
-2026-02-21T19:14:24.691-03:00 TRACE 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [public], value class [java.lang.String], SQL type unknown
-2026-02-21T19:14:24.700-03:00 DEBUG 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
-2026-02-21T19:14:24.700-03:00 DEBUG 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'controlplane_users']
-2026-02-21T19:14:24.700-03:00 TRACE 148 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [public], value class [java.lang.String], SQL type unknown
-2026-02-21T19:14:24.702-03:00  INFO 148 --- [multitenancy001] [  restartedMain] b.c.m.i.f.p.PublicSchemaVerifier         : ✅ Verificação OK! Tabelas encontradas: accounts=1, controlplane_users=1
-2026-02-21T19:14:25.227-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-02-21T19:14:25.228-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-02-21T19:14:25.229-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-2026-02-21T19:14:28.253-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] b.c.m.c.s.app.AccountOnboardingService   : Tentando criar conta | loginEmail=e2e_1771712065_afc47b@tenant.local
-2026-02-21T19:14:28.389-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/db_multitenancy (PostgreSQL 18.1)
-2026-02-21T19:14:28.409-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "t_tenant_e2e_821b96_fe5c5768"."tenant_flyway_schema_history" does not exist yet
-2026-02-21T19:14:28.410-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbValidate     : Successfully validated 8 migrations (execution time 00:00.009s)
-2026-02-21T19:14:28.416-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "t_tenant_e2e_821b96_fe5c5768"."tenant_flyway_schema_history" ...
-2026-02-21T19:14:28.449-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Current version of schema "t_tenant_e2e_821b96_fe5c5768": << Empty Schema >>
-2026-02-21T19:14:28.456-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "1 - create table tenant users"
-2026-02-21T19:14:28.483-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "2 - create table tenant user permissions"
-2026-02-21T19:14:28.495-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "3 - create table categories"
-2026-02-21T19:14:28.521-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "4 - create table subcategories"
-2026-02-21T19:14:28.546-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "5 - create table suppliers"
-2026-02-21T19:14:28.574-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "6 - create table products"
-2026-02-21T19:14:28.604-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "7 - create table sales"
-2026-02-21T19:14:28.622-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_821b96_fe5c5768" to version "8 - create table sales items"
-2026-02-21T19:14:28.638-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Successfully applied 8 migrations to schema "t_tenant_e2e_821b96_fe5c5768", now at version v8 (execution time 00:00.120s)
-2026-02-21T19:14:28.647-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=49 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:28.649-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=49 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:29.093-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-02-22T23:14:29.093-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'TENANT_PU'
+2026-02-22T23:14:29.376-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-02-22T23:14:32.082-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name multiContextUserDetailsService
+2026-02-22T23:14:34.039-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-02-22T23:14:35.098-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2026-02-22T23:14:35.402-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-02-22T23:14:35.425-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] b.c.m.Multitenancy001Application         : Started Multitenancy001Application in 14.643 seconds (process running for 15.21)
+2026-02-22T23:14:35.578-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] b.c.m.i.f.p.PublicSchemaVerifier         : 🔍 Verificando tabelas criadas pelo Flyway...
+2026-02-22T23:14:35.580-03:00 DEBUG 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-22T23:14:35.581-03:00 DEBUG 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'accounts']
+2026-02-22T23:14:35.586-03:00 TRACE 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [public], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:35.594-03:00 DEBUG 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-22T23:14:35.595-03:00 DEBUG 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'controlplane_users']
+2026-02-22T23:14:35.595-03:00 TRACE 14904 --- [multitenancy001] [  restartedMain] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [public], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:35.596-03:00  INFO 14904 --- [multitenancy001] [  restartedMain] b.c.m.i.f.p.PublicSchemaVerifier         : ✅ Verificação OK! Tabelas encontradas: accounts=1, controlplane_users=1
+2026-02-22T23:14:36.344-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-02-22T23:14:36.344-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-02-22T23:14:36.347-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 3 ms
+2026-02-22T23:14:38.983-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.c.s.app.AccountOnboardingService   : Tentando criar conta | loginEmail=e2e_1771812876_885ad4@tenant.local
+2026-02-22T23:14:39.119-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5432/db_multitenancy (PostgreSQL 18.1)
+2026-02-22T23:14:39.134-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "t_tenant_e2e_8d836f_a7910db3"."tenant_flyway_schema_history" does not exist yet
+2026-02-22T23:14:39.135-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbValidate     : Successfully validated 8 migrations (execution time 00:00.007s)
+2026-02-22T23:14:39.140-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "t_tenant_e2e_8d836f_a7910db3"."tenant_flyway_schema_history" ...
+2026-02-22T23:14:39.156-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Current version of schema "t_tenant_e2e_8d836f_a7910db3": << Empty Schema >>
+2026-02-22T23:14:39.160-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "1 - create table tenant users"
+2026-02-22T23:14:39.196-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "2 - create table tenant user permissions"
+2026-02-22T23:14:39.207-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "3 - create table categories"
+2026-02-22T23:14:39.229-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "4 - create table subcategories"
+2026-02-22T23:14:39.251-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "5 - create table suppliers"
+2026-02-22T23:14:39.275-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "6 - create table products"
+2026-02-22T23:14:39.304-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "7 - create table sales"
+2026-02-22T23:14:39.322-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Migrating schema "t_tenant_e2e_8d836f_a7910db3" to version "8 - create table sales items"
+2026-02-22T23:14:39.338-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] o.f.core.internal.command.DbMigrate      : Successfully applied 8 migrations to schema "t_tenant_e2e_8d836f_a7910db3", now at version v8 (execution time 00:00.129s)
+2026-02-22T23:14:39.346-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=49 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:39.348-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=49 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         tu1_0.id 
@@ -167,20 +167,22 @@ Hibernate:
         (account_id, created_at, created_by, created_by_email, deleted_at, deleted_by, deleted_by_email, updated_at, updated_by, updated_by_email, avatar_url, deleted, email, last_login, locale, locked_until, must_change_password, name, origin, password, password_changed_at, password_reset_expires, password_reset_token, phone, role, suspended_by_account, suspended_by_admin, timezone) 
     values
         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-2026-02-21T19:14:28.764-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=49
-2026-02-21T19:14:28.765-03:00 DEBUG 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL update
-2026-02-21T19:14:28.766-03:00 DEBUG 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)
-VALUES (?, 'TENANT_ACCOUNT', ?, ?)
-ON CONFLICT (email, account_id) WHERE subject_type = 'TENANT_ACCOUNT'
+2026-02-22T23:14:39.464-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=49
+2026-02-22T23:14:39.467-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL update
+2026-02-22T23:14:39.467-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [INSERT INTO public.login_identities (email, subject_type, subject_id, account_id)
+VALUES (?, ?::text, ?, ?)
+ON CONFLICT (email, account_id) WHERE subject_type = ?::text
 DO NOTHING]
-2026-02-21T19:14:28.766-03:00 TRACE 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [e2e_1771712065_afc47b@tenant.local], value class [java.lang.String], SQL type unknown
-2026-02-21T19:14:28.766-03:00 TRACE 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 2, parameter value [2], value class [java.lang.Long], SQL type unknown
-2026-02-21T19:14:28.766-03:00 TRACE 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 3, parameter value [2], value class [java.lang.Long], SQL type unknown
-2026-02-21T19:14:28.770-03:00 TRACE 148 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : SQL update affected 1 rows
-2026-02-21T19:14:28.808-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] b.c.m.c.s.app.AccountOnboardingService   : ✅ Account criada | accountId=2 | tenantSchema=t_tenant_e2e_821b96_fe5c5768 | slug=tenant-e2e-821b96 | status=FREE_TRIAL | trialEndAt=2026-03-07T22:14:28.792579900Z
-2026-02-21T19:14:28.827-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-4] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/signup | tenant=PUBLIC | status=201 | ip=0:0:0:0:0:0:0:1 | requestId=72d27a82-7413-4dbb-8f15-6995d0143aea | thread=49
-2026-02-21T19:14:28.962-03:00 DEBUG 148 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
-2026-02-21T19:14:28.962-03:00 DEBUG 148 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [    select li.account_id,
+2026-02-22T23:14:39.468-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [e2e_1771812876_885ad4@tenant.local], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:39.468-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 2, parameter value [TENANT_ACCOUNT], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:39.468-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 3, parameter value [2], value class [java.lang.Long], SQL type unknown
+2026-02-22T23:14:39.468-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 4, parameter value [2], value class [java.lang.Long], SQL type unknown
+2026-02-22T23:14:39.468-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 5, parameter value [TENANT_ACCOUNT], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:39.471-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-4] o.s.jdbc.core.JdbcTemplate               : SQL update affected 1 rows
+2026-02-22T23:14:39.504-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.c.s.app.AccountOnboardingService   : ✅ Account criada | accountId=2 | tenantSchema=t_tenant_e2e_8d836f_a7910db3 | slug=tenant-e2e-8d836f | status=FREE_TRIAL | trialEndAt=2026-03-09T02:14:39.488391Z
+2026-02-22T23:14:39.519-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/signup | tenant=PUBLIC | status=201 | ip=0:0:0:0:0:0:0:1 | requestId=1210fab9-981b-4174-9a6b-d60c40ab49a8 | thread=49
+2026-02-22T23:14:39.661-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-5] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-22T23:14:39.661-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-5] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [    select li.account_id,
            a.display_name,
            a.slug
       from public.login_identities li
@@ -189,8 +191,8 @@ DO NOTHING]
        and li.subject_type = 'TENANT_ACCOUNT'
        and a.deleted = false
 ]
-2026-02-21T19:14:28.962-03:00 TRACE 148 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [e2e_1771712065_afc47b@tenant.local], value class [java.lang.String], SQL type unknown
-2026-02-21T19:14:28.980-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:39.662-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-5] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [e2e_1771812876_885ad4@tenant.local], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:39.678-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -228,7 +230,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:28.984-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-7] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=52 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:39.681-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=50 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -237,7 +239,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.078-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-7] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=52 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:39.770-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=50 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     update
         tenant_users tu1_0 
@@ -246,9 +248,9 @@ Hibernate:
     where
         tu1_0.id=? 
         and tu1_0.deleted=false
-2026-02-21T19:14:29.194-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=52
-2026-02-21T19:14:29.229-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-7] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/login | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=bda86d4c-e147-4a34-b2f6-6ef49ea61b62 | thread=52
-2026-02-21T19:14:29.411-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=51 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:39.867-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=50
+2026-02-22T23:14:39.896-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/login | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=1e886395-03e8-4387-81ab-1aef25b4dd85 | thread=50
+2026-02-22T23:14:40.067-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=51 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -286,7 +288,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.416-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-6] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=51 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.074-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=51 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -295,7 +297,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.440-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-6] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=51 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.103-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=51 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         tu1_0.id,
@@ -341,9 +343,9 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.455-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/tenant/me | tenant=t_tenant_e2e_821b96_fe5c5768 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=9b7f1113-4ef5-4c2a-a58c-f0f3984a97ac | thread=51
-2026-02-21T19:14:29.455-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=51
-2026-02-21T19:14:29.512-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.120-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/tenant/me | tenant=t_tenant_e2e_8d836f_a7910db3 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=24fd5e80-98a3-4a66-aa43-613f7ba05ee1 | thread=51
+2026-02-22T23:14:40.120-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=51
+2026-02-22T23:14:40.219-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -381,7 +383,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.515-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=50 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.223-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=52 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -390,8 +392,8 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.534-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=50
-2026-02-21T19:14:29.537-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.245-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=52
+2026-02-22T23:14:40.248-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -429,7 +431,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.550-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=50 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.262-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=52 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -438,7 +440,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.554-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=50 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.267-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=52 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     update
         tenant_users tu1_0 
@@ -447,15 +449,15 @@ Hibernate:
     where
         tu1_0.id=? 
         and tu1_0.deleted=false
-2026-02-21T19:14:29.561-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=50
-2026-02-21T19:14:29.565-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:29.566-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=50
-2026-02-21T19:14:29.573-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:29.574-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=50
-2026-02-21T19:14:29.577-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=50 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:29.579-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_821b96_fe5c5768 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=e862f4ae-47f4-4a3c-95a7-6e213ab64b9c | thread=50
-2026-02-21T19:14:29.579-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=50
-2026-02-21T19:14:29.700-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=53 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.275-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=52
+2026-02-22T23:14:40.279-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.281-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=52
+2026-02-22T23:14:40.288-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.289-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=52
+2026-02-22T23:14:40.291-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=52 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.293-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_8d836f_a7910db3 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=b35302ae-d05e-4b5a-8dff-1df558296d8f | thread=52
+2026-02-22T23:14:40.294-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=52
+2026-02-22T23:14:40.414-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=53 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -493,7 +495,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.704-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-8] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=53 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.417-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=53 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -502,7 +504,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.713-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-8] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=53 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.424-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=53 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         tu1_0.id,
@@ -548,9 +550,9 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.724-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/tenant/me | tenant=t_tenant_e2e_821b96_fe5c5768 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=8f7a4e6c-040f-4df3-952f-19d745e46b50 | thread=53
-2026-02-21T19:14:29.724-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=53
-2026-02-21T19:14:29.839-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.431-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/tenant/me | tenant=t_tenant_e2e_8d836f_a7910db3 | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=beac024f-8e98-483f-8777-4219e33b80f9 | thread=53
+2026-02-22T23:14:40.431-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=53
+2026-02-22T23:14:40.524-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -588,7 +590,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.843-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.527-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -597,8 +599,8 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.849-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=54
-2026-02-21T19:14:29.853-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.533-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=54
+2026-02-22T23:14:40.536-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -636,7 +638,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:29.865-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.566-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -645,7 +647,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:29.870-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.571-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     update
         tenant_users tu1_0 
@@ -654,14 +656,14 @@ Hibernate:
     where
         tu1_0.id=? 
         and tu1_0.deleted=false
-2026-02-21T19:14:29.875-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=54
-2026-02-21T19:14:29.879-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:29.883-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=t_tenant_e2e_821b96_fe5c5768, effective=t_tenant_e2e_821b96_fe5c5768) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
-2026-02-21T19:14:29.884-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH TenantTokenRefreshService.refresh(..) | tenant(bound=t_tenant_e2e_821b96_fe5c5768, effective=t_tenant_e2e_821b96_fe5c5768) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
-2026-02-21T19:14:29.893-03:00  WARN 148 --- [multitenancy001] [nio-8080-exec-9] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado/expirado]
-2026-02-21T19:14:29.894-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_821b96_fe5c5768 | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=2a01b0a6-4ff4-4b85-8a9b-fd8578112f7f | thread=54
-2026-02-21T19:14:29.894-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=54
-2026-02-21T19:14:30.012-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.577-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=54
+2026-02-22T23:14:40.580-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.585-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=t_tenant_e2e_8d836f_a7910db3, effective=t_tenant_e2e_8d836f_a7910db3) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
+2026-02-22T23:14:40.585-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH TenantTokenRefreshService.refresh(..) | tenant(bound=t_tenant_e2e_8d836f_a7910db3, effective=t_tenant_e2e_8d836f_a7910db3) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
+2026-02-22T23:14:40.597-03:00  WARN 14904 --- [multitenancy001] [nio-8080-exec-9] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado/expirado]
+2026-02-22T23:14:40.598-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_8d836f_a7910db3 | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=514e0721-d072-4259-92a3-6021aa128cb7 | thread=54
+2026-02-22T23:14:40.598-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=54
+2026-02-22T23:14:40.713-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -699,7 +701,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:30.015-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=55 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.717-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=55 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -708,17 +710,17 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:30.031-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=55
-2026-02-21T19:14:30.036-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:30.039-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=55
-2026-02-21T19:14:30.042-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:30.043-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=55
-2026-02-21T19:14:30.048-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:30.048-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=55
-2026-02-21T19:14:30.051-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:30.053-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/logout | tenant=t_tenant_e2e_821b96_fe5c5768 | status=204 | ip=0:0:0:0:0:0:0:1 | requestId=bcf4c3f6-6e81-4ba3-b06d-b2df493c8fcd | thread=55
-2026-02-21T19:14:30.053-03:00  INFO 148 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=55
-2026-02-21T19:14:30.154-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.731-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=55
+2026-02-22T23:14:40.734-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.736-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=55
+2026-02-22T23:14:40.739-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.740-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=55
+2026-02-22T23:14:40.745-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.745-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=55
+2026-02-22T23:14:40.748-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=55 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.750-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/logout | tenant=t_tenant_e2e_8d836f_a7910db3 | status=204 | ip=0:0:0:0:0:0:0:1 | requestId=fe517ef2-b832-419c-9329-5312ef328d3e | thread=55
+2026-02-22T23:14:40.750-03:00  INFO 14904 --- [multitenancy001] [io-8080-exec-10] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=55
+2026-02-22T23:14:40.868-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -756,7 +758,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:30.158-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.870-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -765,8 +767,8 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:30.164-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=46
-2026-02-21T19:14:30.167-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_821b96_fe5c5768
+2026-02-22T23:14:40.875-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=46
+2026-02-22T23:14:40.878-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_8d836f_a7910db3
 Hibernate: 
     select
         tu1_0.id,
@@ -804,7 +806,7 @@ Hibernate:
         tu1_0.email=? 
         and tu1_0.account_id=? 
         and not(tu1_0.deleted)
-2026-02-21T19:14:30.176-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.886-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     select
         p1_0.tenant_user_id,
@@ -813,7 +815,7 @@ Hibernate:
         tenant_user_permissions p1_0 
     where
         p1_0.tenant_user_id=?
-2026-02-21T19:14:30.181-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_821b96_fe5c5768 | tenantSchemaThread=t_tenant_e2e_821b96_fe5c5768 | SQL=SET search_path TO "t_tenant_e2e_821b96_fe5c5768", "public"
+2026-02-22T23:14:40.890-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=46 | tenantSchemaParam=t_tenant_e2e_8d836f_a7910db3 | tenantSchemaThread=t_tenant_e2e_8d836f_a7910db3 | SQL=SET search_path TO "t_tenant_e2e_8d836f_a7910db3", "public"
 Hibernate: 
     update
         tenant_users tu1_0 
@@ -822,18 +824,47 @@ Hibernate:
     where
         tu1_0.id=? 
         and tu1_0.deleted=false
-2026-02-21T19:14:30.185-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=46
-2026-02-21T19:14:30.188-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_821b96_fe5c5768
-2026-02-21T19:14:30.189-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=t_tenant_e2e_821b96_fe5c5768, effective=t_tenant_e2e_821b96_fe5c5768) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
-2026-02-21T19:14:30.189-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH TenantTokenRefreshService.refresh(..) | tenant(bound=t_tenant_e2e_821b96_fe5c5768, effective=t_tenant_e2e_821b96_fe5c5768) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
-2026-02-21T19:14:30.191-03:00  WARN 148 --- [multitenancy001] [nio-8080-exec-1] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado]
-2026-02-21T19:14:30.192-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_821b96_fe5c5768 | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=ed5b64ed-c786-4adf-a773-276ddf52b9b9 | thread=46
-2026-02-21T19:14:30.192-03:00  INFO 148 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_821b96_fe5c5768 | thread=46
+2026-02-22T23:14:40.895-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=46
+2026-02-22T23:14:40.898-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=46 | null -> t_tenant_e2e_8d836f_a7910db3
+2026-02-22T23:14:40.899-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=t_tenant_e2e_8d836f_a7910db3, effective=t_tenant_e2e_8d836f_a7910db3) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
+2026-02-22T23:14:40.899-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH TenantTokenRefreshService.refresh(..) | tenant(bound=t_tenant_e2e_8d836f_a7910db3, effective=t_tenant_e2e_8d836f_a7910db3) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
+2026-02-22T23:14:40.901-03:00  WARN 14904 --- [multitenancy001] [nio-8080-exec-1] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado]
+2026-02-22T23:14:40.901-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/refresh | tenant=t_tenant_e2e_8d836f_a7910db3 | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=0dce81d4-ebf0-4fb2-ba5d-d8dcb3d6125b | thread=46
+2026-02-22T23:14:40.901-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-1] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_8d836f_a7910db3 | thread=46
+2026-02-22T23:14:40.997-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-2] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-22T23:14:40.997-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-2] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [    select li.subject_id
+      from public.login_identities li
+     where li.email = ?
+       and li.subject_type = 'CONTROLPLANE_USER'
+     limit 1
+]
+2026-02-22T23:14:40.997-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-2] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [superadmin@platform.local], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:41.232-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-2] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/controlplane/auth/login | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=0c72e8a5-f6da-461b-a788-e2ed3af3371f | thread=47
+2026-02-22T23:14:41.330-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-3] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/controlplane/me | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=accee828-20e2-4b8e-8643-7a59cbad0a45 | thread=48
+2026-02-22T23:14:41.479-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-4] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/controlplane/auth/refresh | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=40bd2a1d-8232-4afd-9acf-ccd317090974 | thread=49
+2026-02-22T23:14:41.587-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/controlplane/me | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=3422f402-620e-44b8-be97-30578112432a | thread=50
+2026-02-22T23:14:41.686-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=null, effective=public) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
+2026-02-22T23:14:41.686-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH ControlPlaneTokenRefreshService.refresh(..) | tenant(bound=null, effective=public) | status=401 code=INVALID_REFRESH msg=refreshToken revogado/expirado
+2026-02-22T23:14:41.687-03:00  WARN 14904 --- [multitenancy001] [nio-8080-exec-6] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado/expirado]
+2026-02-22T23:14:41.688-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/controlplane/auth/refresh | tenant=PUBLIC | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=c221d5af-fcef-4a4c-9dbb-1283d56b95a8 | thread=51
+2026-02-22T23:14:41.773-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-22T23:14:41.773-03:00 DEBUG 14904 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [    select li.subject_id
+      from public.login_identities li
+     where li.email = ?
+       and li.subject_type = 'CONTROLPLANE_USER'
+     limit 1
+]
+2026-02-22T23:14:41.773-03:00 TRACE 14904 --- [multitenancy001] [nio-8080-exec-7] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [superadmin@platform.local], value class [java.lang.String], SQL type unknown
+2026-02-22T23:14:41.785-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-7] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/controlplane/auth/logout | tenant=PUBLIC | status=204 | ip=0:0:0:0:0:0:0:1 | requestId=c66696ce-f3cb-443f-98ac-e7818550fc09 | thread=52
+2026-02-22T23:14:41.888-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH AuthRefreshSessionService.rotateOrThrow(..) | tenant(bound=null, effective=public) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
+2026-02-22T23:14:41.889-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTH ControlPlaneTokenRefreshService.refresh(..) | tenant(bound=null, effective=public) | status=401 code=INVALID_REFRESH msg=refreshToken revogado
+2026-02-22T23:14:41.890-03:00  WARN 14904 --- [multitenancy001] [nio-8080-exec-8] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [brito.com.multitenancy001.shared.kernel.error.ApiException: refreshToken revogado]
+2026-02-22T23:14:41.891-03:00  INFO 14904 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/controlplane/auth/refresh | tenant=PUBLIC | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=2edba3fb-e542-435e-9c5c-6654a3ca527d | thread=53
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD FAILURE
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time:  28.283 s
-[INFO] Finished at: 2026-02-21T19:14:30-03:00
+[INFO] Total time:  25.501 s
+[INFO] Finished at: 2026-02-22T23:14:42-03:00
 [INFO] ------------------------------------------------------------------------
 [ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.5.9:run (default-cli) on project multitenancy001: Process terminated with exit code: 143 -> [Help 1]
 [ERROR] 

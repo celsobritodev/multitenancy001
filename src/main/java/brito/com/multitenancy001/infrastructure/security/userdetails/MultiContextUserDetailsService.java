@@ -13,6 +13,7 @@ import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -25,34 +26,20 @@ import java.util.Locale;
 /**
  * UserDetailsService multi-contexto (Tenant + Control Plane).
  *
- * <p>Responsabilidades:</p>
+ * <p>Objetivo:</p>
  * <ul>
- *   <li>Resolver o tipo de usuário (Control Plane vs Tenant) via tabela {@code login_identities}.</li>
- *   <li>Carregar o usuário apropriado do schema correto.</li>
- *   <li>Retornar um {@link AuthenticatedUserContext} que implementa {@link UserDetails}.</li>
+ *   <li>Resolver o "tipo de sujeito" (Tenant vs Control Plane) via tabela <code>public.login_identities</code>.</li>
+ *   <li>No caso Control Plane (LOGIN com AuthenticationManager/DaoAuthenticationProvider):
+ *       retornar um <code>org.springframework.security.core.userdetails.User</code> com password hash.</li>
+ *   <li>No caso JWT/refresh/filtros: disponibilizar loaders que retornam <code>AuthenticatedUserContext</code>.</li>
  * </ul>
  *
- * <p>Fluxo de Resolução:</p>
- * <ol>
- *   <li>Consulta a tabela {@code public.login_identities} pelo email para obter o {@code subject_type}.</li>
- *   <li>Se {@code subject_type} for {@code CONTROLPLANE_USER}, carrega do schema PUBLIC.</li>
- *   <li>Se {@code subject_type} for {@code TENANT_USER}, carrega do schema do tenant (que deve estar bindado via {@code X-Tenant}).</li>
- *   <li>Fallback: se não encontrar na identidade, tenta carregar como Tenant (compatibilidade).</li>
- * </ol>
- *
- * <p>Regras de Tempo:</p>
+ * <p>Importante:</p>
  * <ul>
- *   <li>Não usa {@code Instant.now()}. A fonte de tempo é {@link AppClock}.</li>
+ *   <li>Control Plane login exige password hash em <code>UserDetails</code> (senão ocorre "Empty encoded password").</li>
+ *   <li>Tenant login normalmente não passa por AuthenticationManager (por causa de schema-per-tenant e resolução de tenant),
+ *       então <code>loadUserByUsername</code> é focado em suportar o Control Plane com segurança.</li>
  * </ul>
- *
- * <p>Tratamento de Erros:</p>
- * <ul>
- *   <li>Se o usuário não for encontrado, lança {@link UsernameNotFoundException} (compatível com Spring Security).</li>
- *   <li>Erros internos são encapsulados em {@link ApiException}.</li>
- * </ul>
- *
- * @see AuthenticatedUserContext
- * @see AuthoritiesFactory
  */
 @Service
 @RequiredArgsConstructor
@@ -74,14 +61,24 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     private final AppClock appClock;
 
     /**
-     * Carrega um usuário pelo username (email) conforme contrato do Spring Security.
+     * Método padrão do Spring Security para resolver o usuário por "username".
+     * Aqui, o username é o email.
      *
-     * @param username O email do usuário.
-     * @return Um {@link UserDetails} representando o usuário autenticado.
-     * @throws UsernameNotFoundException Se o usuário não for encontrado.
+     * <p>Regra crítica:</p>
+     * <ul>
+     *   <li>Se for CONTROLPLANE_USER: retorna <code>User</code> (com password hash) para o AuthenticationManager.</li>
+     *   <li>Se for TENANT_USER: mantém fallback para carregar algo (evita quebrar chamadas antigas),
+     *       mas não é o caminho ideal para login de tenant.</li>
+     * </ul>
+     *
+     * @param username email (username) recebido pelo Spring Security.
+     * @return UserDetails apropriado.
+     * @throws UsernameNotFoundException se não encontrado/ inválido.
      */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+
+        /** comentário: valida e normaliza o username/email para resolver subject_type e carregar o UserDetails correto */
         if (username == null || username.isBlank()) {
             throw new UsernameNotFoundException("Email é obrigatório");
         }
@@ -91,15 +88,17 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         try {
             String subjectType = resolveSubjectTypeByEmail(normalized);
 
+            // ✅ caminho correto para LOGIN do Control Plane (AuthenticationManager precisa de password hash)
             if (SUBJECT_TYPE_CONTROLPLANE_USER.equals(subjectType)) {
-                return loadControlPlaneUserByEmail(normalized, null);
+                return loadControlPlaneUserForLoginByEmail(normalized);
             }
 
+            // Tenant: fallback para compatibilidade (não é recomendado como caminho de login em schema-per-tenant)
             if (SUBJECT_TYPE_TENANT_USER.equals(subjectType)) {
                 return loadTenantUserByEmail(normalized, null);
             }
 
-            // Fallback: tenta carregar como Tenant (compatibilidade)
+            // fallback final: tenta tenant para não quebrar fluxos antigos
             return loadTenantUserByEmail(normalized, null);
 
         } catch (ApiException e) {
@@ -108,15 +107,16 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Resolve o tipo de sujeito (subject_type) a partir do email, consultando a tabela login_identities.
+     * Resolve o tipo de sujeito (subject_type) a partir do email, consultando a tabela public.login_identities.
      *
      * @param normalizedEmail Email normalizado.
-     * @return O tipo de sujeito, ou {@code null} se não encontrado.
+     * @return subject_type (ou null se não encontrado).
      */
     private String resolveSubjectTypeByEmail(String normalizedEmail) {
+
+        /** comentário: consulta public.login_identities para descobrir se o email pertence a CONTROLPLANE_USER ou TENANT_USER */
         return withPublicEntityManager(em -> {
             try {
-                // Abordagem 1: Usando getSingleResult com tratamento de exceção
                 String sql = """
                     SELECT li.subject_type
                     FROM public.login_identities li
@@ -136,8 +136,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
                 Object result = results.get(0);
                 return result != null ? result.toString() : null;
 
-            } catch (Exception e) {
-                // Log do erro se necessário, mas não propaga
+            } catch (Exception ignored) {
                 return null;
             }
         });
@@ -146,12 +145,13 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     /**
      * Carrega um usuário do Tenant pelo email e accountId.
      *
-     * @param email     O email do usuário.
-     * @param accountId O ID da conta (pode ser {@code null} se não fornecido).
-     * @return Um {@link UserDetails} representando o usuário do tenant.
-     * @throws ApiException Se o usuário não for encontrado.
+     * @param email     Email.
+     * @param accountId accountId opcional.
+     * @return UserDetails (AuthenticatedUserContext) do tenant.
      */
     public UserDetails loadTenantUserByEmail(String email, Long accountId) {
+
+        /** comentário: carrega TenantUser do schema tenant (depende de tenant schema já resolvido no contexto da app) */
         if (email == null || email.isBlank()) {
             throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
         }
@@ -185,21 +185,23 @@ public class MultiContextUserDetailsService implements UserDetailsService {
             }
         });
 
-        String tenantSchema = null; // Será preenchido pelo JwtAuthenticationFilter
+        String tenantSchema = null; // preenchido pelo JwtAuthenticationFilter
         var authorities = AuthoritiesFactory.forTenant(user);
 
         return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
     }
 
     /**
-     * Carrega um usuário do Control Plane pelo email e userId.
+     * Carrega um usuário do Control Plane como "contexto autenticado" (AuthenticatedUserContext).
+     * Use este método para JWT/refresh/filtros, não para login via AuthenticationManager.
      *
-     * @param email  O email do usuário.
-     * @param userId O ID do usuário (pode ser {@code null} se não fornecido).
-     * @return Um {@link UserDetails} representando o usuário do Control Plane.
-     * @throws ApiException Se o usuário não for encontrado.
+     * @param email  Email.
+     * @param userId userId opcional (mantido por compat).
+     * @return AuthenticatedUserContext (como UserDetails).
      */
     public UserDetails loadControlPlaneUserByEmail(String email, Long userId) {
+
+        /** comentário: carrega ControlPlaneUser no schema public e monta AuthenticatedUserContext (sem password) */
         if (email == null || email.isBlank()) {
             throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
         }
@@ -233,13 +235,61 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Executa uma função usando um EntityManager do PUBLIC, garantindo fechamento.
+     * Carrega um usuário do Control Plane para LOGIN (AuthenticationManager).
+     * Retorna UserDetails do Spring com password hash do banco.
      *
-     * @param cb A função a ser executada.
-     * @param <T> O tipo de retorno.
-     * @return O resultado da função.
+     * @param normalizedEmail email já normalizado.
+     * @return UserDetails com password hash.
+     */
+    public UserDetails loadControlPlaneUserForLoginByEmail(String normalizedEmail) {
+
+        /** comentário: carrega ControlPlaneUser e devolve org.springframework.security.core.userdetails.User com password hash */
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+        }
+
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery(
+                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                    ControlPlaneUser.class
+            );
+            query.setParameter("email", normalizedEmail);
+            query.setMaxResults(1);
+
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
+        });
+
+        String passwordHash = user.getPassword();
+        if (passwordHash == null || passwordHash.isBlank()) {
+            throw new ApiException(ApiErrorCode.INVALID_USER, "Usuário sem password hash cadastrado");
+        }
+
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+
+        return User.withUsername(user.getEmail())
+                .password(passwordHash)
+                .authorities(authorities)
+                .accountExpired(false)
+                .accountLocked(false)
+                .credentialsExpired(false)
+                .disabled(false)
+                .build();
+    }
+
+    /**
+     * Executa callback com EntityManager do schema PUBLIC (Control Plane), garantindo fechamento.
+     *
+     * @param cb callback.
+     * @return resultado.
+     * @param <T> tipo.
      */
     private <T> T withPublicEntityManager(EntityManagerCallback<T> cb) {
+
+        /** comentário: cria/fecha EntityManager do publicEmf para execução segura de queries */
         EntityManager em = publicEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -253,13 +303,15 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Executa uma função usando um EntityManager do TENANT, garantindo fechamento.
+     * Executa callback com EntityManager do TENANT, garantindo fechamento.
      *
-     * @param cb A função a ser executada.
-     * @param <T> O tipo de retorno.
-     * @return O resultado da função.
+     * @param cb callback.
+     * @return resultado.
+     * @param <T> tipo.
      */
     private <T> T withTenantEntityManager(EntityManagerCallback<T> cb) {
+
+        /** comentário: cria/fecha EntityManager do tenantEmf para execução segura de queries */
         EntityManager em = tenantEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -275,7 +327,7 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     /**
      * Callback funcional para operações com EntityManager.
      *
-     * @param <T> O tipo de retorno.
+     * @param <T> tipo do retorno.
      */
     @FunctionalInterface
     private interface EntityManagerCallback<T> {

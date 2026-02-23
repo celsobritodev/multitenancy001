@@ -27,8 +27,11 @@ import java.util.Map;
  * Regras:
  * - Resolve accountId/userId/tenantSchema da identidade do request.
  * - Aplica entitlements (limite de usuários) antes de criar.
- * - Executa dentro do schema via TenantExecutor.
  * - Auditoria SOC2-like: ATTEMPT + SUCCESS/DENIED/FAILURE (append-only em public schema).
+ *
+ * Nota arquitetural:
+ * - Commands (writes) delegam para TenantUserCommandService, que executa via TenantSchemaUnitOfWork (schema + tx).
+ * - Queries continuam usando TenantExecutor quando necessário (read no schema do tenant).
  */
 @Service
 @RequiredArgsConstructor
@@ -58,11 +61,8 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
 
         try {
-            tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                /** comentário do método: chama o command e executa a transferência no schema do tenant */
-                tenantUserCommandService.transferTenantOwnerRole(accountId, tenantSchema, fromUserId, toUserId);
-                return null;
-            });
+            // ✅ command já executa schema+tx via TenantSchemaUnitOfWork
+            tenantUserCommandService.transferTenantOwnerRole(accountId, tenantSchema, fromUserId, toUserId);
 
             securityAudit.recordSuccess(SecurityAuditActionType.OWNERSHIP_TRANSFERRED, toUserId, target.getEmail(), details);
 
@@ -129,23 +129,21 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(SecurityAuditActionType.USER_CREATED, null, email, details);
 
         try {
-            TenantUser created = tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                    /** comentário do método: delega para o command com assinatura padrão do projeto */
-                    tenantUserCommandService.createTenantUser(
-                            accountId,
-                            tenantSchema,
-                            name,
-                            email,
-                            req.password(),
-                            req.role(),
-                            req.phone(),
-                            req.avatarUrl(),
-                            finalLocale,
-                            finalTimezone,
-                            perms,
-                            mustChangePassword,
-                            origin
-                    )
+            // ✅ command já executa schema+tx via TenantSchemaUnitOfWork
+            TenantUser created = tenantUserCommandService.createTenantUser(
+                    accountId,
+                    tenantSchema,
+                    name,
+                    email,
+                    req.password(),
+                    req.role(),
+                    req.phone(),
+                    req.avatarUrl(),
+                    finalLocale,
+                    finalTimezone,
+                    perms,
+                    mustChangePassword,
+                    origin
             );
 
             details.put("createdUserId", created.getId());
@@ -184,11 +182,10 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(type, userId, target.getEmail(), details);
 
         try {
-            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                /** comentário do método: aplica suspensão e retorna o usuário atualizado */
-                tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
-                return tenantUserQueryService.getUser(userId, accountId);
-            });
+            // ✅ command já executa schema+tx
+            tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
+
+            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
 
             securityAudit.recordSuccess(type, userId, target.getEmail(), details);
             return result;
@@ -225,11 +222,10 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(type, userId, target.getEmail(), details);
 
         try {
-            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                /** comentário do método: aplica suspensão e retorna o usuário atualizado */
-                tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
-                return tenantUserQueryService.getUser(userId, accountId);
-            });
+            // ✅ command já executa schema+tx
+            tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
+
+            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
 
             securityAudit.recordSuccess(type, userId, target.getEmail(), details);
             return result;
@@ -261,11 +257,8 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
 
         try {
-            tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                /** comentário do método: aplica soft delete no command */
-                tenantUserCommandService.softDelete(userId, accountId, tenantSchema);
-                return null;
-            });
+            // ✅ command já executa schema+tx
+            tenantUserCommandService.softDelete(userId, accountId, tenantSchema);
 
             securityAudit.recordSuccess(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
 
@@ -286,15 +279,12 @@ public class TenantUserCurrentContextCommandService {
     }
 
     public void hardDeleteTenantUser(Long userId) {
-        /* Hard delete do usuário (deleção física). (Opcional auditar via USER_SOFT_DELETED ou tipo novo; aqui mantive sem audit). */
+        /* Hard delete do usuário (deleção física). */
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-            /** comentário do método: mantém assinatura existente do seu command service */
-            tenantUserCommandService.hardDelete(userId, accountId);
-            return null;
-        });
+        // ✅ assinatura nova exige tenantSchema
+        tenantUserCommandService.hardDelete(userId, accountId, tenantSchema);
     }
 
     public TenantUser restoreTenantUser(Long userId) {
@@ -308,10 +298,8 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
 
         try {
-            TenantUser restored = tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                    /** comentário do método: executa restore no command */
-                    tenantUserCommandService.restore(userId, accountId, tenantSchema)
-            );
+            // ✅ command já executa schema+tx
+            TenantUser restored = tenantUserCommandService.restore(userId, accountId, tenantSchema);
 
             securityAudit.recordSuccess(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
             return restored;
@@ -348,10 +336,8 @@ public class TenantUserCurrentContextCommandService {
         securityAudit.recordAttempt(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
 
         try {
-            TenantUser updated = tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                    /** comentário do método: executa reset sem expor senha em logs/audit */
-                    tenantUserCommandService.resetPassword(userId, accountId, tenantSchema, newPassword)
-            );
+            // ✅ command já executa schema+tx
+            TenantUser updated = tenantUserCommandService.resetPassword(userId, accountId, tenantSchema, newPassword);
 
             securityAudit.recordSuccess(SecurityAuditActionType.PASSWORD_RESET_COMPLETED, userId, target.getEmail(), details);
             return updated;

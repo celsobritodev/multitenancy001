@@ -12,6 +12,9 @@ public final class AccountFactory {
 
     private AccountFactory() {}
 
+   // src/main/java/brito/com/multitenancy001/controlplane/accounts/app/AccountFactory.java
+// Atualizar o método newTenantAccount
+
     public static Account newTenantAccount(CreateAccountCommand cmd) {
         if (cmd == null) throw new IllegalArgumentException("cmd é obrigatório");
 
@@ -26,11 +29,15 @@ public final class AccountFactory {
         String baseSlug = slugify(cmd.displayName());
         account.setSlug(baseSlug + "-" + shortId());
 
-        // ✅ Antes: account.setTenantSchema(...)
-        // ✅ Agora: o Aggregate gera tenantSchema de forma consistente
         account.ensureTenantSchema();
 
         account.setStatus(AccountStatus.PROVISIONING);
+
+        // Valores padrão para campos adicionais
+        account.setCountry("Brasil");
+        account.setTimezone("America/Sao_Paulo");
+        account.setLocale("pt_BR");
+        account.setCurrency("BRL");
 
         return account;
     }

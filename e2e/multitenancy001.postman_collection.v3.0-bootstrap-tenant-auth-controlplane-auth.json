@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "e096821c-eb47-4927-89b8-ae84cdfbd5ee",
+    "_postman_id": "fb01de7d-d66a-496d-9856-e4c40cfc0d7e",
     "name": "multitenancy001-e2e (v3.0 - bootstrap + tenant auth + controlplane auth)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "22901965"
@@ -54,7 +54,6 @@
                   "",
                   "const json = pm.response.json();",
                   "",
-                  "// Ajuste estes paths se seu payload mudar",
                   "const accountId = json?.account?.id;",
                   "const tenantSchema = json?.account?.tenantSchema;",
                   "const tenantSlug = json?.account?.slug;",
@@ -68,39 +67,29 @@
                   "  pm.expect(tenantSchema, \"account.tenantSchema\").to.exist;",
                   "});",
                   "",
-                  "// Salva no environment",
                   "pm.environment.set(\"account_id\", String(accountId));",
                   "pm.environment.set(\"tenant_schema\", tenantSchema);",
                   "pm.environment.set(\"tenantSchema\", String(json.account?.tenantSchema || json.tenantSchema || \"\"));",
                   "pm.environment.set(\"tenant_slug\", tenantSlug || \"\");",
                   "pm.environment.set(\"tenant_admin_email\", tenantAdminEmail || \"\");",
                   "",
-                  "// Log útil",
                   "console.log(\"signup account_id=\", accountId, \"tenant_schema=\", tenantSchema, \"tenant_email=\", pm.environment.get(\"tenant_email\"));"
                 ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "type": "text/javascript"
               }
             },
             {
               "listen": "prerequest",
               "script": {
                 "exec": [
-                  "/**\r",
-                  " * Gera tenant_email automaticamente se estiver vazio.\r",
-                  " * Mantém compatível com Newman e Postman.\r",
-                  " */\r",
-                  "if (!pm.environment.get(\"tenant_email\")) {\r",
-                  "    const ts = Date.now();\r",
-                  "    const email = `e2e_${ts}@tenant.local`;\r",
-                  "    pm.environment.set(\"tenant_email\", email);\r",
-                  "    console.log(\"Generated tenant_email =\", email);\r",
+                  "if (!pm.environment.get(\"tenant_email\")) {",
+                  "    const ts = Date.now();",
+                  "    const email = `e2e_${ts}@tenant.local`;",
+                  "    pm.environment.set(\"tenant_email\", email);",
+                  "    console.log(\"Generated tenant_email =\", email);",
                   "}"
                 ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "type": "text/javascript"
               }
             }
           ],
@@ -152,13 +141,14 @@
                   "console.log(\"Saved tenant_access_token length=\", (json.accessToken || \"\").length);",
                   "console.log(\"Saved tenant_schema=\", json.tenantSchema);"
                 ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
               {
@@ -198,23 +188,11 @@
                   "pm.expect(json.email, 'me: email ausente').to.exist;",
                   "console.log('tenant me userId=', json.id, 'email=', json.email);"
                 ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{tenant_access_token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "GET",
             "header": [
               {
@@ -247,39 +225,12 @@
           "listen": "prerequest",
           "script": {
             "type": "text/javascript",
-            "packages": {},
-            "requests": {},
             "exec": [
-              "// ================================\r",
-              "// Bootstrap - Header X-Tenant auto\r",
-              "// ================================\r",
-              "\r",
-              "const tenantSchema =\r",
-              "  pm.environment.get(\"tenantSchema\") ||\r",
-              "  pm.environment.get(\"tenant_schema\") ||\r",
-              "  pm.environment.get(\"tenant_schema_name\");\r",
-              "\r",
-              "if (tenantSchema && tenantSchema.trim() !== \"\") {\r",
-              "  pm.request.headers.upsert({\r",
-              "    key: \"X-Tenant\",\r",
-              "    value: tenantSchema\r",
-              "  });\r",
-              "\r",
-              "  console.log(\"X-Tenant aplicado automaticamente:\", tenantSchema);\r",
-              "} else {\r",
-              "  console.log(\"X-Tenant não definido (ok para signup/health/login)\");\r",
+              "const tenantSchema = pm.environment.get(\"tenantSchema\") || pm.environment.get(\"tenant_schema\");",
+              "if (tenantSchema && tenantSchema.trim() !== \"\") {",
+              "  pm.request.headers.upsert({ key: \"X-Tenant\", value: tenantSchema });",
+              "  console.log(\"X-Tenant aplicado automaticamente:\", tenantSchema);",
               "}"
-            ]
-          }
-        },
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "packages": {},
-            "requests": {},
-            "exec": [
-              ""
             ]
           }
         }
@@ -290,32 +241,6 @@
       "item": [
         {
           "name": "01.01 tenant refresh",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/tenant/auth/refresh",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "tenant",
-                "auth",
-                "refresh"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}"
-            }
-          },
-          "response": [],
           "event": [
             {
               "listen": "test",
@@ -324,7 +249,6 @@
                 "exec": [
                   "pm.test('Tenant refresh OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
                   "",
-                  "// guarda refresh antigo para validar rotação",
                   "const oldRefresh = pm.environment.get('tenant_refresh_token');",
                   "pm.environment.set('tenant_refresh_token_old', oldRefresh || '');",
                   "",
@@ -342,15 +266,54 @@
                   "}",
                   "",
                   "console.log('tenant refresh OK. old_refresh_saved=', (oldRefresh || '').length, 'new_refresh_len=', (json.refreshToken || '').length);"
-                ],
-                "packages": {},
-                "requests": {}
+                ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "01.02 tenant me (after refresh)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant me OK (after refresh)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.id, 'me: id ausente').to.exist;",
+                  "pm.expect(json.email, 'me: email ausente').to.exist;",
+                  "console.log('tenant me after refresh userId=', json.id, 'email=', json.email);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -360,8 +323,7 @@
               },
               {
                 "key": "X-Tenant",
-                "value": "{{tenantSchema}}",
-                "type": "text"
+                "value": "{{tenantSchema}}"
               }
             ],
             "url": {
@@ -374,39 +336,25 @@
                 "tenant",
                 "me"
               ]
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{tenant_access_token}}",
-                  "type": "string"
-                }
-              ]
             }
           },
-          "response": [],
+          "response": []
+        },
+        {
+          "name": "01.03 tenant refresh (old refresh must fail)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Tenant me OK (after refresh)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('Tenant refresh old token must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
                   "const json = pm.response.json();",
-                  "pm.expect(json.id, 'me: id ausente').to.exist;",
-                  "pm.expect(json.email, 'me: email ausente').to.exist;",
-                  "console.log('tenant me after refresh userId=', json.id, 'email=', json.email);"
-                ],
-                "packages": {},
-                "requests": {}
+                  "console.log('refresh old token response=', json);"
+                ]
               }
             }
-          ]
-        },
-        {
-          "name": "01.03 tenant refresh (old refresh must fail)",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -415,6 +363,10 @@
                 "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token_old}}\"\n}"
+            },
             "url": {
               "raw": "{{base_url}}/api/tenant/auth/refresh",
               "host": [
@@ -426,31 +378,24 @@
                 "auth",
                 "refresh"
               ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token_old}}\"\n}"
             }
           },
-          "response": [],
+          "response": []
+        },
+        {
+          "name": "01.04 tenant logout (single device)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Tenant refresh old token must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
-                  "const json = pm.response.json();",
-                  "console.log('refresh old token response=', json);"
-                ],
-                "packages": {},
-                "requests": {}
+                  "pm.test('Tenant logout OK', () => pm.expect(pm.response.code).to.be.oneOf([200,204]));",
+                  "console.log('tenant logout OK');"
+                ]
               }
             }
-          ]
-        },
-        {
-          "name": "01.04 tenant logout (single device)",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -459,6 +404,10 @@
                 "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\",\n  \"allDevices\": false\n}"
+            },
             "url": {
               "raw": "{{base_url}}/api/tenant/auth/logout",
               "host": [
@@ -470,30 +419,25 @@
                 "auth",
                 "logout"
               ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\",\n  \"allDevices\": false\n}"
             }
           },
-          "response": [],
+          "response": []
+        },
+        {
+          "name": "01.05 tenant refresh (after logout must fail)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Tenant logout OK', () => pm.expect(pm.response.code).to.be.oneOf([200,204]));",
-                  "console.log('tenant logout OK');"
-                ],
-                "packages": {},
-                "requests": {}
+                  "pm.test('Tenant refresh after logout must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "const json = pm.response.json();",
+                  "console.log('refresh after logout response=', json);"
+                ]
               }
             }
-          ]
-        },
-        {
-          "name": "01.05 tenant refresh (after logout must fail)",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -502,6 +446,10 @@
                 "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}"
+            },
             "url": {
               "raw": "{{base_url}}/api/tenant/auth/refresh",
               "host": [
@@ -513,28 +461,9 @@
                 "auth",
                 "refresh"
               ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}"
             }
           },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Tenant refresh after logout must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
-                  "const json = pm.response.json();",
-                  "console.log('refresh after logout response=', json);"
-                ],
-                "packages": {},
-                "requests": {}
-              }
-            }
-          ]
+          "response": []
         }
       ]
     },
@@ -543,20 +472,6 @@
       "item": [
         {
           "name": "02.01 controlplane login",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/api/controlplane/auth/login",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{controlplane_email}}\",\n  \"password\": \"{{controlplane_password}}\"\n}"
-            }
-          },
           "event": [
             {
               "listen": "prerequest",
@@ -565,7 +480,8 @@
                   "if (!pm.environment.get('controlplane_email') || !pm.environment.get('controlplane_password')) {",
                   "  console.warn('controlplane_email/controlplane_password não definidos no environment. Defina antes de rodar.');",
                   "}"
-                ]
+                ],
+                "type": "text/javascript"
               }
             },
             {
@@ -580,23 +496,43 @@
                   "pm.environment.set('controlplane_refresh_token', String(json.refreshToken));",
                   "if (json.accountId != null) pm.environment.set('controlplane_account_id', String(json.accountId));",
                   "console.log('controlplane login OK. account_id=', pm.environment.get('controlplane_account_id'));"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{controlplane_email}}\",\n  \"password\": \"{{controlplane_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "02.02 controlplane me",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/controlplane/me",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{controlplane_access_token}}"
-              }
-            ]
-          },
           "event": [
             {
               "listen": "test",
@@ -607,27 +543,35 @@
                   "const json = pm.response.json();",
                   "pm.expect(json.email, 'controlplane me: email ausente').to.exist;",
                   "console.log('controlplane me email=', json.email);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{controlplane_access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "me"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "02.03 controlplane refresh",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/api/controlplane/auth/refresh",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token}}\"\n}"
-            }
-          },
           "event": [
             {
               "listen": "test",
@@ -640,39 +584,89 @@
                   "pm.environment.set('controlplane_access_token', String(json.accessToken));",
                   "pm.environment.set('controlplane_refresh_token_new', String(json.refreshToken));",
                   "console.log('controlplane refresh OK. new_refresh_len=', (json.refreshToken || '').length);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "02.04 controlplane me (after refresh)",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/controlplane/me",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{controlplane_access_token}}"
-              }
-            ]
-          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "pm.test('ControlPlane me OK (after refresh)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{controlplane_access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "me"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "02.05 controlplane refresh (old refresh must fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ControlPlane refresh old token must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "console.log('controlplane old refresh response=', pm.response.json());"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "url": "{{base_url}}/api/controlplane/auth/refresh",
             "header": [
               {
                 "key": "Content-Type",
@@ -682,36 +676,24 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token_old}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
             }
           },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('ControlPlane refresh old token must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
-                  "console.log('controlplane old refresh response=', pm.response.json());"
-                ]
-              }
-            }
-          ]
+          "response": []
         },
         {
           "name": "02.06 controlplane logout (single device)",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/api/controlplane/auth/logout",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token_new}}\"\n}"
-            }
-          },
           "event": [
             {
               "listen": "test",
@@ -719,16 +701,13 @@
                 "exec": [
                   "pm.test('ControlPlane logout OK', () => pm.expect(pm.response.code).to.be.oneOf([204]));",
                   "console.log('controlplane logout OK');"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
-        },
-        {
-          "name": "02.07 controlplane refresh (after logout must fail)",
+          ],
           "request": {
             "method": "POST",
-            "url": "{{base_url}}/api/controlplane/auth/refresh",
             "header": [
               {
                 "key": "Content-Type",
@@ -738,8 +717,24 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token_new}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "logout"
+              ]
             }
           },
+          "response": []
+        },
+        {
+          "name": "02.07 controlplane refresh (after logout must fail)",
           "event": [
             {
               "listen": "test",
@@ -747,10 +742,37 @@
                 "exec": [
                   "pm.test('ControlPlane refresh after logout must fail', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
                   "console.log('controlplane refresh after logout response=', pm.response.json());"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{controlplane_refresh_token_new}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     }
@@ -760,19 +782,30 @@
       "listen": "prerequest",
       "script": {
         "type": "text/javascript",
-        "packages": {},
-        "requests": {},
         "exec": [
-          "// Garante que tenant routes sempre mandem os headers corretos.\r",
-          "// (Funciona mesmo que você esqueça de setar manualmente em algum request.)\r",
-          "const token = pm.environment.get(\"tenant_access_token\");\r",
-          "const schema = pm.environment.get(\"tenant_schema\");\r",
-          "\r",
-          "if (token) {\r",
-          "  pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + token });\r",
-          "}\r",
-          "if (schema) {\r",
-          "  pm.request.headers.upsert({ key: \"X-Tenant\", value: schema });\r",
+          "const url = pm.request.url.toString();",
+          "",
+          "if (url.includes('/api/tenant/') || url.includes('/api/me')) {",
+          "    const token = pm.environment.get(\"tenant_access_token\");",
+          "    const schema = pm.environment.get(\"tenant_schema\");",
+          "    ",
+          "    if (token) {",
+          "        pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + token });",
+          "        console.log(\"Token de tenant adicionado para:\", url);",
+          "    }",
+          "    if (schema) {",
+          "        pm.request.headers.upsert({ key: \"X-Tenant\", value: schema });",
+          "        console.log(\"X-Tenant adicionado para:\", url);",
+          "    }",
+          "} else if (url.includes('/api/controlplane/')) {",
+          "    const token = pm.environment.get(\"controlplane_access_token\");",
+          "    ",
+          "    if (token) {",
+          "        pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + token });",
+          "        console.log(\"Token do Control Plane adicionado para:\", url);",
+          "    } else {",
+          "        console.log(\"Token do Control Plane não disponível para:\", url);",
+          "    }",
           "}"
         ]
       }
@@ -781,11 +814,7 @@
       "listen": "test",
       "script": {
         "type": "text/javascript",
-        "packages": {},
-        "requests": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     }
   ],

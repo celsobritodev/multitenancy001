@@ -102,7 +102,7 @@ public enum ApiErrorCode {
     // =========================
     // Tenant / Multitenancy
     // =========================
-    TENANT_SELECTION_REQUIRED(ApiErrorCategory.AUTH, 400, "Seleção de tenant é obrigatória"),
+    TENANT_SELECTION_REQUIRED(ApiErrorCategory.CONFLICT, 409, "Seleção de tenant é obrigatória"),
 
     TENANT_CONTEXT_REQUIRED(ApiErrorCategory.TENANT, 400, "Tenant context é obrigatório"),
     TENANT_INVALID(ApiErrorCategory.TENANT, 400, "Tenant inválido"),

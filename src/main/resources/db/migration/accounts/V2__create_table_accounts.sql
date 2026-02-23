@@ -85,3 +85,19 @@ CREATE INDEX IF NOT EXISTS idx_accounts_deleted ON accounts (deleted);
 CREATE INDEX IF NOT EXISTS idx_accounts_created_at ON accounts (created_at);
 CREATE INDEX IF NOT EXISTS idx_accounts_payment_due_date ON accounts (payment_due_date) WHERE deleted = false;
 CREATE INDEX IF NOT EXISTS idx_accounts_trial_end_at ON accounts (trial_end_at) WHERE deleted = false;
+
+-- Adicionar ao final do arquivo V2__create_table_accounts.sql
+
+-- Índices para consultas frequentes por localização
+CREATE INDEX IF NOT EXISTS idx_accounts_country ON accounts(country) WHERE deleted = false;
+CREATE INDEX IF NOT EXISTS idx_accounts_timezone ON accounts(timezone) WHERE deleted = false;
+
+-- Índice para busca por billing_email (quando usado)
+CREATE INDEX IF NOT EXISTS idx_accounts_billing_email ON accounts(billing_email) WHERE deleted = false AND billing_email IS NOT NULL;
+
+-- Índice para consultas de trial expirado (usado em jobs)
+CREATE INDEX IF NOT EXISTS idx_accounts_trial_status ON accounts(status, trial_end_at) WHERE deleted = false;
+
+-- Índice para consultas de pagamento atrasado (usado em jobs)
+CREATE INDEX IF NOT EXISTS idx_accounts_payment_status ON accounts(status, payment_due_date) WHERE deleted = false;
+

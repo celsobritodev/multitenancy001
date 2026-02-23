@@ -10,6 +10,12 @@ import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 
+
+/**
+ * Serviço central de execução em contexto de Tenant.
+ * Garante que a conexão com o banco de dados seja roteada para o schema correto
+ * e que o contexto de segurança do tenant seja preservado durante a execução.
+ */
 @Component
 public class TenantExecutor {
 

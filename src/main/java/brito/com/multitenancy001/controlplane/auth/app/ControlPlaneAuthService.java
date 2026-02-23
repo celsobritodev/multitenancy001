@@ -1,11 +1,11 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.controlplane.auth.app.command.ControlPlaneAdminLoginCommand;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.integration.audit.ControlPlaneAuthEventAuditIntegrationService;
 import brito.com.multitenancy001.integration.auth.ControlPlaneJwtIntegrationService;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.db.Schemas;
@@ -29,10 +29,18 @@ import org.springframework.util.StringUtils;
 import java.time.Instant;
 
 /**
- * Serviço de login do ControlPlane.
+ * Serviço de login do Control Plane.
  *
- * Ajuste:
- * - Ao emitir refreshToken no login, registra sessão server-side (logout forte / rotação).
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Validar request de login.</li>
+ *   <li>Resolver identidade via <code>login_identities</code>.</li>
+ *   <li>Validar status do usuário (enabled / habilitado para login).</li>
+ *   <li>Autenticar via AuthenticationManager (password hash validado pelo DaoAuthenticationProvider).</li>
+ *   <li>Emitir access token + refresh token.</li>
+ *   <li>Registrar refresh session server-side (logout forte / rotação).</li>
+ *   <li>Auditar tentativa / sucesso / negação.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -52,9 +60,15 @@ public class ControlPlaneAuthService {
 
     private final AuthRefreshSessionService authRefreshSessionService;
 
+    /**
+     * Efetua login do usuário do Control Plane e retorna access+refresh tokens.
+     *
+     * @param cmd comando de login (email/senha).
+     * @return JwtResult com tokens e claims essenciais.
+     */
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
 
-        /** comentário: valida entrada, autentica, emite tokens e registra sessão */
+        /** comentário: valida entrada, audita tentativa, autentica, emite tokens, registra sessão e audita sucesso/negação */
         if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Requisição inválida", 400);
         if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
         if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
@@ -97,11 +111,26 @@ public class ControlPlaneAuthService {
                         new UsernamePasswordAuthenticationToken(emailNorm, password)
                 );
 
-                String accessToken = controlPlaneJwtIntegrationService.generateControlPlaneToken(authentication, accountId, DEFAULT_SCHEMA);
+                /**
+                 * FIX:
+                 * Durante login, o Authentication costuma ter principal=UserDetails (ex.: org.springframework.security.core.userdetails.User).
+                 * O JwtTokenProvider exige subjectId quando o principal NÃO é AuthenticatedUserContext.
+                 * Portanto, passamos explicitamente o userId (subject_id) = user.getId().
+                 */
+                String accessToken = controlPlaneJwtIntegrationService.generateControlPlaneToken(
+                        authentication,
+                        accountId,
+                        DEFAULT_SCHEMA,
+                        user.getId()
+                );
 
-                String refreshToken = controlPlaneJwtIntegrationService.generateRefreshToken(user.getEmail(), DEFAULT_SCHEMA, accountId);
+                String refreshToken = controlPlaneJwtIntegrationService.generateRefreshToken(
+                        user.getEmail(),
+                        DEFAULT_SCHEMA,
+                        accountId
+                );
 
-             // ✅ registra sessão server-side (logout forte / rotação)
+                // registra sessão server-side (logout forte / rotação)
                 authRefreshSessionService.onRefreshIssued(
                         brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.CONTROLPLANE,
                         accountId,
@@ -133,8 +162,15 @@ public class ControlPlaneAuthService {
         }
     }
 
+    /**
+     * Audita tentativa de login (ATTEMPT).
+     *
+     * @param emailNorm email normalizado.
+     * @param detailsJson json de detalhes.
+     */
     private void auditAttempt(String emailNorm, String detailsJson) {
-        /** comentário: audit attempt de login */
+
+        /** comentário: registra auditoria de tentativa de login do Control Plane */
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_INIT,
@@ -147,8 +183,15 @@ public class ControlPlaneAuthService {
         );
     }
 
+    /**
+     * Audita negação de login (DENIED).
+     *
+     * @param emailNorm email normalizado.
+     * @param detailsJson json de detalhes.
+     */
     private void auditDenied(String emailNorm, String detailsJson) {
-        /** comentário: audit denied de login */
+
+        /** comentário: registra auditoria de login negado do Control Plane */
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_DENIED,
@@ -161,8 +204,15 @@ public class ControlPlaneAuthService {
         );
     }
 
+    /**
+     * Audita sucesso de login (SUCCESS).
+     *
+     * @param emailNorm email normalizado.
+     * @param detailsJson json de detalhes.
+     */
     private void auditSuccess(String emailNorm, String detailsJson) {
-        /** comentário: audit success de login */
+
+        /** comentário: registra auditoria de login bem-sucedido do Control Plane */
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_SUCCESS,

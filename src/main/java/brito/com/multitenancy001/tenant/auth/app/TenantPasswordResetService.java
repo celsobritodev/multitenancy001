@@ -61,16 +61,15 @@ public class TenantPasswordResetService {
 
         AccountSnapshot account = accountResolver.resolveActiveAccountBySlug(slug);
 
-        String tenantSchema = account.tenantSchema();
-        if (!StringUtils.hasText(tenantSchema)) {
+        String tenantSchemaRaw = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchemaRaw)) {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", 409);
         }
-        tenantSchema = tenantSchema.trim();
 
-        String finalTenantSchema = tenantSchema;
+        final String tenantSchema = tenantSchemaRaw.trim();
 
         try {
-            String token = tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+            String token = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
                 TenantUser user = tenantUserQueryService.getUserByEmail(normalizedEmail, account.id());
 
                 if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
@@ -79,27 +78,29 @@ public class TenantPasswordResetService {
 
                 String passwordResetToken = jwtTokenProvider.generatePasswordResetToken(
                         user.getEmail(),
-                        finalTenantSchema,
+                        tenantSchema,
                         account.id()
                 );
 
                 user.setPasswordResetToken(passwordResetToken);
                 user.setPasswordResetExpires(appClock.instant().plus(Duration.ofHours(1)));
-                tenantUserCommandService.save(user);
+
+                // ✅ assinatura nova: save(String tenantSchema, TenantUser user)
+                tenantUserCommandService.save(tenantSchema, user);
 
                 return passwordResetToken;
             });
 
             securityAuditService.record(
-                SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
-                AuditOutcome.SUCCESS,
-                null,
-                null,
-                normalizedEmail,
-                null,
-                account.id(),
-                finalTenantSchema,
-                "{\"expiresHours\":1}"
+                    SecurityAuditActionType.PASSWORD_RESET_REQUESTED,
+                    AuditOutcome.SUCCESS,
+                    null,
+                    null,
+                    normalizedEmail,
+                    null,
+                    account.id(),
+                    tenantSchema,
+                    "{\"expiresHours\":1}"
             );
 
             return token;
@@ -113,7 +114,7 @@ public class TenantPasswordResetService {
                     normalizedEmail,
                     null,
                     account.id(),
-                    finalTenantSchema,
+                    tenantSchema,
                     "{\"reason\":\"error\"}"
             );
             throw e;
@@ -143,7 +144,7 @@ public class TenantPasswordResetService {
 
         try {
             tenantExecutor.runInTenantSchema(tenantSchema, () -> {
-                // ✅ FIX: assinatura correta (accountId, tenantSchema, email, token, newPassword)
+                // ✅ assinatura correta (accountId, tenantSchema, email, token, newPassword)
                 tenantUserCommandService.resetPasswordWithToken(accountId, tenantSchema, email, token, newPassword);
                 return null;
             });
