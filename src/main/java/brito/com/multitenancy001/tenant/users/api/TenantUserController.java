@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.tenant.users.api;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.users.api.dto.TenantUserCreateRequest;
@@ -24,6 +23,18 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * API REST (Tenant): Usuários.
+ *
+ * Observação importante sobre roteamento:
+ * - Rotas fixas (ex.: /count-enabled) DEVEM existir explicitamente.
+ * - Rotas com path variable DEVEM ser restritas por regex (ex.: {userId:\\d+})
+ *   para não capturar strings e gerar 500 (TypeMismatch).
+ *
+ * Compatibilidade E2E/coleções legadas:
+ * - Algumas coleções usam PATCH /{id}/soft-delete ao invés de DELETE /{id}.
+ *   Mantemos ambos para não quebrar Newman.
+ */
 @RestController
 @RequestMapping("/api/tenant/users")
 @RequiredArgsConstructor
@@ -54,7 +65,37 @@ public class TenantUserController {
         return ResponseEntity.ok(users.stream().map(tenantUserApiMapper::toSummary).toList());
     }
 
-    @GetMapping("/{userId}")
+    /**
+     * Compat com a coleção E2E v9:
+     * GET /api/tenant/users/count-enabled
+     */
+    @GetMapping("/count-enabled")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
+    public ResponseEntity<Long> countEnabledTenantUsersCompat() {
+        return ResponseEntity.ok(tenantUserQueryService.countEnabledTenantUsers());
+    }
+
+    /**
+     * Endpoint "oficial" atual:
+     * GET /api/tenant/users/enabled/count
+     */
+    @GetMapping("/enabled/count")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
+    public ResponseEntity<Long> countEnabledTenantUsers() {
+        return ResponseEntity.ok(tenantUserQueryService.countEnabledTenantUsers());
+    }
+
+    @GetMapping("/enabled/{userId:\\d+}")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
+    public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
+        TenantUser user = tenantUserQueryService.getEnabledTenantUser(userId);
+        return ResponseEntity.ok(tenantUserApiMapper.toDetails(user));
+    }
+
+    /**
+     * IMPORTANTE: restringe para aceitar somente números.
+     */
+    @GetMapping("/{userId:\\d+}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
     public ResponseEntity<TenantUserDetailsResponse> getTenantUser(@PathVariable Long userId) {
         TenantUser user = tenantUserQueryService.getTenantUser(userId);
@@ -68,14 +109,14 @@ public class TenantUserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(tenantUserApiMapper.toDetails(created));
     }
 
-    @PatchMapping("/{userId}/transfer-admin")
+    @PatchMapping("/{userId:\\d+}/transfer-admin")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_ROLE_TRANSFER.asAuthority())")
     public ResponseEntity<Void> transferTenantOwner(@PathVariable Long userId) {
         tenantUserCommandService.transferTenantOwner(userId);
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("/{userId}/status")
+    @PatchMapping("/{userId:\\d+}/status")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.asAuthority())")
     public ResponseEntity<TenantUserSummaryResponse> updateTenantUserStatus(
             @PathVariable Long userId,
@@ -97,7 +138,7 @@ public class TenantUserController {
         return ResponseEntity.ok(tenantUserApiMapper.toSummary(updated));
     }
 
-    @PatchMapping("/{userId}/password")
+    @PatchMapping("/{userId:\\d+}/password")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_UPDATE.asAuthority())")
     public ResponseEntity<TenantUserSummaryResponse> resetTenantUserPassword(
             @PathVariable Long userId,
@@ -112,37 +153,39 @@ public class TenantUserController {
         return ResponseEntity.ok(tenantUserApiMapper.toSummary(updated));
     }
 
-    @DeleteMapping("/{userId}")
+    /**
+     * Compat com coleções legadas:
+     * PATCH /api/tenant/users/{id}/soft-delete
+     */
+    @PatchMapping("/{userId:\\d+}/soft-delete")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.asAuthority())")
+    public ResponseEntity<Void> softDeleteTenantUserCompat(@PathVariable Long userId) {
+        tenantUserCommandService.softDeleteTenantUser(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Endpoint "oficial" atual:
+     * DELETE /api/tenant/users/{id}
+     */
+    @DeleteMapping("/{userId:\\d+}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.asAuthority())")
     public ResponseEntity<Void> deleteTenantUser(@PathVariable Long userId) {
         tenantUserCommandService.softDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/{userId}/hard")
+    @DeleteMapping("/{userId:\\d+}/hard")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_DELETE.asAuthority())")
     public ResponseEntity<Void> hardDeleteTenantUser(@PathVariable Long userId) {
         tenantUserCommandService.hardDeleteTenantUser(userId);
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("/{userId}/restore")
+    @PatchMapping("/{userId:\\d+}/restore")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_RESTORE.asAuthority())")
     public ResponseEntity<TenantUserSummaryResponse> restoreTenantUser(@PathVariable Long userId) {
         TenantUser restored = tenantUserCommandService.restoreTenantUser(userId);
         return ResponseEntity.ok(tenantUserApiMapper.toSummary(restored));
-    }
-
-    @GetMapping("/enabled/{userId}")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<TenantUserDetailsResponse> getEnabledTenantUser(@PathVariable Long userId) {
-        TenantUser user = tenantUserQueryService.getEnabledTenantUser(userId);
-        return ResponseEntity.ok(tenantUserApiMapper.toDetails(user));
-    }
-
-    @GetMapping("/enabled/count")
-    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_USER_READ.asAuthority())")
-    public ResponseEntity<Long> countEnabledTenantUsers() {
-        return ResponseEntity.ok(tenantUserQueryService.countEnabledTenantUsers());
     }
 }

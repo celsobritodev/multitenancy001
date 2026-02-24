@@ -7,29 +7,47 @@ import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.net.InetAddress;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Serviço central de auditoria de segurança (append-only) gravado em PUBLIC schema.
  *
- * Objetivo:
- * - Registrar eventos sensíveis de segurança/billing/users com outcome: ATTEMPT/SUCCESS/DENIED/FAILURE.
- * - Produzir trilha SOC2-like para investigação e compliance.
+ * <p><b>Objetivo:</b></p>
+ * <ul>
+ *   <li>Registrar eventos sensíveis de segurança/billing/users com outcome: ATTEMPT/SUCCESS/DENIED/FAILURE.</li>
+ *   <li>Produzir trilha SOC2-like para investigação e compliance.</li>
+ * </ul>
  *
- * Regras:
- * - Deve ser chamado por AppServices/UseCases (não Controller).
- * - Details deve ser JSON estruturado e nunca conter segredos (tokens, senhas, hashes, etc.).
- * - occurredAt deve vir do AppClock (Instant -> timestamptz).
+ * <p><b>Regras:</b></p>
+ * <ul>
+ *   <li>Deve ser chamado por AppServices/UseCases (não Controller).</li>
+ *   <li>Details deve ser JSON estruturado e nunca conter segredos (tokens, senhas, hashes, etc.).</li>
+ *   <li>occurredAt deve vir do AppClock (Instant -> timestamptz).</li>
+ * </ul>
+ *
+ * <p><b>Isolamento transacional:</b>
+ * Auditoria PUBLIC não deve "entrar" em TX TENANT. Por isso usamos REQUIRES_NEW e
+ * {@code transactionManager = "publicTransactionManager"}.</p>
+ *
+ * <p><b>Diagnóstico:</b>
+ * Este serviço loga quando é invocado com transação já ativa no thread (indicando nesting).</p>
  */
 @Service
 @RequiredArgsConstructor
 public class SecurityAuditService {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityAuditService.class);
 
     private final SecurityAuditEventRepository securityAuditEventRepository;
     private final AppClock appClock;
@@ -37,8 +55,13 @@ public class SecurityAuditService {
 
     /**
      * Registra um evento append-only de segurança.
+     *
+     * <p><b>TX:</b> sempre PUBLIC e sempre REQUIRES_NEW para não misturar com TENANT.</p>
      */
-    @Transactional
+    @Transactional(
+            transactionManager = "publicTransactionManager",
+            propagation = Propagation.REQUIRES_NEW
+    )
     public void record(
             SecurityAuditActionType actionType,
             AuditOutcome outcome,
@@ -50,8 +73,54 @@ public class SecurityAuditService {
             String tenantSchema,
             String detailsJson
     ) {
-        /* Comentário do método: cria e persiste um evento append-only com request meta e occurredAt via AppClock. */
+        logIfCalledWithActiveTx("record", actionType, outcome, accountId, tenantSchema);
+        doRecord(actionType, outcome, actorEmail, actorUserId, targetEmail, targetUserId, accountId, tenantSchema, detailsJson);
+    }
 
+    /**
+     * Helper para passar objeto estruturado e converter em JSON.
+     *
+     * <p><b>TX:</b> PUBLIC + REQUIRES_NEW.</p>
+     */
+    @Transactional(
+            transactionManager = "publicTransactionManager",
+            propagation = Propagation.REQUIRES_NEW
+    )
+    public void recordStructured(
+            SecurityAuditActionType actionType,
+            AuditOutcome outcome,
+            String actorEmail,
+            Long actorUserId,
+            String targetEmail,
+            Long targetUserId,
+            Long accountId,
+            String tenantSchema,
+            Object details
+    ) {
+        logIfCalledWithActiveTx("recordStructured", actionType, outcome, accountId, tenantSchema);
+
+        String detailsJson = (details == null)
+                ? null
+                : jsonDetailsMapper.toJsonNode(details).toString();
+
+        doRecord(actionType, outcome, actorEmail, actorUserId, targetEmail, targetUserId, accountId, tenantSchema, detailsJson);
+    }
+
+    /**
+     * Implementação interna (SEM anotação transacional) para evitar confusão com self-invocation
+     * e manter a regra: "uma fronteira transacional por método público".
+     */
+    private void doRecord(
+            SecurityAuditActionType actionType,
+            AuditOutcome outcome,
+            String actorEmail,
+            Long actorUserId,
+            String targetEmail,
+            Long targetUserId,
+            Long accountId,
+            String tenantSchema,
+            String detailsJson
+    ) {
         Instant now = appClock.instant();
 
         RequestMeta meta = RequestMetaContext.getOrNull();
@@ -82,73 +151,70 @@ public class SecurityAuditService {
         e.setAccountId(accountId);
         e.setTenantSchema(trimOrNull(tenantSchema));
 
-        // garante JSON válido (se vier null, fica null)
         e.setDetailsJson(normalizeDetailsJson(detailsJson));
+
+        if (log.isDebugEnabled()) {
+            log.debug("🧾 Audit save | actionType={} | outcome={} | accountId={} | tenantSchema={} | requestId={}",
+                    actionType, outcome, accountId, tenantSchema, requestId);
+        }
 
         securityAuditEventRepository.save(e);
     }
 
-    /**
-     * Helper para quem quer passar Map/record diretamente e deixar o serviço converter em JSON.
-     */
-    @Transactional
-    public void recordStructured(
+    private static void logIfCalledWithActiveTx(
+            String method,
             SecurityAuditActionType actionType,
             AuditOutcome outcome,
-            String actorEmail,
-            Long actorUserId,
-            String targetEmail,
-            Long targetUserId,
             Long accountId,
-            String tenantSchema,
-            Object details
+            String tenantSchema
     ) {
-        /* Comentário do método: converte details tipado (Map/record) em JSON e delega para record(). */
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) return;
 
-        String detailsJson = (details == null)
-                ? null
-                : jsonDetailsMapper.toJsonNode(details).toString();
+        Map<Object, Object> resources = TransactionSynchronizationManager.getResourceMap();
 
-        record(
-                actionType,
-                outcome,
-                actorEmail,
-                actorUserId,
-                targetEmail,
-                targetUserId,
-                accountId,
-                tenantSchema,
-                detailsJson
-        );
+        log.warn("⚠️ SecurityAuditService.{} chamado com transação já ativa no thread (possível nesting TENANT->PUBLIC/JDBC) | actionType={} | outcome={} | accountId={} | tenantSchema={} | resources={}",
+                method, actionType, outcome, accountId, tenantSchema, summarizeResources(resources));
+    }
+
+    private static String summarizeResources(Map<Object, Object> resources) {
+        if (resources == null || resources.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (var e : resources.entrySet()) {
+            if (!first) sb.append(", ");
+            first = false;
+            Object k = e.getKey();
+            Object v = e.getValue();
+            sb.append(k == null ? "null" : k.getClass().getName())
+              .append("->")
+              .append(v == null ? "null" : v.getClass().getName());
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     private static InetAddress parseInetAddressOrNull(String ip) {
-        /* Comentário do método: converte String IP para InetAddress de forma defensiva. */
         if (!StringUtils.hasText(ip)) return null;
         try {
             return InetAddress.getByName(ip.trim());
         } catch (Exception ex) {
-            // auditoria nunca deve falhar por IP inválido
-            return null;
+            return null; // auditoria nunca deve falhar por IP inválido
         }
     }
 
     private static String trimOrNull(String s) {
-        /* Comentário do método: trim defensivo para evitar lixo em auditoria. */
         if (!StringUtils.hasText(s)) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
     }
 
     private static String normalizeEmailOrNull(String email) {
-        /* Comentário do método: normaliza email para auditoria (minúsculo + trim). */
         if (!StringUtils.hasText(email)) return null;
         String t = email.trim().toLowerCase();
         return t.isEmpty() ? null : t;
     }
 
     private static String normalizeDetailsJson(String json) {
-        /* Comentário do método: valida minimamente o formato para não persistir "toString()" acidental. */
         if (!StringUtils.hasText(json)) return null;
         String t = json.trim();
         if (t.isEmpty()) return null;
@@ -160,7 +226,6 @@ public class SecurityAuditService {
     }
 
     private static String escapeJsonString(String s) {
-        /* Comentário do método: escape básico para embutir texto em JSON. */
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

@@ -1,7 +1,6 @@
 package brito.com.multitenancy001.tenant.users.app.query;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -59,6 +58,9 @@ public class TenantUserQueryService {
     // READ / LIST
     // =========================================================
 
+    /**
+     * Busca usuário por ID no tenant, EXCLUINDO soft-deleted (deleted=false).
+     */
     public TenantUser getUser(Long userId, Long accountId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
@@ -69,6 +71,26 @@ public class TenantUserQueryService {
         );
     }
 
+    /**
+     * Busca usuário por ID no tenant, INCLUINDO soft-deleted (deleted=true).
+     *
+     * Motivação:
+     * - Fluxos de RESTORE após soft delete precisam enxergar o usuário deletado.
+     * - Evita 404 "prematuro" quando o service de contexto precisa auditar e restaurar.
+     */
+    public TenantUser getUserIncludingDeleted(Long userId, Long accountId) {
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);
+
+        return transactionExecutor.inTenantReadOnlyTx(() ->
+                tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404))
+        );
+    }
+
+    /**
+     * Busca usuário habilitado por ID (regra do repository).
+     */
     public TenantUser getEnabledUser(Long userId, Long accountId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_REQUIRED, "userId é obrigatório", 400);

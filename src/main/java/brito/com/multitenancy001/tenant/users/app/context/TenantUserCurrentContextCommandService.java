@@ -4,8 +4,8 @@ import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.integration.security.TenantRequestIdentityService;
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
+import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
@@ -52,7 +52,10 @@ public class TenantUserCurrentContextCommandService {
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
         Long fromUserId = requestIdentity.getCurrentUserId();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(toUserId, accountId));
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUser(toUserId, accountId)
+        );
 
         Map<String, Object> details = securityAudit.baseDetails("ownership_transfer", toUserId, target.getEmail());
         details.put("fromUserId", fromUserId);
@@ -171,7 +174,10 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUser(userId, accountId)
+        );
 
         SecurityAuditActionType type = suspended ? SecurityAuditActionType.USER_SUSPENDED : SecurityAuditActionType.USER_RESTORED;
 
@@ -185,7 +191,10 @@ public class TenantUserCurrentContextCommandService {
             // ✅ command já executa schema+tx
             tenantUserCommandService.setSuspendedByAdmin(accountId, tenantSchema, userId, suspended);
 
-            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+            TenantUser result = tenantExecutor.runInTenantSchema(
+                    tenantSchema,
+                    () -> tenantUserQueryService.getUser(userId, accountId)
+            );
 
             securityAudit.recordSuccess(type, userId, target.getEmail(), details);
             return result;
@@ -211,7 +220,10 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUser(userId, accountId)
+        );
 
         SecurityAuditActionType type = suspended ? SecurityAuditActionType.USER_SUSPENDED : SecurityAuditActionType.USER_RESTORED;
 
@@ -225,7 +237,10 @@ public class TenantUserCurrentContextCommandService {
             // ✅ command já executa schema+tx
             tenantUserCommandService.setSuspendedByAccount(accountId, tenantSchema, userId, suspended);
 
-            TenantUser result = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+            TenantUser result = tenantExecutor.runInTenantSchema(
+                    tenantSchema,
+                    () -> tenantUserQueryService.getUser(userId, accountId)
+            );
 
             securityAudit.recordSuccess(type, userId, target.getEmail(), details);
             return result;
@@ -251,7 +266,10 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUser(userId, accountId)
+        );
 
         Map<String, Object> details = securityAudit.baseDetails("user_soft_delete", userId, target.getEmail());
         securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_DELETED, userId, target.getEmail(), details);
@@ -292,7 +310,12 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+        // ✅ IMPORTANTÍSSIMO: após soft delete, getUser(...) dá 404 (deleted=false).
+        // Precisamos enxergar o usuário soft-deleted para restaurar.
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUserIncludingDeleted(userId, accountId)
+        );
 
         Map<String, Object> details = securityAudit.baseDetails("user_soft_restore", userId, target.getEmail());
         securityAudit.recordAttempt(SecurityAuditActionType.USER_SOFT_RESTORED, userId, target.getEmail(), details);
@@ -327,7 +350,10 @@ public class TenantUserCurrentContextCommandService {
         Long accountId = requestIdentity.getCurrentAccountId();
         String tenantSchema = requestIdentity.getCurrentTenantSchema();
 
-        TenantUser target = tenantExecutor.runInTenantSchema(tenantSchema, () -> tenantUserQueryService.getUser(userId, accountId));
+        TenantUser target = tenantExecutor.runInTenantSchema(
+                tenantSchema,
+                () -> tenantUserQueryService.getUser(userId, accountId)
+        );
 
         Map<String, Object> details = securityAudit.baseDetails("user_password_reset_admin", userId, target.getEmail());
         details.put("mode", "admin_reset");

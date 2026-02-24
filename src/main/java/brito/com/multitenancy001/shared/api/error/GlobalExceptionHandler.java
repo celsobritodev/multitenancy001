@@ -13,6 +13,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -211,6 +213,38 @@ public class GlobalExceptionHandler {
                         .timestamp(ts)
                         .error("INVALID_USER")
                         .message("usuario ou senha invalidos")
+                        .build()
+        );
+    }
+
+    // ✅ NOVO: Tratamento para AuthorizationDeniedException (Spring Security 6)
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex) {
+        Instant ts = appNow();
+
+        log.warn("Acesso negado (AuthorizationDenied): {}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(ts)
+                        .error(ApiErrorCode.FORBIDDEN.name())
+                        .message("Acesso negado")
+                        .build()
+        );
+    }
+
+    // ✅ NOVO: Tratamento para AccessDeniedException (versões antigas do Spring Security)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        Instant ts = appNow();
+
+        log.warn("Acesso negado (AccessDenied): {}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(ts)
+                        .error(ApiErrorCode.FORBIDDEN.name())
+                        .message("Acesso negado")
                         .build()
         );
     }

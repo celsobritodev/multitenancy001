@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.users.app.command;
 
+import brito.com.multitenancy001.infrastructure.publicschema.audit.PublicAuditDispatcher;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaUnitOfWork;
@@ -20,6 +21,7 @@ import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -53,7 +55,13 @@ import java.util.Set;
  * Regra arquitetural (multi-tenant):
  * - Este service NÃO usa TxExecutor diretamente.
  * - Toda execução de tenant deve ocorrer via TenantSchemaUnitOfWork (schema + tx em um único contrato).
+ *
+ * Regra crítica (multi-tx managers):
+ * - NUNCA gravar auditoria PUBLIC iniciando uma transação dentro de uma transação TENANT no mesmo thread.
+ * - Para evitar: "Pre-bound JDBC Connection found! ...", a gravação PUBLIC é feita via {@link PublicAuditDispatcher},
+ *   que grava imediatamente quando não há tx ativa, ou agenda afterCompletion quando há tx ativa.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TenantUserCommandService {
@@ -63,6 +71,9 @@ public class TenantUserCommandService {
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
+
+    /** Dispatcher que evita nesting ilegal TENANT->PUBLIC. */
+    private final PublicAuditDispatcher publicAuditDispatcher;
 
     /**
      * Unit of Work que garante:
@@ -861,18 +872,35 @@ public class TenantUserCommandService {
             String tenantSchema,
             Object details
     ) {
-        /* Grava evento com details estruturado. */
-        securityAuditService.record(
-                actionType,
-                outcome,
-                actor == null ? null : actor.email(),
-                actor == null ? null : actor.userId(),
-                targetEmail,
-                targetUserId,
-                accountId,
-                tenantSchema,
-                toJson(details)
-        );
+        /**
+         * Grava evento com details estruturado.
+         *
+         * IMPORTANTE:
+         * Esta chamada NÃO pode iniciar transação PUBLIC dentro de tx TENANT no mesmo thread.
+         * Por isso, a gravação é feita via PublicAuditDispatcher:
+         * - Se não há tx ativa: grava imediatamente em PUBLIC (REQUIRES_NEW).
+         * - Se há tx ativa (TENANT): agenda afterCompletion e grava depois que a tx encerrar.
+         */
+        final String detailsJson = toJson(details);
+        publicAuditDispatcher.dispatch(() -> {
+            try {
+                securityAuditService.record(
+                        actionType,
+                        outcome,
+                        actor == null ? null : actor.email(),
+                        actor == null ? null : actor.userId(),
+                        targetEmail,
+                        targetUserId,
+                        accountId,
+                        tenantSchema,
+                        detailsJson
+                );
+            } catch (Exception e) {
+                // best-effort: auditoria não derruba o caso de uso
+                log.warn("⚠️ Falha ao gravar SecurityAudit (best-effort) | actionType={} outcome={} accountId={} tenantSchema={} msg={}",
+                        actionType, outcome, accountId, tenantSchema, e.getMessage(), e);
+            }
+        });
     }
 
     private String toJson(Object details) {

@@ -4,9 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.MultiTenancySettings;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.orm.hibernate5.SpringBeanContainer;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -17,6 +19,18 @@ import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Configuração do EntityManagerFactory TENANT usando Hibernate multi-tenancy por SCHEMA.
+ *
+ * <p>Regras do projeto:</p>
+ * <ul>
+ *   <li>Entidades TENANT vivem em {@code brito.com.multitenancy001.tenant.*}</li>
+ *   <li>O tenant é resolvido por schema via {@link TenantSchemaResolver}</li>
+ *   <li>Conexões são fornecidas por {@link TenantSchemaConnectionProvider}</li>
+ *   <li>O TransactionManager do TENANT é {@link JpaTransactionManager}</li>
+ * </ul>
+ */
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @Configuration
 @RequiredArgsConstructor
 public class TenantSchemaHibernateConfig {
@@ -28,13 +42,11 @@ public class TenantSchemaHibernateConfig {
 
     @Bean(name = "tenantEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean tenantEntityManagerFactory() {
-        var emf = new LocalContainerEntityManagerFactoryBean();
+        LocalContainerEntityManagerFactoryBean emf = new LocalContainerEntityManagerFactoryBean();
         emf.setDataSource(dataSource);
 
         /**
          * Entidades do TENANT (módulo-first: tenant.users/products/categories/etc.)
-         *
-         * Obs: não use mais "brito.com.multitenancy001.tenant.domain" (não existe mais).
          */
         emf.setPackagesToScan("brito.com.multitenancy001.tenant");
 
@@ -42,14 +54,23 @@ public class TenantSchemaHibernateConfig {
         emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
 
         Map<String, Object> props = new HashMap<>();
-        props.put("hibernate.hbm2ddl.auto", "none");
-        props.put("hibernate.show_sql", true);
-        props.put("hibernate.format_sql", true);
 
-        // ✅ Multi-tenancy por schema (strategy)
+        // DDL sempre via Flyway (você dropa o banco e recria)
+        props.put(AvailableSettings.HBM2DDL_AUTO, "none");
+
+        // Log SQL (mantenho como você está usando)
+        props.put(AvailableSettings.SHOW_SQL, true);
+        props.put(AvailableSettings.FORMAT_SQL, true);
+
+        /**
+         * ✅ Multi-tenancy por SCHEMA
+         *
+         * Obs: Na sua versão, AvailableSettings.MULTI_TENANT não existe.
+         * O key compatível é "hibernate.multiTenancy" (string).
+         */
         props.put("hibernate.multiTenancy", "SCHEMA");
 
-        // ✅ Provider/Resolver
+        // ✅ Provider/Resolver (constantes oficiais)
         props.put(MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, tenantSchemaConnectionProvider);
         props.put(MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, currentTenantSchemaResolver);
 
@@ -67,4 +88,3 @@ public class TenantSchemaHibernateConfig {
         return new JpaTransactionManager(emf);
     }
 }
-

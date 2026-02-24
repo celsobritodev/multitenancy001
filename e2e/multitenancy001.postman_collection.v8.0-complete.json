@@ -1,0 +1,763 @@
+{
+  "info": {
+    "_postman_id": "v8-complete-tests-final",
+    "name": "multitenancy001-e2e (v8.0 - COMPLETE - FINAL)",
+    "description": "Coleção única final com: (1) clear no início (collection prerequest), (2) auto-header para rotas /api/tenant/** (collection prerequest), (3) remoção de headers repetidos em /api/tenant/**. Inclui BOOTSTRAP + AUTH + ROLES + BILLING + CATEGORY + SUBCATEGORY + SUPPLIER + PRODUCT + QUERIES + NEGATIVE.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "22901965"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "try { console.clear(); } catch (e) {}",
+          "// ==============================================",
+          "// 🚀 E2E Collection prerequest (single script)",
+          "// - Clear limpo (Newman-friendly)",
+          "// - Auto-header para rotas /api/tenant/**",
+          "// ==============================================",
+          "",
+          "// Clear limpo: não spamma 60 linhas no Newman.",
+          "// Mantém o banner, mas só imprime 1x por execução.",
+          "if (!pm.collectionVariables.get('__e2e_started')) {",
+          "  pm.collectionVariables.set('__e2e_started', '1');",
+          "  console.log('==============================================');",
+          "  console.log('🚀 Starting E2E Collection: multitenancy001');",
+          "  console.log('==============================================');",
+          "}",
+          "",
+          "// ===== AUTO-HEADER for /api/tenant/** =====",
+          "const url = pm.request.url.toString();",
+          "",
+          "if (url.includes('/api/tenant/')) {",
+          "  const token = pm.environment.get('tenant_access_token');",
+          "  const schema = pm.environment.get('tenant_schema');",
+          "",
+          "  if (token) {",
+          "    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "    console.log('🔑 Token de tenant adicionado para:', url);",
+          "  }",
+          "  if (schema) {",
+          "    pm.request.headers.upsert({ key: 'X-Tenant', value: schema });",
+          "    console.log('🏷️ X-Tenant adicionado para:', url);",
+          "  }",
+          "} else {",
+          "  console.log('ℹ️ Rota sem autenticação automática:', url);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "📦 00 - BOOTSTRAP (V3)",
+      "description": "Setup inicial - health, signup, logins",
+      "item": [
+        {
+          "name": "00.01 health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/actuator/health"
+          }
+        },
+        {
+          "name": "00.02 signup",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get(\"tenant_email\")) {",
+                  "    const ts = Date.now();",
+                  "    const email = `e2e_${ts}@tenant.local`;",
+                  "    pm.environment.set(\"tenant_email\", email);",
+                  "    console.log(`📧 Email gerado: ${email}`);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Signup OK', () => pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('account_id', String(json.account.id));",
+                  "pm.environment.set('tenant_schema', json.account.tenantSchema);",
+                  "pm.environment.set('tenant_slug', json.account.slug);",
+                  "console.log(`✅ Conta criada: ID=${json.account.id}, Schema=${json.account.tenantSchema}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Tenant E2E\",\n  \"loginEmail\": \"{{tenant_email}}\",\n  \"taxIdType\": \"{{tenant_tax_id_type}}\",\n  \"taxIdNumber\": \"{{tenant_tax_id_number}}\",\n  \"password\": \"{{tenant_password}}\",\n  \"confirmPassword\": \"{{tenant_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/signup"
+          }
+        },
+        {
+          "name": "00.03 tenant login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenant login OK', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('tenant_access_token', json.accessToken);",
+                  "pm.environment.set('tenant_refresh_token', json.refreshToken);",
+                  "pm.environment.set('tenant_user_id', String(json.userId));",
+                  "console.log(`✅ Tenant logado: ID=${json.userId}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tenant_email}}\",\n  \"password\": \"{{tenant_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/auth/login"
+          }
+        },
+        {
+          "name": "00.04 tenant me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenant me OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/tenant/me"
+          }
+        },
+        {
+          "name": "00.05 controlplane login (superadmin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login superadmin OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('superadmin_token', json.accessToken);",
+                  "pm.environment.set('superadmin_refresh', json.refreshToken);",
+                  "pm.environment.set('superadmin_user_id', String(json.userId));",
+                  "console.log(`✅ Superadmin logado: ID=${json.userId}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@platform.local\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/login"
+          }
+        },
+        {
+          "name": "00.06 login as billing manager",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login billing manager OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('billing_token', json.accessToken);",
+                  "pm.environment.set('billing_refresh', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"billing@platform.local\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/login"
+          }
+        },
+        {
+          "name": "00.07 login as support",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login support OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('support_token', json.accessToken);",
+                  "pm.environment.set('support_refresh', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"support@platform.local\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/login"
+          }
+        },
+        {
+          "name": "00.08 login as operator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login operator OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('operator_token', json.accessToken);",
+                  "pm.environment.set('operator_refresh', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator@platform.local\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔐 01 - TENANT AUTH TESTS (V3)",
+      "description": "Testes de refresh e logout do tenant",
+      "item": [
+        {
+          "name": "01.01 tenant refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenant refresh OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('tenant_refresh_old', pm.environment.get('tenant_refresh_token'));",
+                  "pm.environment.set('tenant_access_token', json.accessToken);",
+                  "pm.environment.set('tenant_refresh_token', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/auth/refresh"
+          }
+        },
+        {
+          "name": "01.02 tenant logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tenant logout OK', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{tenant_refresh_token}}\",\n  \"allDevices\": false\n}"
+            },
+            "url": "{{base_url}}/api/tenant/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎯 02 - CONTROL PLANE AUTH TESTS (V3)",
+      "description": "Testes de refresh e logout do control plane",
+      "item": [
+        {
+          "name": "02.01 controlplane refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Controlplane refresh OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('superadmin_token_new', json.accessToken);",
+                  "pm.environment.set('superadmin_refresh_new', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{superadmin_refresh}}\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/refresh"
+          }
+        },
+        {
+          "name": "02.02 controlplane logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Controlplane logout OK', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{superadmin_refresh_new}}\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "💰 03 - BILLING MANAGER TESTS (V4)",
+      "description": "Testes específicos do billing manager",
+      "item": [
+        {
+          "name": "03.01 billing manager me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Billing manager me OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.email).to.equal('billing@platform.local');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{billing_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/me"
+          }
+        },
+        {
+          "name": "03.02 billing manager refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Refresh OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('billing_token_new', json.accessToken);",
+                  "pm.environment.set('billing_refresh_new', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{billing_refresh}}\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/refresh"
+          }
+        },
+        {
+          "name": "03.03 billing manager logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Logout OK', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{billing_refresh_new}}\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🆘 04 - SUPPORT TESTS (V5)",
+      "description": "Testes de permissões do support",
+      "item": [
+        {
+          "name": "04.01 support me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Support me OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.email).to.equal('support@platform.local');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{support_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/me"
+          }
+        },
+        {
+          "name": "04.02 support list accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Support list accounts OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{support_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/accounts"
+          }
+        },
+        {
+          "name": "04.03 support list users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Support list users OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{support_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/users"
+          }
+        }
+      ]
+    },
+    {
+      "name": "⚙️ 05 - OPERATOR TESTS (V5)",
+      "description": "Testes de permissões do operator",
+      "item": [
+        {
+          "name": "05.01 operator me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Operator me OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.email).to.equal('operator@platform.local');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operator_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/me"
+          }
+        },
+        {
+          "name": "05.02 operator list accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Operator list accounts OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operator_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/accounts"
+          }
+        },
+        {
+          "name": "05.03 operator cannot list users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Operator cannot list users (403)', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operator_token}}" }
+            ],
+            "url": "{{base_url}}/api/controlplane/users"
+          }
+        }
+      ]
+    },
+    {
+      "name": "💳 06 - BILLING TESTS (V6)",
+      "description": "Testes de criação e consulta de pagamentos",
+      "item": [
+        {
+          "name": "06.01 superadmin create payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Superadmin create payment OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{superadmin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"{{account_id}}\",\n  \"amount\": 100.00,\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"paymentGateway\": \"STRIPE\",\n  \"description\": \"Test payment\"\n}"
+            },
+            "url": "{{base_url}}/api/controlplane/billing/payments"
+          }
+        },
+        {
+          "name": "06.02 superadmin list pending payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Superadmin list pending payments OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{superadmin_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/status/PENDING"
+          }
+        },
+        {
+          "name": "06.03 superadmin get total paid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Superadmin get total paid OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{superadmin_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/accounts/{{account_id}}/total-paid?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z"
+          }
+        },
+        {
+          "name": "06.04 superadmin count completed payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Superadmin count completed OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{superadmin_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/accounts/{{account_id}}/count-completed"
+          }
+        },
+        {
+          "name": "06.05 billing manager list pending payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Billing manager list pending payments OK', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{billing_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/status/PENDING"
+          }
+        },
+        {
+          "name": "06.06 support cannot list payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Support cannot list payments (403)', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{support_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/status/PENDING"
+          }
+        },
+        {
+          "name": "06.07 operator cannot list payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Operator cannot list payments (403)', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operator_token}}" }
+            ],
+            "url": "{{base_url}}/api/admin/billing/payments/query/status/PENDING"
+          }
+        }
+      ]
+    }
+  ]
+}

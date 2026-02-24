@@ -1,23 +1,29 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
-import java.util.function.Supplier;
-
-import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.db.Schemas;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * Serviço central de execução em contexto de Tenant.
- * Garante que a conexão com o banco de dados seja roteada para o schema correto
- * e que o contexto de segurança do tenant seja preservado durante a execução.
+ * Executor central do contexto de Tenant.
+ *
+ * <p>Responsabilidade: garantir que o {@link TenantContext} esteja corretamente bindado
+ * para um schema de tenant válido durante a execução de um bloco.</p>
+ *
+ * <p>Esse bind é o que permite que o Hibernate multi-tenant por schema escolha
+ * o schema correto (ex.: via CurrentTenantIdentifierResolver / MultiTenantConnectionProvider).</p>
  */
 @Component
 public class TenantExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantExecutor.class);
 
     private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
 
@@ -26,7 +32,7 @@ public class TenantExecutor {
     }
 
     // ---------------------------------------------------------------------
-    // ✅ Execução (tenant pronto) => sempre tenantSchema
+    // Execução: tenant pronto => sempre tenantSchema
     // ---------------------------------------------------------------------
 
     public <T> T runInTenantSchema(String tenantSchema, Supplier<T> fn) {
@@ -36,8 +42,16 @@ public class TenantExecutor {
             throw new ApiException(ApiErrorCode.TENANT_INVALID, "Tenant inválido", 404);
         }
 
+        if (log.isDebugEnabled()) {
+            log.debug("[TENANT] bind -> schema={}", normalizedTenantSchema);
+        }
+
         try (TenantContext.Scope ignored = TenantContext.scope(normalizedTenantSchema)) {
             return fn.get();
+        } finally {
+            if (log.isDebugEnabled()) {
+                log.debug("[TENANT] unbind -> back to PUBLIC");
+            }
         }
     }
 
@@ -48,7 +62,11 @@ public class TenantExecutor {
         });
     }
 
-    /** Retorna defaultValue se schema/tabela não existir. */
+    /**
+     * Executa apenas se schema e tabela existirem; caso contrário retorna {@code defaultValue}.
+     *
+     * <p>Útil para rotinas que podem rodar antes do provisionamento completo do tenant.</p>
+     */
     public <T> T runInTenantSchemaIfReady(String tenantSchema, String requiredTable, Supplier<T> fn, T defaultValue) {
         String normalizedTenantSchema = normalizeTenantSchemaOrNull(tenantSchema);
 
@@ -70,7 +88,9 @@ public class TenantExecutor {
         }, null);
     }
 
-    /** Lança ApiException se schema/tabela não existir. */
+    /**
+     * Valida que schema (e opcionalmente tabela) existe; caso contrário lança {@link ApiException}.
+     */
     public void assertTenantSchemaReadyOrThrow(String tenantSchema, String requiredTable) {
         String normalizedTenantSchema = normalizeTenantSchemaOrNull(tenantSchema);
 

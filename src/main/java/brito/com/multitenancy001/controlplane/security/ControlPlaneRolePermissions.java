@@ -54,13 +54,12 @@ public final class ControlPlaneRolePermissions {
                 ControlPlanePermission.CP_USER_PASSWORD_RESET
         )));
 
-        // OPERATOR = leitura operacional + self-service (/me)
+        // OPERATOR = leitura operacional + self-service (/me) - SEM CP_USER_READ
         MAP.put(ControlPlaneRole.CONTROLPLANE_OPERATOR, unmodifiable(EnumSet.of(
                 ControlPlanePermission.CP_ME_READ,
                 ControlPlanePermission.CP_ME_PASSWORD_CHANGE,
-
-                ControlPlanePermission.CP_TENANT_READ,
-                ControlPlanePermission.CP_USER_READ
+                ControlPlanePermission.CP_TENANT_READ
+                // CP_USER_READ foi removido - operator NÃO pode listar usuários
         )));
 
         // VIEWER = somente leitura + self-service (/me)

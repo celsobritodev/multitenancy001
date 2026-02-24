@@ -3,6 +3,8 @@ package brito.com.multitenancy001.infrastructure.persistence.multitenancy.hibern
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -31,6 +33,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class TransactionManagementConfig implements TransactionManagementConfigurer, SmartInitializingSingleton {
 
+    private static final Logger log = LoggerFactory.getLogger(TransactionManagementConfig.class);
+
     private static final String TENANT_BASE_PACKAGE = "brito.com.multitenancy001.tenant.";
 
     private final ApplicationContext applicationContext;
@@ -40,10 +44,13 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
 
     /**
      * ✅ Regra 1: qualquer @Transactional "pelado" (sem especificar manager) deve cair no PUBLIC.
-     * Isso torna o comportamento estável e previsível .
+     * Isso torna o comportamento estável e previsível.
      */
     @Override
     public PlatformTransactionManager annotationDrivenTransactionManager() {
+        Class<?> target = AopUtils.getTargetClass(publicTransactionManager);
+        if (target == null) target = publicTransactionManager.getClass();
+        log.info("✅ annotationDrivenTransactionManager() = publicTransactionManager | type={}", target.getName());
         return publicTransactionManager;
     }
 
@@ -55,6 +62,8 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
      */
     @Override
     public void afterSingletonsInstantiated() {
+        log.info("🔎 Verificando uso proibido de @Transactional direto em TENANT... basePackage={}", TENANT_BASE_PACKAGE);
+
         Set<String> violations = new LinkedHashSet<>();
 
         // 2.1) Verifica beans normais cuja classe alvo está no pacote tenant
@@ -64,7 +73,7 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
             try {
                 bean = applicationContext.getBean(beanName);
             } catch (Exception ignored) {
-                continue; // bean lazy/proxy com erro ou ainda não inicializado totalmente
+                continue;
             }
 
             Class<?> targetClass = AopUtils.getTargetClass(bean);
@@ -75,12 +84,11 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
             }
         }
 
-        // 2.2) Verifica especificamente interfaces de Spring Data JPA repositories (porque o bean é proxy)
-        // getBeansOfType(JpaRepository.class) volta como Map<String, JpaRepository> (raw) por causa de type erasure.
+        // 2.2) Verifica interfaces de Spring Data JPA repositories (proxy)
         Map<String, ?> repositories = applicationContext.getBeansOfType(JpaRepository.class);
         for (Object repoBeanObj : repositories.values()) {
 
-        	Class<?> targetClass = AopUtils.getTargetClass(repoBeanObj);
+            Class<?> targetClass = AopUtils.getTargetClass(repoBeanObj);
             if (targetClass == null) continue;
 
             for (Class<?> itf : targetClass.getInterfaces()) {
@@ -102,21 +110,17 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
             sb.append("\nCorreção: troque @Transactional por @TenantTx ou @TenantReadOnlyTx.\n");
             throw new IllegalStateException(sb.toString());
         }
+
+        log.info("✅ OK: Nenhum @Transactional direto encontrado no pacote TENANT.");
     }
 
     private boolean isTenantType(Class<?> type) {
         return type.getName().startsWith(TENANT_BASE_PACKAGE);
     }
 
-    /**
-     * Retorna lista de "Class#method" (e também Class-level) onde:
-     * - existe @Transactional aplicado diretamente (não via meta-annotation),
-     * - e NÃO existe @TenantTx/@TenantReadOnlyTx cobrindo o ponto.
-     */
     private List<String> findDirectTransactionalUsages(Class<?> type) {
         List<String> out = new ArrayList<>();
 
-        // Se a classe está anotada diretamente com @Transactional, isso é violação (a menos que seja @TenantTx/@TenantReadOnlyTx)
         boolean hasClassLevelDirectTransactional = type.isAnnotationPresent(Transactional.class);
         boolean hasClassLevelTenantTx = AnnotatedElementUtils.hasAnnotation(type, TenantTx.class)
                 || AnnotatedElementUtils.hasAnnotation(type, TenantReadOnlyTx.class);
@@ -125,9 +129,7 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
             out.add(type.getName() + "  [@Transactional direto no nível de classe]");
         }
 
-        // Varre métodos
         ReflectionUtils.doWithMethods(type, method -> {
-            // Se já está coberto por @TenantTx/@TenantReadOnlyTx (direto ou herdado/composto), ok
             boolean hasTenantTx = AnnotatedElementUtils.hasAnnotation(method, TenantTx.class)
                     || AnnotatedElementUtils.hasAnnotation(method, TenantReadOnlyTx.class)
                     || AnnotatedElementUtils.hasAnnotation(type, TenantTx.class)
@@ -135,7 +137,6 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
 
             if (hasTenantTx) return;
 
-            // Se tem @Transactional (em qualquer forma), mas aplicado DIRETAMENTE no método, é violação
             boolean hasAnyTransactional = AnnotatedElementUtils.hasAnnotation(method, Transactional.class)
                     || AnnotatedElementUtils.hasAnnotation(type, Transactional.class);
 
@@ -150,7 +151,6 @@ public class TransactionManagementConfig implements TransactionManagementConfigu
     }
 
     private boolean isCandidateMethod(Method method) {
-        // ignora bridge/synthetic
         return !method.isBridge() && !method.isSynthetic();
     }
 

@@ -1,5 +1,5 @@
-// src/main/java/brito/com/multitenancy001/controlplane/users/api/admin/ControlPlaneUserController.java
-package brito.com.multitenancy001.controlplane.users.api.admin;
+// src/main/java/brito/com/multitenancy001/controlplane/users/api/ControlPlaneUserController.java
+package brito.com.multitenancy001.controlplane.users.api;
 
 import brito.com.multitenancy001.controlplane.users.api.dto.*;
 import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserService;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/admin/controlplane-users")
+@RequestMapping("/api/controlplane/users")  // ← ALTERADO: /api/admin/controlplane-users → /api/controlplane/users
 @RequiredArgsConstructor
 public class ControlPlaneUserController {
 

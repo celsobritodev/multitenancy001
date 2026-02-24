@@ -119,6 +119,12 @@ public class AccountAppService {
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         accountStatusService.softDeleteAccount(accountId);
     }
+    
+    
+    
+    
+    
+    
 
     public void restoreAccount(Long accountId) {
         /* Restaura account deletada (delegado ao service específico). */

@@ -94,13 +94,23 @@ log "==> Health OK."
 
 log "==> Patch ENV (effective env for Newman)"
 ENV_FILE="${ENV_FILE}" ENV_EFFECTIVE="${ENV_EFFECTIVE}" python - <<'PY'
-import json, time, uuid, os
+import json, time, uuid, os, sys
+
+# Configurar encoding para UTF-8 no Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 src = os.environ["ENV_FILE"]
 out = os.environ["ENV_EFFECTIVE"]
 
-with open(src, "r", encoding="utf-8") as f:
-    d = json.load(f)
+try:
+    with open(src, "r", encoding="utf-8") as f:
+        d = json.load(f)
+except Exception as e:
+    print(f"Erro ao ler arquivo: {e}")
+    sys.exit(1)
 
 vals = d.get("values", [])
 by_key = {v.get("key"): v for v in vals if isinstance(v, dict) and "key" in v}
@@ -137,23 +147,30 @@ if not get("tenant_tax_id_type"):
 if not get("tenant_tax_id_number"):
     setv("tenant_tax_id_number", "12345678000199")
 
-# Control Plane - MANTER VALORES DO ARQUIVO ORIGINAL
-# Não fazer nada, apenas garantir que existam
+# Control Plane
 controlplane_email = get("controlplane_email")
 controlplane_password = get("controlplane_password")
 
-# Se por algum motivo estiverem vazios, usar valores padrão (fallback seguro)
 if not controlplane_email:
     setv("controlplane_email", "superadmin@platform.local")
-    print("⚠️ controlplane_email não encontrado, usando fallback")
+    print("[WARN] controlplane_email não encontrado, usando fallback")
 if not controlplane_password:
     setv("controlplane_password", "admin123")
-    print("⚠️ controlplane_password não encontrado, usando fallback")
+    print("[WARN] controlplane_password não encontrado, usando fallback")
 
-# Tokens vazios
-for k in ["tenant_access_token","tenant_refresh_token","account_id","tenantSchema",
-          "controlplane_access_token","controlplane_refresh_token","controlplane_refresh_token_old",
-          "controlplane_refresh_token_new","controlplane_account_id"]:
+# Lista completa de tokens para a V5
+token_keys = [
+    "tenant_access_token", "tenant_refresh_token", "account_id", "tenantSchema",
+    "superadmin_token", "superadmin_refresh", "superadmin_user_id",
+    "billing_token", "billing_refresh", "billing_token_new", "billing_refresh_new",
+    "support_token", "support_refresh", "support_token_new", "support_refresh_new",
+    "operator_token", "operator_refresh", "operator_token_new", "operator_refresh_new",
+    "controlplane_access_token", "controlplane_refresh_token", 
+    "controlplane_refresh_token_old", "controlplane_refresh_token_new", 
+    "controlplane_account_id"
+]
+
+for k in token_keys:
     if k not in by_key:
         setv(k, "")
 
@@ -172,21 +189,26 @@ d["values"] = new_vals
 with open(out, "w", encoding="utf-8") as f:
     json.dump(d, f, ensure_ascii=False, indent=2)
 
-# Output para debug
-print("tenant_email =", get("tenant_email"))
+# Output simples sem caracteres especiais
+print(f"tenant_email = {get('tenant_email')}")
 print("tenant_password = ***")
-print("tenant_tax_id_type =", get("tenant_tax_id_type"))
-print("tenant_tax_id_number =", get("tenant_tax_id_number"))
-print("controlplane_email =", get("controlplane_email"))
+print(f"tenant_tax_id_type = {get('tenant_tax_id_type')}")
+print(f"tenant_tax_id_number = {get('tenant_tax_id_number')}")
+print(f"controlplane_email = {get('controlplane_email')}")
 print("controlplane_password = ***")
-print("effective_env_written =", out)
+print(f"effective_env_written = {out}")
 PY
-# Adicione esta linha após o bloco Python, antes do newman run
-log "==> Conteúdo do arquivo efetivo gerado:"
-cat "${ENV_EFFECTIVE}" | grep -E "controlplane_(email|password)" || echo "Variáveis controlplane não encontradas!"
 
+log "==> Conteúdo do arquivo efetivo gerado:"
+# Usar cat com tratamento para Windows
+if [[ -f "${ENV_EFFECTIVE}" ]]; then
+    grep -E "controlplane_(email|password)" "${ENV_EFFECTIVE}" 2>/dev/null || echo "Variáveis controlplane não encontradas!"
+else
+    echo "Arquivo ${ENV_EFFECTIVE} não encontrado!"
+fi
 
 log "==> Run Newman"
-newman run "${COLLECTION}" -e "${ENV_EFFECTIVE}" --bail
+# Desabilitar cores no Newman para evitar problemas de encoding
+newman run "${COLLECTION}" -e "${ENV_EFFECTIVE}" --bail --color off
 
 log "==> DONE ✅"
