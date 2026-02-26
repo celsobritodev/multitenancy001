@@ -1,0 +1,222 @@
+==> Drop DB (db_multitenancy)
+ pg_terminate_backend 
+----------------------
+(0 linha)
+
+DROP DATABASE
+CREATE DATABASE
+==> Start app
+==> App started (pid=2702). Logs: .e2e-app.log
+==> Wait for STARTED
+==> App STARTED.
+==> Health check
+==> Health OK.
+==> Patch ENV (effective env for Newman)
+[WARN] controlplane_email não encontrado, usando fallback
+[WARN] controlplane_password não encontrado, usando fallback
+tenant_email = e2e_1772106346_02a7e5@tenant.local
+tenant_password = ***
+tenant_tax_id_type = CNPJ
+tenant_tax_id_number = 12345678000199
+controlplane_email = superadmin@platform.local
+controlplane_password = ***
+effective_env_written = .env.effective.json
+==> Conteúdo do arquivo efetivo gerado:
+      "key": "controlplane_email",
+      "key": "controlplane_password",
+==> Run Newman
+newman
+
+multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity + diagnostics)
+
+□ 📦 00 - BOOTSTRAP (V3)
+└ 00.01 health
+  GET http://localhost:8080/actuator/health [200 OK, 466B, 52ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Health OK
+
+└ 00.02 signup
+  POST http://localhost:8080/api/signup [201 Created, 849B, 750ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Signup OK
+  ┌
+  │ '✅ Conta criada: ID=2, Schema=t_tenant_e2e_5ef501_cc9d
+  │ 96a2'
+  └
+
+└ 00.03 tenant login
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.07kB, 307ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant login OK
+  ┌
+  │ '✅ Tenant logado: ID=1'
+  └
+
+└ 00.04 tenant me
+  GET http://localhost:8080/api/tenant/me [200 OK, 789B, 125ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Tenant me OK
+
+└ 00.05 controlplane login (superadmin)
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 290ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login superadmin OK
+  ┌
+  │ '✅ Superadmin logado: ID=4'
+  └
+
+└ 00.06 login as billing manager
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 126ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login billing manager OK
+
+└ 00.07 login as support
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 127ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login support OK
+
+└ 00.08 login as operator
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 119ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login operator OK
+
+□ 🔐 01 - TENANT AUTH TESTS (V3)
+└ 01.01 tenant refresh
+  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.07kB, 90ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant refresh OK
+
+└ 01.02 tenant logout
+  POST http://localhost:8080/api/tenant/auth/logout [204 No Content, 423B, 51ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant logout OK
+
+□ 🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6)
+└ 01.50.01 signup tenant #2
+  ┌
+  │ '[v10.8.5] tenant2_email=e2e2_1772106352217_5d3d1a@ten
+  │ ant.local'
+  │ '[v10.8.5] shared_email=shared_1772106352217_61f5ad@te
+  │ nant.local'
+  └
+  POST http://localhost:8080/api/signup [201 Created, 860B, 359ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant #2 signup OK
+  ┌
+  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_3f6d0
+  │ b_008226a2, Slug=tenant-e2e-2-3f6d0b'
+  └
+
+└ 01.50.02 tenant #2 login (admin)
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 147ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant #2 login OK (direct)
+
+└ 01.50.03 create shared user in tenant #1
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 254ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create shared user (201 or 409 if already exists)
+
+└ 01.50.04 create shared user in tenant #2
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 156ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create shared user (201 or 409 if already exists)
+
+└ 01.50.04a controlplane list tenant-users (account #1) - shared index check
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 836B, 46ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  ControlPlane list tenant-users OK
+  √  Shared email must be present in tenant-users index
+
+└ 01.50.04b controlplane list tenant-users (account #2) - shared index check
+  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 843B, 28ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  ControlPlane list tenant-users OK
+  √  Shared email must be present in tenant-users index
+
+└ 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED
+  POST http://localhost:8080/api/tenant/auth/login [401 Unauthorized, 659B, 36ms]
+  √  No 500 in collection
+  √  Status code acceptable for SMOKE (POST)
+  ┌
+  │ '⚠️ Ambiguous login returned 401/INVALID_USER. This us
+  │ ually means the shared user exists in tenant schemas, 
+  │ but the PUBLIC index (login_identities) was not provis
+  │ ioned for that email in both accounts.'
+  │ '   Expected: public.login_identities should contain 2
+  │  rows for shared_email (subject_type=TENANT_ACCOUNT, a
+  │ ccount_id=accountId).'
+  │ "   Check DB: SELECT subject_type, account_id, subject
+  │ _id, email FROM public.login_identities WHERE email = 
+  │ '{{shared_email}}';"
+  └
+  1. Ambiguous login must return 409
+  2. Error must be TENANT_SELECTION_REQUIRED
+  3. Must include challengeId
+  4. Must include tenants list in details
+  √  Must NOT return token yet
+  5⠄ AssertionFailure in test-script
+
+┌─────────────────────────┬────────────────────┬────────────────────┐
+│                         │           executed │             failed │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│              iterations │                  1 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│                requests │                 17 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│            test-scripts │                 34 │                  1 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│      prerequest-scripts │                 21 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│              assertions │                 57 │                  4 │
+├─────────────────────────┴────────────────────┴────────────────────┤
+│ total run duration: 4.7s                                          │
+├───────────────────────────────────────────────────────────────────┤
+│ total data received: 11.73kB (approx)                             │
+├───────────────────────────────────────────────────────────────────┤
+│ average response time: 180ms [min: 28ms, max: 750ms, s.d.: 172ms] │
+└───────────────────────────────────────────────────────────────────┘
+
+[31m  # [39m[31m failure          [39m[31m detail                                                                                                                                                      [39m
+[90m    [39m[90m                  [39m[90m                                                                                                                                                             [39m
+ 1.  AssertionError    Ambiguous login must return 409                                                                                                                             
+                       status: expected 401 to deeply equal 409                                                                                                                    
+                       at assertion:0 in test-script                                                                                                                               
+                       inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
+[90m    [39m[90m                  [39m[90m                                                                                                                                                             [39m
+ 2.  AssertionError    Error must be TENANT_SELECTION_REQUIRED                                                                                                                     
+                       error/code: expected 'INVALID_USER' to deeply equal 'TENANT_SELECTION_REQUIRED'                                                                             
+                       at assertion:1 in test-script                                                                                                                               
+                       inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
+[90m    [39m[90m                  [39m[90m                                                                                                                                                             [39m
+ 3.  AssertionError    Must include challengeId                                                                                                                                    
+                       challengeId: expected undefined to be a string                                                                                                              
+                       at assertion:2 in test-script                                                                                                                               
+                       inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
+[90m    [39m[90m                  [39m[90m                                                                                                                                                             [39m
+ 4.  AssertionError    Must include tenants list in details                                                                                                                        
+                       tenants list: expected null to be an array                                                                                                                  
+                       at assertion:3 in test-script                                                                                                                               
+                       inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
+[90m    [39m[90m                  [39m[90m                                                                                                                                                             [39m
+ 5.  AssertionFailure                                                                                                                                                              
+                       Ambiguous login must return 409, Error must be TENANT_SELECTION_REQUIRED, Must include challengeId, Must include tenants list in details                    
+                       at test-script:39:17                                                                                                                                        
+                       inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
+==> Stopping app (pid=2702)...

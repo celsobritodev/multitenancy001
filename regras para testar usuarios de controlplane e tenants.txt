@@ -1,0 +1,16 @@
+testar
+
+controlplane
+usuarios
+ tipo builtin não podem ser excluidos , renomeados,e permissoes não podem ser alteradadas mas a senha pode ser trocada
+ que não sao tipo buildin podem ser excluidos, renomeados, alteradas as permissoes.
+ nao posso incluir um usuario no controlplane igual a um que ja existe lá
+ cada usuario do controlplane precisa ter um login e um identificador unico cpf/cnpj
+
+tenant
+1- usuarios podem ser excluidos, alterados e permissoes podem ser alteradas
+
+
+
+
+

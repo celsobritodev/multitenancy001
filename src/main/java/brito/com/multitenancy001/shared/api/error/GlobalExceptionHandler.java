@@ -10,15 +10,17 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -198,6 +200,61 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errorResponse);
     }
 
+    /**
+     * ✅ Se faltar @RequestParam obrigatório, é 400 (request inválida), não 500.
+     * Ex.: GET /api/tenant/categories/search sem ?name=...
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleMissingRequestParam(MissingServletRequestParameterException ex) {
+        Instant ts = appNow();
+
+        String param = ex.getParameterName();
+        log.warn("Missing request parameter: {}", param);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(ts)
+                        .error("MISSING_REQUEST_PARAMETER")
+                        .message("Parâmetro obrigatório ausente: " + param)
+                        .field(param)
+                        .invalidValue(null)
+                        .allowedValues(null)
+                        .details(null)
+                        .build()
+        );
+    }
+
+    /**
+     * ✅ NOVO: quando o path/query param vem com tipo inválido (ex.: UUID esperado e recebeu "1"),
+     * isso deve ser 400 e não 500.
+     *
+     * Ex.: GET /api/tenant/products/1 quando o controller espera UUID.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiEnumErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        Instant ts = appNow();
+
+        String field = ex.getName(); // nome do path var / param
+        Object value = ex.getValue();
+        String invalidValue = value == null ? "null" : value.toString();
+
+        String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
+
+        log.warn("Type mismatch for '{}': value='{}', expected={}", field, invalidValue, expectedType);
+
+        return ResponseEntity.badRequest().body(
+                ApiEnumErrorResponse.builder()
+                        .timestamp(ts)
+                        .error("INVALID_PARAMETER")
+                        .message("Parâmetro inválido: " + field)
+                        .field(field)
+                        .invalidValue(invalidValue)
+                        .allowedValues(List.of(expectedType))
+                        .details(null)
+                        .build()
+        );
+    }
+
     @ExceptionHandler({
             BadCredentialsException.class,
             InternalAuthenticationServiceException.class,
@@ -217,7 +274,6 @@ public class GlobalExceptionHandler {
         );
     }
 
-    // ✅ NOVO: Tratamento para AuthorizationDeniedException (Spring Security 6)
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<ApiEnumErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex) {
         Instant ts = appNow();
@@ -233,7 +289,6 @@ public class GlobalExceptionHandler {
         );
     }
 
-    // ✅ NOVO: Tratamento para AccessDeniedException (versões antigas do Spring Security)
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiEnumErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         Instant ts = appNow();
@@ -249,6 +304,19 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(DomainException.class)
+    public ResponseEntity<ApiErrorResponse> handleDomainException(DomainException ex) {
+        Instant ts = appNow();
+
+        ApiErrorResponse body = ApiErrorResponse.builder()
+                .timestamp(ts)
+                .error("DOMAIN_RULE_VIOLATION")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiEnumErrorResponse> handleGeneric(Exception ex) {
         Instant ts = appNow();
@@ -262,18 +330,5 @@ public class GlobalExceptionHandler {
                         .message("Erro interno inesperado. Contate o suporte.")
                         .build()
         );
-    }
-
-    @ExceptionHandler(DomainException.class)
-    public ResponseEntity<ApiErrorResponse> handleDomainException(DomainException ex) {
-        Instant ts = appNow();
-
-        ApiErrorResponse body = ApiErrorResponse.builder()
-                .timestamp(ts)
-                .error("DOMAIN_RULE_VIOLATION")
-                .message(ex.getMessage())
-                .build();
-
-        return ResponseEntity.badRequest().body(body);
     }
 }
