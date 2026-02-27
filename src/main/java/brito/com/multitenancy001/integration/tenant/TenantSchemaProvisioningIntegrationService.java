@@ -24,14 +24,7 @@ public class TenantSchemaProvisioningIntegrationService {
         return tenantSchemaProvisioningService.ensureSchemaExistsAndMigrate(tenantSchema);
     }
 
-    /**
-     * Alias de compatibilidade (caso algum código antigo ainda chame).
-     * Mantemos o nome antigo, mas a semântica real é "ensure + migrate".
-     */
-    @Deprecated
-    public boolean provisionTenantSchema(String tenantSchema) {
-        return ensureSchemaExistsAndMigrate(tenantSchema);
-    }
+  
 
     public void tryDropSchema(String tenantSchema) {
         tenantSchemaProvisioningService.tryDropSchema(tenantSchema);

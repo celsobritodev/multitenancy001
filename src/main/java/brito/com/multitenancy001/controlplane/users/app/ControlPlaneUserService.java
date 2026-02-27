@@ -4,7 +4,14 @@ package brito.com.multitenancy001.controlplane.users.app;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.security.ControlPlaneRole;
-import brito.com.multitenancy001.controlplane.users.api.dto.*;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneChangeMyPasswordRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneMeResponse;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserCreateRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDetailsResponse;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPasswordResetRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPermissionsUpdateRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserSuspendRequest;
+import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserUpdateRequest;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneBuiltInUsers;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
@@ -30,6 +37,7 @@ import org.springframework.util.StringUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Use cases de usuários do Control Plane.
@@ -111,7 +119,8 @@ public class ControlPlaneUserService {
                     "permissionsCount", request.permissions() == null ? 0 : request.permissions().size()
             );
 
-            Map<String, Object> success = m(
+            // ✅ successDetails via Supplier (depois do bloco) — aqui é estático, mas mantém padrão.
+            Supplier<Object> successSupplier = () -> m(
                     "scope", SCOPE,
                     "stage", "after_save",
                     "role", request.role() == null ? null : request.role().name(),
@@ -125,7 +134,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    success,
+                    successSupplier,
                     () -> {
                         boolean emailExists = controlPlaneUserRepository
                                 .findByEmailAndAccount_IdAndDeletedFalse(email, cp.getId())
@@ -171,7 +180,7 @@ public class ControlPlaneUserService {
                             );
                         }
 
-                        loginIdentityProvisioningService.ensureControlPlaneIdentity(email, saved.getId());
+                        loginIdentityProvisioningService.ensureControlPlaneIdentityAfterCompletion(email, saved.getId());
 
                         // ✅ NÃO registrar USER_CREATED SUCCESS aqui (o helper já registra).
                         return getControlPlaneUser(saved.getId());
@@ -208,173 +217,162 @@ public class ControlPlaneUserService {
         });
     }
 
-   public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
-    /* Atualiza dados do usuário do Control Plane (ADMIN) com SUCCESS contendo delta/changes. */
-    return publicSchemaUnitOfWork.tx(() -> {
-        Actor actor = resolveActorOrNull();
+    public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
+        /* Atualiza dados do usuário do Control Plane (ADMIN) com SUCCESS contendo delta/changes. */
+        return publicSchemaUnitOfWork.tx(() -> {
+            Actor actor = resolveActorOrNull();
 
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-        if (request == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
+            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+            if (request == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
 
-        Account cp = getControlPlaneAccount();
+            Account cp = getControlPlaneAccount();
 
-        ControlPlaneUser user = controlPlaneUserRepository
-                .findNotDeletedByIdAndAccountId(userId, cp.getId())
-                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+            ControlPlaneUser user = controlPlaneUserRepository
+                    .findNotDeletedByIdAndAccountId(userId, cp.getId())
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-        if (user.isBuiltInUser()) {
-            throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
-        }
+            if (user.isBuiltInUser()) {
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
 
-        String beforeName = user.getName();
-        String beforeEmail = user.getEmail();
-        ControlPlaneRole beforeRole = user.getRole();
+            String beforeName = user.getName();
+            String beforeEmail = user.getEmail();
+            ControlPlaneRole beforeRole = user.getRole();
 
-        AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
+            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
-        Map<String, Object> attempt = m(
-                "scope", SCOPE,
-                "reason", "update",
-                "hasName", request.name() != null,
-                "hasEmail", request.email() != null,
-                "hasRole", request.role() != null,
-                "hasPermissions", request.permissions() != null
-        );
+            Map<String, Object> attempt = m(
+                    "scope", SCOPE,
+                    "reason", "update",
+                    "hasName", request.name() != null,
+                    "hasEmail", request.email() != null,
+                    "hasRole", request.role() != null,
+                    "hasPermissions", request.permissions() != null
+            );
 
-        // ✅ SUCCESS mutável preenchido dentro do bloco com delta/changes (sem duplicar USER_UPDATED)
-        Map<String, Object> success = new LinkedHashMap<>();
-        success.put("scope", SCOPE);
-        success.put("reason", "update");
+            // ✅ SUCCESS montado após o bloco — sem duplicidade, sem gambiarra
+            Map<String, Object> success = new LinkedHashMap<>();
+            success.put("scope", SCOPE);
+            success.put("reason", "update");
 
-        return auditAttemptSuccessFail(
-                SecurityAuditActionType.USER_UPDATED,
-                actor,
-                target,
-                cp.getId(),
-                null,
-                attempt,
-                success,
-                () -> {
-                    boolean roleChanged = false;
-                    boolean permissionsChanged = request.permissions() != null;
+            return auditAttemptSuccessFail(
+                    SecurityAuditActionType.USER_UPDATED,
+                    actor,
+                    target,
+                    cp.getId(),
+                    null,
+                    attempt,
+                    () -> success,
+                    () -> {
+                        boolean roleChanged = false;
+                        boolean permissionsChanged = request.permissions() != null;
 
-                    Map<String, Object> changes = new LinkedHashMap<>();
+                        Map<String, Object> changes = new LinkedHashMap<>();
 
-                    // -------------------------
-                    // NAME
-                    // -------------------------
-                    if (request.name() != null) {
-                        String newName = normalizeNameOrThrow(request.name());
-                        String currentName = user.getName();
+                        // NAME
+                        if (request.name() != null) {
+                            String newName = normalizeNameOrThrow(request.name());
+                            String currentName = user.getName();
 
-                        if (currentName == null || !currentName.equals(newName)) {
-                            user.rename(newName);
-                            changes.put("nameBefore", beforeName);
-                            changes.put("nameAfter", newName);
-                        }
-                    }
-
-                    // -------------------------
-                    // EMAIL
-                    // -------------------------
-                    if (request.email() != null) {
-                        String newEmail = normalizeEmailOrThrow(request.email());
-
-                        if (ControlPlaneBuiltInUsers.isReservedEmail(newEmail)) {
-                            throw new ApiException(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
+                            if (currentName == null || !currentName.equals(newName)) {
+                                user.rename(newName);
+                                changes.put("nameBefore", beforeName);
+                                changes.put("nameAfter", newName);
+                            }
                         }
 
-                        String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
-                        if (currentEmail == null || !currentEmail.equals(newEmail)) {
+                        // EMAIL
+                        if (request.email() != null) {
+                            String newEmail = normalizeEmailOrThrow(request.email());
 
-                            boolean emailExists = controlPlaneUserRepository
-                                    .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
-                                    .filter(u -> !u.getId().equals(user.getId()))
-                                    .isPresent();
-
-                            if (emailExists) {
-                                throw new ApiException(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
+                            if (ControlPlaneBuiltInUsers.isReservedEmail(newEmail)) {
+                                throw new ApiException(ApiErrorCode.EMAIL_RESERVED, "Este email é reservado do sistema (BUILT_IN)", 409);
                             }
 
-                            user.changeEmail(newEmail);
-                            loginIdentityProvisioningService.moveControlPlaneIdentity(user.getId(), newEmail);
+                            String currentEmail = EmailNormalizer.normalizeOrNull(user.getEmail());
+                            if (currentEmail == null || !currentEmail.equals(newEmail)) {
 
-                            changes.put("emailBefore", beforeEmail);
-                            changes.put("emailAfter", newEmail);
+                                boolean emailExists = controlPlaneUserRepository
+                                        .findByEmailAndAccount_IdAndDeletedFalse(newEmail, cp.getId())
+                                        .filter(u -> !u.getId().equals(user.getId()))
+                                        .isPresent();
+
+                                if (emailExists) {
+                                    throw new ApiException(ApiErrorCode.EMAIL_ALREADY_IN_USE, "Já existe um usuário ativo com este email", 409);
+                                }
+
+                                user.changeEmail(newEmail);
+                                loginIdentityProvisioningService.moveControlPlaneIdentityAfterCompletion(user.getId(), newEmail);
+
+                                changes.put("emailBefore", beforeEmail);
+                                changes.put("emailAfter", newEmail);
+                            }
                         }
-                    }
 
-                    // -------------------------
-                    // ROLE
-                    // -------------------------
-                    if (request.role() != null) {
-                        if (beforeRole == null || !beforeRole.equals(request.role())) {
-                            user.changeRole(request.role());
-                            roleChanged = true;
+                        // ROLE
+                        if (request.role() != null) {
+                            if (beforeRole == null || !beforeRole.equals(request.role())) {
+                                user.changeRole(request.role());
+                                roleChanged = true;
 
-                            changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
-                            changes.put("roleAfter", user.getRole() == null ? null : user.getRole().name());
+                                changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
+                                changes.put("roleAfter", user.getRole() == null ? null : user.getRole().name());
+                            }
                         }
+
+                        controlPlaneUserRepository.save(user);
+
+                        // PERMISSIONS (evento separado)
+                        if (permissionsChanged) {
+                            explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
+
+                            recordAudit(
+                                    SecurityAuditActionType.PERMISSIONS_CHANGED,
+                                    AuditOutcome.SUCCESS,
+                                    actor,
+                                    user.getEmail(),
+                                    user.getId(),
+                                    cp.getId(),
+                                    null,
+                                    m(
+                                            "scope", SCOPE,
+                                            "reason", "update",
+                                            "permissionsCount", request.permissions() == null ? 0 : request.permissions().size(),
+                                            "permissions", request.permissions()
+                                    )
+                            );
+
+                            changes.put("permissionsChanged", true);
+                            changes.put("permissionsCount", request.permissions() == null ? 0 : request.permissions().size());
+                        }
+
+                        // ROLE_CHANGED (evento separado)
+                        if (roleChanged) {
+                            recordAudit(
+                                    SecurityAuditActionType.ROLE_CHANGED,
+                                    AuditOutcome.SUCCESS,
+                                    actor,
+                                    user.getEmail(),
+                                    user.getId(),
+                                    cp.getId(),
+                                    null,
+                                    m(
+                                            "scope", SCOPE,
+                                            "from", beforeRole == null ? null : beforeRole.name(),
+                                            "to", user.getRole() == null ? null : user.getRole().name()
+                                    )
+                            );
+                        }
+
+                        // ✅ SUCCESS rico do USER_UPDATED (o helper gravará após este bloco terminar)
+                        success.put("changed", !changes.isEmpty());
+                        success.put("changes", changes);
+
+                        return getControlPlaneUser(userId);
                     }
-
-                    // Persistimos o usuário sempre (mantém semântica atual do seu método)
-                    controlPlaneUserRepository.save(user);
-
-                    // -------------------------
-                    // PERMISSIONS (evento separado)
-                    // -------------------------
-                    if (permissionsChanged) {
-                        explicitPermissionsService.setExplicitPermissionsFromCodes(userId, request.permissions());
-
-                        recordAudit(
-                                SecurityAuditActionType.PERMISSIONS_CHANGED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                user.getEmail(),
-                                user.getId(),
-                                cp.getId(),
-                                null,
-                                m(
-                                        "scope", SCOPE,
-                                        "reason", "update",
-                                        "permissionsCount", request.permissions() == null ? 0 : request.permissions().size(),
-                                        "permissions", request.permissions()
-                                )
-                        );
-
-                        changes.put("permissionsChanged", true);
-                        changes.put("permissionsCount", request.permissions() == null ? 0 : request.permissions().size());
-                    }
-
-                    // -------------------------
-                    // ROLE_CHANGED (evento separado)
-                    // -------------------------
-                    if (roleChanged) {
-                        recordAudit(
-                                SecurityAuditActionType.ROLE_CHANGED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                user.getEmail(),
-                                user.getId(),
-                                cp.getId(),
-                                null,
-                                m(
-                                        "scope", SCOPE,
-                                        "from", beforeRole == null ? null : beforeRole.name(),
-                                        "to", user.getRole() == null ? null : user.getRole().name()
-                                )
-                        );
-                    }
-
-                    // ✅ fecha SUCCESS do USER_UPDATED com delta/changes
-                    success.put("changed", !changes.isEmpty());
-                    success.put("changes", changes);
-
-                    return getControlPlaneUser(userId);
-                }
-        );
-    });
-}
+            );
+        });
+    }
 
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(Long userId, ControlPlaneUserPermissionsUpdateRequest request) {
         /* Atualiza permissões explícitas (ADMIN endpoint dedicado). */
@@ -462,7 +460,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    attempt,
+                    () -> attempt,
                     () -> {
                         String hash = passwordEncoder.encode(request.newPassword());
                         user.setTemporaryPasswordHash(hash);
@@ -506,7 +504,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    attempt,
+                    () -> attempt,
                     () -> {
                         user.softDelete();
                         controlPlaneUserRepository.save(user);
@@ -552,12 +550,12 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    attempt,
+                    () -> attempt,
                     () -> {
                         user.restore();
                         controlPlaneUserRepository.save(user);
 
-                        loginIdentityProvisioningService.ensureControlPlaneIdentity(user.getEmail(), user.getId());
+                        loginIdentityProvisioningService.ensureControlPlaneIdentityAfterCompletion(user.getEmail(), user.getId());
 
                         return mapToResponse(user);
                     }
@@ -601,7 +599,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    success,
+                    () -> success,
                     () -> {
                         user.suspendByAdmin();
                         controlPlaneUserRepository.save(user);
@@ -652,7 +650,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    success,
+                    () -> success,
                     () -> {
                         user.unsuspendByAdmin();
                         controlPlaneUserRepository.save(user);
@@ -699,35 +697,32 @@ public class ControlPlaneUserService {
     // ME
     // =========================================================
 
-   public ControlPlaneMeResponse getMe() {
-    return publicSchemaUnitOfWork.readOnly(() -> {
-        Long userId = requestIdentity.getCurrentUserId();
-        
-        // Busca a conta do Control Plane (sempre existe)
-        Account cp = getControlPlaneAccount();
-        
-        // Busca o usuário diretamente pelo ID
-        ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
-        
-        // Verifica se o usuário pertence à conta do Control Plane
-        if (user.getAccount() == null || !cp.getId().equals(user.getAccount().getId())) {
-            throw new ApiException(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
-        }
-        
-        return new ControlPlaneMeResponse(
-                user.getId(),
-                user.getAccount().getId(),
-                user.getName(),
-                user.getEmail(),
-                SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin(),
-                user.isDeleted(),
-                user.isEnabled()
-        );
-    });
-}
+    public ControlPlaneMeResponse getMe() {
+        return publicSchemaUnitOfWork.readOnly(() -> {
+            Long userId = requestIdentity.getCurrentUserId();
+
+            Account cp = getControlPlaneAccount();
+
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.getAccount() == null || !cp.getId().equals(user.getAccount().getId())) {
+                throw new ApiException(ApiErrorCode.FORBIDDEN, "Usuário não pertence ao Control Plane", 403);
+            }
+
+            return new ControlPlaneMeResponse(
+                    user.getId(),
+                    user.getAccount().getId(),
+                    user.getName(),
+                    user.getEmail(),
+                    SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
+                    user.isSuspendedByAccount(),
+                    user.isSuspendedByAdmin(),
+                    user.isDeleted(),
+                    user.isEnabled()
+            );
+        });
+    }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
         /* Troca de senha autenticada (self). */
@@ -775,7 +770,7 @@ public class ControlPlaneUserService {
                     cp.getId(),
                     null,
                     attempt,
-                    attempt,
+                    () -> attempt,
                     () -> {
                         String currentHash = user.getPassword();
                         if (currentHash == null || !passwordEncoder.matches(request.currentPassword(), currentHash)) {
@@ -851,6 +846,18 @@ public class ControlPlaneUserService {
         T call();
     }
 
+  
+
+    /**
+     * ✅ Helper "bonito": SUCCESS é calculado AFTER o bloco executar.
+     *
+     * <p>Vantagens:</p>
+     * <ul>
+     *   <li>Permite incluir deltas/changes calculados dentro do bloco</li>
+     *   <li>Evita duplicidade de SUCCESS</li>
+     *   <li>Evita gambiarras com array-holder / warnings</li>
+     * </ul>
+     */
     private <T> T auditAttemptSuccessFail(
             SecurityAuditActionType actionType,
             Actor actor,
@@ -858,19 +865,25 @@ public class ControlPlaneUserService {
             Long accountId,
             String tenantSchema,
             Map<String, Object> attemptDetails,
-            Map<String, Object> successDetails,
+            Supplier<Object> successDetailsSupplier,
             AuditCallable<T> block
     ) {
-        /* Padroniza trilha ATTEMPT + SUCCESS/FAIL/DENIED para um caso de uso. */
         recordAudit(actionType, AuditOutcome.ATTEMPT, actor, target.email(), target.userId(), accountId, tenantSchema, attemptDetails);
 
         try {
             T result = block.call();
 
-            Map<String, Object> sd = (successDetails != null ? successDetails : attemptDetails);
-            recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, sd);
+            Object successDetails;
+            try {
+                successDetails = (successDetailsSupplier == null) ? attemptDetails : successDetailsSupplier.get();
+            } catch (Exception ignored) {
+                successDetails = attemptDetails;
+            }
+            if (successDetails == null) successDetails = attemptDetails;
 
+            recordAudit(actionType, AuditOutcome.SUCCESS, actor, target.email(), target.userId(), accountId, tenantSchema, successDetails);
             return result;
+
         } catch (ApiException ex) {
             recordAudit(actionType, outcomeFrom(ex), actor, target.email(), target.userId(), accountId, tenantSchema, failureDetails(SCOPE, ex));
             throw ex;
@@ -903,7 +916,7 @@ public class ControlPlaneUserService {
             Long targetUserId,
             Long accountId,
             String tenantSchema,
-            Map<String, Object> details
+            Object details
     ) {
         /* Grava evento de auditoria com details estruturado. */
         securityAuditService.record(

@@ -3,6 +3,11 @@ set -euo pipefail
 
 # =========================================================
 # multitenancy001 - E2E RESET + RUN (Postgres local)
+# E2E RUNNER VERSION: v10.9.8
+
+# Print runner version early (helps confirm you're using the right file)
+echo "==> Runner: run-e2e-reset.sh (v10.9.8)"
+# (tail app log on newman failure)
 # =========================================================
 
 # Always run from project root (relative paths are stable)
@@ -209,6 +214,43 @@ fi
 
 log "==> Run Newman"
 # Desabilitar cores no Newman para evitar problemas de encoding
-newman run "${COLLECTION}" -e "${ENV_EFFECTIVE}" --bail --color off
+if ! newman run "${COLLECTION}" -e "${ENV_EFFECTIVE}" --bail --color off; then
+  echo
+  echo "==========================================================="
+  echo "❌ Newman FAILED. Showing last 200 lines of app log:"
+  echo "   ${APP_LOG}"
+  echo "==========================================================="
+  if [[ -f "${APP_LOG}" ]]; then
+    tail -n 200 "${APP_LOG}" || true
+  else
+    echo "(log file not found)"
+  fi
+  
+  echo
+  echo "==> Diagnostics: attempt to extract shared_email and check public.login_identities"
+  if command -v grep >/dev/null 2>&1 && [[ -f "${APP_LOG}" ]]; then
+    shared_email="$(grep -oE "shared_[0-9]+_[a-f0-9]+@tenant\.local" "${APP_LOG}" | tail -n 1 || true)"
+    if [[ -n "${shared_email}" ]]; then
+      echo "   shared_email detected: ${shared_email}"
+      if command -v psql >/dev/null 2>&1; then
+        echo "   Querying public.login_identities for shared_email..."
+        psql -v ON_ERROR_STOP=0 -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" -c \
+"SELECT subject_type, account_id, subject_id, email FROM public.login_identities WHERE email = '${shared_email}' ORDER BY account_id;" || true
+      else
+        echo "   (psql not found in PATH, skipping DB check)"
+      fi
+    else
+      echo "   (shared_email not found in app log; skipping DB check)"
+    fi
+  else
+    echo "   (grep or app log not available; skipping DB check)"
+  fi
+echo "==========================================================="
+  exit 1
+fi
 
 log "==> DONE ✅"
+
+
+
+

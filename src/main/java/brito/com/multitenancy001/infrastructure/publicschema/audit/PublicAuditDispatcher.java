@@ -1,33 +1,24 @@
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
+import brito.com.multitenancy001.infrastructure.tx.AfterTransactionCompletion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 
 /**
- * Dispatcher de auditoria PUBLIC que evita nesting ilegal de transações
- * (TENANT JPA -> PUBLIC JDBC/JPA) no mesmo thread.
+ * Dispatcher de ações que precisam ocorrer no PUBLIC schema com segurança.
  *
- * <p>Problema que resolve:</p>
+ * <p>Regra do projeto:</p>
  * <ul>
- *   <li>Erro: "Pre-bound JDBC Connection found! JpaTransactionManager does not support running within DataSourceTransactionManager..."</li>
+ *   <li>NUNCA rodar PUBLIC "dentro" de uma transação TENANT no mesmo thread.</li>
+ *   <li>Para evitar "Pre-bound JDBC Connection found", este dispatcher agenda a execução
+ *       para ocorrer somente após a transação atual finalizar (commit OU rollback).</li>
  * </ul>
  *
- * <p>Estratégia:</p>
+ * <p>Isso garante:</p>
  * <ul>
- *   <li>Se NÃO há transação ativa no thread: grava imediatamente em PUBLIC (REQUIRES_NEW).</li>
- *   <li>Se HÁ transação ativa (ex: TENANT): agenda a gravação para <b>afterCompletion</b>
- *       (commit ou rollback), quando os resources já foram liberados.</li>
- * </ul>
- *
- * <p>Observação:</p>
- * <ul>
- *   <li>afterCompletion é usado para registrar auditoria tanto de sucesso quanto de falha.</li>
- *   <li>Falhas ao gravar audit não devem derrubar a request de negócio (best-effort), mas são logadas.</li>
+ *   <li>Sem nesting TENANT->PUBLIC no mesmo thread</li>
+ *   <li>Auditoria ainda registra SUCCESS/FAIL/DENIED (pois roda afterCompletion)</li>
  * </ul>
  */
 @Slf4j
@@ -35,39 +26,24 @@ import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
 @RequiredArgsConstructor
 public class PublicAuditDispatcher {
 
-    private final TxExecutor txExecutor;
+    private final AfterTransactionCompletion afterTransactionCompletion;
 
     /**
-     * Executa uma ação de auditoria no schema PUBLIC de forma segura, evitando nesting de transaction managers.
+     * Executa a ação com garantia de NÃO conflitar com transações TENANT/JPA ativas no thread.
      *
-     * @param action ação que grava audit (ex: chamar SecurityAuditService.record(...))
+     * <p>Se houver transação ativa, agenda para afterCompletion.</p>
+     *
+     * @param action ação best-effort
      */
     public void dispatch(Runnable action) {
-        if (action == null) throw new IllegalArgumentException("action é obrigatório");
+        if (action == null) return;
 
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            // Sem tx ativa: grava agora
-            runInPublicRequiresNew(action);
-            return;
-        }
-
-        // Há tx ativa (ex: tenant): agenda para depois do commit/rollback
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                try {
-                    runInPublicRequiresNew(action);
-                } catch (Exception e) {
-                    log.warn("⚠️ Falha ao gravar auditoria PUBLIC em afterCompletion: {}", e.getMessage(), e);
-                }
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                action.run();
+            } catch (Exception e) {
+                log.warn("⚠️ PublicAuditDispatcher action failed (best-effort) | msg={}", e.getMessage(), e);
             }
-        });
-    }
-
-    private void runInPublicRequiresNew(Runnable action) {
-        txExecutor.inPublicRequiresNew(() -> {
-            action.run();
-            return null;
         });
     }
 }

@@ -147,7 +147,7 @@ public class AccountOnboardingService {
             // 5) Registrar identidade de login no PUBLIC (para /api/tenant/auth/login)
             try {
                 publicSchemaUnitOfWork.tx(() -> {
-                    loginIdentityProvisioningService.ensureTenantIdentity(data.loginEmail(), account.getId());
+                    loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(data.loginEmail(), account.getId());
                     return null;
                 });
             } catch (RuntimeException ex) {

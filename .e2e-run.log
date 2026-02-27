@@ -1,3 +1,4 @@
+==> Runner: run-e2e-reset.sh (v10.9.8)
 ==> Drop DB (db_multitenancy)
  pg_terminate_backend 
 ----------------------
@@ -6,7 +7,7 @@
 DROP DATABASE
 CREATE DATABASE
 ==> Start app
-==> App started (pid=2702). Logs: .e2e-app.log
+==> App started (pid=4882). Logs: .e2e-app.log
 ==> Wait for STARTED
 ==> App STARTED.
 ==> Health check
@@ -14,7 +15,7 @@ CREATE DATABASE
 ==> Patch ENV (effective env for Newman)
 [WARN] controlplane_email não encontrado, usando fallback
 [WARN] controlplane_password não encontrado, usando fallback
-tenant_email = e2e_1772106346_02a7e5@tenant.local
+tenant_email = e2e_1772142910_9580c5@tenant.local
 tenant_password = ***
 tenant_tax_id_type = CNPJ
 tenant_tax_id_number = 12345678000199
@@ -27,28 +28,28 @@ effective_env_written = .env.effective.json
 ==> Run Newman
 newman
 
-multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity + diagnostics)
+multitenancy001-e2e (v10.9.3 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity + diagnostics)
 
 □ 📦 00 - BOOTSTRAP (V3)
 └ 00.01 health
-  GET http://localhost:8080/actuator/health [200 OK, 466B, 52ms]
-  √  No 500 in collection
+  GET http://localhost:8080/actuator/health [200 OK, 466B, 47ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Health OK
 
 └ 00.02 signup
-  POST http://localhost:8080/api/signup [201 Created, 849B, 750ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/signup [201 Created, 849B, 764ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Signup OK
   ┌
-  │ '✅ Conta criada: ID=2, Schema=t_tenant_e2e_5ef501_cc9d
-  │ 96a2'
+  │ '✅ Conta criada: ID=2, Schema=t_tenant_e2e_f8b394_e8dc
+  │ 0da7'
   └
 
 └ 00.03 tenant login
-  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.07kB, 307ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.07kB, 338ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant login OK
   ┌
@@ -56,14 +57,14 @@ multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity 
   └
 
 └ 00.04 tenant me
-  GET http://localhost:8080/api/tenant/me [200 OK, 789B, 125ms]
-  √  No 500 in collection
+  GET http://localhost:8080/api/tenant/me [200 OK, 789B, 123ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Tenant me OK
 
 └ 00.05 controlplane login (superadmin)
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 290ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 273ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login superadmin OK
   ┌
@@ -71,88 +72,88 @@ multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity 
   └
 
 └ 00.06 login as billing manager
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 126ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 118ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login billing manager OK
 
 └ 00.07 login as support
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 127ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 118ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login support OK
 
 └ 00.08 login as operator
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 119ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 127ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login operator OK
 
 □ 🔐 01 - TENANT AUTH TESTS (V3)
 └ 01.01 tenant refresh
-  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.07kB, 90ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.07kB, 84ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant refresh OK
 
 └ 01.02 tenant logout
-  POST http://localhost:8080/api/tenant/auth/logout [204 No Content, 423B, 51ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/auth/logout [204 No Content, 423B, 50ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant logout OK
 
 □ 🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6)
 └ 01.50.01 signup tenant #2
   ┌
-  │ '[v10.8.5] tenant2_email=e2e2_1772106352217_5d3d1a@ten
+  │ '[v10.8.5] tenant2_email=e2e2_1772142919413_3ada2f@ten
   │ ant.local'
-  │ '[v10.8.5] shared_email=shared_1772106352217_61f5ad@te
+  │ '[v10.8.5] shared_email=shared_1772142919413_af2e93@te
   │ nant.local'
   └
-  POST http://localhost:8080/api/signup [201 Created, 860B, 359ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/signup [201 Created, 860B, 346ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant #2 signup OK
   ┌
-  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_3f6d0
-  │ b_008226a2, Slug=tenant-e2e-2-3f6d0b'
+  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_d7704
+  │ 0_979fabfb, Slug=tenant-e2e-2-d77040'
   └
 
 └ 01.50.02 tenant #2 login (admin)
-  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 147ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 127ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant #2 login OK (direct)
 
 └ 01.50.03 create shared user in tenant #1
-  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 254ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 251ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create shared user (201 or 409 if already exists)
 
 └ 01.50.04 create shared user in tenant #2
-  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 156ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 192ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create shared user (201 or 409 if already exists)
 
 └ 01.50.04a controlplane list tenant-users (account #1) - shared index check
-  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 836B, 46ms]
-  √  No 500 in collection
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 836B, 47ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  ControlPlane list tenant-users OK
   √  Shared email must be present in tenant-users index
 
 └ 01.50.04b controlplane list tenant-users (account #2) - shared index check
-  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 843B, 28ms]
-  √  No 500 in collection
+  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 843B, 27ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  ControlPlane list tenant-users OK
   √  Shared email must be present in tenant-users index
 
 └ 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED
-  POST http://localhost:8080/api/tenant/auth/login [401 Unauthorized, 659B, 36ms]
-  √  No 500 in collection
+  POST http://localhost:8080/api/tenant/auth/login [401 Unauthorized, 662B, 33ms]
+  √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   ┌
   │ '⚠️ Ambiguous login returned 401/INVALID_USER. This us
@@ -186,11 +187,11 @@ multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity 
 ├─────────────────────────┼────────────────────┼────────────────────┤
 │              assertions │                 57 │                  4 │
 ├─────────────────────────┴────────────────────┴────────────────────┤
-│ total run duration: 4.7s                                          │
+│ total run duration: 4.8s                                          │
 ├───────────────────────────────────────────────────────────────────┤
 │ total data received: 11.73kB (approx)                             │
 ├───────────────────────────────────────────────────────────────────┤
-│ average response time: 180ms [min: 28ms, max: 750ms, s.d.: 172ms] │
+│ average response time: 180ms [min: 27ms, max: 764ms, s.d.: 176ms] │
 └───────────────────────────────────────────────────────────────────┘
 
 [31m  # [39m[31m failure          [39m[31m detail                                                                                                                                                      [39m
@@ -219,4 +220,218 @@ multitenancy001-e2e (v10.9.2 - FULL - ALL ENDPOINTS - STRICT - tenant ambiguity 
                        Ambiguous login must return 409, Error must be TENANT_SELECTION_REQUIRED, Must include challengeId, Must include tenants list in details                    
                        at test-script:39:17                                                                                                                                        
                        inside "🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6) / 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED" 
-==> Stopping app (pid=2702)...
+
+===========================================================
+❌ Newman FAILED. Showing last 200 lines of app log:
+   .e2e-app.log
+===========================================================
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:88) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:113) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:83) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:342) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:399) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:903) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1774) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:973) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.50.jar:10.1.50]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-02-26T18:55:20.662-03:00  WARN 19312 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.p.audit.SecurityAuditService     : ⚠️ SecurityAuditService.record chamado com transação já ativa no thread (possível nesting TENANT->PUBLIC/JDBC) | actionType=USER_CREATED | outcome=SUCCESS | accountId=3 | tenantSchema=t_tenant_e2e_2_d77040_979fabfb | resources=[com.zaxxer.hikari.HikariDataSource->org.springframework.jdbc.datasource.ConnectionHolder, jdk.proxy4.$Proxy170->org.springframework.orm.jpa.EntityManagerHolder]
+2026-02-26T18:55:20.666-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/users | tenant=t_tenant_e2e_2_d77040_979fabfb | status=201 | ip=0:0:0:0:0:0:0:1 | requestId=86fc0912-2dae-4cf4-b2cc-476191891dd1 | thread=50
+2026-02-26T18:55:20.666-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-5] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_2_d77040_979fabfb | thread=50
+2026-02-26T18:55:20.801-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=53 | null -> t_tenant_e2e_f8b394_e8dc0da7
+2026-02-26T18:55:20.803-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-8] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=53 | tenantSchemaParam=t_tenant_e2e_f8b394_e8dc0da7 | tenantSchemaThread=t_tenant_e2e_f8b394_e8dc0da7 | SQL=SET search_path TO "t_tenant_e2e_f8b394_e8dc0da7", "public"
+Hibernate: 
+    select
+        tu1_0.id,
+        tu1_0.account_id,
+        tu1_0.created_at,
+        tu1_0.created_by,
+        tu1_0.created_by_email,
+        tu1_0.deleted_at,
+        tu1_0.deleted_by,
+        tu1_0.deleted_by_email,
+        tu1_0.updated_at,
+        tu1_0.updated_by,
+        tu1_0.updated_by_email,
+        tu1_0.avatar_url,
+        tu1_0.deleted,
+        tu1_0.email,
+        tu1_0.last_login,
+        tu1_0.locale,
+        tu1_0.locked_until,
+        tu1_0.must_change_password,
+        tu1_0.name,
+        tu1_0.origin,
+        tu1_0.password,
+        tu1_0.password_changed_at,
+        tu1_0.password_reset_expires,
+        tu1_0.password_reset_token,
+        tu1_0.phone,
+        tu1_0.role,
+        tu1_0.suspended_by_account,
+        tu1_0.suspended_by_admin,
+        tu1_0.timezone 
+    from
+        tenant_users tu1_0 
+    where
+        tu1_0.account_id=?
+Hibernate: 
+    select
+        p1_0.tenant_user_id,
+        p1_0.permission 
+    from
+        tenant_user_permissions p1_0 
+    where
+        p1_0.tenant_user_id=?
+Hibernate: 
+    select
+        p1_0.tenant_user_id,
+        p1_0.permission 
+    from
+        tenant_user_permissions p1_0 
+    where
+        p1_0.tenant_user_id=?
+2026-02-26T18:55:20.811-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-8] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_f8b394_e8dc0da7 | thread=53
+2026-02-26T18:55:20.818-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-8] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/controlplane/accounts/2/tenant-users | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=8c678331-decf-4e8b-b8e3-a64f45f3a9e2 | thread=53
+2026-02-26T18:55:20.943-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=51 | null -> t_tenant_e2e_2_d77040_979fabfb
+2026-02-26T18:55:20.945-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-6] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=51 | tenantSchemaParam=t_tenant_e2e_2_d77040_979fabfb | tenantSchemaThread=t_tenant_e2e_2_d77040_979fabfb | SQL=SET search_path TO "t_tenant_e2e_2_d77040_979fabfb", "public"
+Hibernate: 
+    select
+        tu1_0.id,
+        tu1_0.account_id,
+        tu1_0.created_at,
+        tu1_0.created_by,
+        tu1_0.created_by_email,
+        tu1_0.deleted_at,
+        tu1_0.deleted_by,
+        tu1_0.deleted_by_email,
+        tu1_0.updated_at,
+        tu1_0.updated_by,
+        tu1_0.updated_by_email,
+        tu1_0.avatar_url,
+        tu1_0.deleted,
+        tu1_0.email,
+        tu1_0.last_login,
+        tu1_0.locale,
+        tu1_0.locked_until,
+        tu1_0.must_change_password,
+        tu1_0.name,
+        tu1_0.origin,
+        tu1_0.password,
+        tu1_0.password_changed_at,
+        tu1_0.password_reset_expires,
+        tu1_0.password_reset_token,
+        tu1_0.phone,
+        tu1_0.role,
+        tu1_0.suspended_by_account,
+        tu1_0.suspended_by_admin,
+        tu1_0.timezone 
+    from
+        tenant_users tu1_0 
+    where
+        tu1_0.account_id=?
+Hibernate: 
+    select
+        p1_0.tenant_user_id,
+        p1_0.permission 
+    from
+        tenant_user_permissions p1_0 
+    where
+        p1_0.tenant_user_id=?
+Hibernate: 
+    select
+        p1_0.tenant_user_id,
+        p1_0.permission 
+    from
+        tenant_user_permissions p1_0 
+    where
+        p1_0.tenant_user_id=?
+2026-02-26T18:55:20.951-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-6] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_2_d77040_979fabfb | thread=51
+2026-02-26T18:55:20.953-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-6] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/controlplane/accounts/3/tenant-users | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=94a10ddf-fcfc-4557-9d2d-9c6cbf1ecf9f | thread=51
+2026-02-26T18:55:21.013-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_f8b394_e8dc0da7
+Hibernate: 
+    select
+        tu1_0.id,
+        tu1_0.account_id,
+        tu1_0.created_at,
+        tu1_0.created_by,
+        tu1_0.created_by_email,
+        tu1_0.deleted_at,
+        tu1_0.deleted_by,
+        tu1_0.deleted_by_email,
+        tu1_0.updated_at,
+        tu1_0.updated_by,
+        tu1_0.updated_by_email,
+        tu1_0.avatar_url,
+        tu1_0.deleted,
+        tu1_0.email,
+        tu1_0.last_login,
+        tu1_0.locale,
+        tu1_0.locked_until,
+        tu1_0.must_change_password,
+        tu1_0.name,
+        tu1_0.origin,
+        tu1_0.password,
+        tu1_0.password_changed_at,
+        tu1_0.password_reset_expires,
+        tu1_0.password_reset_token,
+        tu1_0.phone,
+        tu1_0.role,
+        tu1_0.suspended_by_account,
+        tu1_0.suspended_by_admin,
+        tu1_0.timezone 
+    from
+        tenant_users tu1_0 
+    where
+        tu1_0.email=? 
+        and tu1_0.account_id=? 
+        and not(tu1_0.deleted)
+2026-02-26T18:55:21.016-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] m.i.p.m.h.TenantSchemaConnectionProvider : 🎯 [MT] getConnection | thread=54 | tenantSchemaParam=t_tenant_e2e_f8b394_e8dc0da7 | tenantSchemaThread=t_tenant_e2e_f8b394_e8dc0da7 | SQL=SET search_path TO "t_tenant_e2e_f8b394_e8dc0da7", "public"
+Hibernate: 
+    select
+        p1_0.tenant_user_id,
+        p1_0.permission 
+    from
+        tenant_user_permissions p1_0 
+    where
+        p1_0.tenant_user_id=?
+2026-02-26T18:55:21.021-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_f8b394_e8dc0da7 | thread=54
+2026-02-26T18:55:21.024-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_f8b394_e8dc0da7
+2026-02-26T18:55:21.024-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_f8b394_e8dc0da7 | thread=54
+2026-02-26T18:55:21.024-03:00 DEBUG 19312 --- [multitenancy001] [nio-8080-exec-9] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL query
+2026-02-26T18:55:21.024-03:00 DEBUG 19312 --- [multitenancy001] [nio-8080-exec-9] o.s.jdbc.core.JdbcTemplate               : Executing prepared SQL statement [    select li.account_id,
+           a.display_name,
+           a.slug
+      from public.login_identities li
+      join public.accounts a on a.id = li.account_id
+     where li.email = ?
+       and li.subject_type = 'TENANT_ACCOUNT'
+       and a.deleted = false
+]
+2026-02-26T18:55:21.024-03:00 TRACE 19312 --- [multitenancy001] [nio-8080-exec-9] o.s.jdbc.core.StatementCreatorUtils      : Setting SQL statement parameter value: column index 1, parameter value [shared_1772142919413_af2e93@tenant.local], value class [java.lang.String], SQL type unknown
+2026-02-26T18:55:21.026-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_f8b394_e8dc0da7
+2026-02-26T18:55:21.026-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_f8b394_e8dc0da7 | thread=54
+2026-02-26T18:55:21.028-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado | thread=54 | null -> t_tenant_e2e_f8b394_e8dc0da7
+2026-02-26T18:55:21.029-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.m.o.TenantContextMonitor         : 🔐 AUTENTICACAO TenantLoginInitService.loginInit(..) (8ms) | tenant(bound=t_tenant_e2e_f8b394_e8dc0da7, effective=t_tenant_e2e_f8b394_e8dc0da7) | motivo: usuario ou senha invalidos
+2026-02-26T18:55:21.032-03:00  WARN 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.s.a.error.GlobalExceptionHandler   : Authentication failed: usuario ou senha invalidos
+2026-02-26T18:55:21.037-03:00  WARN 19312 --- [multitenancy001] [nio-8080-exec-9] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [org.springframework.security.authentication.BadCredentialsException: usuario ou senha invalidos]
+2026-02-26T18:55:21.038-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] POST /api/tenant/auth/login | tenant=t_tenant_e2e_f8b394_e8dc0da7 | status=401 | ip=0:0:0:0:0:0:0:1 | requestId=86711948-c53c-406a-bf17-1c3cd1917782 | thread=54
+2026-02-26T18:55:21.038-03:00  INFO 19312 --- [multitenancy001] [nio-8080-exec-9] b.c.m.shared.context.TenantContext       : 🔄 Tenant bindado para PUBLIC (null) | anterior=t_tenant_e2e_f8b394_e8dc0da7 | thread=54
+
+==> Diagnostics: attempt to extract shared_email and check public.login_identities
+   shared_email detected: shared_1772142919413_af2e93@tenant.local
+   Querying public.login_identities for shared_email...
+ subject_type | account_id | subject_id | email 
+--------------+------------+------------+-------
+(0 linha)
+
+===========================================================
+==> Stopping app (pid=4882)...

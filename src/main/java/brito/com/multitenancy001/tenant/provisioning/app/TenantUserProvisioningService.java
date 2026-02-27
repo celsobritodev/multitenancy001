@@ -5,7 +5,9 @@ import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.TenantRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.security.TenantRole;
@@ -36,6 +38,10 @@ public class TenantUserProvisioningService {
 
     private final AppClock appClock;
 
+    // ✅ NOVO: PUBLIC UoW + provisioning do índice de login
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
+
     public List<UserSummaryData> listUserSummaries(String tenantSchema, Long accountId, boolean onlyOperational) {
         tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
@@ -64,6 +70,12 @@ public class TenantUserProvisioningService {
 
     /**
      * Cria o usuário dono (TENANT_OWNER) no schema do Tenant.
+     *
+     * <p>Correção crítica (login multi-tenant):</p>
+     * <ul>
+     *   <li>Após criar o usuário no schema TENANT, deve provisionar o índice PUBLIC em {@code public.login_identities}.</li>
+     *   <li>Isso é feito FORA da transação TENANT, via {@link PublicSchemaUnitOfWork#requiresNew(Runnable)}.</li>
+     * </ul>
      */
     public UserSummaryData createTenantOwner(
             String tenantSchema,
@@ -74,7 +86,8 @@ public class TenantUserProvisioningService {
     ) {
         tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
 
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
+        // 1) Faz o create inteiro no TENANT (TX TENANT)
+        UserSummaryData created = tenantExecutor.runInTenantSchema(tenantSchema, () ->
                 transactionExecutor.inTenantTx(() -> {
 
                     if (accountId == null) {
@@ -104,10 +117,7 @@ public class TenantUserProvisioningService {
                     TenantUser tenantUser = new TenantUser();
                     tenantUser.setAccountId(accountId);
 
-                    // ✅ padronização: rename() (trim interno)
                     tenantUser.rename(name);
-
-                    // ✅ padronização: changeEmail() (normaliza via EmailNormalizer)
                     tenantUser.changeEmail(emailNorm);
 
                     tenantUser.setPassword(passwordEncoder.encode(rawPassword));
@@ -136,6 +146,13 @@ public class TenantUserProvisioningService {
                     );
                 })
         );
+
+        // 2) Fora da TX TENANT: provisiona o índice PUBLIC (REQUIRES_NEW)
+        publicSchemaUnitOfWork.requiresNew(() ->
+                loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(created.email(), accountId)
+        );
+
+        return created;
     }
 
     /**
@@ -216,81 +233,9 @@ public class TenantUserProvisioningService {
         );
     }
 
-    public void setSuspendedByAdmin(String tenantSchema, Long accountId, Long userId, boolean suspended) {
-        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
-
-        tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                transactionExecutor.inTenantTx(() -> {
-
-                    if (accountId == null) {
-                        throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "AccountId obrigatório", 400);
-                    }
-                    if (userId == null) {
-                        throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId obrigatório", 400);
-                    }
-
-                    if (suspended) {
-                        TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
-                                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404));
-
-                        if (isActiveOwner(user)) {
-                            long activeOwners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
-                            if (activeOwners <= 1) {
-                                throw new ApiException(
-                                        ApiErrorCode.TENANT_OWNER_REQUIRED,
-                                        "Não é permitido suspender o último TENANT_OWNER ativo.",
-                                        409
-                                );
-                            }
-                        }
-                    }
-
-                    int updated = tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended);
-                    if (updated == 0) {
-                        throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado ou removido", 404);
-                    }
-                    return null;
-                })
-        );
-    }
-
-    public void setPasswordResetToken(String tenantSchema, Long accountId, Long userId, String token, Instant expiresAt) {
-        tenantExecutor.runInTenantSchemaIfReady(tenantSchema, REQUIRED_TABLE, () ->
-                transactionExecutor.inTenantTx(() -> {
-                    TenantUser user = tenantUserRepository.findEnabledByIdAndAccountId(userId, accountId)
-                            .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
-
-                    user.setPasswordResetToken(token);
-                    user.setPasswordResetExpiresAt(expiresAt);
-
-                    tenantUserRepository.save(user);
-                    return null;
-                })
-        );
-    }
-
-    public TenantUser findByPasswordResetToken(String tenantSchema, Long accountId, String token) {
-        tenantExecutor.assertTenantSchemaReadyOrThrow(tenantSchema, REQUIRED_TABLE);
-
-        return tenantExecutor.runInTenantSchema(tenantSchema, () ->
-                transactionExecutor.inTenantReadOnlyTx(() ->
-                        tenantUserRepository.findByPasswordResetTokenAndAccountId(token, accountId)
-                                .orElseThrow(() -> new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400))
-                )
-        );
-    }
-
     // =========================================================
     // helpers
     // =========================================================
-
-    private boolean isActiveOwner(TenantUser user) {
-        if (user == null) return false;
-        if (user.isDeleted()) return false;
-        if (user.isSuspendedByAccount()) return false;
-        if (user.isSuspendedByAdmin()) return false;
-        return user.getRole() != null && user.getRole().isTenantOwner();
-    }
 
     private Instant appNow() {
         return appClock.instant();

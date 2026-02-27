@@ -1,5 +1,7 @@
+// src/main/java/brito/com/multitenancy001/tenant/users/app/command/TenantUserCommandService.java
 package brito.com.multitenancy001.tenant.users.app.command;
 
+import brito.com.multitenancy001.infrastructure.persistence.tx.AfterCommit;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.PublicAuditDispatcher;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
@@ -11,6 +13,7 @@ import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
@@ -35,31 +38,19 @@ import java.util.Set;
 /**
  * Casos de uso de comando para usuários do Tenant.
  *
- * Objetivos:
- * - Criar usuário com role e permissões finais (base + requested).
- * - Suspender/restaurar por admin ou por conta.
- * - Atualizar perfil.
- * - Fluxos de senha (reset admin, reset token, change self).
- * - Soft delete / restore / hard delete.
- * - Transferência de ownership (SOC2-like).
+ * <p>Auditoria SOC2-like:</p>
+ * <ul>
+ *   <li>ATTEMPT + SUCCESS/FAIL/DENIED (append-only em public schema).</li>
+ *   <li>Details estruturado (Map -> JSON), sem segredos.</li>
+ *   <li>Gravação PUBLIC protegida contra nesting ilegal TENANT->PUBLIC via {@link PublicAuditDispatcher}.</li>
+ * </ul>
  *
- * Auditoria SOC2-like:
- * - ATTEMPT + SUCCESS/FAIL/DENIED (append-only em public schema).
- * - Details estruturado (Map -> JSON) e sem segredos.
- * - tenantSchema propagado para o evento quando disponível.
- *
- * Regras:
- * - Não permitir mutações em BUILT_IN.
- * - Não permitir remover/suspender/excluir o último TENANT_OWNER ativo.
- *
- * Regra arquitetural (multi-tenant):
- * - Este service NÃO usa TxExecutor diretamente.
- * - Toda execução de tenant deve ocorrer via TenantSchemaUnitOfWork (schema + tx em um único contrato).
- *
- * Regra crítica (multi-tx managers):
- * - NUNCA gravar auditoria PUBLIC iniciando uma transação dentro de uma transação TENANT no mesmo thread.
- * - Para evitar: "Pre-bound JDBC Connection found! ...", a gravação PUBLIC é feita via {@link PublicAuditDispatcher},
- *   que grava imediatamente quando não há tx ativa, ou agenda afterCompletion quando há tx ativa.
+ * <p>Regra crítica (multi-tx managers):</p>
+ * <ul>
+ *   <li>NUNCA iniciar TX PUBLIC dentro de TX TENANT no mesmo thread.</li>
+ *   <li>Este service usa {@link PublicAuditDispatcher} para gravar em PUBLIC de forma segura.</li>
+ *   <li>Indexação de login_identities (PUBLIC) roda via {@link AfterCommit} (pós-commit do tenant).</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -77,12 +68,12 @@ public class TenantUserCommandService {
 
     /**
      * Unit of Work que garante:
-     * - bind do tenantSchema (TenantExecutor)
-     * - transação tenant (TxExecutor)
+     * - bind do tenantSchema
+     * - transação tenant (em um único contrato)
      */
     private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
 
-    /** Mantido por compat (ainda usado para resolver actor). */
+    /** Mantido por compat (best-effort actor). */
     private final SecurityUtils securityUtils;
 
     /** Auditoria append-only (public schema). */
@@ -91,10 +82,27 @@ public class TenantUserCommandService {
     /** Mapper para details (Map/record/String -> JsonNode). */
     private final JsonDetailsMapper jsonDetailsMapper;
 
+    /** Provisionamento do índice público para login por e-mail (PUBLIC schema). */
+    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
+
     // =========================================================
     // CREATE
     // =========================================================
 
+    /**
+     * Cria um usuário de tenant, aplicando permissões finais (base + requested validadas).
+     *
+     * <p>Auditoria:</p>
+     * <ul>
+     *   <li>USER_CREATED: ATTEMPT + SUCCESS/FAIL/DENIED</li>
+     *   <li>PERMISSIONS_CHANGED: SUCCESS (reason=create)</li>
+     * </ul>
+     *
+     * <p>Index público (login_identities):</p>
+     * <ul>
+     *   <li>Após COMMIT do tenant, garante {@code (email, accountId)} no PUBLIC para permitir loginInit ambíguo.</li>
+     * </ul>
+     */
     public TenantUser createTenantUser(
             Long accountId,
             String tenantSchema,
@@ -110,7 +118,6 @@ public class TenantUserCommandService {
             Boolean mustChangePassword,
             EntityOrigin origin
     ) {
-        /* Cria um usuário de tenant, aplicando permissões base + requested (validadas). */
         return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
 
             if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
@@ -129,116 +136,110 @@ public class TenantUserCommandService {
                 throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
             }
 
-            Actor actor = resolveActorOrNull(accountId, tenantSchema);
-
+            final Actor actor = resolveActorOrNull(accountId, tenantSchema);
             final int requestedCount = (requestedPermissions == null) ? 0 : requestedPermissions.size();
 
-            Map<String, Object> attempt = m(
+            final Map<String, Object> attemptDetails = m(
                     "scope", SCOPE,
                     "stage", "before_save",
                     "role", role.name(),
                     "requestedPermissionsCount", requestedCount
             );
 
-            TenantUser saved = auditAttemptSuccessFail(
-                    SecurityAuditActionType.USER_CREATED,
-                    actor,
-                    normEmail,
-                    null,
-                    accountId,
-                    tenantSchema,
-                    attempt,
-                    null,
-                    () -> {
-                        boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
-                        if (exists) throw new ApiException(ApiErrorCode.EMAIL_ALREADY_EXISTS, "Email já cadastrado nesta conta", 409);
+            // ATTEMPT
+            recordAudit(SecurityAuditActionType.USER_CREATED, AuditOutcome.ATTEMPT, actor, normEmail, null, accountId, tenantSchema, attemptDetails);
 
-                        TenantUser user = new TenantUser();
-                        user.setAccountId(accountId);
+            try {
+                boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
+                if (exists) throw new ApiException(ApiErrorCode.EMAIL_ALREADY_EXISTS, "Email já cadastrado nesta conta", 409);
 
-                        user.rename(name);
-                        user.changeEmail(normEmail);
+                TenantUser user = new TenantUser();
+                user.setAccountId(accountId);
 
-                        user.setPassword(passwordEncoder.encode(rawPassword));
-                        user.setRole(role);
+                user.rename(name);
+                user.changeEmail(normEmail);
 
-                        user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
+                user.setPassword(passwordEncoder.encode(rawPassword));
+                user.setRole(role);
 
-                        user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
+                user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
+                user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
 
-                        Instant now = appClock.instant();
-                        user.setPasswordChangedAt(user.isMustChangePassword() ? null : now);
+                Instant now = appClock.instant();
+                user.setPasswordChangedAt(user.isMustChangePassword() ? null : now);
 
-                        user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
-                        user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
+                user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
+                user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
 
-                        user.setLocale(StringUtils.hasText(locale) ? locale.trim() : null);
-                        user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : null);
+                user.setLocale(StringUtils.hasText(locale) ? locale.trim() : null);
+                user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : null);
 
-                        user.setSuspendedByAccount(false);
-                        user.setSuspendedByAdmin(false);
+                user.setSuspendedByAccount(false);
+                user.setSuspendedByAdmin(false);
 
-                        Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
-                        Set<TenantPermission> desired = new LinkedHashSet<>();
-                        if (requestedPermissions != null && !requestedPermissions.isEmpty()) desired.addAll(requestedPermissions);
+                Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
+                Set<TenantPermission> desired = new LinkedHashSet<>();
+                if (requestedPermissions != null && !requestedPermissions.isEmpty()) desired.addAll(requestedPermissions);
 
-                        desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
+                desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
 
-                        Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
-                        finalPerms.addAll(desired);
+                Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
+                finalPerms.addAll(desired);
 
-                        user.setPermissions(finalPerms);
+                user.setPermissions(finalPerms);
 
-                        if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
-                        if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
+                if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
+                if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
 
-                        return tenantUserRepository.save(user);
-                    }
-            );
+                TenantUser saved = tenantUserRepository.save(user);
 
-            // SUCCESS do create com info final (sem segredos)
-            recordAudit(
-                    SecurityAuditActionType.USER_CREATED,
-                    AuditOutcome.SUCCESS,
-                    actor,
-                    saved.getEmail(),
-                    saved.getId(),
-                    accountId,
-                    tenantSchema,
-                    m(
-                            "scope", SCOPE,
-                            "stage", "after_save",
-                            "role", role.name()
-                    )
-            );
+                // SUCCESS (com targetUserId correto)
+                recordAudit(
+                        SecurityAuditActionType.USER_CREATED,
+                        AuditOutcome.SUCCESS,
+                        actor,
+                        saved.getEmail(),
+                        saved.getId(),
+                        accountId,
+                        tenantSchema,
+                        m(
+                                "scope", SCOPE,
+                                "stage", "after_save",
+                                "role", role.name(),
+                                "finalPermissionsCount", sizeOrZero(saved.getPermissions())
+                        )
+                );
 
-            // Permissions changed (create): base + requested -> final
-            Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
-            Set<TenantPermission> desired = new LinkedHashSet<>();
-            if (requestedPermissions != null && !requestedPermissions.isEmpty()) desired.addAll(requestedPermissions);
-            desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
+                // Permissions changed (create): base + requested -> final
+                recordAudit(
+                        SecurityAuditActionType.PERMISSIONS_CHANGED,
+                        AuditOutcome.SUCCESS,
+                        actor,
+                        saved.getEmail(),
+                        saved.getId(),
+                        accountId,
+                        tenantSchema,
+                        m(
+                                "scope", SCOPE,
+                                "reason", "create",
+                                "baseCount", base.size(),
+                                "requestedCount", requestedCount,
+                                "finalCount", finalPerms.size()
+                        )
+                );
 
-            Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
-            finalPerms.addAll(desired);
+                // ✅ Pós-commit: garante índice público (login_identities) para permitir loginInit ambíguo.
+                AfterCommit.run(() -> loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(saved.getEmail(), accountId));
 
-            recordAudit(
-                    SecurityAuditActionType.PERMISSIONS_CHANGED,
-                    AuditOutcome.SUCCESS,
-                    actor,
-                    saved.getEmail(),
-                    saved.getId(),
-                    accountId,
-                    tenantSchema,
-                    m(
-                            "scope", SCOPE,
-                            "reason", "create",
-                            "baseCount", base.size(),
-                            "requestedCount", requestedCount,
-                            "finalCount", finalPerms.size()
-                    )
-            );
+                return saved;
 
-            return saved;
+            } catch (ApiException ex) {
+                recordAudit(SecurityAuditActionType.USER_CREATED, outcomeFrom(ex), actor, normEmail, null, accountId, tenantSchema, failureDetails(SCOPE, ex));
+                throw ex;
+            } catch (Exception ex) {
+                recordAudit(SecurityAuditActionType.USER_CREATED, AuditOutcome.FAILURE, actor, normEmail, null, accountId, tenantSchema, unexpectedFailureDetails(SCOPE, ex));
+                throw ex;
+            }
         });
     }
 
@@ -247,17 +248,14 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void setSuspendedByAdmin(Long accountId, String tenantSchema, Long userId, boolean suspended) {
-        /* Suspende/reativa por administrador (flag suspendedByAdmin). */
         setSuspension(accountId, tenantSchema, userId, suspended, true);
     }
 
     public void setSuspendedByAccount(Long accountId, String tenantSchema, Long userId, boolean suspended) {
-        /* Suspende/reativa por conta (flag suspendedByAccount). */
         setSuspension(accountId, tenantSchema, userId, suspended, false);
     }
 
     private void setSuspension(Long accountId, String tenantSchema, Long userId, boolean suspended, boolean byAdmin) {
-        /* Aplica suspensão com guardrails (owner) e auditoria ATTEMPT+SUCCESS/FAIL. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -271,12 +269,11 @@ public class TenantUserCommandService {
             requireNotBuiltInForMutation(user, "Não é permitido suspender usuário BUILT_IN");
 
             if (suspended && isActiveOwner(user)) {
-                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(),
+                requireWillStillHaveAtLeastOneActiveOwner(accountId,
                         "Não é permitido suspender o último TENANT_OWNER ativo");
             }
 
             SecurityAuditActionType action = suspended ? SecurityAuditActionType.USER_SUSPENDED : SecurityAuditActionType.USER_RESTORED;
-
             String reason = byAdmin ? "suspendedByAdmin" : "suspendedByAccount";
 
             Map<String, Object> details = m(
@@ -293,7 +290,7 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     details,
-                    details,
+                    null,
                     () -> {
                         int updated = byAdmin
                                 ? tenantUserRepository.setSuspendedByAdmin(accountId, userId, suspended)
@@ -317,9 +314,8 @@ public class TenantUserCommandService {
             String avatarUrl,
             String locale,
             String timezone,
-            Instant now // mantido por compat
+            Instant now // compat (ignorado; usamos AppClock)
     ) {
-        /* Atualiza perfil do usuário (sem alterar role/perms). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -332,73 +328,100 @@ public class TenantUserCommandService {
 
             requireNotBuiltInForMutation(user, "Não é permitido alterar perfil de usuário BUILT_IN");
 
-            Map<String, Object> attempt = m(
+            Map<String, Object> attemptDetails = m(
                     "scope", SCOPE,
                     "reason", "updateProfile"
             );
 
-            return auditAttemptSuccessFail(
+            recordAudit(
                     SecurityAuditActionType.USER_UPDATED,
+                    AuditOutcome.ATTEMPT,
                     actor,
                     user.getEmail(),
                     user.getId(),
                     accountId,
                     tenantSchema,
-                    attempt,
-                    null,
-                    () -> {
-                        boolean changed = false;
-                        Map<String, Object> changes = new LinkedHashMap<>();
-
-                        if (StringUtils.hasText(name)) {
-                            user.rename(name);
-                            changed = true;
-                            changes.put("name", "changed");
-                        }
-                        if (StringUtils.hasText(phone)) {
-                            user.setPhone(phone.trim());
-                            changed = true;
-                            changes.put("phone", "changed");
-                        }
-                        if (StringUtils.hasText(locale)) {
-                            user.setLocale(locale.trim());
-                            changed = true;
-                            changes.put("locale", "changed");
-                        }
-                        if (StringUtils.hasText(timezone)) {
-                            user.setTimezone(timezone.trim());
-                            changed = true;
-                            changes.put("timezone", "changed");
-                        }
-
-                        if (avatarUrl != null) {
-                            String trimmed = avatarUrl.trim();
-                            user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
-                            changed = true;
-                            changes.put("avatarUrl", trimmed.isEmpty() ? "cleared" : "changed");
-                        }
-
-                        TenantUser saved = tenantUserRepository.save(user);
-
-                        recordAudit(
-                                SecurityAuditActionType.USER_UPDATED,
-                                AuditOutcome.SUCCESS,
-                                actor,
-                                saved.getEmail(),
-                                saved.getId(),
-                                accountId,
-                                tenantSchema,
-                                m(
-                                        "scope", SCOPE,
-                                        "reason", "updateProfile",
-                                        "changed", changed,
-                                        "changes", changes
-                                )
-                        );
-
-                        return saved;
-                    }
+                    attemptDetails
             );
+
+            try {
+                boolean changed = false;
+                Map<String, Object> changes = new LinkedHashMap<>();
+
+                if (StringUtils.hasText(name)) {
+                    user.rename(name);
+                    changed = true;
+                    changes.put("name", "changed");
+                }
+                if (StringUtils.hasText(phone)) {
+                    user.setPhone(phone.trim());
+                    changed = true;
+                    changes.put("phone", "changed");
+                }
+                if (StringUtils.hasText(locale)) {
+                    user.setLocale(locale.trim());
+                    changed = true;
+                    changes.put("locale", "changed");
+                }
+                if (StringUtils.hasText(timezone)) {
+                    user.setTimezone(timezone.trim());
+                    changed = true;
+                    changes.put("timezone", "changed");
+                }
+
+                if (avatarUrl != null) {
+                    String trimmed = avatarUrl.trim();
+                    user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
+                    changed = true;
+                    changes.put("avatarUrl", trimmed.isEmpty() ? "cleared" : "changed");
+                }
+
+                TenantUser saved = tenantUserRepository.save(user);
+
+                recordAudit(
+                        SecurityAuditActionType.USER_UPDATED,
+                        AuditOutcome.SUCCESS,
+                        actor,
+                        saved.getEmail(),
+                        saved.getId(),
+                        accountId,
+                        tenantSchema,
+                        m(
+                                "scope", SCOPE,
+                                "reason", "updateProfile",
+                                "changed", changed,
+                                "changes", changes
+                        )
+                );
+
+                return saved;
+
+            } catch (ApiException ex) {
+                recordAudit(
+                        SecurityAuditActionType.USER_UPDATED,
+                        outcomeFrom(ex),
+                        actor,
+                        user.getEmail(),
+                        user.getId(),
+                        accountId,
+                        tenantSchema,
+                        failureDetails(SCOPE, ex)
+                );
+                throw ex;
+
+            } catch (Exception ex) {
+                recordAudit(
+                        SecurityAuditActionType.USER_UPDATED,
+                        AuditOutcome.FAILURE,
+                        actor,
+                        user.getEmail(),
+                        user.getId(),
+                        accountId,
+                        tenantSchema,
+                        unexpectedFailureDetails(SCOPE, ex)
+                );
+                throw ex;
+            }
         });
     }
 
@@ -407,7 +430,6 @@ public class TenantUserCommandService {
     // =========================================================
 
     public TenantUser resetPassword(Long userId, Long accountId, String tenantSchema, String newPassword) {
-        /* Reset administrativo (sem senha atual), sem auditoria de secrets. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -423,10 +445,7 @@ public class TenantUserCommandService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-            Map<String, Object> details = m(
-                    "scope", SCOPE,
-                    "reason", "admin_reset"
-            );
+            Map<String, Object> details = m("scope", SCOPE, "reason", "admin_reset");
 
             return auditAttemptSuccessFail(
                     SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
@@ -436,7 +455,7 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     details,
-                    details,
+                    null,
                     () -> {
                         Instant now = appClock.instant();
 
@@ -453,7 +472,6 @@ public class TenantUserCommandService {
     }
 
     public void resetPasswordWithToken(Long accountId, String tenantSchema, String email, String token, String newPassword) {
-        /* Reset via token (self). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (!StringUtils.hasText(token)) throw new ApiException(ApiErrorCode.TOKEN_REQUIRED, "token é obrigatório", 400);
@@ -468,11 +486,7 @@ public class TenantUserCommandService {
                     .orElseThrow(() -> new ApiException(ApiErrorCode.TOKEN_INVALID, "Token inválido", 400));
 
             Actor actor = resolveActorOrNull(accountId, tenantSchema);
-
-            Map<String, Object> attempt = m(
-                    "scope", SCOPE,
-                    "flow", "token_reset"
-            );
+            Map<String, Object> attempt = m("scope", SCOPE, "flow", "token_reset");
 
             auditAttemptSuccessFail(
                     SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
@@ -482,7 +496,7 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     attempt,
-                    attempt,
+                    null,
                     () -> {
                         Instant now = appClock.instant();
 
@@ -516,7 +530,6 @@ public class TenantUserCommandService {
     }
 
     public void changeMyPassword(Long userId, Long accountId, String tenantSchema, String currentPassword, String newPassword, String confirmNewPassword) {
-        /* Troca autenticada (self). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -533,11 +546,7 @@ public class TenantUserCommandService {
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
             Actor actor = resolveActorOrNull(accountId, tenantSchema);
-
-            Map<String, Object> details = m(
-                    "scope", SCOPE,
-                    "reason", "self_change"
-            );
+            Map<String, Object> details = m("scope", SCOPE, "reason", "self_change");
 
             auditAttemptSuccessFail(
                     SecurityAuditActionType.PASSWORD_CHANGED,
@@ -547,7 +556,7 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     details,
-                    details,
+                    null,
                     () -> {
                         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
                             throw new ApiException(ApiErrorCode.CURRENT_PASSWORD_INVALID, "Senha atual inválida", 400);
@@ -576,7 +585,6 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void softDelete(Long userId, Long accountId, String tenantSchema) {
-        /* Soft delete (não suspender; deletar logicamente). */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -592,14 +600,13 @@ public class TenantUserCommandService {
             requireNotBuiltInForMutation(user, "Não é permitido excluir usuário BUILT_IN");
 
             if (isActiveOwner(user)) {
-                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(),
+                requireWillStillHaveAtLeastOneActiveOwner(accountId,
                         "Não é permitido excluir o último TENANT_OWNER ativo");
             }
 
-            Map<String, Object> details = m(
-                    "scope", SCOPE,
-                    "reason", "softDelete"
-            );
+            final String emailForIndex = user.getEmail();
+
+            Map<String, Object> details = m("scope", SCOPE, "reason", "softDelete");
 
             auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SOFT_DELETED,
@@ -609,7 +616,7 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     details,
-                    details,
+                    null,
                     () -> {
                         Instant now = appClock.instant();
                         user.softDelete(now, appClock.epochMillis());
@@ -618,12 +625,14 @@ public class TenantUserCommandService {
                     }
             );
 
+            // ✅ Pós-commit: remove do índice público
+            AfterCommit.run(() -> loginIdentityProvisioningService.deleteTenantIdentityAfterCompletion(emailForIndex, accountId));
+
             return null;
         });
     }
 
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
-        /* Restore após soft delete. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -634,12 +643,9 @@ public class TenantUserCommandService {
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
 
-            Map<String, Object> details = m(
-                    "scope", SCOPE,
-                    "reason", "softRestore"
-            );
+            Map<String, Object> details = m("scope", SCOPE, "reason", "softRestore");
 
-            return auditAttemptSuccessFail(
+            TenantUser saved = auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SOFT_RESTORED,
                     actor,
                     user.getEmail(),
@@ -647,17 +653,21 @@ public class TenantUserCommandService {
                     accountId,
                     tenantSchema,
                     details,
-                    details,
+                    null,
                     () -> {
                         user.restore();
                         return tenantUserRepository.save(user);
                     }
             );
+
+            // ✅ Pós-commit: garante índice público novamente
+            AfterCommit.run(() -> loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(saved.getEmail(), accountId));
+
+            return saved;
         });
     }
 
     public void hardDelete(Long userId, Long accountId, String tenantSchema) {
-        /* Hard delete (remoção física). Atenção: normalmente não é SOC2-friendly em produção. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -669,17 +679,22 @@ public class TenantUserCommandService {
             requireNotBuiltInForMutation(user, "Não é permitido hard-delete de usuário BUILT_IN");
 
             if (!user.isDeleted() && isActiveOwner(user)) {
-                requireWillStillHaveAtLeastOneActiveOwner(accountId, user.getId(),
+                requireWillStillHaveAtLeastOneActiveOwner(accountId,
                         "Não é permitido excluir o último TENANT_OWNER ativo");
             }
 
+            final String emailForIndex = user.getEmail();
+
             tenantUserRepository.delete(user);
+
+            // ✅ Pós-commit: remove do índice público
+            AfterCommit.run(() -> loginIdentityProvisioningService.deleteTenantIdentityAfterCompletion(emailForIndex, accountId));
+
             return null;
         });
     }
 
     public TenantUser save(String tenantSchema, TenantUser user) {
-        /* Persiste usuário (guard mínimo). */
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (user == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Usuário inválido", 400);
         return tenantSchemaUnitOfWork.tx(tenantSchema, () -> tenantUserRepository.save(user));
@@ -690,7 +705,6 @@ public class TenantUserCommandService {
     // =========================================================
 
     public void transferTenantOwnerRole(Long accountId, String tenantSchema, Long fromUserId, Long toUserId) {
-        /* Transfere ownership (TENANT_OWNER) para outro usuário habilitado. */
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         if (fromUserId == null) throw new ApiException(ApiErrorCode.FROM_USER_REQUIRED, "fromUserId é obrigatório", 400);
@@ -715,7 +729,6 @@ public class TenantUserCommandService {
             TenantRole beforeFrom = from.getRole();
             TenantRole beforeTo = to.getRole();
 
-            // SOC2-like: evento agregado de transferência (alto nível)
             recordAudit(
                     SecurityAuditActionType.OWNERSHIP_TRANSFERRED,
                     AuditOutcome.ATTEMPT,
@@ -733,7 +746,6 @@ public class TenantUserCommandService {
                     )
             );
 
-            // ATTEMPT de role/perms (por alvo) para trilha detalhada
             recordAudit(SecurityAuditActionType.ROLE_CHANGED, AuditOutcome.ATTEMPT, actor, from.getEmail(), from.getId(), accountId, tenantSchema,
                     m("scope", SCOPE, "kind", "transferOwner", "side", "from"));
             recordAudit(SecurityAuditActionType.ROLE_CHANGED, AuditOutcome.ATTEMPT, actor, to.getEmail(), to.getId(), accountId, tenantSchema,
@@ -792,14 +804,12 @@ public class TenantUserCommandService {
     // =========================================================
 
     private void requireNotBuiltInForMutation(TenantUser user, String message) {
-        /* Impede mutações em BUILT_IN. */
         if (user != null && user.getOrigin() == EntityOrigin.BUILT_IN) {
             throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, message, 409);
         }
     }
 
     private boolean isActiveOwner(TenantUser user) {
-        /* Define se o usuário conta como OWNER ativo (para guard de último owner). */
         if (user == null) return false;
         if (user.isDeleted()) return false;
         if (user.isSuspendedByAccount()) return false;
@@ -807,19 +817,16 @@ public class TenantUserCommandService {
         return user.getRole() != null && user.getRole().isTenantOwner();
     }
 
-    private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, Long removingUserId, String message) {
-        /* Garante que não vai sobrar 0 owners ativos. */
+    private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, String message) {
         long owners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
         if (owners <= 1) throw new ApiException(ApiErrorCode.TENANT_OWNER_REQUIRED, message, 409);
     }
 
     private static int sizeOrZero(Set<?> s) {
-        /* Helper para size null-safe. */
         return s == null ? 0 : s.size();
     }
 
     private static String nameOrNull(Enum<?> e) {
-        /* Helper para enum name null-safe. */
         return e == null ? null : e.name();
     }
 
@@ -843,13 +850,12 @@ public class TenantUserCommandService {
             Map<String, Object> successDetails,
             AuditCallable<T> block
     ) {
-        /* Padroniza trilha ATTEMPT + SUCCESS/FAIL/DENIED. */
         recordAudit(actionType, AuditOutcome.ATTEMPT, actor, targetEmail, targetUserId, accountId, tenantSchema, attemptDetails);
 
         try {
             T result = block.call();
 
-            Map<String, Object> sd = (successDetails != null ? successDetails : attemptDetails);
+            Object sd = (successDetails != null ? successDetails : attemptDetails);
             recordAudit(actionType, AuditOutcome.SUCCESS, actor, targetEmail, targetUserId, accountId, tenantSchema, sd);
 
             return result;
@@ -872,16 +878,8 @@ public class TenantUserCommandService {
             String tenantSchema,
             Object details
     ) {
-        /**
-         * Grava evento com details estruturado.
-         *
-         * IMPORTANTE:
-         * Esta chamada NÃO pode iniciar transação PUBLIC dentro de tx TENANT no mesmo thread.
-         * Por isso, a gravação é feita via PublicAuditDispatcher:
-         * - Se não há tx ativa: grava imediatamente em PUBLIC (REQUIRES_NEW).
-         * - Se há tx ativa (TENANT): agenda afterCompletion e grava depois que a tx encerrar.
-         */
         final String detailsJson = toJson(details);
+
         publicAuditDispatcher.dispatch(() -> {
             try {
                 securityAuditService.record(
@@ -896,7 +894,6 @@ public class TenantUserCommandService {
                         detailsJson
                 );
             } catch (Exception e) {
-                // best-effort: auditoria não derruba o caso de uso
                 log.warn("⚠️ Falha ao gravar SecurityAudit (best-effort) | actionType={} outcome={} accountId={} tenantSchema={} msg={}",
                         actionType, outcome, accountId, tenantSchema, e.getMessage(), e);
             }
@@ -904,7 +901,6 @@ public class TenantUserCommandService {
     }
 
     private String toJson(Object details) {
-        /* Serializa details para JSON string (compatível com detailsJson do evento). */
         if (details == null) return null;
 
         JsonNode node = jsonDetailsMapper.toJsonNode(details);
@@ -914,7 +910,6 @@ public class TenantUserCommandService {
     }
 
     private Actor resolveActorOrNull(Long accountId, String tenantSchema) {
-        /* Resolve actor do request (best-effort) sem depender de controller. */
         try {
             Long actorUserId = securityUtils.getCurrentUserId();
             Long actorAccountId = securityUtils.getCurrentAccountId();
@@ -922,7 +917,6 @@ public class TenantUserCommandService {
             if (actorUserId == null || actorAccountId == null) return Actor.anonymous();
             if (!actorAccountId.equals(accountId)) return new Actor(actorUserId, null);
 
-            // Se não tiver tenantSchema, não tenta lookup (evita consulta no schema errado)
             if (!StringUtils.hasText(tenantSchema)) return new Actor(actorUserId, null);
 
             String actorEmail = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
@@ -938,14 +932,12 @@ public class TenantUserCommandService {
     }
 
     private static AuditOutcome outcomeFrom(ApiException ex) {
-        /* Mapeia ApiException para outcome DENIED vs FAILURE. */
         if (ex == null) return AuditOutcome.FAILURE;
         int s = ex.getStatus();
         return (s == 401 || s == 403) ? AuditOutcome.DENIED : AuditOutcome.FAILURE;
     }
 
     private static Map<String, Object> failureDetails(String scope, ApiException ex) {
-        /* Details estruturado de erro (sem segredos). */
         return m(
                 "scope", scope,
                 "error", ex == null ? null : ex.getError(),
@@ -955,7 +947,6 @@ public class TenantUserCommandService {
     }
 
     private static Map<String, Object> unexpectedFailureDetails(String scope, Exception ex) {
-        /* Details estruturado para falhas inesperadas. */
         return m(
                 "scope", scope,
                 "unexpected", ex == null ? null : ex.getClass().getSimpleName(),
@@ -964,17 +955,11 @@ public class TenantUserCommandService {
     }
 
     private static String safeMessage(String msg) {
-        /* Sanitiza texto para não quebrar JSON e não vazar dados acidentais. */
         if (!StringUtils.hasText(msg)) return null;
-        return msg
-                .replace("\n", " ")
-                .replace("\r", " ")
-                .replace("\t", " ")
-                .trim();
+        return msg.replace("\n", " ").replace("\r", " ").replace("\t", " ").trim();
     }
 
     private static Map<String, Object> m(Object... kv) {
-        /* Cria Map ordenado para JSON estável. */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
         for (int i = 0; i + 1 < kv.length; i += 2) {
@@ -987,7 +972,6 @@ public class TenantUserCommandService {
 
     private record Actor(Long userId, String email) {
         static Actor anonymous() {
-            /* Actor desconhecido (best-effort). */
             return new Actor(null, null);
         }
     }
