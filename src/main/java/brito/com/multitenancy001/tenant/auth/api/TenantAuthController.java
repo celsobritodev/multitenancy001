@@ -21,6 +21,7 @@ import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,6 +40,7 @@ import java.util.List;
  * - registra sessão server-side tanto no /login (quando retornar JWT final)
  *   quanto no /login/confirm.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/tenant/auth")
 @CrossOrigin(origins = "*", maxAge = 3600)
@@ -74,15 +76,18 @@ public class TenantAuthController {
      */
     @PostMapping("/login")
     public ResponseEntity<?> loginTenant(@Valid @RequestBody TenantLoginInitRequest req) {
-
-        /** comentário: inicia login tenant; pode emitir JWT final ou exigir seleção */
+        log.info("🔐 [LOGIN] Tentativa de login para email: {}", req.email());
+        
         TenantLoginInitCommand cmd = new TenantLoginInitCommand(req.email(), req.password());
         TenantLoginResult result = tenantLoginInitService.loginInit(cmd);
+        
+        log.info("📦 [LOGIN] Resultado do loginInit: {}", result.getClass().getSimpleName());
 
         if (result instanceof TenantLoginResult.LoginSuccess ok) {
             JwtResult jwt = ok.jwt();
+            log.info("✅ [LOGIN] Login direto bem-sucedido - accountId={}, userId={}", 
+                     jwt.accountId(), jwt.userId());
 
-            // ✅ /login pode retornar JWT final => registra sessão server-side
             refreshSessions.onRefreshIssued(
                     brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.TENANT,
                     jwt.accountId(),
@@ -90,14 +95,25 @@ public class TenantAuthController {
                     jwt.tenantSchema(),
                     jwt.refreshToken()
             );
+            log.info("🔄 [LOGIN] Sessão registrada para userId={}", jwt.userId());
 
             return ResponseEntity.ok(toHttp(jwt));
         }
 
         if (result instanceof TenantLoginResult.TenantSelectionRequired sel) {
+            log.info("🔍 [LOGIN] Seleção de tenant necessária - challengeId={}", sel.challengeId());
+            log.info("📋 [LOGIN] Detalhes recebidos do service: {}", sel.details());
+            
             List<TenantSelectionOption> details = sel.details().stream()
-                    .map(o -> new TenantSelectionOption(o.accountId(), o.displayName(), o.slug()))
+                    .map(o -> {
+                        log.debug("   - Opção: accountId={}, displayName={}, slug={}", 
+                                  o.accountId(), o.displayName(), o.slug());
+                        return new TenantSelectionOption(o.accountId(), o.displayName(), o.slug());
+                    })
                     .toList();
+            
+            log.info("📋 [LOGIN] Detalhes mapeados: {} opções", details.size());
+            details.forEach(d -> log.info("   → accountId={}, slug={}", d.accountId(), d.slug()));
 
             TenantSelectionRequiredResponse body = new TenantSelectionRequiredResponse(
                     ApiErrorCode.TENANT_SELECTION_REQUIRED.name(),
@@ -105,10 +121,23 @@ public class TenantAuthController {
                     sel.challengeId(),
                     details
             );
+            
+            log.info("📦 [LOGIN] Response body: code={}, challengeId={}, details.size={}", 
+                     body.code(), body.challengeId(), body.details().size());
 
-            return ResponseEntity.status(409).body(body);
+            // ✅ ADICIONAR HEADERS DE DEBUG
+            return ResponseEntity.status(409)
+                    .header("X-Debug-ChallengeId", sel.challengeId())
+                    .header("X-Debug-Details-Count", String.valueOf(details.size()))
+                    .header("X-Debug-Account-Ids", 
+                            details.stream()
+                                   .map(d -> String.valueOf(d.accountId()))
+                                   .reduce((a, b) -> a + "," + b)
+                                   .orElse(""))
+                    .body(body);
         }
 
+        log.error("❌ [LOGIN] Resultado inesperado: {}", result.getClass().getName());
         throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "Resposta inesperada do servidor", 500);
     }
 
@@ -118,8 +147,9 @@ public class TenantAuthController {
      */
     @PostMapping("/login/confirm")
     public ResponseEntity<JwtResponse> confirmTenantLogin(@Valid @RequestBody TenantLoginConfirmRequest req) {
+        log.info("🔐 [CONFIRM] Confirmando login - challengeId={}, accountId={}, slug={}", 
+                 req.challengeId(), req.accountId(), req.slug());
 
-        /** comentário: confirma seleção e emite tokens definitivos */
         TenantLoginConfirmCommand cmd = new TenantLoginConfirmCommand(
                 req.challengeId().toString(),
                 req.accountId(),
@@ -127,8 +157,9 @@ public class TenantAuthController {
         );
 
         JwtResult jwt = tenantLoginConfirmService.loginConfirm(cmd);
+        log.info("✅ [CONFIRM] Login confirmado - accountId={}, userId={}", 
+                 jwt.accountId(), jwt.userId());
 
-        // ✅ registra sessão server-side (logout forte / rotação)
         refreshSessions.onRefreshIssued(
                 brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain.TENANT,
                 jwt.accountId(),
@@ -136,6 +167,7 @@ public class TenantAuthController {
                 jwt.tenantSchema(),
                 jwt.refreshToken()
         );
+        log.info("🔄 [CONFIRM] Sessão registrada para userId={}", jwt.userId());
 
         return ResponseEntity.ok(toHttp(jwt));
     }
@@ -145,8 +177,10 @@ public class TenantAuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody TenantRefreshRequest req) {
-        /** comentário: refresh com rotação server-side */
+        log.info("🔄 [REFRESH] Refresh token request");
         JwtResult jwt = tenantTokenRefreshService.refresh(req.refreshToken());
+        log.info("✅ [REFRESH] Token renovado - accountId={}, userId={}", 
+                 jwt.accountId(), jwt.userId());
         return ResponseEntity.ok(toHttp(jwt));
     }
 
@@ -157,8 +191,9 @@ public class TenantAuthController {
      */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest req) {
-        /** comentário: executa logout forte */
+        log.info("🚪 [LOGOUT] Logout - allDevices={}", req.allDevices());
         tenantLogoutService.logout(req.refreshToken(), req.allDevices());
+        log.info("✅ [LOGOUT] Logout concluído");
         return ResponseEntity.noContent().build();
     }
 }

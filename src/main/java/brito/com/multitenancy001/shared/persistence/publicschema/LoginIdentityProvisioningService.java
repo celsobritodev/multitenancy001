@@ -12,6 +12,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Provisionamento do "índice público" de login (public.login_identities).
@@ -56,36 +57,66 @@ public class LoginIdentityProvisioningService {
 
   
   
-
-    // =====================================================================
-    // SAFE wrappers (recomendado chamar SEMPRE estes a partir do TENANT)
-    // =====================================================================
-
-    /**
-     * SAFE: agenda o provisioning do TENANT_ACCOUNT para rodar após a transação atual finalizar (commit ou rollback).
-     *
-     * <p>Use este método quando estiver no fluxo TENANT (JPA / TenantTx / etc.).</p>
-     */
-    public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
-        String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (accountId == null || emailNorm == null) return;
-
-        warnIfActiveTx("ensureTenantIdentityAfterCompletion", emailNorm, accountId);
-
-        runAfterCompletion(() -> ensureTenantIdentityNow(emailNorm, accountId));
+/**
+ * SAFE: agenda o provisioning do TENANT_ACCOUNT para rodar APÓS a transação,
+ * em uma thread separada com transação própria.
+ */
+public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
+    String emailNorm = EmailNormalizer.normalizeOrNull(email);
+    if (accountId == null || emailNorm == null) {
+        log.debug("ensureTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
+        return;
     }
 
-    /**
-     * SAFE: agenda o delete do TENANT_ACCOUNT para rodar após a transação atual finalizar (commit ou rollback).
-     */
-    public void deleteTenantIdentityAfterCompletion(String email, Long accountId) {
-        String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (accountId == null || emailNorm == null) return;
+    log.info("📋 ensureTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
 
-        warnIfActiveTx("deleteTenantIdentityAfterCompletion", emailNorm, accountId);
+    // ✅ CORREÇÃO DEFINITIVA: Executar em thread separada com nova transação
+    CompletableFuture.runAsync(() -> {
+        try {
+            log.info("⚡ EXECUTANDO ensureTenantIdentityNow em thread separada para {} | accountId={}", 
+                     emailNorm, accountId);
+            
+            // Criar uma nova transação isolada
+            TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
+            tt.executeWithoutResult(status -> {
+                ensureTenantIdentityNow(emailNorm, accountId);
+            });
+            
+            log.info("✅ ensureTenantIdentityNow EXECUTADO com sucesso para {} | accountId={}", 
+                     emailNorm, accountId);
+        } catch (Exception e) {
+            log.error("❌ Erro ao executar ensureTenantIdentityNow: {}", e.getMessage(), e);
+        }
+    });
+}
 
-        runAfterCompletion(() -> deleteTenantIdentityNow(emailNorm, accountId));
-    }
+/**
+ * SAFE: agenda o delete do TENANT_ACCOUNT para rodar APÓS a transação,
+ * em uma thread separada com transação própria.
+ */
+public void deleteTenantIdentityAfterCompletion(String email, Long accountId) {
+    String emailNorm = EmailNormalizer.normalizeOrNull(email);
+    if (accountId == null || emailNorm == null) return;
+
+    log.info("📋 deleteTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
+
+    CompletableFuture.runAsync(() -> {
+        try {
+            log.info("⚡ EXECUTANDO deleteTenantIdentityNow em thread separada para {} | accountId={}", 
+                     emailNorm, accountId);
+            
+            TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
+            tt.executeWithoutResult(status -> {
+                deleteTenantIdentityNow(emailNorm, accountId);
+            });
+            
+            log.info("✅ deleteTenantIdentityNow EXECUTADO com sucesso para {} | accountId={}", 
+                     emailNorm, accountId);
+        } catch (Exception e) {
+            log.error("❌ Erro ao executar deleteTenantIdentityNow: {}", e.getMessage(), e);
+        }
+    });
+}
 
     /**
      * SAFE: agenda o provisioning do CONTROLPLANE_USER para rodar após a transação atual finalizar (commit ou rollback).
@@ -267,6 +298,44 @@ public class LoginIdentityProvisioningService {
             deleteControlPlaneIdentityByUserIdNow(controlPlaneUserId);
             ensureControlPlaneIdentityNow(newEmailNorm, controlPlaneUserId);
         });
+    }
+
+    // =====================================================================
+    // MÉTODO DE VERIFICAÇÃO (para diagnóstico)
+    // =====================================================================
+
+    /**
+     * Verifica se uma identidade de login existe para o tenant (usado apenas para diagnóstico).
+     * 
+     * @param email Email do usuário
+     * @param accountId ID da conta
+     * @return true se existir, false caso contrário
+     */
+    public boolean existsTenantIdentity(String email, Long accountId) {
+        String emailNorm = EmailNormalizer.normalizeOrNull(email);
+        if (accountId == null || emailNorm == null) {
+            log.debug("existsTenantIdentity: parâmetros inválidos - email={}, accountId={}", email, accountId);
+            return false;
+        }
+        
+        try {
+            String sql = """
+                SELECT COUNT(*) FROM public.login_identities 
+                WHERE email = ? 
+                  AND account_id = ? 
+                  AND subject_type = 'TENANT_ACCOUNT'
+            """;
+            
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, emailNorm, accountId);
+            boolean exists = count != null && count > 0;
+            
+            log.info("🔍 existsTenantIdentity: email={}, accountId={}, exists={}", emailNorm, accountId, exists);
+            return exists;
+            
+        } catch (Exception e) {
+            log.error("❌ existsTenantIdentity - Erro ao verificar existência: {}", e.getMessage(), e);
+            return false;
+        }
     }
 
     // =====================================================================
