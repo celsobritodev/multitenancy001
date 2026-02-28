@@ -2277,8 +2277,121 @@
             "method": "PATCH",
             "url": "{{base_url}}/api/tenant/users/{{tenant_user_created_id}}/restore"
           }
+        },
+		
+	        {
+          "name": "13.09 tentar criar usuário com email duplicado (deve falhar com 409)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Criar um email fixo para o teste de duplicidade",
+                  "const duplicatedEmail = `duplicate_test_${Date.now()}@tenant.local`;",
+                  "pm.collectionVariables.set('duplicated_email', duplicatedEmail);",
+                  "console.log(`📧 Email para teste de duplicidade: ${duplicatedEmail}`);",
+                  "",
+                  "// Buscar tokens do ambiente",
+                  "const token = pm.environment.get('tenant_access_token');",
+                  "const schema = pm.environment.get('tenant_schema');",
+                  "const baseUrl = pm.environment.get('base_url') || 'http://localhost:8080';",
+                  "",
+                  "if (!token || !schema) {",
+                  "  console.error('❌ Token ou schema não encontrados!');",
+                  "  return;",
+                  "}",
+                  "",
+                  "// Primeiro, criar o usuário original (vai funcionar)",
+                  "const createRequest = {",
+                  "  url: baseUrl + '/api/tenant/users',",
+                  "  method: 'POST',",
+                  "  header: [",
+                  "    'Content-Type: application/json',",
+                  "    'Authorization: Bearer ' + token,",
+                  "    'X-Tenant: ' + schema",
+                  "  ],",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({",
+                  "      name: 'Primeiro Usuário',",
+                  "      email: duplicatedEmail,",
+                  "      password: 'admin123',",
+                  "      role: 'TENANT_USER',",
+                  "      permissions: []",
+                  "    })",
+                  "  }",
+                  "};",
+                  "",
+                  "pm.sendRequest(createRequest, function (err, response) {",
+                  "  if (err) {",
+                  "    console.error('❌ Erro ao criar primeiro usuário:', err);",
+                  "    return;",
+                  "  }",
+                  "  ",
+                  "  if (response.code === 201) {",
+                  "    console.log('✅ Primeiro usuário criado com email:', duplicatedEmail);",
+                  "    pm.collectionVariables.set('first_user_id', response.json().id);",
+                  "  } else {",
+                  "    console.error('❌ Falha ao criar primeiro usuário. Status:', response.code);",
+                  "    console.error('Resposta:', response.text());",
+                  "  }",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "// TESTE NEGATIVO - Tentar criar SEGUNDO usuário com MESMO email",
+                  "pm.test('Tentar criar usuário com email duplicado deve retornar 409', function () {",
+                  "  pm.expect(pm.response.code).to.equal(409);",
+                  "});",
+                  "",
+                  "pm.test('Erro deve ser EMAIL_ALREADY_EXISTS', function () {",
+                  "  const errorCode = json.error || json.code || (json.errors && json.errors[0]);",
+                  "  pm.expect(errorCode).to.equal('EMAIL_ALREADY_EXISTS');",
+                  "});",
+                  "",
+                  "pm.test('Mensagem deve indicar email já cadastrado', function () {",
+                  "  const message = json.message || json.error_description || '';",
+                  "  pm.expect(message).to.include('Email já cadastrado');",
+                  "});",
+                  "",
+                  "console.log('✅ Teste negativo de email duplicado passou!');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Segundo Usuário (Tentativa)\",\n  \"email\": \"{{duplicated_email}}\",\n  \"password\": \"outrasenha123\",\n  \"role\": \"TENANT_ADMIN\",\n  \"permissions\": []\n}"
+            },
+            "url": "{{base_url}}/api/tenant/users"
+          }
         }
-      ]
+	  
+	  ]
     },
     {
       "name": "🏢 14 - CONTROLPLANE ACCOUNT QUERIES (ADDED to reach 61)",
@@ -2358,6 +2471,413 @@
         }
       ]
     },
+	    {
+      "name": "📊 99 - POPULATE MASS DATA (10 each)",
+      "description": "Popula massa de dados para demonstração - 10 categorias, subcategorias, fornecedores, produtos, vendas e usuários",
+      "item": [
+        {
+          "name": "99.01 - Criar 10 categorias",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Limpar lista de categorias",
+                  "pm.collectionVariables.set('created_category_ids', '[]');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_category_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_category_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Categoria ${ids.length}/10 criada: ID=${json.id}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Categoria {{$randomInt}}\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/categories"
+          }
+        },
+        {
+          "name": "99.02 - Criar 10 subcategorias",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Obter categorias criadas",
+                  "const categoryIds = JSON.parse(pm.collectionVariables.get('created_category_ids') || '[]');",
+                  "if (categoryIds.length === 0) {",
+                  "  console.error('❌ Nenhuma categoria encontrada!');",
+                  "  return;",
+                  "}",
+                  "// Escolher uma categoria aleatória",
+                  "const randomIndex = Math.floor(Math.random() * categoryIds.length);",
+                  "const categoryId = categoryIds[randomIndex];",
+                  "pm.variables.set('current_category_id', categoryId);",
+                  "pm.collectionVariables.set('subcategory_counter', (parseInt(pm.collectionVariables.get('subcategory_counter') || '0') + 1));",
+                  "",
+                  "// Limpar lista de subcategorias no primeiro",
+                  "if (pm.collectionVariables.get('subcategory_counter') === '1') {",
+                  "  pm.collectionVariables.set('created_subcategory_ids', '[]');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_subcategory_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_subcategory_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Subcategoria ${ids.length}/10 criada: ID=${json.id}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Subcategoria {{$randomInt}}\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/subcategories/category/{{current_category_id}}"
+          }
+        },
+        {
+          "name": "99.03 - Criar 10 fornecedores",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Limpar lista de fornecedores no primeiro",
+                  "const counter = parseInt(pm.collectionVariables.get('supplier_counter') || '0') + 1;",
+                  "pm.collectionVariables.set('supplier_counter', counter.toString());",
+                  "if (counter === 1) {",
+                  "  pm.collectionVariables.set('created_supplier_ids', '[]');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_supplier_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_supplier_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Fornecedor ${ids.length}/10 criado: ID=${json.id}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fornecedor {{$randomCompanyName}}\",\n  \"email\": \"fornecedor{{$randomInt}}@teste.com\",\n  \"phone\": \"119{{$randomInt}}{{ $randomInt}}\",\n  \"document\": \"{{$randomInt}}{{ $randomInt}}{{ $randomInt}}0001{{$randomInt}}\",\n  \"documentType\": \"CNPJ\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/suppliers"
+          }
+        },
+        {
+          "name": "99.04 - Criar 10 produtos",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Obter IDs criados",
+                  "const categoryIds = JSON.parse(pm.collectionVariables.get('created_category_ids') || '[]');",
+                  "const subcategoryIds = JSON.parse(pm.collectionVariables.get('created_subcategory_ids') || '[]');",
+                  "const supplierIds = JSON.parse(pm.collectionVariables.get('created_supplier_ids') || '[]');",
+                  "",
+                  "if (categoryIds.length === 0) {",
+                  "  console.error('❌ Nenhuma categoria encontrada!');",
+                  "  return;",
+                  "}",
+                  "",
+                  "// Escolher IDs aleatórios",
+                  "const catId = categoryIds[Math.floor(Math.random() * categoryIds.length)];",
+                  "const subId = subcategoryIds.length > 0 ? subcategoryIds[Math.floor(Math.random() * subcategoryIds.length)] : null;",
+                  "const supId = supplierIds.length > 0 ? supplierIds[Math.floor(Math.random() * supplierIds.length)] : null;",
+                  "",
+                  "pm.variables.set('prod_category_id', catId);",
+                  "pm.variables.set('prod_subcategory_id', subId);",
+                  "pm.variables.set('prod_supplier_id', supId);",
+                  "",
+                  "// Limpar lista de produtos no primeiro",
+                  "const counter = parseInt(pm.collectionVariables.get('product_counter') || '0') + 1;",
+                  "pm.collectionVariables.set('product_counter', counter.toString());",
+                  "if (counter === 1) {",
+                  "  pm.collectionVariables.set('created_product_ids', '[]');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_product_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_product_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Produto ${ids.length}/10 criado: ID=${json.id}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Produto {{$randomProduct}}\",\n  \"sku\": \"SKU-{{$randomInt}}\",\n  \"price\": {{$randomInt 50 500}},\n  \"categoryId\": {{prod_category_id}},\n  \"subcategoryId\": {{prod_subcategory_id}},\n  \"stockQuantity\": {{$randomInt 10 100}},\n  \"brand\": \"Marca {{$randomCompanyName}}\",\n  \"supplierId\": \"{{prod_supplier_id}}\"\n}"
+            },
+            "url": "{{base_url}}/api/tenant/products/detailed"
+          }
+        },
+        {
+          "name": "99.05 - Criar 10 usuários",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Gerar email único",
+                  "const ts = Date.now() + Math.floor(Math.random() * 1000);",
+                  "pm.variables.set('new_user_email', `mass_user_${ts}@tenant.local`);",
+                  "",
+                  "// Limpar lista de usuários no primeiro",
+                  "const counter = parseInt(pm.collectionVariables.get('user_counter') || '0') + 1;",
+                  "pm.collectionVariables.set('user_counter', counter.toString());",
+                  "if (counter === 1) {",
+                  "  pm.collectionVariables.set('created_user_ids', '[]');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_user_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_user_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Usuário ${ids.length}/10 criado: ID=${json.id}`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Usuário Massa {{$randomInt}}\",\n  \"email\": \"{{new_user_email}}\",\n  \"password\": \"admin123\",\n  \"role\": \"TENANT_USER\",\n  \"permissions\": []\n}"
+            },
+            "url": "{{base_url}}/api/tenant/users"
+          }
+        },
+        {
+          "name": "99.06 - Criar 10 vendas com items",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Obter produtos criados",
+                  "const productIds = JSON.parse(pm.collectionVariables.get('created_product_ids') || '[]');",
+                  "if (productIds.length === 0) {",
+                  "  console.error('❌ Nenhum produto encontrado!');",
+                  "  return;",
+                  "}",
+                  "",
+                  "// Selecionar produtos aleatórios para a venda",
+                  "const numItems = Math.floor(Math.random() * 3) + 1; // 1 a 3 items",
+                  "const items = [];",
+                  "for (let i = 0; i < numItems; i++) {",
+                  "  const prodId = productIds[Math.floor(Math.random() * productIds.length)];",
+                  "  const quantity = Math.floor(Math.random() * 5) + 1;",
+                  "  const price = Math.floor(Math.random() * 100) + 50;",
+                  "  items.push({",
+                  "    productId: prodId,",
+                  "    quantity: quantity,",
+                  "    unitPrice: price",
+                  "  });",
+                  "}",
+                  "",
+                  "pm.variables.set('sale_items', JSON.stringify(items));",
+                  "",
+                  "// Status possíveis",
+                  "const statuses = ['DRAFT', 'OPEN', 'CONFIRMED', 'PAID', 'CANCELLED'];",
+                  "pm.variables.set('sale_status', statuses[Math.floor(Math.random() * statuses.length)]);",
+                  "",
+                  "// Limpar lista de vendas no primeiro",
+                  "const counter = parseInt(pm.collectionVariables.get('sale_counter') || '0') + 1;",
+                  "pm.collectionVariables.set('sale_counter', counter.toString());",
+                  "if (counter === 1) {",
+                  "  pm.collectionVariables.set('created_sale_ids', '[]');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "let ids = JSON.parse(pm.collectionVariables.get('created_sale_ids') || '[]');",
+                  "ids.push(json.id);",
+                  "pm.collectionVariables.set('created_sale_ids', JSON.stringify(ids));",
+                  "console.log(`✅ Venda ${ids.length}/10 criada: ID=${json.id} com ${json.items ? json.items.length : 0} items`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Cliente {{$randomFullName}}\",\n  \"customerEmail\": \"cliente{{$randomInt}}@email.com\",\n  \"status\": \"{{sale_status}}\",\n  \"items\": {{sale_items}}\n}"
+            },
+            "url": "{{base_url}}/api/tenant/sales"
+          }
+        },
+        {
+          "name": "99.07 - Verificar contagem final",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "console.log('\\n📊 ====== RESUMO DA MASSA DE DADOS ======');",
+                  "const categories = JSON.parse(pm.collectionVariables.get('created_category_ids') || '[]');",
+                  "const subcategories = JSON.parse(pm.collectionVariables.get('created_subcategory_ids') || '[]');",
+                  "const suppliers = JSON.parse(pm.collectionVariables.get('created_supplier_ids') || '[]');",
+                  "const products = JSON.parse(pm.collectionVariables.get('created_product_ids') || '[]');",
+                  "const users = JSON.parse(pm.collectionVariables.get('created_user_ids') || '[]');",
+                  "const sales = JSON.parse(pm.collectionVariables.get('created_sale_ids') || '[]');",
+                  "",
+                  "console.log(`✅ Categorias criadas: ${categories.length}`);",
+                  "console.log(`✅ Subcategorias criadas: ${subcategories.length}`);",
+                  "console.log(`✅ Fornecedores criados: ${suppliers.length}`);",
+                  "console.log(`✅ Produtos criados: ${products.length}`);",
+                  "console.log(`✅ Usuários criados: ${users.length}`);",
+                  "console.log(`✅ Vendas criadas: ${sales.length}`);",
+                  "console.log('==========================================\\n');",
+                  "",
+                  "pm.test('Todas as 10 categorias foram criadas', () => pm.expect(categories.length).to.equal(10));",
+                  "pm.test('Todas as 10 subcategorias foram criadas', () => pm.expect(subcategories.length).to.equal(10));",
+                  "pm.test('Todos os 10 fornecedores foram criados', () => pm.expect(suppliers.length).to.equal(10));",
+                  "pm.test('Todos os 10 produtos foram criados', () => pm.expect(products.length).to.equal(10));",
+                  "pm.test('Todos os 10 usuários foram criados', () => pm.expect(users.length).to.equal(10));",
+                  "pm.test('Todas as 10 vendas foram criadas', () => pm.expect(sales.length).to.equal(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/tenant/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+	
+	
+	
+	
     {
       "name": "🧩 v10 - FULL (disabled extras)",
       "item": [
