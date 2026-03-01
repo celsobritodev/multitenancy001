@@ -17,9 +17,11 @@ public class AccountEntitlementsProvisioningService {
 
     private final AccountEntitlementsRepository accountEntitlementsRepository;
     private final AppClock appClock;
+    private final DefaultEntitlements defaultEntitlements;
 
     /**
      * Garante entitlements default para TENANT (idempotente / race-safe).
+     *
      * - BUILT_IN => não persiste entitlements (ilimitado)
      * - TENANT   => INSERT ... ON CONFLICT DO NOTHING + SELECT
      *
@@ -28,9 +30,11 @@ public class AccountEntitlementsProvisioningService {
      */
     public AccountEntitlements ensureDefaultEntitlementsForTenant(Account account) {
         if (account == null || account.getId() == null) {
-            // status e mensagem poderiam ser só "new ApiException(ApiErrorCode.ACCOUNT_REQUIRED)"
-            // mas mantive override porque você já fazia isso.
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
+            throw new ApiException(
+                    ApiErrorCode.ACCOUNT_REQUIRED,
+                    "Conta é obrigatória",
+                    400
+            );
         }
 
         if (account.isBuiltInAccount()) {
@@ -43,9 +47,9 @@ public class AccountEntitlementsProvisioningService {
 
         int inserted = accountEntitlementsRepository.insertDefaultIfMissing(
                 account.getId(),
-                5,
-                100,
-                100,
+                defaultEntitlements.maxUsers(account.getSubscriptionPlan()),
+                defaultEntitlements.maxProducts(account.getSubscriptionPlan()),
+                defaultEntitlements.maxStorageMb(account.getSubscriptionPlan()),
                 now,
                 now
         );
@@ -53,7 +57,8 @@ public class AccountEntitlementsProvisioningService {
         return accountEntitlementsRepository.findByAccount_Id(account.getId())
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.ENTITLEMENTS_NOT_FOUND,
-                        "Entitlements não encontrados para a conta " + account.getId()
+                        "Entitlements não encontrados para a conta "
+                                + account.getId()
                                 + " (inserted=" + inserted + ")",
                         500
                 ));

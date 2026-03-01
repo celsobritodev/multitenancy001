@@ -1,11 +1,15 @@
 package brito.com.multitenancy001.tenant.products.api;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.products.api.dto.ProductResponse;
+import brito.com.multitenancy001.tenant.products.api.dto.ProductUpdateRequest;
 import brito.com.multitenancy001.tenant.products.api.dto.ProductUpsertRequest;
 import brito.com.multitenancy001.tenant.products.api.dto.SupplierProductCountResponse;
 import brito.com.multitenancy001.tenant.products.api.mapper.ProductApiMapper;
 import brito.com.multitenancy001.tenant.products.app.TenantProductService;
 import brito.com.multitenancy001.tenant.products.app.command.CreateProductCommand;
+import brito.com.multitenancy001.tenant.products.app.command.UpdateProductCommand;
 import brito.com.multitenancy001.tenant.products.domain.Product;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -247,4 +251,107 @@ public class TenantProductController {
                 .toList();
         return ResponseEntity.ok(out);
     }
+    
+    /**
+     * UPDATE (PATCH) - atualização parcial.
+     *
+     * Semântica:
+     * - Campos null => não alteram.
+     * - Subcategory:
+     *    - clearSubcategory=true e subcategoryId=null => remove subcategory
+     *    - subcategoryId != null => seta subcategory (clearSubcategory forçado false)
+     *    - nenhum enviado => não altera subcategory
+     */
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.asAuthority())")
+    public ResponseEntity<ProductResponse> patchUpdate(
+            @PathVariable UUID id,
+            @Valid @RequestBody ProductUpdateRequest req
+    ) {
+        UpdateProductCommand cmd = buildUpdateCommandFrom(req);
+        Product updated = tenantProductService.update(id, cmd);
+        return ResponseEntity.ok(productApiMapper.toResponse(updated));
+    }
+
+    /**
+     * UPDATE (PUT) - pode ser usado como "update completo".
+     *
+     * Observação:
+     * - Se você quiser PUT 100% "replace", então você deveria exigir campos obrigatórios aqui.
+     * - No seu design atual (command patch-like), PUT e PATCH podem ter o mesmo comportamento.
+     */
+ @PutMapping("/{id}")
+@PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.asAuthority())")
+public ResponseEntity<ProductResponse> putUpdate(
+        @PathVariable UUID id,
+        @Valid @RequestBody ProductUpsertRequest req
+) {
+
+    // 🚨 regra anti-ambiguidade
+    if (Boolean.TRUE.equals(req.clearSubcategory()) && req.subcategoryId() != null) {
+        throw new ApiException(
+                ApiErrorCode.INVALID_SUBCATEGORY,
+                "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo",
+                400
+        );
+    }
+
+    boolean clearSubcategory = Boolean.TRUE.equals(req.clearSubcategory());
+
+    UpdateProductCommand cmd = new UpdateProductCommand(
+            req.name(),
+            req.description(),
+            req.sku(),
+            req.price(),
+            req.stockQuantity(),
+            req.minStock(),
+            req.maxStock(),
+            req.costPrice(),
+            req.categoryId(),
+            req.subcategoryId(),
+            clearSubcategory,
+            req.brand(),
+            req.weightKg(),
+            req.dimensions(),
+            req.barcode(),
+            req.active(),
+            req.supplierId()
+    );
+
+    Product updated = tenantProductService.update(id, cmd);
+    return ResponseEntity.ok(productApiMapper.toResponse(updated));
+}
+
+    /**
+     * Helper: monta UpdateProductCommand com regra correta de subcategory.
+     */
+    private UpdateProductCommand buildUpdateCommandFrom(ProductUpdateRequest req) {
+        boolean clearSubcategory = Boolean.TRUE.equals(req.clearSubcategory());
+
+        // Se subcategoryId veio preenchido, ela manda: clearSubcategory deve ser false.
+        if (req.subcategoryId() != null) {
+            clearSubcategory = false;
+        }
+
+        return new UpdateProductCommand(
+                req.name(),
+                req.description(),
+                req.sku(),
+                req.price(),
+                req.stockQuantity(),
+                req.minStock(),
+                req.maxStock(),
+                req.costPrice(),
+                req.categoryId(),
+                req.subcategoryId(),
+                clearSubcategory,
+                req.brand(),
+                req.weightKg(),
+                req.dimensions(),
+                req.barcode(),
+                req.active(),
+                req.supplierId()
+        );
+    }
+    
 }

@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Executor para agendar execução após o término da transação atual.
  *
@@ -17,8 +19,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <p>Comportamento:</p>
  * <ul>
- *   <li>Se NÃO houver transação ativa: executa imediatamente.</li>
- *   <li>Se houver transação ativa: registra callback e executa após completion.</li>
+ *   <li>Se NÃO houver synchronization ativa: executa imediatamente.</li>
+ *   <li>Se houver synchronization ativa: registra callback e executa após completion.</li>
+ *   <li>Se registerSynchronization falhar: executa ASYNC (nunca imediato no mesmo thread).</li>
  * </ul>
  */
 @Slf4j
@@ -33,8 +36,9 @@ public class AfterTransactionCompletion {
     public void runAfterCompletion(Runnable task) {
         if (task == null) return;
 
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            safeRun("no-tx", task);
+        // Gatilho correto: se dá pra registrar afterCompletion
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            safeRun("no-sync", task);
             return;
         }
 
@@ -46,9 +50,9 @@ public class AfterTransactionCompletion {
                 }
             });
         } catch (Exception e) {
-            // fallback: não derruba a request, mas também não “perde” o runnable
-            log.warn("⚠️ Falha ao registrar afterCompletion; executando imediatamente | msg={}", e.getMessage(), e);
-            safeRun("fallback-immediate", task);
+            // NUNCA execute imediato aqui: pode estar com resources pre-bound no thread atual.
+            log.warn("⚠️ Falha ao registrar afterCompletion; executando async | msg={}", e.getMessage(), e);
+            CompletableFuture.runAsync(() -> safeRun("fallback-async", task));
         }
     }
 

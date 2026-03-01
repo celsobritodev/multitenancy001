@@ -1,0 +1,1407 @@
+newman
+
+multitenancy001-e2e (v10.9.14 - FULL - ALL ENDPOINTS - STRICT + mass flow deterministic no-loop) (v10.9.14.1 patch) (v10.9.14.2 patch mass-jsonsafe)
+
+□ 📦 00 - BOOTSTRAP (V3)
+└ 00.01 health
+  GET http://localhost:8080/actuator/health [200 OK, 466B, 65ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Health OK
+
+└ 00.02 signup
+  ┌
+  │ '📧 Email gerado: e2e_1772311146690@tenant.local'
+  └
+  POST http://localhost:8080/api/signup [201 Created, 845B, 764ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Signup OK
+  ┌
+  │ '✅ Conta criada: ID=2, Schema=t_tenant_e2e_ca575c_76b6
+  │ 117f'
+  └
+
+└ 00.03 tenant login
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.06kB, 298ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant login OK
+  ┌
+  │ '✅ Tenant logado: ID=1'
+  └
+
+└ 00.04 tenant me
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 101ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Tenant me OK
+
+└ 00.05 controlplane login (superadmin)
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 370ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login superadmin OK
+  ┌
+  │ '✅ Superadmin logado: ID=4'
+  └
+
+└ 00.06 login as billing manager
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 185ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login billing manager OK
+
+└ 00.07 login as support
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 163ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login support OK
+
+└ 00.08 login as operator
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 124ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Login operator OK
+
+□ 🔐 01 - TENANT AUTH TESTS (V3)
+└ 01.01 tenant refresh
+  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.06kB, 100ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant refresh OK
+
+└ 01.02 tenant logout
+  POST http://localhost:8080/api/tenant/auth/logout [204 No Content, 423B, 56ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant logout OK
+
+□ 🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6)
+└ 01.50.01 signup tenant #2
+  ┌
+  │ '[v10.8.5] tenant2_email=e2e2_1772311149896_5cf772@ten
+  │ ant.local'
+  │ '[v10.8.5] shared_email=shared_1772311149896_83ae38@te
+  │ nant.local'
+  └
+  POST http://localhost:8080/api/signup [201 Created, 860B, 343ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant #2 signup OK
+  ┌
+  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_ecd83
+  │ 1_0e954c13, Slug=tenant-e2e-2-ecd831'
+  └
+
+└ 01.50.02 tenant #2 login (admin)
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 223ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tenant #2 login OK (direct)
+
+└ 01.50.03 create shared user in tenant #1
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 294ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create shared user (201 or 409 if already exists)
+
+└ 01.50.04 create shared user in tenant #2
+  POST http://localhost:8080/api/tenant/users [201 Created, 800B, 153ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create shared user (201 or 409 if already exists)
+
+└ 01.50.04a controlplane list tenant-users (account #1) - shared index check
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 832B, 57ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  ControlPlane list tenant-users OK
+  √  Shared email must be present in tenant-users index
+
+└ 01.50.04b controlplane list tenant-users (account #2) - shared index check
+  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 843B, 34ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  ControlPlane list tenant-users OK
+  √  Shared email must be present in tenant-users index
+
+└ 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED
+  POST http://localhost:8080/api/tenant/auth/login [409 Conflict, 892B, 363ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Ambiguous login must return 409
+  √  Error must be TENANT_SELECTION_REQUIRED
+  √  Must include challengeId
+  √  Must include tenants list in details
+  √  Must NOT return token yet
+  ┌
+  │ '✅ Payload para confirm criado:', '{"challengeId":"07a
+  │ b387d-9933-4228-b334-48394406d1c0","slug":"tenant-e2e-
+  │ ca575c"}'
+  └
+
+└ 01.50.06 tenant login confirm (challengeId + tenant selection) => 200 JWT
+  POST http://localhost:8080/api/tenant/auth/login/confirm [200 OK, 1.66kB, 74ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Confirm login must return 200
+  √  Confirm response must contain token
+
+□ 🎯 02 - CONTROL PLANE AUTH TESTS (V3)
+└ 02.01 controlplane refresh
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.72kB, 35ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Controlplane refresh OK
+
+└ 02.02 controlplane logout
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 28ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Controlplane logout OK
+
+□ 💰 03 - BILLING MANAGER TESTS (V4)
+└ 03.01 billing manager me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 689B, 36ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Billing manager me OK
+
+└ 03.02 billing manager refresh
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.58kB, 31ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Refresh OK
+
+└ 03.03 billing manager logout
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 30ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Logout OK
+
+□ 🆘 04 - SUPPORT TESTS (V5)
+└ 04.01 support me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 673B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Support me OK
+
+└ 04.02 support list accounts
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Support list accounts OK
+
+└ 04.03 support list users
+  GET http://localhost:8080/api/controlplane/users [200 OK, 1.46kB, 27ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Support list users OK
+
+□ ⚙️ 05 - OPERATOR TESTS (V5)
+└ 05.01 operator me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 676B, 17ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Operator me OK
+
+└ 05.02 operator list accounts
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Operator list accounts OK
+
+└ 05.03 operator cannot list users
+  GET http://localhost:8080/api/controlplane/users [403 Forbidden, 643B, 30ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Operator cannot list users (403)
+
+□ 💳 06 - BILLING TESTS (V6)
+└ 06.01 superadmin create payment
+  POST http://localhost:8080/api/controlplane/billing/payments [200 OK, 813B, 1098ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Superadmin create payment: created (200) or already exists (409)
+
+└ 06.02 superadmin list pending payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Superadmin list pending payments OK
+
+└ 06.03 superadmin get total paid
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z [200 OK, 476B, 29ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Superadmin get total paid OK
+
+└ 06.04 superadmin count completed payments
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Superadmin count completed OK
+
+└ 06.05 billing manager list pending payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Billing manager list pending payments OK
+
+└ 06.06 support cannot list payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Support cannot list payments (403)
+
+└ 06.07 operator cannot list payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Operator cannot list payments (403)
+
+□ 🗂️ 07 - CATEGORY TESTS (V7)
+└ 07.01 create category
+  POST http://localhost:8080/api/tenant/categories [201 Created, 540B, 46ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create category OK
+
+└ 07.02 create another category
+  POST http://localhost:8080/api/tenant/categories [201 Created, 534B, 43ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create category OK
+
+└ 07.03 list all categories
+  GET http://localhost:8080/api/tenant/categories [200 OK, 592B, 51ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List categories OK
+
+└ 07.04 get category by id
+  GET http://localhost:8080/api/tenant/categories/1 [200 OK, 535B, 30ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Get category OK
+
+└ 07.05 update category
+  PUT http://localhost:8080/api/tenant/categories/1 [200 OK, 546B, 34ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PUT)
+  √  Update category OK
+
+└ 07.06 toggle category active
+  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [200 OK, 547B, 62ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Toggle active OK
+
+└ 07.07 soft delete category
+  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+  √  Soft delete OK
+
+└ 07.08 restore category
+  PATCH http://localhost:8080/api/tenant/categories/1/restore [200 OK, 546B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Restore OK
+
+□ 📂 08 - SUBCATEGORY TESTS (V7)
+└ 08.01 create subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/2 [201 Created, 554B, 42ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create subcategory OK
+
+└ 08.02 list subcategories by category
+  GET http://localhost:8080/api/tenant/subcategories/category/2/not-deleted [200 OK, 551B, 28ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List subcategories OK
+
+□ 🏭 09 - SUPPLIER TESTS (V7)
+└ 09.01 create supplier
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 802B, 55ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create supplier OK
+
+└ 09.02 list suppliers
+  GET http://localhost:8080/api/tenant/suppliers [200 OK, 799B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List suppliers OK
+
+□ 📦 10 - PRODUCT TESTS (V7)
+└ 10.01 create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 940B, 99ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create product OK
+
+└ 10.02 list products
+  GET http://localhost:8080/api/tenant/products?page=0&size=10 [200 OK, 1.25kB, 42ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List products OK
+
+└ 10.03 get product by id
+  GET http://localhost:8080/api/tenant/products/71fe3a98-5b7d-49a9-bbc9-89d9e69ec78d [200 OK, 929B, 30ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Get product OK
+
+└ 10.04 update product cost
+  PATCH http://localhost:8080/api/tenant/products/71fe3a98-5b7d-49a9-bbc9-89d9e69ec78d/cost-price?costPrice=1500.00 [200 OK, 936B, 43ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Update cost OK
+
+└ 10.05 toggle product active
+  PATCH http://localhost:8080/api/tenant/products/71fe3a98-5b7d-49a9-bbc9-89d9e69ec78d/toggle-active [200 OK, 937B, 37ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Toggle active OK
+
+□ 🔍 11 - PRODUCT QUERIES (V7)
+└ 11.01 list products by category
+  GET http://localhost:8080/api/tenant/products/category/2 [200 OK, 477B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List by category OK
+
+└ 11.02 count low stock
+  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Count low stock OK
+
+└ 11.03 search products
+  GET http://localhost:8080/api/tenant/products/search?name=Smartphone [200 OK, 936B, 32ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Search products OK
+
+□ ⚠️ 12 - NEGATIVE TESTS (V7)
+└ 12.01 create product without category
+  POST http://localhost:8080/api/tenant/products/detailed [400 Bad Request, 605B, 50ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create without category fails (400)
+
+└ 12.02 create duplicate sku
+  POST http://localhost:8080/api/tenant/products/detailed [409 Conflict, 663B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Duplicate SKU fails (409)
+
+□ 👥 13 - TENANT USERS TESTS (ADDED to reach 61)
+└ 13.01 create tenant user
+  POST http://localhost:8080/api/tenant/users [201 Created, 792B, 156ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Create tenant user OK
+
+└ 13.02 list tenant users
+  GET http://localhost:8080/api/tenant/users [200 OK, 1.65kB, 43ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  List tenant users OK
+
+└ 13.03 get tenant user by id
+  GET http://localhost:8080/api/tenant/users/3 [200 OK, 787B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Get tenant user OK
+
+└ 13.04 count enabled tenant users
+  GET http://localhost:8080/api/tenant/users/count-enabled [200 OK, 476B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Count enabled OK
+
+└ 13.05 suspend by admin (status)
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=true [200 OK, 596B, 70ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Suspend status OK
+
+└ 13.06 unsuspend by admin (status)
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=false [200 OK, 596B, 62ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Unsuspend status OK
+
+└ 13.07 soft delete tenant user
+  PATCH http://localhost:8080/api/tenant/users/3/soft-delete [204 No Content, 423B, 35ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Soft delete OK
+
+└ 13.08 restore tenant user
+  PATCH http://localhost:8080/api/tenant/users/3/restore [200 OK, 596B, 46ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+  √  Restore OK
+
+└ 13.09 tentar criar usuário com email duplicado (deve falhar com 409)
+  ┌
+  │ '📧 Email para teste de duplicidade: duplicate_test_17
+  │ 72311159806@tenant.local'
+  └
+  POST http://localhost:8080/api/tenant/users [201 Created, 807B, 145ms]
+  ┌
+  │ '✅ Primeiro usuário criado com email:', 'duplicate_tes
+  │ t_1772311159806@tenant.local'
+  └
+  POST http://localhost:8080/api/tenant/users [409 Conflict, 671B, 46ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  Tentar criar usuário com email duplicado deve retornar 409
+  √  Erro deve ser EMAIL_ALREADY_EXISTS
+  √  Mensagem deve indicar email já cadastrado
+  ┌
+  │ '✅ Teste negativo de email duplicado passou!'
+  └
+
+□ 🏢 14 - CONTROLPLANE ACCOUNT QUERIES (ADDED to reach 61)
+└ 14.01 superadmin get account by id
+  GET http://localhost:8080/api/controlplane/accounts/2 [200 OK, 735B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Get account OK
+
+└ 14.02 superadmin get account admin details
+  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [200 OK, 951B, 38ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Admin details OK
+
+└ 14.03 superadmin list account tenant users
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 1.2kB, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  Tenant users list OK
+
+□ 📊 99 - POPULATE MASS DATA (10 each)
+└ 99.00 - Reset vars (mass)
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  √  reset ok
+
+└ 99.01.01 - Criar categoria (1/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.02 - Criar categoria (2/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.03 - Criar categoria (3/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.04 - Criar categoria (4/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.05 - Criar categoria (5/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.06 - Criar categoria (6/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.07 - Criar categoria (7/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.08 - Criar categoria (8/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.09 - Criar categoria (9/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.01.10 - Criar categoria (10/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.01 - Criar subcategoria (1/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/3 [201 Created, 553B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.02 - Criar subcategoria (2/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/4 [201 Created, 553B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.03 - Criar subcategoria (3/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/5 [201 Created, 553B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.04 - Criar subcategoria (4/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/6 [201 Created, 553B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.05 - Criar subcategoria (5/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/7 [201 Created, 553B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.06 - Criar subcategoria (6/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/8 [201 Created, 553B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.07 - Criar subcategoria (7/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/9 [201 Created, 553B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.08 - Criar subcategoria (8/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/10 [201 Created, 554B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.09 - Criar subcategoria (9/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/11 [201 Created, 555B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.02.10 - Criar subcategoria (10/10)
+  √  has category id for subcategory
+  POST http://localhost:8080/api/tenant/subcategories/category/12 [201 Created, 555B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
+└ 99.03.01 - Criar fornecedor (1/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.02 - Criar fornecedor (2/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.03 - Criar fornecedor (3/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.04 - Criar fornecedor (4/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 29ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.05 - Criar fornecedor (5/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.06 - Criar fornecedor (6/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.07 - Criar fornecedor (7/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.08 - Criar fornecedor (8/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.09 - Criar fornecedor (9/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.03.10 - Criar fornecedor (10/10)
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.01 - Criar produto (1/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.02 - Criar produto (2/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 31ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.03 - Criar produto (3/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 29ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.04 - Criar produto (4/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 34ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.05 - Criar produto (5/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.06 - Criar produto (6/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 27ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.07 - Criar produto (7/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 55ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.08 - Criar produto (8/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 951B, 31ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.09 - Criar produto (9/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 27ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.04.10 - Criar produto (10/10)
+  √  has ids to create product
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 28ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 201 or 409
+
+└ 99.05.01 - Criar usuario (1/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  1. status 2xx
+
+└ 99.05.02 - Criar usuario (2/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  2. status 2xx
+
+└ 99.05.03 - Criar usuario (3/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  3. status 2xx
+
+└ 99.05.04 - Criar usuario (4/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  4. status 2xx
+
+└ 99.05.05 - Criar usuario (5/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  5. status 2xx
+
+└ 99.05.06 - Criar usuario (6/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  6. status 2xx
+
+└ 99.05.07 - Criar usuario (7/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  7. status 2xx
+
+└ 99.05.08 - Criar usuario (8/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  8. status 2xx
+
+└ 99.05.09 - Criar usuario (9/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  9. status 2xx
+
+└ 99.05.10 - Criar usuario (10/10)
+  POST http://localhost:8080/api/tenant/users [400 Bad Request, 694B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 10. status 2xx
+
+└ 99.06.01 - Criar venda (1/10)
+ 11. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 12. status 2xx
+
+└ 99.06.02 - Criar venda (2/10)
+ 13. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 642B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 14. status 2xx
+
+└ 99.06.03 - Criar venda (3/10)
+ 15. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 16. status 2xx
+
+└ 99.06.04 - Criar venda (4/10)
+ 17. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 18. status 2xx
+
+└ 99.06.05 - Criar venda (5/10)
+ 19. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 20. status 2xx
+
+└ 99.06.06 - Criar venda (6/10)
+ 21. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 22. status 2xx
+
+└ 99.06.07 - Criar venda (7/10)
+ 23. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 642B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 24. status 2xx
+
+└ 99.06.08 - Criar venda (8/10)
+ 25. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 26. status 2xx
+
+└ 99.06.09 - Criar venda (9/10)
+ 27. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 28. status 2xx
+
+└ 99.06.10 - Criar venda (10/10)
+ 29. mass prerequisites
+  POST http://localhost:8080/api/tenant/sales [400 Bad Request, 645B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+ 30. status 2xx
+
+└ 99.07 - Verificar contagem final
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+  ┌
+  │ '\n' +
+  │   '📊 ====== RESUMO DA MASSA DE DADOS ======'
+  │ '✅ Categorias criadas: 10'
+  │ '✅ Subcategorias criadas: 10'
+  │ '✅ Fornecedores criados: 10'
+  │ '✅ Produtos criados: 10'
+  │ '✅ Usuários criados: 0'
+  │ '✅ Vendas criadas: 0'
+  │ '==========================================\n'
+  └
+  √  Todas as 10 categorias foram criadas
+  √  Todas as 10 subcategorias foram criadas
+  √  Todos os 10 fornecedores foram criados
+  √  Todos os 10 produtos foram criados
+ 31. Todos os 10 usuários foram criados
+  √  Vendas: nao obrigatorio (ainda)
+
+□ 🧩 v10 - FULL (disabled extras) / TENANT (auto-header) - EXTRA
+└ DELETE /api/tenant/categories/{id}
+  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 17ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ DELETE /api/tenant/subcategories/{id}
+  DELETE http://localhost:8080/api/tenant/subcategories/1 [204 No Content, 423B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ DELETE /api/tenant/suppliers/{id}
+  DELETE http://localhost:8080/api/tenant/suppliers/bbb639f3-0978-428b-b2fd-4929cec46ea9 [204 No Content, 423B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ DELETE /api/tenant/users/{userId:\\d+}
+  DELETE http://localhost:8080/api/tenant/users/1 [409 Conflict, 694B, 36ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ DELETE /api/tenant/users/{userId:\\d+}/hard
+  DELETE http://localhost:8080/api/tenant/users/1/hard [204 No Content, 423B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ GET /api/tenant/_debug/schema
+  GET http://localhost:8080/api/tenant/_debug/schema [200 OK, 582B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/billing/payments/account/{accountId}
+  GET http://localhost:8080/api/tenant/billing/payments/account/2 [200 OK, 809B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/billing/payments/account/{accountId}/has-active
+  GET http://localhost:8080/api/tenant/billing/payments/account/2/has-active [200 OK, 479B, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/billing/payments/account/{accountId}/{paymentId}
+  GET http://localhost:8080/api/tenant/billing/payments/account/2/00000000-0000-0000-0000-000000000000 [400 Bad Request, 687B, 32ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/categories/active
+  GET http://localhost:8080/api/tenant/categories/active [200 OK, 1.12kB, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/categories/admin
+  GET http://localhost:8080/api/tenant/categories/admin [200 OK, 1.12kB, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/categories/search
+  GET http://localhost:8080/api/tenant/categories/search [400 Bad Request, 658B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/categories/{id}
+  GET http://localhost:8080/api/tenant/categories/1 [409 Conflict, 678B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products
+  GET http://localhost:8080/api/tenant/products [200 OK, 5.94kB, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/any/brand
+  GET http://localhost:8080/api/tenant/products/any/brand [400 Bad Request, 660B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/any/category/{categoryId}
+  GET http://localhost:8080/api/tenant/products/any/category/1 [200 OK, 477B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/any/subcategory/{subcategoryId}
+  GET http://localhost:8080/api/tenant/products/any/subcategory/1 [200 OK, 936B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/category/{categoryId}
+  GET http://localhost:8080/api/tenant/products/category/1 [200 OK, 477B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/count-by-supplier
+  GET http://localhost:8080/api/tenant/products/count-by-supplier [200 OK, 507B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/inventory-value
+  GET http://localhost:8080/api/tenant/products/inventory-value [200 OK, 484B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/low-stock/count
+  GET http://localhost:8080/api/tenant/products/low-stock/count [200 OK, 476B, 17ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/search
+  GET http://localhost:8080/api/tenant/products/search [400 Bad Request, 658B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/subcategory/{subcategoryId}
+  GET http://localhost:8080/api/tenant/products/subcategory/1 [200 OK, 477B, 25ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/supplier/{supplierId}
+  GET http://localhost:8080/api/tenant/products/supplier/bbb639f3-0978-428b-b2fd-4929cec46ea9 [200 OK, 477B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/products/{id}
+  GET http://localhost:8080/api/tenant/products/1 [400 Bad Request, 638B, 15ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/subcategories/category/{categoryId}/admin
+  GET http://localhost:8080/api/tenant/subcategories/category/1/admin [200 OK, 477B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/subcategories/category/{categoryId}/not-deleted
+  GET http://localhost:8080/api/tenant/subcategories/category/1/not-deleted [200 OK, 477B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/subcategories/{id}
+  GET http://localhost:8080/api/tenant/subcategories/1 [409 Conflict, 684B, 15ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/active
+  GET http://localhost:8080/api/tenant/suppliers/active [200 OK, 3.38kB, 27ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/document/{document}
+  GET http://localhost:8080/api/tenant/suppliers/document/12345678000199 [404 Not Found, 661B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/email
+  GET http://localhost:8080/api/tenant/suppliers/email [400 Bad Request, 660B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/email/any
+  GET http://localhost:8080/api/tenant/suppliers/email/any [400 Bad Request, 657B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/search
+  GET http://localhost:8080/api/tenant/suppliers/search [400 Bad Request, 658B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/suppliers/{id}
+  GET http://localhost:8080/api/tenant/suppliers/1 [400 Bad Request, 638B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/users/enabled
+  GET http://localhost:8080/api/tenant/users/enabled [200 OK, 970B, 30ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/users/enabled/count
+  GET http://localhost:8080/api/tenant/users/enabled/count [200 OK, 476B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/users/enabled/{userId:\\d+}
+  GET http://localhost:8080/api/tenant/users/enabled/1 [200 OK, 785B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/tenant/users/{userId:\\d+}
+  GET http://localhost:8080/api/tenant/users/1 [200 OK, 785B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ PATCH /api/tenant/admin/users/{userId}/suspend
+  PATCH http://localhost:8080/api/tenant/admin/users/1/suspend [400 Bad Request, 645B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/categories/{id}/restore
+  PATCH http://localhost:8080/api/tenant/categories/1/restore [200 OK, 546B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/categories/{id}/toggle-active
+  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [200 OK, 547B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/me/password
+  PATCH http://localhost:8080/api/tenant/me/password [400 Bad Request, 645B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/products/{id}/cost-price
+  PATCH http://localhost:8080/api/tenant/products/1/cost-price [400 Bad Request, 638B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/products/{id}/toggle-active
+  PATCH http://localhost:8080/api/tenant/products/1/toggle-active [400 Bad Request, 638B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/subcategories/{id}/restore
+  PATCH http://localhost:8080/api/tenant/subcategories/1/restore [200 OK, 549B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/subcategories/{id}/toggle-active
+  PATCH http://localhost:8080/api/tenant/subcategories/1/toggle-active [200 OK, 550B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/suppliers/{id}/restore
+  PATCH http://localhost:8080/api/tenant/suppliers/1/restore [400 Bad Request, 638B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/suppliers/{id}/toggle-active
+  PATCH http://localhost:8080/api/tenant/suppliers/1/toggle-active [400 Bad Request, 638B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/users/{userId:\\d+}/password
+  PATCH http://localhost:8080/api/tenant/users/1/password [400 Bad Request, 672B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/users/{userId:\\d+}/restore
+  PATCH http://localhost:8080/api/tenant/users/1/restore [200 OK, 591B, 33ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/users/{userId:\\d+}/soft-delete
+  PATCH http://localhost:8080/api/tenant/users/1/soft-delete [409 Conflict, 694B, 23ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/users/{userId:\\d+}/status
+  PATCH http://localhost:8080/api/tenant/users/1/status [400 Bad Request, 653B, 15ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/tenant/users/{userId:\\d+}/transfer-admin
+  PATCH http://localhost:8080/api/tenant/users/1/transfer-admin [400 Bad Request, 651B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ POST /api/tenant/auth/login/confirm
+  POST http://localhost:8080/api/tenant/auth/login/confirm [400 Bad Request, 645B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/tenant/password/forgot
+  POST http://localhost:8080/api/tenant/password/forgot [400 Bad Request, 645B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/tenant/password/reset
+  POST http://localhost:8080/api/tenant/password/reset [400 Bad Request, 645B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/tenant/subcategories/category/{categoryId}
+  POST http://localhost:8080/api/tenant/subcategories/category/1 [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ PUT /api/tenant/categories/{id}
+  PUT http://localhost:8080/api/tenant/categories/1 [400 Bad Request, 645B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PUT)
+
+└ PUT /api/tenant/me
+  PUT http://localhost:8080/api/tenant/me [400 Bad Request, 645B, 13ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PUT)
+
+└ PUT /api/tenant/subcategories/{id}
+  PUT http://localhost:8080/api/tenant/subcategories/1 [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PUT)
+
+└ PUT /api/tenant/suppliers/{id}
+  PUT http://localhost:8080/api/tenant/suppliers/1 [400 Bad Request, 638B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PUT)
+
+□ 🧩 v10 - FULL (disabled extras) / CONTROL PLANE (superadmin_token) - EXTRA
+└ DELETE /api/controlplane/accounts/{accountId}
+  DELETE http://localhost:8080/api/controlplane/accounts/2 [204 No Content, 423B, 38ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ DELETE /api/controlplane/users/{userId}
+  DELETE http://localhost:8080/api/controlplane/users/1 [409 Conflict, 754B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (DELETE)
+
+└ GET /api/controlplane/accounts/by-status
+  GET http://localhost:8080/api/controlplane/accounts/by-status [400 Bad Request, 662B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/created-between
+  GET http://localhost:8080/api/controlplane/accounts/created-between [400 Bad Request, 657B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/query/payment-due-before
+  GET http://localhost:8080/api/controlplane/accounts/query/payment-due-before [400 Bad Request, 655B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/query/{id}
+  GET http://localhost:8080/api/controlplane/accounts/query/1 [200 OK, 697B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/query/{id}/enabled
+  GET http://localhost:8080/api/controlplane/accounts/query/1/enabled [200 OK, 697B, 18ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/search
+  GET http://localhost:8080/api/controlplane/accounts/search [400 Bad Request, 658B, 8ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/{accountId}
+  GET http://localhost:8080/api/controlplane/accounts/2 [404 Not Found, 656B, 17ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/{accountId}/admin-details
+  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [404 Not Found, 659B, 16ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/{accountId}/provisioning-events
+  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events [200 OK, 1.58kB, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/{accountId}/provisioning-events/latest
+  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events/latest [200 OK, 869B, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/accounts/{accountId}/tenant-users
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [404 Not Found, 658B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/users/enabled
+  GET http://localhost:8080/api/controlplane/users/enabled [200 OK, 1.46kB, 15ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/users/{userId}
+  GET http://localhost:8080/api/controlplane/users/1 [200 OK, 715B, 17ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/controlplane/users/{userId}/enabled
+  GET http://localhost:8080/api/controlplane/users/1/enabled [200 OK, 715B, 14ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ PATCH /api/controlplane/me/password
+  PATCH http://localhost:8080/api/controlplane/me/password [400 Bad Request, 645B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/controlplane/users/{userId}
+  PATCH http://localhost:8080/api/controlplane/users/1 [400 Bad Request, 645B, 12ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/controlplane/users/{userId}/permissions
+  PATCH http://localhost:8080/api/controlplane/users/1/permissions [400 Bad Request, 645B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/controlplane/users/{userId}/reset-password
+  PATCH http://localhost:8080/api/controlplane/users/1/reset-password [400 Bad Request, 645B, 9ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ PATCH /api/controlplane/users/{userId}/restore
+  PATCH http://localhost:8080/api/controlplane/users/1/restore [409 Conflict, 757B, 26ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (PATCH)
+
+└ POST /api/controlplane/accounts/query/count
+  POST http://localhost:8080/api/controlplane/accounts/query/count [400 Bad Request, 645B, 8ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/accounts/signup
+  POST http://localhost:8080/api/controlplane/accounts/signup [400 Bad Request, 645B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/accounts/{accountId}/restore
+  POST http://localhost:8080/api/controlplane/accounts/2/restore [204 No Content, 423B, 24ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/accounts/{accountId}/status
+  POST http://localhost:8080/api/controlplane/accounts/2/status [400 Bad Request, 645B, 8ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/accounts/{accountId}/tenant-users/{userId}/suspended-by-admin
+  POST http://localhost:8080/api/controlplane/accounts/2/tenant-users/1/suspended-by-admin [400 Bad Request, 660B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/users
+  POST http://localhost:8080/api/controlplane/users [400 Bad Request, 645B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/users/{userId}/restore-by-admin
+  POST http://localhost:8080/api/controlplane/users/1/restore-by-admin [409 Conflict, 757B, 20ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+└ POST /api/controlplane/users/{userId}/suspend-by-admin
+  POST http://localhost:8080/api/controlplane/users/1/suspend-by-admin [409 Conflict, 757B, 15ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+
+□ 🧩 v10 - FULL (disabled extras) / ADMIN (superadmin_token) - EXTRA
+└ GET /api/admin/billing/payments/query/accounts/{accountId}/count-completed
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 10ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/admin/billing/payments/query/accounts/{accountId}/total-paid
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid [400 Bad Request, 668B, 7ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+└ GET /api/admin/billing/payments/query/status/{status}
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 11ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (GET)
+
+┌─────────────────────────┬────────────────────┬───────────────────┐
+│                         │           executed │            failed │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              iterations │                  1 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│                requests │                226 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│            test-scripts │                357 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│      prerequest-scripts │                295 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              assertions │                626 │                31 │
+├─────────────────────────┴────────────────────┴───────────────────┤
+│ total run duration: 32.2s                                        │
+├──────────────────────────────────────────────────────────────────┤
+│ total data received: 67.94kB (approx)                            │
+├──────────────────────────────────────────────────────────────────┤
+│ average response time: 43ms [min: 7ms, max: 1098ms, s.d.: 100ms] │
+└──────────────────────────────────────────────────────────────────┘
+
+[31m   # [39m[31m failure        [39m[31m detail                                                                           [39m
+[90m     [39m[90m                [39m[90m                                                                                  [39m
+ 01.  AssertionError  status 2xx                                                                       
+                      expected 400 to be within 200..299                                               
+                      at assertion:0 in test-script                                                    
+                      inside "📊 99 - POPULATE MASS DATA (10 each) / 99.05.01 - Criar usuario (1/10)"  
+[90m     [39m[90m                [39m[90m                                                                                  [39m
+ 02.  AssertionError  status 2xx                                                                       
+                      expected 400 to be within 200..299                                               
+                      at assertion:0 in test-script                                                    
+                      inside "📊 99 - POPULATE MASS DATA (10 each) / 99.05.02 - Criar usuario (2/10)"  

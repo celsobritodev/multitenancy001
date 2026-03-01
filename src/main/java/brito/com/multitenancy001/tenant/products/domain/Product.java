@@ -18,14 +18,13 @@ import java.util.UUID;
 /**
  * Aggregate Root (Tenant): Product.
  *
- * Regra única de margem (definitiva):
- * - profitMargin = "MARGEM %" (margin), não "markup".
- * - Fórmula: margin% = ((price - costPrice) / price) * 100
+ * Regra unica de margem (definitiva):
+ * - profitMargin = "MARGEM %" (margin), nao "markup".
+ * - Formula: margin% = ((price - costPrice) / price) * 100
  *
- * Persistência / consistência:
+ * Persistencia / consistencia:
  * - Para garantir que o retorno da API sempre traga profitMargin atualizado,
- *   esta entidade recalcula automaticamente a margem em @PrePersist/@PreUpdate
- *   (mesmo se alguém usar setters direto).
+ *   esta entidade recalcula automaticamente a margem em @PrePersist/@PreUpdate.
  */
 @Entity
 @Table(name = "products")
@@ -69,9 +68,9 @@ public class Product implements Auditable, SoftDeletable {
 
     /**
      * Percentual de margem (0..100..), scale(2).
-     * Ex.: 25.00 significa 25% de margem sobre o preço.
+     * Ex.: 25.00 significa 25% de margem sobre o preco.
      *
-     * DDL atual: NUMERIC(12,2) está ótimo.
+     * DDL: NUMERIC(12,2).
      */
     @Column(name = "profit_margin", precision = 12, scale = 2)
     private BigDecimal profitMargin;
@@ -79,13 +78,16 @@ public class Product implements Auditable, SoftDeletable {
     @Column(length = 100)
     private String brand;
 
-    @Column(name = "weight_kg", precision = 10, scale = 3)
+    // SQL: weight_kg NUMERIC(8,3)
+    @Column(name = "weight_kg", precision = 8, scale = 3)
     private BigDecimal weightKg;
 
-    @Column(length = 100)
+    // SQL: dimensions VARCHAR(50)
+    @Column(length = 50)
     private String dimensions;
 
-    @Column(length = 100)
+    // SQL: barcode VARCHAR(50)
+    @Column(length = 50)
     private String barcode;
 
     @Column(nullable = false)
@@ -93,7 +95,7 @@ public class Product implements Auditable, SoftDeletable {
     private Boolean active = true;
 
     // =========================
-    // SOFT DELETE + AUDIT ÚNICO
+    // SOFT DELETE + AUDIT UNICO
     // =========================
 
     @Column(nullable = false)
@@ -111,7 +113,7 @@ public class Product implements Auditable, SoftDeletable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "supplier_id",
-            foreignKey = @ForeignKey(name = "fk_products_supplier")
+            foreignKey = @ForeignKey(name = "fk_product_supplier") // <-- SQL
     )
     private Supplier supplier;
 
@@ -151,7 +153,6 @@ public class Product implements Auditable, SoftDeletable {
     @PrePersist
     @PreUpdate
     private void onPersistOrUpdate() {
-        // método: garante consistência do campo derivado
         recomputeProfitMargin();
     }
 
@@ -160,14 +161,12 @@ public class Product implements Auditable, SoftDeletable {
     // =========================
 
     public void addToStock(Integer qty) {
-        // método: adiciona ao estoque de forma segura
         if (qty == null || qty <= 0) return;
         if (this.stockQuantity == null) this.stockQuantity = 0;
         this.stockQuantity = this.stockQuantity + qty;
     }
 
     public void removeFromStock(int qty) {
-        // método: remove do estoque garantindo não-negativo
         if (qty <= 0) return;
         if (this.stockQuantity == null) this.stockQuantity = 0;
 
@@ -177,11 +176,10 @@ public class Product implements Auditable, SoftDeletable {
     }
 
     // =========================
-    // DOMAIN METHODS (preço/custo/margem)
+    // DOMAIN METHODS (preco/custo/margem)
     // =========================
 
     public void updatePrice(BigDecimal newPrice) {
-        // método: valida, aplica preço e recalcula margem
         if (newPrice == null) throw new IllegalArgumentException("newPrice is required");
         if (newPrice.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("newPrice cannot be negative");
 
@@ -190,7 +188,6 @@ public class Product implements Auditable, SoftDeletable {
     }
 
     public void updateCostPrice(BigDecimal newCostPrice) {
-        // método: valida, aplica custo e recalcula margem
         if (newCostPrice == null) throw new IllegalArgumentException("newCostPrice is required");
         if (newCostPrice.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("newCostPrice cannot be negative");
 
@@ -199,15 +196,14 @@ public class Product implements Auditable, SoftDeletable {
     }
 
     /**
-     * Regra única (MARGEM %):
+     * Regra unica (MARGEM %):
      * margin% = ((price - costPrice) / price) * 100
      *
      * - Se price == null ou price <= 0 => profitMargin = null
      * - Se costPrice == null => profitMargin = null
-     * - Se costPrice > price => margem negativa (aceito para sinalizar prejuízo)
+     * - Se costPrice > price => margem negativa (aceito)
      */
     public void recomputeProfitMargin() {
-        // método: recalcula profitMargin de forma determinística
         if (this.price == null || this.price.compareTo(BigDecimal.ZERO) <= 0) {
             this.profitMargin = null;
             return;
@@ -220,7 +216,7 @@ public class Product implements Auditable, SoftDeletable {
         BigDecimal profit = this.price.subtract(this.costPrice);
 
         BigDecimal margin = profit
-                .divide(this.price, 10, RoundingMode.HALF_UP) // precisão interna
+                .divide(this.price, 10, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"))
                 .setScale(2, RoundingMode.HALF_UP);
 
@@ -232,14 +228,12 @@ public class Product implements Auditable, SoftDeletable {
     // =========================
 
     public void softDelete() {
-        // método: marca como deletado (idempotente)
         if (Boolean.TRUE.equals(this.deleted)) return;
         this.deleted = true;
         this.active = false;
     }
 
     public void softDelete(Instant now) {
-        // método: marca como deletado e registra deletedAt (quando possível)
         if (Boolean.TRUE.equals(this.deleted)) return;
         if (now == null) throw new IllegalArgumentException("now is required");
 
@@ -250,7 +244,6 @@ public class Product implements Auditable, SoftDeletable {
     }
 
     public void restore() {
-        // método: restaura soft-delete (idempotente)
         if (!Boolean.TRUE.equals(this.deleted)) return;
 
         this.deleted = false;

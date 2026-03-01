@@ -178,19 +178,19 @@ public class AccountStatusService {
         }
     }
 
-  public void softDeleteAccount(Long accountId) {
+ public void softDeleteAccount(Long accountId) {
     if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
 
     log.info("🗑️ Iniciando exclusão da conta [ID: {}]", accountId);
 
-    // PRIMEIRA TRANSAÇÃO: Marca a Account como deletada no Public Schema
+    // 1) PUBLIC TX: marca a account como deletada
     Account account = publicSchemaUnitOfWork.tx(() -> {
         log.debug("Passo 1/2: Marcando conta como deletada no schema public");
         Account acc = getAccountByIdRaw(accountId);
 
         if (acc.isBuiltInAccount()) {
             log.warn("🚫 Tentativa de excluir conta do sistema [ID: {}]", accountId);
-            throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED, 
+            throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED,
                 "Contas do sistema não podem ser excluídas", 403);
         }
 
@@ -200,20 +200,16 @@ public class AccountStatusService {
         return saved;
     });
 
-    // SEGUNDA TRANSAÇÃO: Executa em UM NOVO THREAD para garantir isolamento completo
+    // 2) FORA de TX PUBLIC: operação TENANT (pode ser async)
     String tenantSchema = account.getTenantSchema();
     log.info("📦 Passo 2/2: Removendo usuários do tenant [{}]", tenantSchema);
 
     try {
-        // Executa em um novo contexto transacional completamente isolado
-        CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() -> {
-            return publicSchemaUnitOfWork.requiresNew(() -> {
-                log.debug("Executando limpeza de usuários em transação isolada");
-                return tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
-            });
-        });
+        CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() ->
+            tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId())
+        );
 
-        Integer usuariosRemovidos = future.get(30, TimeUnit.SECONDS); // timeout de 30s
+        Integer usuariosRemovidos = future.get(30, TimeUnit.SECONDS);
 
         if (usuariosRemovidos != null && usuariosRemovidos > 0) {
             log.info("✅ {} usuário(s) do tenant [{}] foram removidos", usuariosRemovidos, tenantSchema);
@@ -224,88 +220,81 @@ public class AccountStatusService {
         log.info("🎉 Exclusão da conta [{}] concluída com sucesso", accountId);
 
     } catch (Exception e) {
-        log.warn("⚠️ A conta [{}] foi excluída, mas houve um problema ao remover os usuários do tenant [{}].", 
-                accountId, tenantSchema);
+        log.warn("⚠️ A conta [{}] foi excluída, mas houve um problema ao remover os usuários do tenant [{}].",
+            accountId, tenantSchema);
         log.warn("   Motivo: Não foi possível completar a operação no tenant. A limpeza dos usuários precisará ser feita manualmente.");
         log.debug("Detalhes técnicos:", e);
     }
 }
+ 
+ public void restoreAccount(Long accountId) {
+    if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
 
-    public void restoreAccount(Long accountId) {
-        /* Restaura account (se permitido) + restaura users do tenant (side-effect). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+    log.info("🔄 Iniciando restauração da conta [ID: {}]", accountId);
 
-        log.info("🔄 Iniciando restauração da conta [ID: {}]", accountId);
+    // 1) PUBLIC TX: restaura account
+    Account account = publicSchemaUnitOfWork.tx(() -> {
+        log.debug("Passo 1/2: Restaurando conta no schema public");
+        Account acc = getAccountByIdRaw(accountId);
 
-        // PRIMEIRA TRANSAÇÃO: Restaura a Account no Public Schema
-        Account account = publicSchemaUnitOfWork.tx(() -> {
-            log.debug("Passo 1/2: Restaurando conta no schema public");
-            Account acc = getAccountByIdRaw(accountId);
-
-            if (acc.isBuiltInAccount() && acc.isDeleted()) {
-                log.warn("🚫 Tentativa de restaurar conta do sistema [ID: {}]", accountId);
-                throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED, 
-                    "Contas do sistema não podem ser restauradas", 403);
-            }
-
-            acc.restore();
-            Account saved = accountRepository.save(acc);
-            log.info("✅ Conta [{} - {}] restaurada", accountId, acc.getDisplayName());
-            return saved;
-        });
-
-        // SEGUNDA TRANSAÇÃO (REQUIRES_NEW): Restaura os usuários do tenant
-        String tenantSchema = account.getTenantSchema();
-        log.info("📦 Restaurando usuários do tenant [{}]", tenantSchema);
-
-        try {
-            publicSchemaUnitOfWork.requiresNew(() -> {
-                log.debug("Executando restauração de usuários em transação separada");
-                tenantUsersIntegrationService.restoreAllUsersByAccount(tenantSchema, account.getId());
-                return null;
-            });
-
-            log.info("✅ Usuários do tenant [{}] restaurados com sucesso", tenantSchema);
-            log.info("🎉 Restauração da conta [{}] concluída com sucesso", accountId);
-
-        } catch (Exception e) {
-            log.warn("⚠️ A conta [{}] foi restaurada, mas houve um problema ao restaurar os usuários do tenant [{}].", 
-                    accountId, tenantSchema);
-            log.warn("   Motivo: {}", e.getMessage());
-            log.debug("Detalhes técnicos:", e);
-            // Não relançar a exceção - a operação principal já foi concluída
+        if (acc.isBuiltInAccount() && acc.isDeleted()) {
+            log.warn("🚫 Tentativa de restaurar conta do sistema [ID: {}]", accountId);
+            throw new ApiException(ApiErrorCode.BUILTIN_ACCOUNT_PROTECTED,
+                "Contas do sistema não podem ser restauradas", 403);
         }
+
+        acc.restore();
+        Account saved = accountRepository.save(acc);
+        log.info("✅ Conta [{} - {}] restaurada", accountId, acc.getDisplayName());
+        return saved;
+    });
+
+    // 2) FORA de TX PUBLIC: operação TENANT
+    String tenantSchema = account.getTenantSchema();
+    log.info("📦 Restaurando usuários do tenant [{}]", tenantSchema);
+
+    try {
+        int restored = tenantUsersIntegrationService.restoreAllUsersByAccount(tenantSchema, account.getId());
+        log.info("✅ {} usuário(s) do tenant [{}] restaurados com sucesso", restored, tenantSchema);
+        log.info("🎉 Restauração da conta [{}] concluída com sucesso", accountId);
+
+    } catch (Exception e) {
+        log.warn("⚠️ A conta [{}] foi restaurada, mas houve um problema ao restaurar os usuários do tenant [{}].",
+            accountId, tenantSchema);
+        log.warn("   Motivo: {}", e.getMessage());
+        log.debug("Detalhes técnicos:", e);
     }
+}
+    
+    
 
-    private int cancelAccount(Account account) {
-        /* Cancela account: soft delete (se necessário) + status CANCELLED + soft delete users. */
-        log.info("📝 Cancelando conta [ID: {} - {}]", account.getId(), account.getDisplayName());
+  private int cancelAccount(Account account) {
+    log.info("📝 Cancelando conta [ID: {} - {}]", account.getId(), account.getDisplayName());
 
-        // PRIMEIRA TRANSAÇÃO: Atualiza a Account
-        publicSchemaUnitOfWork.requiresNew(() -> {
-            if (!account.isDeleted()) {
-                account.softDelete(appClock.instant());
-            }
-            account.setStatus(AccountStatus.CANCELLED);
-            accountRepository.save(account);
-            log.info("✅ Conta [{}] marcada como CANCELADA", account.getId());
-            return null;
-        });
-
-        // SEGUNDA TRANSAÇÃO: Deleta os usuários do tenant
-        String tenantSchema = account.getTenantSchema();
-        try {
-            int removidos = publicSchemaUnitOfWork.requiresNew(() -> 
-                tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId())
-            );
-            log.info("✅ {} usuário(s) do tenant removidos durante cancelamento", removidos);
-            return removidos;
-        } catch (Exception e) {
-            log.warn("⚠️ Cancelamento parcial: usuários do tenant não foram removidos. Motivo: {}", e.getMessage());
-            log.debug("Detalhes:", e);
-            return 0;
+    // 1) PUBLIC TX: garante soft-delete + status CANCELLED
+    publicSchemaUnitOfWork.requiresNew(() -> {
+        if (!account.isDeleted()) {
+            account.softDelete(appClock.instant());
         }
+        account.setStatus(AccountStatus.CANCELLED);
+        accountRepository.save(account);
+        log.info("✅ Conta [{}] marcada como CANCELADA", account.getId());
+        return null;
+    });
+
+    // 2) FORA de TX PUBLIC: operação TENANT
+    String tenantSchema = account.getTenantSchema();
+    try {
+        int removidos = tenantUsersIntegrationService.softDeleteAllUsersByAccount(tenantSchema, account.getId());
+        log.info("✅ {} usuário(s) do tenant removidos durante cancelamento", removidos);
+        return removidos;
+
+    } catch (Exception e) {
+        log.warn("⚠️ Cancelamento parcial: usuários do tenant não foram removidos. Motivo: {}", e.getMessage());
+        log.debug("Detalhes:", e);
+        return 0;
     }
+}
 
     private Account getAccountByIdRaw(Long accountId) {
         /* Busca account por id sem exigir enabled/ready (raw). */

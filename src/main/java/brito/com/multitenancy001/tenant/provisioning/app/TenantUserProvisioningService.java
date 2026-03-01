@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -105,7 +106,11 @@ public class TenantUserProvisioningService {
 
                     boolean emailExists = tenantUserRepository.existsByEmailAndAccountId(emailNorm, accountId);
                     if (emailExists) {
-                        throw new ApiException(ApiErrorCode.EMAIL_ALREADY_EXISTS, "Email já cadastrado nesta conta", 409);
+                    	throw new ApiException(
+                    		    ApiErrorCode.EMAIL_ALREADY_REGISTERED_IN_ACCOUNT,
+                    		    null,
+                    		    Map.of("accountId", accountId, "email", email)
+                    		);
                     }
 
                     String name = StringUtils.hasText(ownerDisplayName)

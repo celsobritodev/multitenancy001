@@ -4,14 +4,32 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Generate 4 random uppercase letters
+generate_random_suffix() {
+    # Using /dev/urandom to generate random letters
+    # This works on Linux/Mac/Git Bash for Windows
+    LC_ALL=C tr -dc 'A-Z' < /dev/urandom 2>/dev/null | head -c 4 || {
+        # Fallback for systems without /dev/urandom (rare)
+        echo "$(date +%N | sha256sum | base64 | tr -dc 'A-Z' | head -c 4)"
+    }
+}
+
+RANDOM_SUFFIX=$(generate_random_suffix)
+# Ensure we always have 4 chars (in case of fallback issues)
+while [ ${#RANDOM_SUFFIX} -lt 4 ]; do
+    RANDOM_SUFFIX="${RANDOM_SUFFIX}A"
+done
+
 # Output outside the project (avoid Eclipse search/index pollution)
 OUTPUT_DIR="$HOME/eclipse-workspace/ConteudoAnaliseIA"
 mkdir -p "$OUTPUT_DIR"
-OUTPUT_FILE="$OUTPUT_DIR/contexto_multitenancy001.txt"
+OUTPUT_FILE="$OUTPUT_DIR/contexto_multitenancy${RANDOM_SUFFIX}.txt"
 
 # Options (0/1)
 INCLUDE_TESTS="${INCLUDE_TESTS:-0}"     # 1 to include src/test
 STRIP_COMMENTS="${STRIP_COMMENTS:-0}"   # 1 to remove comments (only if you need to shrink a lot)
+
+echo "Gerando arquivo: $OUTPUT_FILE"
 
 # Clear output file
 : > "$OUTPUT_FILE"

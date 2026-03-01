@@ -96,6 +96,7 @@ public enum ApiErrorCode {
     // Email
     INVALID_EMAIL(ApiErrorCategory.VALIDATION, 400, "E-mail inválido"),
     EMAIL_ALREADY_EXISTS(ApiErrorCategory.CONFLICT, 409, "E-mail já existe"),
+    EMAIL_ALREADY_REGISTERED_IN_ACCOUNT(ApiErrorCategory.CONFLICT, 409, "E-mail já cadastrado nesta conta"),
     EMAIL_ALREADY_IN_USE(ApiErrorCategory.CONFLICT, 409, "E-mail já está em uso"),
     EMAIL_RESERVED(ApiErrorCategory.CONFLICT, 409, "E-mail reservado"),
 
@@ -197,6 +198,16 @@ public enum ApiErrorCode {
     SUPPLIER_EMAIL_REQUIRED(ApiErrorCategory.SUPPLIERS, 400, "E-mail do fornecedor é obrigatório"),
     SUPPLIER_DOCUMENT_REQUIRED(ApiErrorCategory.SUPPLIERS, 400, "Documento do fornecedor é obrigatório"),
     SUPPLIER_DOCUMENT_ALREADY_EXISTS(ApiErrorCategory.CONFLICT, 409, "Documento do fornecedor já existe"),
+    
+    
+ // =========================
+ // Sales
+ // =========================
+ SALE_REQUIRED(ApiErrorCategory.SALES, 400, "Venda é obrigatória"),
+ SALE_ID_REQUIRED(ApiErrorCategory.SALES, 400, "saleId é obrigatório"),
+ SALE_NOT_FOUND(ApiErrorCategory.SALES, 404, "Venda não encontrada"),
+ SALE_ITEM_REQUIRED(ApiErrorCategory.SALES, 400, "Item da venda é obrigatório"),
+ SALE_ITEMS_REQUIRED(ApiErrorCategory.SALES, 400, "items é obrigatório"),
 
     // =========================
     // Generic validation / request

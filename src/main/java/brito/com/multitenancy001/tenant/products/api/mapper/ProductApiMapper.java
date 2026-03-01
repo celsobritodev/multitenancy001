@@ -1,44 +1,40 @@
 package brito.com.multitenancy001.tenant.products.api.mapper;
 
-import org.springframework.stereotype.Component;
-
 import brito.com.multitenancy001.tenant.products.api.dto.ProductResponse;
 import brito.com.multitenancy001.tenant.products.domain.Product;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ProductApiMapper {
 
-    public ProductResponse toResponse(Product product) {
+    public ProductResponse toResponse(Product p) {
         return new ProductResponse(
-                product.getId(),
-                product.getName(),
-                product.getDescription(),
-                product.getSku(),
-                product.getPrice(),
-                product.getStockQuantity(),
-                product.getMinStock(),
-                product.getMaxStock(),
-                product.getCostPrice(),
-                product.getProfitMargin(),
+                p.getId(),
+                p.getName(),
+                p.getDescription(),
+                p.getSku(),
+                p.getPrice(),
+                p.getStockQuantity(),
+                p.getMinStock(),
+                p.getMaxStock(),
+                p.getCostPrice(),
+                p.getProfitMargin(),
 
-                product.getCategory() != null ? product.getCategory().getId() : null,
-                product.getCategory() != null ? product.getCategory().getName() : null,
-                product.getSubcategory() != null ? product.getSubcategory().getId() : null,
-                product.getSubcategory() != null ? product.getSubcategory().getName() : null,
+                p.getCategory() != null ? p.getCategory().getId() : null,
+                p.getSubcategory() != null ? p.getSubcategory().getId() : null,
+                p.getSupplier() != null ? p.getSupplier().getId() : null,
 
-                product.getBrand(),
-                product.getWeightKg(),
-                product.getDimensions(),
-                product.getBarcode(),
-                product.getActive(),
+                p.getBrand(),
+                p.getWeightKg(),
+                p.getDimensions(),
+                p.getBarcode(),
 
-                product.getSupplier() != null ? product.getSupplier().getId() : null,
-                product.getSupplier() != null ? product.getSupplier().getName() : null,
+                p.getActive(),
+                p.getDeleted(),
 
-                // ✅ Auditoria única: vem do AuditInfo (Instant)
-                product.getAudit() != null ? product.getAudit().getCreatedAt() : null,
-                product.getAudit() != null ? product.getAudit().getUpdatedAt() : null
+                p.getAudit() != null ? p.getAudit().getCreatedAt() : null,
+                p.getAudit() != null ? p.getAudit().getUpdatedAt() : null,
+                p.getAudit() != null ? p.getAudit().getDeletedAt() : null
         );
     }
 }
-

@@ -17,26 +17,18 @@ public record ProductResponse(
         BigDecimal profitMargin,
 
         Long categoryId,
-        String categoryName,
         Long subcategoryId,
-        String subcategoryName,
+        UUID supplierId,
 
         String brand,
         BigDecimal weightKg,
         String dimensions,
         String barcode,
+
         Boolean active,
+        Boolean deleted,
 
-        UUID supplierId,
-        String supplierName,
-
-        // ✅ Instantes reais na borda HTTP (JSON com "Z")
         Instant createdAt,
-        Instant updatedAt
-) {
-    public ProductResponse {
-        if (stockQuantity == null) stockQuantity = 0;
-        if (active == null) active = true;
-    }
-}
-
+        Instant updatedAt,
+        Instant deletedAt
+) {}

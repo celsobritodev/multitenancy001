@@ -79,7 +79,7 @@ public class AccountAppService {
 
     public Account getAccount(Long accountId) {
         /* Busca conta por id (não deletada). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+    	if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
@@ -89,7 +89,7 @@ public class AccountAppService {
 
     public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
         /* Retorna visão admin com total de usuários e primeiro admin (se existir). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
 
         return publicSchemaUnitOfWork.readOnly(() -> {
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
@@ -108,7 +108,7 @@ public class AccountAppService {
 
     public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
         /* Orquestra mudança de status (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "cmd é obrigatório", 400);
 
         return accountStatusService.changeAccountStatus(accountId, cmd);
@@ -116,7 +116,7 @@ public class AccountAppService {
 
     public void softDeleteAccount(Long accountId) {
         /* Soft delete de account (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         accountStatusService.softDeleteAccount(accountId);
     }
     
@@ -128,19 +128,19 @@ public class AccountAppService {
 
     public void restoreAccount(Long accountId) {
         /* Restaura account deletada (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         accountStatusService.restoreAccount(accountId);
     }
 
     public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
         /* Lista usuários do tenant associado à account. */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
     }
 
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
         /* Suspende/reativa usuário do tenant via ação admin. */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
+        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
         accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);

@@ -165,6 +165,23 @@ public interface TenantProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findAnyBySubcategoryId(@Param("subcategoryId") Long subcategoryId);
 
     // =========================================================
+    // WRITE SAFETY (uniqueness + soft delete aware)
+    // =========================================================
+
+    Optional<Product> findByIdAndDeletedFalse(UUID id);
+
+    boolean existsBySkuAndDeletedFalse(String sku);
+
+    @Query("""
+        SELECT (COUNT(p) > 0) FROM Product p
+        WHERE p.deleted = false
+          AND p.sku = :sku
+          AND (:excludeId IS NULL OR p.id <> :excludeId)
+        """)
+    boolean existsSkuNotDeletedExcludingId(@Param("sku") String sku,
+                                          @Param("excludeId") UUID excludeId);
+
+    // =========================================================
     // Aliases semânticos (o service chama esses)
     // =========================================================
 
