@@ -18821,3 +18821,19 @@ brito.com.multitenancy001.shared.kernel.error.ApiException: Usuário BUILT_IN é
 2026-02-28T23:47:10.722-03:00  WARN 23224 --- [multitenancy001] [nio-8080-exec-5] .m.m.a.ExceptionHandlerExceptionResolver : Resolved [org.springframework.web.bind.MissingServletRequestParameterException: Required request parameter 'startDate' for method parameter type Instant is not present]
 2026-02-28T23:47:10.722-03:00  INFO 23224 --- [multitenancy001] [nio-8080-exec-5] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/admin/billing/payments/query/accounts/2/total-paid | tenant=PUBLIC | status=400 | ip=0:0:0:0:0:0:0:1 | requestId=895b4012-3b83-4f0d-83c6-d2e883acc5c0 | thread=50
 2026-02-28T23:47:10.835-03:00  INFO 23224 --- [multitenancy001] [nio-8080-exec-2] b.c.m.i.s.filter.RequestLoggingFilter    : 🌐 [REQ] GET /api/admin/billing/payments/query/status/PENDING | tenant=PUBLIC | status=200 | ip=0:0:0:0:0:0:0:1 | requestId=6fd6299a-17f5-40e6-94ee-5bc745578e99 | thread=47
+2026-03-01T00:00:00.016-03:00  INFO 23224 --- [multitenancy001] [   scheduling-1] b.c.m.c.b.a.ControlPlanePaymentService   : Iniciando verificação de pagamentos...
+2026-03-01T07:10:46.442-03:00  WARN 23224 --- [multitenancy001] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=6h40m26s668ms128µs200ns).
+2026-03-01T07:31:30.284-03:00  WARN 23224 --- [multitenancy001] [   scheduling-1] com.zaxxer.hikari.pool.PoolBase          : HikariPool-1 - Failed to validate connection org.postgresql.jdbc.PgConnection@2ab0a01d (This connection has been closed.). Possibly consider using a shorter maxLifetime value.
+2026-03-01T07:31:30.287-03:00  WARN 23224 --- [multitenancy001] [   scheduling-1] com.zaxxer.hikari.pool.PoolBase          : HikariPool-1 - Failed to validate connection org.postgresql.jdbc.PgConnection@5257f19e (This connection has been closed.). Possibly consider using a shorter maxLifetime value.
+2026-03-01T07:31:30.474-03:00  WARN 23224 --- [multitenancy001] [   scheduling-1] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 42P01
+2026-03-01T07:31:30.475-03:00 ERROR 23224 --- [multitenancy001] [   scheduling-1] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERRO: relação "public.account_job_schedules" não existe
+  Posição: 178
+2026-03-01T07:31:30.491-03:00  WARN 23224 --- [multitenancy001] [   scheduling-1] b.c.m.c.s.infra.AccountJobScheduler      : Scheduler ignorado (schema ainda não pronto ou migration ausente). Motivo: ERRO: relação "public.account_job_schedules" não existe
+  Posição: 178
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.5.9:run (default-cli) on project multitenancy001: Process terminated with exit code: -1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
