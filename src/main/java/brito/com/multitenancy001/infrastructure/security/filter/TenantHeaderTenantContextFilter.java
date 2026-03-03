@@ -16,40 +16,53 @@ public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
 
     public static final String TENANT_HEADER = "X-Tenant";
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+  @Override
+protected void doFilterInternal(HttpServletRequest request,
+                                HttpServletResponse response,
+                                FilterChain filterChain) throws ServletException, IOException {
 
-        final long threadId = Thread.currentThread().threadId();
-        final String method = request.getMethod();
-        final String uri = request.getRequestURI();
+    final long threadId = Thread.currentThread().threadId();
+    final String method = request.getMethod();
+    final String uri = request.getRequestURI();
 
-        final String rawHeader = request.getHeader(TENANT_HEADER);
-        final String tenantHeader = (rawHeader == null ? null : rawHeader.trim()); // entrada crua
-        final String tenantSchemaFromHeader = StringUtils.hasText(tenantHeader) ? tenantHeader : null; // pronto p/ bind (public=null)
-        final String tenantForLog = (tenantSchemaFromHeader != null ? tenantSchemaFromHeader : "PUBLIC");
-
-        // ✅ Se tem Bearer, QUEM MANDA É O TOKEN (não o header)
-        final String authHeader = request.getHeader("Authorization");
-        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
-
-            log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | thread={}",
-                    method, uri, tenantForLog, threadId);
-
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // ✅ Sem Bearer -> pode bindar por header (entrada crua -> tenantSchema)
-        try (TenantContext.Scope ignored = TenantContext.scope(tenantSchemaFromHeader)) {
-            log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | thread={}",
-                    method, uri, tenantForLog, threadId);
+    // ✅ Padrão B: auth/signup SEMPRE rodam em PUBLIC (não binda tenant por header)
+    if (isPublicOnlyPath(uri)) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            log.info("🌐 [REQ] {} {} | PUBLIC-ONLY | thread={}", method, uri, threadId);
             filterChain.doFilter(request, response);
         }
+        return;
     }
+
+    final String rawHeader = request.getHeader(TENANT_HEADER);
+    final String tenantHeader = (rawHeader == null ? null : rawHeader.trim());
+    final String tenantSchemaFromHeader = StringUtils.hasText(tenantHeader) ? tenantHeader : null;
+    final String tenantForLog = (tenantSchemaFromHeader != null ? tenantSchemaFromHeader : "PUBLIC");
+
+    // ✅ Se tem Bearer, não binda por header (token manda)
+    final String authHeader = request.getHeader("Authorization");
+    if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+        log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | bearer=yes | thread={}",
+                method, uri, tenantForLog, threadId);
+        filterChain.doFilter(request, response);
+        return;
+    }
+
+    // ✅ Sem Bearer -> binda por header (exceto rotas public-only)
+    try (TenantContext.Scope ignored = TenantContext.scope(tenantSchemaFromHeader)) {
+        log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | bearer=no | thread={}",
+                method, uri, tenantForLog, threadId);
+        filterChain.doFilter(request, response);
+    }
+}
+
+private static boolean isPublicOnlyPath(String uri) {
+    // auth de tenant e control-plane + signup devem rodar em PUBLIC
+    return uri.startsWith("/api/tenant/auth/")
+            || uri.startsWith("/api/controlplane/auth/")
+            || uri.startsWith("/api/signup");
+}
+
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

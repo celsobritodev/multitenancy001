@@ -12,7 +12,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Provisionamento do "índice público" de login (public.login_identities).
@@ -56,10 +55,9 @@ public class LoginIdentityProvisioningService {
     // =====================================================================
 
   
-  
 /**
  * SAFE: agenda o provisioning do TENANT_ACCOUNT para rodar APÓS a transação,
- * em uma thread separada com transação própria.
+ * em uma transação PUBLIC própria (determinístico, sem async).
  */
 public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
     String emailNorm = EmailNormalizer.normalizeOrNull(email);
@@ -70,53 +68,45 @@ public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
 
     log.info("📋 ensureTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
 
-    // ✅ CORREÇÃO DEFINITIVA: Executar em thread separada com nova transação
-    CompletableFuture.runAsync(() -> {
+    runAfterCompletion(() -> {
         try {
-            log.info("⚡ EXECUTANDO ensureTenantIdentityNow em thread separada para {} | accountId={}", 
-                     emailNorm, accountId);
-            
-            // Criar uma nova transação isolada
             TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
-            tt.executeWithoutResult(status -> {
-                ensureTenantIdentityNow(emailNorm, accountId);
-            });
-            
-            log.info("✅ ensureTenantIdentityNow EXECUTADO com sucesso para {} | accountId={}", 
-                     emailNorm, accountId);
+            tt.executeWithoutResult(status -> ensureTenantIdentityNow(emailNorm, accountId));
+            log.info("✅ ensureTenantIdentityNow EXECUTADO (afterCompletion) para {} | accountId={}", emailNorm, accountId);
         } catch (Exception e) {
-            log.error("❌ Erro ao executar ensureTenantIdentityNow: {}", e.getMessage(), e);
+            log.error("❌ Erro no ensureTenantIdentityAfterCompletion: {}", e.getMessage(), e);
         }
     });
 }
 
 /**
  * SAFE: agenda o delete do TENANT_ACCOUNT para rodar APÓS a transação,
- * em uma thread separada com transação própria.
+ * em uma transação PUBLIC própria (determinístico, sem async).
  */
 public void deleteTenantIdentityAfterCompletion(String email, Long accountId) {
     String emailNorm = EmailNormalizer.normalizeOrNull(email);
-    if (accountId == null || emailNorm == null) return;
+    if (accountId == null || emailNorm == null) {
+        log.debug("deleteTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
+        return;
+    }
 
     log.info("📋 deleteTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
 
-    CompletableFuture.runAsync(() -> {
+    runAfterCompletion(() -> {
         try {
-            log.info("⚡ EXECUTANDO deleteTenantIdentityNow em thread separada para {} | accountId={}", 
-                     emailNorm, accountId);
-            
             TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
-            tt.executeWithoutResult(status -> {
-                deleteTenantIdentityNow(emailNorm, accountId);
-            });
-            
-            log.info("✅ deleteTenantIdentityNow EXECUTADO com sucesso para {} | accountId={}", 
-                     emailNorm, accountId);
+            tt.executeWithoutResult(status -> deleteTenantIdentityNow(emailNorm, accountId));
+            log.info("✅ deleteTenantIdentityNow EXECUTADO (afterCompletion) para {} | accountId={}", emailNorm, accountId);
         } catch (Exception e) {
-            log.error("❌ Erro ao executar deleteTenantIdentityNow: {}", e.getMessage(), e);
+            log.error("❌ Erro no deleteTenantIdentityAfterCompletion: {}", e.getMessage(), e);
         }
     });
 }
+
+
+
+
+
 
     /**
      * SAFE: agenda o provisioning do CONTROLPLANE_USER para rodar após a transação atual finalizar (commit ou rollback).
