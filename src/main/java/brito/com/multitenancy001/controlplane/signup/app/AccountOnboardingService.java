@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.controlplane.signup.app;
 
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.domain.service.LoginIdentityService; // NOVA INTERFACE
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -27,37 +28,16 @@ import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-
 /**
  * Serviço de orquestração do onboarding de uma Account (Control Plane).
- *
- * Responsabilidades:
- * - Criar a Account no Public Schema.
- * - Criar o usuário administrador inicial.
- * - Disparar o provisionamento do schema do tenant.
- * - Inicializar entitlements, planos e estado inicial da conta.
- *
- * Papel arquitetural:
- * - Atua como um "Application Service composto".
- * - Coordena múltiplos serviços especializados sem conter lógica técnica.
- *
- * Regras:
- * - Toda criação de Account deve passar por este serviço.
- * - Não é permitido criar Account "parcial" fora deste fluxo.
- * - Falhas intermediárias devem gerar eventos auditáveis.
- *
- * Importante:
- * - Controllers nunca devem criar Account diretamente.
- * - Regras de consistência entre Account, Tenant e Admin são garantidas aqui.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class AccountOnboardingService {
 
     private static final String DEFAULT_TAX_COUNTRY_CODE = "BR";
@@ -66,7 +46,8 @@ public class AccountOnboardingService {
     private final TenantSchemaProvisioningIntegrationService tenantSchemaProvisioningIntegrationService;
     private final TenantProvisioningIntegrationService  tenantProvisioningIntegrationService;
 
-    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
+    // ✅ NOVO: usando a interface, não a implementação concreta
+    private final LoginIdentityService loginIdentityService;
 
     private final AccountRepository accountRepository;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
@@ -77,7 +58,7 @@ public class AccountOnboardingService {
     public SignupResult createAccount(SignupCommand signupCommand) {
         SignupData data = validateAndNormalize(signupCommand);
 
-        log.info("Tentando criar conta | loginEmail={}", data.loginEmail());
+        log.info("🚀 Tentando criar conta | loginEmail={} | displayName={}", data.loginEmail(), data.displayName());
 
         // 1) Cria Account no PUBLIC (TX CP)
         Account account;
@@ -94,12 +75,11 @@ public class AccountOnboardingService {
                 Account created = AccountFactory.newTenantAccount(cmd);
 
                 created.setStatus(AccountStatus.PROVISIONING);
-
-                // ✅ se a factory não setar tenantSchema, garante aqui
                 created.ensureTenantSchema();
 
                 return accountRepository.save(created);
             });
+            log.info("✅ Account criada no PUBLIC | accountId={} tenantSchema={}", account.getId(), account.getTenantSchema());
         } catch (RuntimeException ex) {
             log.error("❌ Falha criando Account no PUBLIC | loginEmail={}", data.loginEmail(), ex);
             throw ex;
@@ -117,21 +97,27 @@ public class AccountOnboardingService {
         try {
             // 3) Provisionamento fora do TX do CP (envolve infra/DDL/migrations)
             String tenantSchema = account.getTenantSchema();
+            log.info("Iniciando provisionamento do schema | tenantSchema={}", tenantSchema);
 
             try {
                 tenantSchemaProvisioningIntegrationService.ensureSchemaExistsAndMigrate(tenantSchema);
+                log.info("✅ Schema provisionado e migrado | tenantSchema={}", tenantSchema);
             } catch (FlywayException ex) {
+                log.error("❌ Falha na migração Flyway | tenantSchema={}", tenantSchema, ex);
                 throw provisioningFailed(ProvisioningFailureCode.TENANT_MIGRATION_ERROR, ex);
             } catch (DataAccessException ex) {
+                log.error("❌ Falha na criação do schema | tenantSchema={}", tenantSchema, ex);
                 throw provisioningFailed(ProvisioningFailureCode.SCHEMA_CREATION_ERROR, ex);
             } catch (RuntimeException ex) {
                 ProvisioningFailureCode code = (ex instanceof ApiException)
                         ? ProvisioningFailureCode.VALIDATION_ERROR
                         : ProvisioningFailureCode.UNKNOWN;
+                log.error("❌ Falha no provisionamento do schema | tenantSchema={}", tenantSchema, ex);
                 throw provisioningFailed(code, ex);
             }
 
             // 4) Criação do tenant owner
+            log.info("Criando tenant owner | tenantSchema={} accountId={} email={}", tenantSchema, account.getId(), data.loginEmail());
             try {
                 tenantOwner = tenantProvisioningIntegrationService.createTenantOwner(
                         tenantSchema,
@@ -140,17 +126,22 @@ public class AccountOnboardingService {
                         data.loginEmail(),
                         data.password()
                 );
+                log.info("✅ Tenant owner criado | userId={} email={}", tenantOwner.id(), tenantOwner.email());
             } catch (RuntimeException ex) {
+                log.error("❌ Falha na criação do tenant owner | tenantSchema={}", tenantSchema, ex);
                 throw provisioningFailed(ProvisioningFailureCode.TENANT_ADMIN_CREATION_ERROR, ex);
             }
 
-            // 5) Registrar identidade de login no PUBLIC (para /api/tenant/auth/login)
+            // 5) Registrar identidade de login no PUBLIC (para /api/tenant/auth/login) - AGORA SÍNCRONO
+            log.info("Garantindo identidade de login no PUBLIC | email={} accountId={}", data.loginEmail(), account.getId());
             try {
                 publicSchemaUnitOfWork.tx(() -> {
-                    loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(data.loginEmail(), account.getId());
+                    loginIdentityService.ensureTenantIdentity(data.loginEmail(), account.getId());
                     return null;
                 });
+                log.info("✅ Identidade de login garantida no PUBLIC | email={} accountId={}", data.loginEmail(), account.getId());
             } catch (RuntimeException ex) {
+                log.error("❌ Falha ao garantir identidade de login | email={} accountId={}", data.loginEmail(), account.getId(), ex);
                 throw provisioningFailed(ProvisioningFailureCode.PUBLIC_PERSISTENCE_ERROR, ex);
             }
 
@@ -158,7 +149,10 @@ public class AccountOnboardingService {
             Account finalized;
             try {
                 finalized = finalizeProvisioning(account.getId());
+                log.info("✅ Provisionamento finalizado | accountId={} status={} trialEndAt={}", 
+                        finalized.getId(), finalized.getStatus(), finalized.getTrialEndAt());
             } catch (RuntimeException ex) {
+                log.error("❌ Falha ao finalizar provisioning | accountId={}", account.getId(), ex);
                 throw provisioningFailed(ProvisioningFailureCode.PUBLIC_PERSISTENCE_ERROR, ex);
             }
 
@@ -169,7 +163,7 @@ public class AccountOnboardingService {
                     buildDetailsJson(finalized, data, "SUCCESS", null, null)
             );
 
-            log.info("✅ Account criada | accountId={} | tenantSchema={} | slug={} | status={} | trialEndAt={}",
+            log.info("✅ Account criada com sucesso | accountId={} | tenantSchema={} | slug={} | status={} | trialEndAt={}",
                     finalized.getId(),
                     finalized.getTenantSchema(),
                     finalized.getSlug(),
@@ -187,8 +181,11 @@ public class AccountOnboardingService {
 
         } catch (ProvisioningFailedException wrapped) {
             ProvisioningFailureCode code = wrapped.code();
-
             String message = safeMessage(wrapped.getCause());
+            
+            log.error("❌ Falha no provisioning | accountId={} | tenantSchema={} | code={} | message={}",
+                    account.getId(), account.getTenantSchema(), code, message, wrapped.getCause());
+
             provisioningAuditService.failed(
                     account.getId(),
                     code,
@@ -196,24 +193,21 @@ public class AccountOnboardingService {
                     buildDetailsJson(account, data, "FAILED", code, wrapped.getCause())
             );
 
-            log.error("❌ Falha no provisioning | accountId={} | tenantSchema={} | code={}",
-                    account.getId(), account.getTenantSchema(), code, wrapped.getCause());
-
             if (wrapped.getCause() instanceof RuntimeException re) {
                 throw re;
             }
             throw wrapped;
 
         } catch (RuntimeException ex) {
+            log.error("❌ Falha inesperada no provisioning | accountId={} | tenantSchema={}",
+                    account.getId(), account.getTenantSchema(), ex);
+
             provisioningAuditService.failed(
                     account.getId(),
                     ProvisioningFailureCode.UNKNOWN,
                     safeMessage(ex),
                     buildDetailsJson(account, data, "FAILED", ProvisioningFailureCode.UNKNOWN, ex)
             );
-
-            log.error("❌ Falha inesperada no provisioning | accountId={} | tenantSchema={}",
-                    account.getId(), account.getTenantSchema(), ex);
 
             throw ex;
         }

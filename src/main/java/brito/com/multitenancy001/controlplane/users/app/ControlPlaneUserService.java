@@ -1,4 +1,3 @@
-// src/main/java/brito/com/multitenancy001/controlplane/users/app/ControlPlaneUserService.java
 package brito.com.multitenancy001.controlplane.users.app;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
@@ -22,14 +21,15 @@ import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.domain.service.LoginIdentityService; // NOVA INTERFACE
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,21 +41,8 @@ import java.util.function.Supplier;
 
 /**
  * Use cases de usuários do Control Plane.
- *
- * Objetivos:
- * - CRUD administrativo (create/update/permissions/reset password/soft delete/restore/suspend/unsuspend).
- * - Endpoints "enabled" (somente usuários habilitados).
- * - Endpoint "me" e troca de senha do próprio usuário.
- *
- * Auditoria SOC2-like:
- * - Trilho append-only com ATTEMPT + SUCCESS/FAILURE/DENIED.
- * - Details estruturado (scope, motivo, alvo, mudanças/deltas).
- * - IP/UA/requestId são capturados pelo SecurityAuditService via RequestMetaContext.
- *
- * Regras:
- * - Usuário BUILT_IN é protegido: não altera/deleta/restaura/suspende; apenas troca de senha.
- * - Todas as operações são restritas ao account "Control Plane" (single CP account).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneUserService {
@@ -71,29 +58,66 @@ public class ControlPlaneUserService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
-
-    /** Identidade do request (actor). */
     private final ControlPlaneRequestIdentityService requestIdentity;
-
     private final ControlPlaneUserExplicitPermissionsService explicitPermissionsService;
-
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
 
-    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
+    // ✅ NOVO: usando a interface, não a implementação concreta
+    private final LoginIdentityService loginIdentityService;
 
-    /** Auditoria real (public schema) com RequestMetaContext. */
     private final SecurityAuditService securityAuditService;
-
-    /** Mapper para details estruturado (Map/record -> JsonNode). */
     private final JsonDetailsMapper jsonDetailsMapper;
+
+    // =========================================================
+    // LOGIN_IDENTITY SYNC (PUBLIC) - HELPERS
+    // =========================================================
+
+    private void ensureControlPlaneIdentityNow(String email, Long userId, String operation) {
+        log.info("ensureControlPlaneIdentityNow INICIANDO | email={} userId={} op={}", email, userId, operation);
+        try {
+            loginIdentityService.ensureControlPlaneIdentity(email, userId);
+            log.info("✅ ensureControlPlaneIdentityNow CONCLUÍDO | email={} userId={}", email, userId);
+        } catch (Exception e) {
+            log.error("❌ ensureControlPlaneIdentityNow FALHOU | email={} userId={} | erro: {}", 
+                    email, userId, e.getMessage(), e);
+            throw new ApiException(ApiErrorCode.INTERNAL_ERROR, 
+                "Falha ao garantir identidade de login para usuário do Control Plane", 500);
+        }
+    }
+
+    private void moveControlPlaneIdentityNow(Long userId, String newEmail, String operation) {
+        log.info("moveControlPlaneIdentityNow INICIANDO | userId={} newEmail={} op={}", userId, newEmail, operation);
+        try {
+            loginIdentityService.moveControlPlaneIdentity(userId, newEmail);
+            log.info("✅ moveControlPlaneIdentityNow CONCLUÍDO | userId={} newEmail={}", userId, newEmail);
+        } catch (Exception e) {
+            log.error("❌ moveControlPlaneIdentityNow FALHOU | userId={} newEmail={} | erro: {}", 
+                    userId, newEmail, e.getMessage(), e);
+            throw new ApiException(ApiErrorCode.INTERNAL_ERROR, 
+                "Falha ao mover identidade de login", 500);
+        }
+    }
+
+    private void deleteControlPlaneIdentityNow(Long userId, String operation) {
+        log.info("deleteControlPlaneIdentityNow INICIANDO | userId={} op={}", userId, operation);
+        try {
+            loginIdentityService.deleteControlPlaneIdentityByUserId(userId);
+            log.info("✅ deleteControlPlaneIdentityNow CONCLUÍDO | userId={}", userId);
+        } catch (Exception e) {
+            log.error("❌ deleteControlPlaneIdentityNow FALHOU (best-effort) | userId={} | erro: {}", 
+                    userId, e.getMessage(), e);
+            // Não relança - operação best-effort
+        }
+    }
 
     // =========================================================
     // ADMIN ENDPOINTS
     // =========================================================
 
     public ControlPlaneUserDetailsResponse createControlPlaneUser(ControlPlaneUserCreateRequest request) {
-        /* Cria um novo usuário do Control Plane (ADMIN). */
+        log.info("🚀 createControlPlaneUser INICIANDO | email={}", request != null ? request.email() : null);
+
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -119,7 +143,6 @@ public class ControlPlaneUserService {
                     "permissionsCount", request.permissions() == null ? 0 : request.permissions().size()
             );
 
-            // ✅ successDetails via Supplier (depois do bloco) — aqui é estático, mas mantém padrão.
             Supplier<Object> successSupplier = () -> m(
                     "scope", SCOPE,
                     "stage", "after_save",
@@ -162,7 +185,6 @@ public class ControlPlaneUserService {
                         if (request.permissions() != null && !request.permissions().isEmpty()) {
                             explicitPermissionsService.setExplicitPermissionsFromCodes(saved.getId(), request.permissions());
 
-                            // SOC2-like: permissions changed no create (evento separado)
                             recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
@@ -180,45 +202,19 @@ public class ControlPlaneUserService {
                             );
                         }
 
-                        loginIdentityProvisioningService.ensureControlPlaneIdentityAfterCompletion(email, saved.getId());
+                        // ✅ Garante identidade de forma SÍNCRONA
+                        ensureControlPlaneIdentityNow(saved.getEmail(), saved.getId(), "create");
 
-                        // ✅ NÃO registrar USER_CREATED SUCCESS aqui (o helper já registra).
+                        log.info("✅ createControlPlaneUser CONCLUÍDO | id={} email={}", saved.getId(), saved.getEmail());
                         return getControlPlaneUser(saved.getId());
                     }
             );
         });
     }
 
-    public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
-        /* Lista usuários (não deletados) do Control Plane. */
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            Account cp = getControlPlaneAccount();
-            return controlPlaneUserRepository.findNotDeletedByAccountId(cp.getId()).stream()
-                    .map(this::mapToResponse)
-                    .toList();
-        });
-    }
-
-    public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
-        /* Busca usuário do Control Plane por id. */
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-
-            Account cp = getControlPlaneAccount();
-
-            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
-
-            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
-            }
-
-            return mapToResponse(user);
-        });
-    }
-
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(Long userId, ControlPlaneUserUpdateRequest request) {
-        /* Atualiza dados do usuário do Control Plane (ADMIN) com SUCCESS contendo delta/changes. */
+        log.info("updateControlPlaneUser INICIANDO | userId={}", userId);
+
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -250,7 +246,6 @@ public class ControlPlaneUserService {
                     "hasPermissions", request.permissions() != null
             );
 
-            // ✅ SUCCESS montado após o bloco — sem duplicidade, sem gambiarra
             Map<String, Object> success = new LinkedHashMap<>();
             success.put("scope", SCOPE);
             success.put("reason", "update");
@@ -302,7 +297,9 @@ public class ControlPlaneUserService {
                                 }
 
                                 user.changeEmail(newEmail);
-                                loginIdentityProvisioningService.moveControlPlaneIdentityAfterCompletion(user.getId(), newEmail);
+                                
+                                // ✅ Move identidade de forma SÍNCRONA
+                                moveControlPlaneIdentityNow(user.getId(), newEmail, "update");
 
                                 changes.put("emailBefore", beforeEmail);
                                 changes.put("emailAfter", newEmail);
@@ -364,18 +361,103 @@ public class ControlPlaneUserService {
                             );
                         }
 
-                        // ✅ SUCCESS rico do USER_UPDATED (o helper gravará após este bloco terminar)
                         success.put("changed", !changes.isEmpty());
                         success.put("changes", changes);
 
+                        log.info("✅ updateControlPlaneUser CONCLUÍDO | userId={}", userId);
                         return getControlPlaneUser(userId);
                     }
             );
         });
     }
 
+    public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
+        log.info("restoreControlPlaneUser INICIANDO | userId={}", userId);
+
+        return publicSchemaUnitOfWork.tx(() -> {
+            Actor actor = resolveActorOrNull();
+
+            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+
+            Account cp = getControlPlaneAccount();
+
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
+            }
+
+            if (user.isBuiltInUser()) {
+                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
+            }
+
+            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
+
+            Map<String, Object> attempt = m(
+                    "scope", SCOPE,
+                    "reason", "soft_restore"
+            );
+
+            ControlPlaneUserDetailsResponse result = auditAttemptSuccessFail(
+                    SecurityAuditActionType.USER_SOFT_RESTORED,
+                    actor,
+                    target,
+                    cp.getId(),
+                    null,
+                    attempt,
+                    () -> attempt,
+                    () -> {
+                        user.restore();
+                        ControlPlaneUser saved = controlPlaneUserRepository.save(user);
+
+                        // ✅ Garante identidade de forma SÍNCRONA
+                        ensureControlPlaneIdentityNow(saved.getEmail(), saved.getId(), "restore");
+
+                        return mapToResponse(saved);
+                    }
+            );
+
+            log.info("✅ restoreControlPlaneUser CONCLUÍDO | userId={}", userId);
+            return result;
+        });
+    }
+
+    // =========================================================
+    // Outros métodos (mantidos como estavam, apenas com logs)
+    // =========================================================
+
+    public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
+        log.debug("listControlPlaneUsers chamado");
+        return publicSchemaUnitOfWork.readOnly(() -> {
+            Account cp = getControlPlaneAccount();
+            return controlPlaneUserRepository.findNotDeletedByAccountId(cp.getId()).stream()
+                    .map(this::mapToResponse)
+                    .toList();
+        });
+    }
+
+    public ControlPlaneUserDetailsResponse getControlPlaneUser(Long userId) {
+        log.debug("getControlPlaneUser chamado | userId={}", userId);
+        return publicSchemaUnitOfWork.readOnly(() -> {
+            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
+
+            Account cp = getControlPlaneAccount();
+
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
+
+            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
+                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
+            }
+
+            return mapToResponse(user);
+        });
+    }
+
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(Long userId, ControlPlaneUserPermissionsUpdateRequest request) {
-        /* Atualiza permissões explícitas (ADMIN endpoint dedicado). */
+        log.info("updateControlPlaneUserPermissions INICIANDO | userId={}", userId);
+        
         return publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -405,7 +487,7 @@ public class ControlPlaneUserService {
                     "permissionsCount", permCount
             );
 
-            return auditAttemptSuccessFail(
+            ControlPlaneUserDetailsResponse result = auditAttemptSuccessFail(
                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                     actor,
                     target,
@@ -418,11 +500,15 @@ public class ControlPlaneUserService {
                         return getControlPlaneUser(userId);
                     }
             );
+
+            log.info("✅ updateControlPlaneUserPermissions CONCLUÍDO | userId={}", userId);
+            return result;
         });
     }
 
     public void resetControlPlaneUserPassword(Long userId, ControlPlaneUserPasswordResetRequest request) {
-        /* Admin reset de senha (não é troca autenticada). */
+        log.info("resetControlPlaneUserPassword INICIANDO | userId={}", userId);
+        
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -469,12 +555,14 @@ public class ControlPlaneUserService {
                     }
             );
 
+            log.info("✅ resetControlPlaneUserPassword CONCLUÍDO | userId={}", userId);
             return null;
         });
     }
 
     public void softDeleteControlPlaneUser(Long userId) {
-        /* Soft delete (ADMIN). */
+        log.info("softDeleteControlPlaneUser INICIANDO | userId={}", userId);
+        
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -489,6 +577,8 @@ public class ControlPlaneUserService {
             if (user.isBuiltInUser()) {
                 throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
             }
+
+            final Long userIdForDelete = user.getId();
 
             AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
 
@@ -508,63 +598,22 @@ public class ControlPlaneUserService {
                     () -> {
                         user.softDelete();
                         controlPlaneUserRepository.save(user);
+                        
+                        // ✅ Remove identidade de forma SÍNCRONA (best-effort)
+                        deleteControlPlaneIdentityNow(userIdForDelete, "softDelete");
+                        
                         return null;
                     }
             );
 
+            log.info("✅ softDeleteControlPlaneUser CONCLUÍDO | userId={}", userId);
             return null;
         });
     }
 
-    public ControlPlaneUserDetailsResponse restoreControlPlaneUser(Long userId) {
-        /* Restaura usuário após soft delete (ADMIN). */
-        return publicSchemaUnitOfWork.tx(() -> {
-            Actor actor = resolveActorOrNull();
-
-            if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-
-            Account cp = getControlPlaneAccount();
-
-            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado", 404));
-
-            if (user.getAccount() == null || user.getAccount().getId() == null || !user.getAccount().getId().equals(cp.getId())) {
-                throw new ApiException(ApiErrorCode.USER_OUT_OF_SCOPE, "Usuário não pertence ao Control Plane", 403);
-            }
-
-            if (user.isBuiltInUser()) {
-                throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, BUILTIN_IMMUTABLE_MESSAGE, 409);
-            }
-
-            AuditTarget target = new AuditTarget(user.getEmail(), user.getId());
-
-            Map<String, Object> attempt = m(
-                    "scope", SCOPE,
-                    "reason", "soft_restore"
-            );
-
-            return auditAttemptSuccessFail(
-                    SecurityAuditActionType.USER_SOFT_RESTORED,
-                    actor,
-                    target,
-                    cp.getId(),
-                    null,
-                    attempt,
-                    () -> attempt,
-                    () -> {
-                        user.restore();
-                        controlPlaneUserRepository.save(user);
-
-                        loginIdentityProvisioningService.ensureControlPlaneIdentityAfterCompletion(user.getEmail(), user.getId());
-
-                        return mapToResponse(user);
-                    }
-            );
-        });
-    }
-
     public void suspendControlPlaneUserByAdmin(Long userId, ControlPlaneUserSuspendRequest request) {
-        /* Suspende usuário por ação administrativa (ADMIN). */
+        log.info("suspendControlPlaneUserByAdmin INICIANDO | userId={}", userId);
+        
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -610,12 +659,14 @@ public class ControlPlaneUserService {
                     }
             );
 
+            log.info("✅ suspendControlPlaneUserByAdmin CONCLUÍDO | userId={}", userId);
             return null;
         });
     }
 
     public void restoreControlPlaneUserByAdmin(Long userId, ControlPlaneUserSuspendRequest request) {
-        /* Remove suspensão administrativa (ADMIN) => reabilita usuário (se não houver outras suspensões). */
+        log.info("restoreControlPlaneUserByAdmin INICIANDO | userId={}", userId);
+        
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -661,16 +712,13 @@ public class ControlPlaneUserService {
                     }
             );
 
+            log.info("✅ restoreControlPlaneUserByAdmin CONCLUÍDO | userId={}", userId);
             return null;
         });
     }
 
-    // =========================================================
-    // ENABLED ENDPOINTS
-    // =========================================================
-
     public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
-        /* Lista usuários habilitados do Control Plane. */
+        log.debug("listEnabledControlPlaneUsers chamado");
         return publicSchemaUnitOfWork.readOnly(() -> {
             Account cp = getControlPlaneAccount();
             List<ControlPlaneUser> users = controlPlaneUserRepository.findEnabledByAccountId(cp.getId());
@@ -679,7 +727,7 @@ public class ControlPlaneUserService {
     }
 
     public ControlPlaneUserDetailsResponse getEnabledControlPlaneUser(Long userId) {
-        /* Busca usuário habilitado do Control Plane. */
+        log.debug("getEnabledControlPlaneUser chamado | userId={}", userId);
         return publicSchemaUnitOfWork.readOnly(() -> {
             if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
 
@@ -693,11 +741,8 @@ public class ControlPlaneUserService {
         });
     }
 
-    // =========================================================
-    // ME
-    // =========================================================
-
     public ControlPlaneMeResponse getMe() {
+        log.debug("getMe chamado");
         return publicSchemaUnitOfWork.readOnly(() -> {
             Long userId = requestIdentity.getCurrentUserId();
 
@@ -725,7 +770,8 @@ public class ControlPlaneUserService {
     }
 
     public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
-        /* Troca de senha autenticada (self). */
+        log.info("changeMyPassword INICIANDO");
+        
         publicSchemaUnitOfWork.tx(() -> {
             Actor actor = resolveActorOrNull();
 
@@ -785,23 +831,22 @@ public class ControlPlaneUserService {
                     }
             );
 
+            log.info("✅ changeMyPassword CONCLUÍDO");
             return null;
         });
     }
 
     // =========================================================
-    // Helpers
+    // Helpers (mantidos como estavam)
     // =========================================================
 
     private static String normalizeEmailOrThrow(String raw) {
-        /* Normaliza e valida email. */
         String email = EmailNormalizer.normalizeOrNull(raw);
         if (email == null) throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
         return email;
     }
 
     private static String normalizeNameOrThrow(String raw) {
-        /* Normaliza e valida nome. */
         if (raw == null) throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
         String name = raw.trim();
         if (name.isBlank()) throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
@@ -809,7 +854,6 @@ public class ControlPlaneUserService {
     }
 
     private ControlPlaneUserDetailsResponse mapToResponse(ControlPlaneUser user) {
-        /* Mapeia entidade para response DTO. */
         return new ControlPlaneUserDetailsResponse(
                 user.getId(),
                 user.getAccount().getId(),
@@ -825,7 +869,6 @@ public class ControlPlaneUserService {
     }
 
     private Account getControlPlaneAccount() {
-        /* Busca a conta única do Control Plane (fail-fast se inválida). */
         try {
             return accountRepository.getSingleControlPlaneAccount();
         } catch (IllegalStateException e) {
@@ -838,7 +881,7 @@ public class ControlPlaneUserService {
     }
 
     // =========================================================
-    // Audit helper (ATTEMPT + SUCCESS/FAIL/DENIED)
+    // Audit helpers (mantidos como estavam)
     // =========================================================
 
     @FunctionalInterface
@@ -846,18 +889,6 @@ public class ControlPlaneUserService {
         T call();
     }
 
-  
-
-    /**
-     * ✅ Helper "bonito": SUCCESS é calculado AFTER o bloco executar.
-     *
-     * <p>Vantagens:</p>
-     * <ul>
-     *   <li>Permite incluir deltas/changes calculados dentro do bloco</li>
-     *   <li>Evita duplicidade de SUCCESS</li>
-     *   <li>Evita gambiarras com array-holder / warnings</li>
-     * </ul>
-     */
     private <T> T auditAttemptSuccessFail(
             SecurityAuditActionType actionType,
             Actor actor,
@@ -894,7 +925,6 @@ public class ControlPlaneUserService {
     }
 
     private Actor resolveActorOrNull() {
-        /* Resolve o actor do request (best-effort), sem quebrar o fluxo em caso de erro. */
         try {
             Long actorId = requestIdentity.getCurrentUserId();
             Long accountId = requestIdentity.getCurrentAccountId();
@@ -918,7 +948,6 @@ public class ControlPlaneUserService {
             String tenantSchema,
             Object details
     ) {
-        /* Grava evento de auditoria com details estruturado. */
         securityAuditService.record(
                 actionType,
                 outcome,
@@ -933,7 +962,6 @@ public class ControlPlaneUserService {
     }
 
     private String toJson(Object details) {
-        /* Serializa details (Map/record/String) para JSON string compatível com detailsJson do evento. */
         if (details == null) return null;
 
         JsonNode node = jsonDetailsMapper.toJsonNode(details);
@@ -943,43 +971,34 @@ public class ControlPlaneUserService {
     }
 
     private static AuditOutcome outcomeFrom(ApiException ex) {
-        /* Mapeia ApiException para outcome semântico (DENIED vs FAILURE). */
         if (ex == null) return AuditOutcome.FAILURE;
         int s = ex.getStatus();
         return (s == 401 || s == 403) ? AuditOutcome.DENIED : AuditOutcome.FAILURE;
     }
 
     private static Map<String, Object> failureDetails(String scope, ApiException ex) {
-        /* Details estruturado para falhas de negócio/validação. */
         return m(
                 "scope", scope,
                 "error", ex == null ? null : ex.getError(),
                 "status", ex == null ? 0 : ex.getStatus(),
-                "message", ex == null ? null : safeMessage(ex.getMessage())
+                "message", safeMessage(ex == null ? null : ex.getMessage())
         );
     }
 
     private static Map<String, Object> unexpectedFailureDetails(String scope, Exception ex) {
-        /* Details estruturado para falhas inesperadas (sem vazar stacktrace/segredo). */
         return m(
                 "scope", scope,
                 "unexpected", ex == null ? null : ex.getClass().getSimpleName(),
-                "message", ex == null ? null : safeMessage(ex.getMessage())
+                "message", safeMessage(ex == null ? null : ex.getMessage())
         );
     }
 
     private static String safeMessage(String msg) {
-        /* Sanitiza mensagem para evitar quebras/ruído no JSON. */
         if (!StringUtils.hasText(msg)) return null;
-        return msg
-                .replace("\n", " ")
-                .replace("\r", " ")
-                .replace("\t", " ")
-                .trim();
+        return msg.replace("\n", " ").replace("\r", " ").replace("\t", " ").trim();
     }
 
     private static Map<String, Object> m(Object... kv) {
-        /* Cria Map ordenado para JSON estável e legível. */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
         for (int i = 0; i + 1 < kv.length; i += 2) {
@@ -992,7 +1011,6 @@ public class ControlPlaneUserService {
 
     private record Actor(Long userId, String email) {
         static Actor anonymous() {
-            /* Actor "desconhecido" (não quebra o fluxo). */
             return new Actor(null, null);
         }
     }

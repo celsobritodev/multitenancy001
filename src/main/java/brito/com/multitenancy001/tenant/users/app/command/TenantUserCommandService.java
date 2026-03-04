@@ -1,18 +1,19 @@
-// src/main/java/brito/com/multitenancy001/tenant/users/app/command/TenantUserCommandService.java
 package brito.com.multitenancy001.tenant.users.app.command;
 
 import brito.com.multitenancy001.infrastructure.publicschema.audit.PublicAuditDispatcher;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
 import brito.com.multitenancy001.infrastructure.tenant.TenantSchemaUnitOfWork;
+import brito.com.multitenancy001.infrastructure.tx.AfterTransactionCompletion;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.domain.service.LoginIdentityService;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityProvisioningService;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Application Service para comandos relacionados a usuários do Tenant.
@@ -48,16 +50,6 @@ import java.util.Set;
  * Para o login multi-tenant ({@code /api/tenant/auth/login}) funcionar, todo usuário ativo em um tenant
  * (não deletado e não suspenso) deve ter entrada correspondente em {@code public.login_identities}
  * com {@code subject_type = 'TENANT_ACCOUNT'}.
- *
- * <p>Fonte da verdade para sincronização:</p>
- * <ul>
- *   <li>Operações que tornam usuário ativo (create/restore/unsuspend) devem garantir a entrada no índice público.</li>
- *   <li>Operações que tornam usuário inativo (soft delete) devem removê-la.</li>
- * </ul>
- *
- * @see LoginIdentityProvisioningService
- * @see TenantUser
- * @see TenantUserRepository
  */
 @Slf4j
 @Service
@@ -70,91 +62,20 @@ public class TenantUserCommandService {
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
 
-    /**
-     * Dispatcher para executar auditoria PUBLIC em safe-mode (evita nesting ilegal TENANT->PUBLIC).
-     * Obs: para login_identities, usamos diretamente LoginIdentityProvisioningService, que já é safe.
-     */
     private final PublicAuditDispatcher publicAuditDispatcher;
-
-    /**
-     * Unit of Work para tenant:
-     * - bind do tenantSchema
-     * - transação tenant
-     */
     private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
-
-    /** Mantido por compat (best-effort actor). */
     private final SecurityUtils securityUtils;
-
-    /** Auditoria append-only (public schema). */
     private final SecurityAuditService securityAuditService;
-
-    /** Mapper para details (Map/record/String -> JsonNode). */
     private final JsonDetailsMapper jsonDetailsMapper;
 
-    /** Serviço para provisionamento do índice público de login (public.login_identities). */
-    private final LoginIdentityProvisioningService loginIdentityProvisioningService;
+    // AfterTransactionCompletion para executar após o commit
+    private final AfterTransactionCompletion afterTransactionCompletion;
 
-    // =========================================================================
-    // LOGIN_IDENTITY SYNC (PUBLIC) - SAFE
-    // =========================================================================
+    // PublicSchemaUnitOfWork para operações no schema public
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
 
-    /**
-     * Garante que o índice público tenha a identidade TENANT_ACCOUNT (email, accountId).
-     *
-     * <p>Importante:</p>
-     * <ul>
-     *   <li>Não executa SQL PUBLIC diretamente aqui.</li>
-     *   <li>Delegamos para {@link LoginIdentityProvisioningService#ensureTenantIdentityAfterCompletion(String, Long)},
-     *       que já executa em thread separada + transação PUBLIC própria.</li>
-     * </ul>
-     */
-    private void ensureLoginIdentityAfterCommit(String email, Long accountId, String operation) {
-        if (!StringUtils.hasText(email) || accountId == null) {
-            log.warn("ensureLoginIdentityAfterCommit ignorado: email ou accountId nulo/vazio | email={} accountId={} op={}",
-                    email, accountId, operation);
-            return;
-        }
-
-        log.info("ensureLoginIdentityAfterCommit agendando provisioning | email={} accountId={} op={}",
-                email, accountId, operation);
-
-        try {
-            // SAFE: o serviço executa fora da TX atual, em thread separada, com transação PUBLIC própria.
-            loginIdentityProvisioningService.ensureTenantIdentityAfterCompletion(email, accountId);
-        } catch (Exception e) {
-            log.error("Falha ao agendar provisioning de login_identity | email={} accountId={} op={} msg={}",
-                    email, accountId, operation, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Remove a identidade TENANT_ACCOUNT do índice público (email, accountId).
-     *
-     * <p>Importante:</p>
-     * <ul>
-     *   <li>Delegamos para {@link LoginIdentityProvisioningService#deleteTenantIdentityAfterCompletion(String, Long)},
-     *       que já executa em thread separada + transação PUBLIC própria.</li>
-     * </ul>
-     */
-    private void deleteLoginIdentityAfterCommit(String email, Long accountId, String operation) {
-        if (!StringUtils.hasText(email) || accountId == null) {
-            log.warn("deleteLoginIdentityAfterCommit ignorado: email ou accountId nulo/vazio | email={} accountId={} op={}",
-                    email, accountId, operation);
-            return;
-        }
-
-        log.info("deleteLoginIdentityAfterCommit agendando delete | email={} accountId={} op={}",
-                email, accountId, operation);
-
-        try {
-            // SAFE: o serviço executa fora da TX atual, em thread separada, com transação PUBLIC própria.
-            loginIdentityProvisioningService.deleteTenantIdentityAfterCompletion(email, accountId);
-        } catch (Exception e) {
-            log.error("Falha ao agendar delete de login_identity | email={} accountId={} op={} msg={}",
-                    email, accountId, operation, e.getMessage(), e);
-        }
-    }
+    // Usando a interface do domínio
+    private final LoginIdentityService loginIdentityService;
 
     // =========================================================
     // CREATE
@@ -171,7 +92,8 @@ public class TenantUserCommandService {
      *
      * <p>Index público (login_identities):</p>
      * <ul>
-     *   <li>Após commit do tenant, garante (email, accountId) no PUBLIC para permitir loginInit ambíguo.</li>
+     *   <li>APÓS o COMMIT da transação do tenant, garante (email, accountId) no PUBLIC.</li>
+     *   <li>Se falhar, apenas loga o erro (best-effort) - o usuário já foi criado no tenant.</li>
      * </ul>
      */
     public TenantUser createTenantUser(
@@ -189,10 +111,14 @@ public class TenantUserCommandService {
             Boolean mustChangePassword,
             EntityOrigin origin
     ) {
-        log.info("createTenantUser iniciando | email={} accountId={}", email, accountId);
+        log.info("🚀 createTenantUser INICIANDO | email={} accountId={} tenantSchema={}", email, accountId, tenantSchema);
 
-        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
-            log.info("createTenantUser dentro da transacao | threadId={} threadName={} email={} accountId={}",
+        // AtomicReference para capturar o email salvo dentro da transação
+        AtomicReference<String> savedEmail = new AtomicReference<>();
+        AtomicReference<Long> savedUserId = new AtomicReference<>();
+
+        TenantUser saved = tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+            log.debug("createTenantUser DENTRO DA TRANSAÇÃO | threadId={} threadName={} email={} accountId={}",
                     Thread.currentThread().threadId(),
                     Thread.currentThread().getName(),
                     email,
@@ -269,23 +195,27 @@ public class TenantUserCommandService {
                 if (!StringUtils.hasText(user.getLocale())) user.setLocale("pt_BR");
                 if (!StringUtils.hasText(user.getTimezone())) user.setTimezone("America/Sao_Paulo");
 
-                TenantUser saved = tenantUserRepository.save(user);
-                log.info("createTenantUser usuario salvo no tenant | id={} email={}", saved.getId(), saved.getEmail());
+                TenantUser savedUser = tenantUserRepository.save(user);
+                log.info("✅ Usuário salvo no tenant | id={} email={}", savedUser.getId(), savedUser.getEmail());
+
+                // Capturar os valores para usar após o commit
+                savedEmail.set(savedUser.getEmail());
+                savedUserId.set(savedUser.getId());
 
                 // SUCCESS (com targetUserId correto)
                 recordAudit(
                         SecurityAuditActionType.USER_CREATED,
                         AuditOutcome.SUCCESS,
                         actor,
-                        saved.getEmail(),
-                        saved.getId(),
+                        savedUser.getEmail(),
+                        savedUser.getId(),
                         accountId,
                         tenantSchema,
                         m(
                                 "scope", SCOPE,
                                 "stage", "after_save",
                                 "role", role.name(),
-                                "finalPermissionsCount", sizeOrZero(saved.getPermissions())
+                                "finalPermissionsCount", sizeOrZero(savedUser.getPermissions())
                         )
                 );
 
@@ -294,8 +224,8 @@ public class TenantUserCommandService {
                         SecurityAuditActionType.PERMISSIONS_CHANGED,
                         AuditOutcome.SUCCESS,
                         actor,
-                        saved.getEmail(),
-                        saved.getId(),
+                        savedUser.getEmail(),
+                        savedUser.getId(),
                         accountId,
                         tenantSchema,
                         m(
@@ -307,22 +237,43 @@ public class TenantUserCommandService {
                         )
                 );
 
-                // Pos-tx: garante indice publico
-                ensureLoginIdentityAfterCommit(saved.getEmail(), accountId, "create");
-
-                log.info("createTenantUser finalizado com sucesso | email={}", saved.getEmail());
-                return saved;
+                return savedUser;
 
             } catch (ApiException ex) {
-                log.error("createTenantUser ApiException | msg={}", ex.getMessage());
+                log.error("❌ createTenantUser ApiException | email={} | msg={}", email, ex.getMessage());
                 recordAudit(SecurityAuditActionType.USER_CREATED, outcomeFrom(ex), actor, normEmail, null, accountId, tenantSchema, failureDetails(SCOPE, ex));
                 throw ex;
             } catch (Exception ex) {
-                log.error("createTenantUser Exception inesperada | msg={}", ex.getMessage(), ex);
+                log.error("❌ createTenantUser Exception inesperada | email={}", email, ex);
                 recordAudit(SecurityAuditActionType.USER_CREATED, AuditOutcome.FAILURE, actor, normEmail, null, accountId, tenantSchema, unexpectedFailureDetails(SCOPE, ex));
                 throw ex;
             }
         });
+
+        // =========================================================
+        // APÓS O COMMIT DA TRANSAÇÃO DO TENANT
+        // =========================================================
+        final String finalEmail = savedEmail.get();
+        final Long finalUserId = savedUserId.get();
+
+        if (StringUtils.hasText(finalEmail) && accountId != null) {
+            afterTransactionCompletion.runAfterCompletion(() -> {
+                try {
+                    publicSchemaUnitOfWork.requiresNew(() -> {
+                        loginIdentityService.ensureTenantIdentity(finalEmail, accountId);
+                        log.info("✅ ensureTenantIdentity executado após completion | email={} accountId={}", 
+                                finalEmail, accountId);
+                        return null;
+                    });
+                } catch (Exception e) {
+                    log.error("❌ Falha ao garantir identidade de login (best-effort) | email={} accountId={} | userId={}", 
+                            finalEmail, accountId, finalUserId, e);
+                }
+            });
+        }
+
+        log.info("✅ createTenantUser FINALIZADO COM SUCESSO | email={} accountId={}", saved.getEmail(), accountId);
+        return saved;
     }
 
     // =========================================================
@@ -344,7 +295,7 @@ public class TenantUserCommandService {
      * Garante a sincronização com o índice público quando o usuário é reativado.
      */
     private void setSuspension(Long accountId, String tenantSchema, Long userId, boolean suspended, boolean byAdmin) {
-        log.info("setSuspension iniciando | userId={} suspended={} byAdmin={}", userId, suspended, byAdmin);
+        log.info("setSuspension INICIANDO | userId={} suspended={} byAdmin={}", userId, suspended, byAdmin);
 
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
@@ -402,20 +353,26 @@ public class TenantUserCommandService {
             return null;
         });
 
-        // Fora da TX principal: se foi reativacao, garantir login_identity (apenas se ativo final)
+        // APÓS o COMMIT: se foi reativacao e o usuário está ativo, garantir login_identity
         if (!suspended && wasSuspended) {
             TenantUser userAfter = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
                     tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId).orElse(null)
             );
 
             if (userAfter != null && userAfter.isEnabledDomain()) {
-                ensureLoginIdentityAfterCommit(userEmail, accountId, byAdmin ? "unsuspend-admin" : "unsuspend-account");
-            } else {
-                log.info("setSuspension reativado mas não ativo final | userId={} deleted={} suspendedByAccount={} suspendedByAdmin={}",
-                        userId,
-                        userAfter == null ? null : userAfter.isDeleted(),
-                        userAfter == null ? null : userAfter.isSuspendedByAccount(),
-                        userAfter == null ? null : userAfter.isSuspendedByAdmin());
+                afterTransactionCompletion.runAfterCompletion(() -> {
+                    try {
+                        publicSchemaUnitOfWork.requiresNew(() -> {
+                            loginIdentityService.ensureTenantIdentity(userEmail, accountId);
+                            log.info("✅ ensureTenantIdentity executado após reativação | email={} accountId={} byAdmin={}", 
+                                    userEmail, accountId, byAdmin);
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        log.error("❌ Falha ao garantir identidade após reativação (best-effort) | email={} accountId={}", 
+                                userEmail, accountId, e);
+                    }
+                });
             }
         }
     }
@@ -424,15 +381,17 @@ public class TenantUserCommandService {
     // RESTORE
     // =========================================================
 
-    /** Restaura um usuário previamente deletado e agenda a recriação da identidade no índice público. */
+    /** Restaura um usuário previamente deletado e recria a identidade no índice público. */
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
-        log.info("restore iniciando | userId={} accountId={}", userId, accountId);
+        log.info("restore INICIANDO | userId={} accountId={}", userId, accountId);
 
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatorio", 400);
 
-        return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+        AtomicReference<String> restoredEmail = new AtomicReference<>();
+
+        TenantUser saved = tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Actor actor = resolveActorOrNull(accountId, tenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
@@ -440,7 +399,7 @@ public class TenantUserCommandService {
 
             Map<String, Object> details = m("scope", SCOPE, "reason", "softRestore");
 
-            TenantUser saved = auditAttemptSuccessFail(
+            TenantUser restoredUser = auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SOFT_RESTORED,
                     actor,
                     user.getEmail(),
@@ -455,23 +414,43 @@ public class TenantUserCommandService {
                     }
             );
 
-            // Pos-tx: garante indice publico novamente
-            ensureLoginIdentityAfterCommit(saved.getEmail(), accountId, "restore");
-            return saved;
+            restoredEmail.set(restoredUser.getEmail());
+            return restoredUser;
         });
+
+        // APÓS o COMMIT: garantir identidade no índice público
+        if (StringUtils.hasText(restoredEmail.get()) && accountId != null) {
+            afterTransactionCompletion.runAfterCompletion(() -> {
+                try {
+                    publicSchemaUnitOfWork.requiresNew(() -> {
+                        loginIdentityService.ensureTenantIdentity(restoredEmail.get(), accountId);
+                        log.info("✅ ensureTenantIdentity executado após restore | email={} accountId={}", 
+                                restoredEmail.get(), accountId);
+                        return null;
+                    });
+                } catch (Exception e) {
+                    log.error("❌ Falha ao garantir identidade após restore (best-effort) | email={} accountId={}", 
+                            restoredEmail.get(), accountId, e);
+                }
+            });
+        }
+
+        return saved;
     }
 
     // =========================================================
     // DELETE
     // =========================================================
 
-    /** Aplica soft delete em um usuário e agenda a remoção da identidade do índice público. */
+    /** Aplica soft delete em um usuário e remove a identidade do índice público. */
     public void softDelete(Long userId, Long accountId, String tenantSchema) {
-        log.info("softDelete iniciando | userId={} accountId={}", userId, accountId);
+        log.info("softDelete INICIANDO | userId={} accountId={}", userId, accountId);
 
         if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
         if (!StringUtils.hasText(tenantSchema)) throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
         if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatorio", 400);
+
+        AtomicReference<String> deletedEmail = new AtomicReference<>();
 
         tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Actor actor = resolveActorOrNull(accountId, tenantSchema);
@@ -491,7 +470,7 @@ public class TenantUserCommandService {
                         "Nao e permitido excluir o ultimo TENANT_OWNER ativo");
             }
 
-            final String emailForIndex = user.getEmail();
+            deletedEmail.set(user.getEmail());
 
             Map<String, Object> details = m("scope", SCOPE, "reason", "softDelete");
 
@@ -512,15 +491,29 @@ public class TenantUserCommandService {
                     }
             );
 
-            // Pos-tx: remove do indice publico (SAFE: service roda async + tx PUBLIC propria)
-            deleteLoginIdentityAfterCommit(emailForIndex, accountId, "softDelete");
-
             return null;
         });
+
+        // APÓS o COMMIT: remover do índice público (best-effort)
+        if (StringUtils.hasText(deletedEmail.get()) && accountId != null) {
+            afterTransactionCompletion.runAfterCompletion(() -> {
+                try {
+                    publicSchemaUnitOfWork.requiresNew(() -> {
+                        loginIdentityService.deleteTenantIdentity(deletedEmail.get(), accountId);
+                        log.info("✅ deleteTenantIdentity executado após softDelete | email={} accountId={}", 
+                                deletedEmail.get(), accountId);
+                        return null;
+                    });
+                } catch (Exception e) {
+                    log.error("❌ Falha ao remover identidade após softDelete (best-effort) | email={} accountId={}", 
+                            deletedEmail.get(), accountId, e);
+                }
+            });
+        }
     }
 
     // =========================================================
-    // Outros métodos (mantidos como estavam no seu arquivo)
+    // Outros métodos (mantidos como estavam)
     // =========================================================
 
     public TenantUser resetPassword(Long userId, Long accountId, String tenantSchema, String newPassword) {
@@ -552,7 +545,7 @@ public class TenantUserCommandService {
     }
 
     // =========================================================
-    // HELPERS
+    // HELPERS (mantidos como estavam)
     // =========================================================
 
     private void requireNotBuiltInForMutation(TenantUser user, String message) {
@@ -579,7 +572,7 @@ public class TenantUserCommandService {
     }
 
     // =========================================================
-    // Audit helpers
+    // Audit helpers (mantidos como estavam)
     // =========================================================
 
     @FunctionalInterface

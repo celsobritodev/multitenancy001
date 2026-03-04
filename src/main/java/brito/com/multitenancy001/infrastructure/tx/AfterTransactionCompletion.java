@@ -23,8 +23,8 @@ import java.util.concurrent.CompletableFuture;
  *       então usamos AFTER COMPLETION (não só AFTER COMMIT).</li>
  * </ul>
  *
- * <p><b>Regra de ouro deste componente:</b> se houver synchronization ativa, a execução real é sempre
- * despachada para outro thread via {@link TaskExecutor}.</p>
+ * <p><b>Regra de ouro deste componente:</b> a execução real é SEMPRE despachada para outro thread
+ * via {@link TaskExecutor}, independentemente de haver sincronização ativa ou não.</p>
  */
 @Slf4j
 @Component
@@ -44,15 +44,18 @@ public class AfterTransactionCompletion {
     /**
      * Agenda {@code task} para executar após a transação atual finalizar (commit ou rollback).
      *
-     * <p>Sem transação gerenciada (sem synchronization): executa imediatamente.</p>
+     * <p><b>CORREÇÃO:</b> Mesmo sem transação gerenciada (sem synchronization), 
+     * nunca executa imediatamente no mesmo thread. Sempre despacha para async.</p>
      *
      * @param task tarefa a executar
      */
     public void runAfterCompletion(@Nullable Runnable task) {
         if (task == null) return;
 
+        // ✅ CORREÇÃO: SEMPRE despachar async, nunca executar no mesmo thread
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            safeRun("no-sync", task);
+            log.debug("Sem sync ativa - despachando async imediatamente");
+            dispatchAsync("no-sync", task);
             return;
         }
 
