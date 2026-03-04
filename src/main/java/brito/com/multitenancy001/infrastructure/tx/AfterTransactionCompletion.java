@@ -1,6 +1,8 @@
 package brito.com.multitenancy001.infrastructure.tx;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -8,35 +10,47 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Executor para agendar execução após o término da transação atual.
+ * Executor para agendar execução após o término da transação atual (commit OU rollback),
+ * garantindo que o código rode fora do thread de commit/cleanup do Spring.
  *
- * <p>Por que AFTER COMPLETION e não apenas AFTER COMMIT?</p>
+ * <p><b>Por que isto existe?</b></p>
  * <ul>
- *   <li>Auditoria SOC2-like exige registrar também FAILURE/DENIED (rollback incluso).</li>
- *   <li>Evita "Pre-bound JDBC Connection found" ao garantir que o runnable execute
- *       fora da janela da TX atual (commit ou rollback já concluído).</li>
+ *   <li>Em ambientes com JPA + JDBC (mesmo DataSource), é comum existir {@code ConnectionHolder}
+ *       e/ou {@code EntityManagerHolder} "pre-bound" no thread durante commit/cleanup.</li>
+ *   <li>Se você tentar iniciar outra transação (mesmo JPA) nesse mesmo thread, pode estourar:
+ *       <pre>IllegalTransactionStateException: Pre-bound JDBC Connection found!</pre></li>
+ *   <li>Para auditoria SOC2-like, precisamos registrar também tentativas e falhas (rollback incluso),
+ *       então usamos AFTER COMPLETION (não só AFTER COMMIT).</li>
  * </ul>
  *
- * <p>Comportamento:</p>
- * <ul>
- *   <li>Se NÃO houver synchronization ativa: executa imediatamente.</li>
- *   <li>Se houver synchronization ativa: registra callback e executa após completion.</li>
- *   <li>Se registerSynchronization falhar: executa ASYNC (nunca imediato no mesmo thread).</li>
- * </ul>
+ * <p><b>Regra de ouro deste componente:</b> se houver synchronization ativa, a execução real é sempre
+ * despachada para outro thread via {@link TaskExecutor}.</p>
  */
 @Slf4j
 @Component
 public class AfterTransactionCompletion {
 
     /**
+     * Executor dedicado para operações "after completion".
+     *
+     * <p>Deve ser um executor leve e confiável; evite usar o mesmo pool de workloads pesados.</p>
+     */
+    private final TaskExecutor afterTxCompletionExecutor;
+
+    public AfterTransactionCompletion(TaskExecutor afterTxCompletionExecutor) {
+        this.afterTxCompletionExecutor = afterTxCompletionExecutor;
+    }
+
+    /**
      * Agenda {@code task} para executar após a transação atual finalizar (commit ou rollback).
+     *
+     * <p>Sem transação gerenciada (sem synchronization): executa imediatamente.</p>
      *
      * @param task tarefa a executar
      */
-    public void runAfterCompletion(Runnable task) {
+    public void runAfterCompletion(@Nullable Runnable task) {
         if (task == null) return;
 
-        // Gatilho correto: se dá pra registrar afterCompletion
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             safeRun("no-sync", task);
             return;
@@ -46,13 +60,57 @@ public class AfterTransactionCompletion {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCompletion(int status) {
-                    safeRun("afterCompletion(status=" + status + ")", task);
+                    dispatchAsync("afterCompletion(status=" + status + ")", task);
                 }
             });
         } catch (Exception e) {
-            // NUNCA execute imediato aqui: pode estar com resources pre-bound no thread atual.
-            log.warn("⚠️ Falha ao registrar afterCompletion; executando async | msg={}", e.getMessage(), e);
-            CompletableFuture.runAsync(() -> safeRun("fallback-async", task));
+            // NUNCA execute "imediato" aqui: pode estar no pior momento do lifecycle transacional.
+            log.warn("⚠️ Falha ao registrar afterCompletion; despachando async (fallback) | msg={}", e.getMessage(), e);
+            dispatchAsync("fallback-async", task);
+        }
+    }
+
+    /**
+     * Agenda {@code task} para executar após a transação atual finalizar (commit ou rollback),
+     * recebendo o {@code status} de completion do Spring.
+     *
+     * @param task tarefa a executar com status
+     */
+    public void runAfterCompletionStatus(@Nullable TransactionCompletionTask task) {
+        if (task == null) return;
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            dispatchAsync("no-sync", () -> task.run(TransactionSynchronization.STATUS_UNKNOWN));
+            return;
+        }
+
+        try {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    dispatchAsync("afterCompletion(status=" + status + ")", () -> task.run(status));
+                }
+            });
+        } catch (Exception e) {
+            log.warn("⚠️ Falha ao registrar afterCompletion(status); despachando async (fallback) | msg={}", e.getMessage(), e);
+            dispatchAsync("fallback-async", () -> task.run(TransactionSynchronization.STATUS_UNKNOWN));
+        }
+    }
+
+    /**
+     * Contrato para receber {@code status} de completion.
+     */
+    @FunctionalInterface
+    public interface TransactionCompletionTask {
+        void run(int status);
+    }
+
+    private void dispatchAsync(String where, Runnable task) {
+        try {
+            afterTxCompletionExecutor.execute(() -> safeRun(where + "/executor", task));
+        } catch (Exception ex) {
+            // Último fallback: garante que não executa no thread corrente.
+            CompletableFuture.runAsync(() -> safeRun(where + "/fallback-completable", task));
         }
     }
 

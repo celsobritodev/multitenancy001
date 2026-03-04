@@ -32,15 +32,16 @@ import java.io.IOException;
 /**
  * Filtro JWT.
  *
- * Regras (mantidas):
+ * Regras:
+ * - Endpoints publicos: bypass explicito (nao tenta validar token)
  * - Sem Bearer: passa
- * - Token inválido: 401 via entryPoint
- * - Mismatch domínio (tenant token em controlplane ou vice-versa): 403 via AccessDeniedHandler
+ * - Token invalido: 401 via entryPoint (apenas para rotas protegidas)
+ * - Mismatch dominio (tenant token em controlplane ou vice-versa): 403 via AccessDeniedHandler
  * - TENANT:
  *   - valida tenantSchema + accountId + X-Tenant
  *   - bind TenantContext.scope(schema)
- *   - (AJUSTE) carrega usuário via TenantUserRepository dentro do schema do tenant (sem MultiContextUserDetailsService)
- * - CONTROLPLANE: mantém MultiContextUserDetailsService
+ *   - carrega usuario via TenantUserRepository dentro do schema do tenant
+ * - CONTROLPLANE: usa MultiContextUserDetailsService
  */
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -48,15 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String TENANT_HEADER = "X-Tenant";
 
     private final JwtTokenProvider jwtTokenProvider;
-
-    /**
-     * Mantido para CONTROLPLANE (e outros casos que você ainda queira).
-     */
     private final MultiContextUserDetailsService multiContextUserDetailsService;
-
-    /**
-     * NOVO: para autenticar TENANT via repository (robusto em schema-per-tenant).
-     */
     private final TenantUserRepository tenantUserRepository;
     private final AppClock appClock;
 
@@ -69,25 +62,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse res,
             @NonNull FilterChain chain
     ) throws ServletException, IOException {
-        /** comentário: autentica request via Bearer JWT quando aplicável */
+
+        // 0) BYPASS explicito de rotas publicas (Padrão B)
+        //    Importante: login/signup nao pode depender de Bearer.
+        if (isPublicEndpoint(req)) {
+            chain.doFilter(req, res);
+            return;
+        }
 
         final String authHeader = req.getHeader("Authorization");
 
-        // Sem Bearer: deixa o Spring decidir (permitAll passa; protegido vira 401 via entryPoint global)
+        // 1) Sem Bearer: deixa seguir anonimo; AuthorizationFilter decide depois
         if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
             chain.doFilter(req, res);
             return;
         }
 
         final String jwt = authHeader.substring(7).trim();
+
+        // 2) Bearer sem token -> trata como "sem token" (nao derruba aqui)
         if (!StringUtils.hasText(jwt)) {
-            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Missing JWT token"));
+            chain.doFilter(req, res);
             return;
         }
 
-        // Token inválido/adulterado/expirado => 401 (sem stacktrace)
+        // 3) Token invalido/adulterado/expirado => 401 (somente em rotas protegidas)
+        //    Aqui ja sabemos que nao e rota publica.
         if (!jwtTokenProvider.validateToken(jwt)) {
-            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT token"));
+            // token inválido -> apenas limpa contexto
+            // AuthorizationFilter decidirá se rota exige auth
+            SecurityContextHolder.clearContext();
+            chain.doFilter(req, res);
             return;
         }
 
@@ -95,11 +100,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String email = normalizeLower(jwtTokenProvider.getEmailFromToken(jwt));
 
         if (!StringUtils.hasText(email)) {
+            SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (email)"));
             return;
         }
 
-        // Se já tem auth no contexto, segue
+        // Se ja tem auth no contexto, segue
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             chain.doFilter(req, res);
             return;
@@ -113,20 +119,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // ======================
-        // Regras de domínio por rota
+        // Regras de dominio por rota
         // ======================
         boolean needsControlPlane = requiresControlPlane(req);
         boolean needsTenant = requiresTenant(req);
 
         if (needsControlPlane && authDomain == AuthDomain.TENANT) {
-            // ✅ 403 DIRETO
             accessDeniedHandler.handle(req, res,
                     new org.springframework.security.access.AccessDeniedException("Tenant token cannot access control plane routes"));
             return;
         }
 
         if (needsTenant && authDomain == AuthDomain.CONTROLPLANE) {
-            // ✅ 403 DIRETO
             accessDeniedHandler.handle(req, res,
                     new org.springframework.security.access.AccessDeniedException("Control plane token cannot access tenant routes"));
             return;
@@ -161,7 +165,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // ✅ mismatch do header TEM que ser 403
+            // mismatch do header => 403
             final String headerTenant = normalize(req.getHeader(TENANT_HEADER));
             if (StringUtils.hasText(headerTenant) && !headerTenant.equalsIgnoreCase(tenantSchema)) {
                 accessDeniedHandler.handle(req, res,
@@ -169,14 +173,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // ✅ Bind tenant por TODA a request (daqui pra frente)
             try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
 
-                // ==========================================================
-                // AJUSTE PRINCIPAL:
-                // - não usa MultiContextUserDetailsService
-                // - busca TenantUser via repository no tenant schema
-                // ==========================================================
                 TenantUser user = tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
                         .orElse(null);
@@ -250,31 +248,51 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        // Qualquer outro authDomain é inválido => 401 (sem stacktrace)
         SecurityContextHolder.clearContext();
         authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authDomain"));
     }
 
     /**
-     * Mantido para CONTROLPLANE (UserDetails).
+     * Endpoints que devem ser PUBLICOS e nunca depender de Bearer.
      */
+    private boolean isPublicEndpoint(HttpServletRequest req) {
+        String path = req.getRequestURI();
+
+        if (path == null) {
+            return false;
+        }
+
+        // signup
+        if ("/api/signup".equals(path)) return true;
+
+        // auth endpoints (tenant/controlplane)
+        if (path.startsWith("/api/tenant/auth/")) return true;
+        if (path.startsWith("/api/controlplane/auth/")) return true;
+
+        // password reset public
+        if (path.startsWith("/api/tenant/password/")) return true;
+
+        // health + swagger
+        if ("/actuator/health".equals(path)) return true;
+        if (path.startsWith("/v3/api-docs/")) return true;
+        if (path.startsWith("/swagger-ui")) return true;
+        if ("/swagger-ui.html".equals(path)) return true;
+
+        return false;
+    }
+
     private void setAuth(HttpServletRequest request, UserDetails userDetails) {
-        /** comentário: seta Authentication no SecurityContext usando UserDetails */
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    /**
-     * NOVO overload para TENANT (principal tipado + authorities).
-     */
     private void setAuth(
             HttpServletRequest request,
             AuthenticatedUserContext principal,
             java.util.Collection<? extends org.springframework.security.core.GrantedAuthority> authorities
     ) {
-        /** comentário: seta Authentication no SecurityContext usando principal tipado do tenant */
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(principal, null, authorities);
         auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -282,14 +300,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean requiresControlPlane(HttpServletRequest req) {
-        /** comentário: detecta rotas do controlplane */
         String path = req.getRequestURI();
         return path.startsWith(SecurityConstants.ApiPaths.ADMIN_PREFIX)
                 || path.startsWith(SecurityConstants.ApiPaths.CONTROLPLANE_PREFIX);
     }
 
     private boolean requiresTenant(HttpServletRequest req) {
-        /** comentário: detecta rotas tenant (inclui /me) */
         String path = req.getRequestURI();
         boolean isMe = SecurityConstants.ApiPaths.ME.equals(path)
                 || path.startsWith(SecurityConstants.ApiPaths.ME_PREFIX);

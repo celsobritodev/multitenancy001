@@ -1,22 +1,28 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/publicschema/audit/SecurityAuditAfterCommitListener.java
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Consome o evento de auditoria APENAS depois do COMMIT da transacao principal.
+ * Listener do evento {@link SecurityAuditRequestedEvent}.
  *
- * <p>Isso evita:</p>
+ * <p><b>Por que AFTER_COMPLETION?</b></p>
  * <ul>
- *   <li>Mix de PUBLIC JPA dentro de TX TENANT</li>
- *   <li>Erro: Pre-bound JDBC Connection found!</li>
+ *   <li>Auditoria SOC2-like precisa registrar também cenários de rollback (FAILURE/DENIED).</li>
+ *   <li>AFTER_COMMIT perderia eventos de rollback.</li>
  * </ul>
  *
- * <p>Best-effort: falha aqui nao deve quebrar request principal (que ja commitou).</p>
+ * <p><b>Por que @Async?</b></p>
+ * <ul>
+ *   <li>Evita executar no mesmo thread do commit/cleanup do Spring.</li>
+ *   <li>Isso elimina a classe de erro: <i>"Pre-bound JDBC Connection found!"</i>.</li>
+ * </ul>
+ *
+ * <p><b>Contrato:</b> best-effort (não lança exceção).</p>
  */
 @Slf4j
 @Component
@@ -25,13 +31,23 @@ public class SecurityAuditAfterCommitListener {
 
     private final SecurityAuditTxWriter txWriter;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onAfterCommit(SecurityAuditRequestedEvent event) {
+    /**
+     * Persiste a auditoria após o término da transação que originou o evento (commit ou rollback).
+     *
+     * @param event evento solicitado (pode ser null)
+     */
+    @Async("afterTxCompletionExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMPLETION)
+    public void on(SecurityAuditRequestedEvent event) {
+        if (event == null) return;
+
         try {
             txWriter.write(event);
-        } catch (Exception ex) {
-            log.warn("SecurityAudit AFTER_COMMIT falhou (best-effort). actionType={}, accountId={}, tenantSchema={}, msg={}",
-                    event.actionType(), event.accountId(), event.tenantSchema(), ex.getMessage(), ex);
+            log.debug("✅ SecurityAudit listener persisted | actionType={} outcome={} accountId={} tenantSchema={}",
+                    event.actionType(), event.outcome(), event.accountId(), event.tenantSchema());
+        } catch (Exception e) {
+            log.warn("⚠️ Falha ao gravar SecurityAudit no listener (best-effort) | actionType={} outcome={} accountId={} tenantSchema={} msg={}",
+                    event.actionType(), event.outcome(), event.accountId(), event.tenantSchema(), e.getMessage(), e);
         }
     }
 }

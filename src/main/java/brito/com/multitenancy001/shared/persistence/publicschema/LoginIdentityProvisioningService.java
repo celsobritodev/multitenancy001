@@ -1,37 +1,30 @@
 package brito.com.multitenancy001.shared.persistence.publicschema;
 
+import brito.com.multitenancy001.infrastructure.tx.AfterTransactionCompletion;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Map;
 
 /**
- * Provisionamento do "índice público" de login (public.login_identities).
+ * Provisionamento do índice público de login (public.login_identities).
  *
- * <p><b>Problema que este service resolve:</b></p>
+ * <p><b>Objetivo:</b></p>
  * <ul>
- *   <li>Em schema-per-tenant, você costuma ter TENANT via JPA (JpaTransactionManager) e PUBLIC via JDBC
- *       (DataSourceTransactionManager).</li>
- *   <li>Se você executar SQL PUBLIC "no meio" de uma TX TENANT/JPA no mesmo thread, o Spring pode estourar com:
- *       <pre>IllegalTransactionStateException: Pre-bound JDBC Connection found! JpaTransactionManager does not support running within DataSourceTransactionManager</pre>
- *   </li>
+ *   <li>Permitir que o login resolva rapidamente "quem é este email" (tenant vs control-plane),
+ *       sem joins multi-schema.</li>
  * </ul>
  *
- * <p><b>Regra de ouro:</b> qualquer escrita PUBLIC deve rodar <b>após</b> a TX corrente finalizar (commit ou rollback)
- * quando chamada a partir de fluxo TENANT.</p>
- *
- * <p>Para isso, este service oferece:</p>
+ * <p><b>Regra crítica (evitar "Pre-bound JDBC Connection found!"):</b></p>
  * <ul>
- *   <li><b>Wrappers SAFE</b>: {@code ...AfterCompletion(...)} (use a partir do TENANT)</li>
- *   <li><b>Métodos NOW</b>: {@code ...Now(...)} (executa PUBLIC isolado via TransactionTemplate)</li>
+ *   <li>Nunca executar escrita PUBLIC no mesmo thread do commit/cleanup de um TX "chamador".</li>
+ *   <li>Quando disparado de dentro de uma TX (sync ativa), agendamos AFTER COMPLETION
+ *       e executamos em outro thread, abrindo {@code REQUIRES_NEW} no PUBLIC.</li>
  * </ul>
  */
 @Slf4j
@@ -40,344 +33,307 @@ import java.util.Map;
 public class LoginIdentityProvisioningService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    private final AfterTransactionCompletion afterTransactionCompletion;
+
+    // =========================================================
+    // TENANT_ACCOUNT (account_id != null)
+    // =========================================================
 
     /**
-     * TransactionManager do schema PUBLIC (obrigatório para executar SQL PUBLIC de forma isolada).
-     *
-     * <p>ATENÇÃO: este TM normalmente é um DataSourceTransactionManager (JDBC),
-     * enquanto o tenant costuma ser JpaTransactionManager.</p>
+     * SAFE: garante UPSERT da identidade TENANT_ACCOUNT após completion da TX atual.
      */
-    @Qualifier("publicTransactionManager")
-    private final PlatformTransactionManager publicTransactionManager;
-
-    // =====================================================================
-    // Compat (métodos antigos): mantenho para não quebrar callers existentes
-    // =====================================================================
-
-  
-/**
- * SAFE: agenda o provisioning do TENANT_ACCOUNT para rodar APÓS a transação,
- * em uma transação PUBLIC própria (determinístico, sem async).
- */
-public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
-    String emailNorm = EmailNormalizer.normalizeOrNull(email);
-    if (accountId == null || emailNorm == null) {
-        log.debug("ensureTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
-        return;
-    }
-
-    log.info("📋 ensureTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
-
-    runAfterCompletion(() -> {
-        try {
-            TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
-            tt.executeWithoutResult(status -> ensureTenantIdentityNow(emailNorm, accountId));
-            log.info("✅ ensureTenantIdentityNow EXECUTADO (afterCompletion) para {} | accountId={}", emailNorm, accountId);
-        } catch (Exception e) {
-            log.error("❌ Erro no ensureTenantIdentityAfterCompletion: {}", e.getMessage(), e);
+    public void ensureTenantIdentityAfterCompletion(String email, Long accountId) {
+        String emailNorm = EmailNormalizer.normalizeOrNull(email);
+        if (accountId == null || emailNorm == null) {
+            log.debug("ensureTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
+            return;
         }
-    });
-}
 
-/**
- * SAFE: agenda o delete do TENANT_ACCOUNT para rodar APÓS a transação,
- * em uma transação PUBLIC própria (determinístico, sem async).
- */
-public void deleteTenantIdentityAfterCompletion(String email, Long accountId) {
-    String emailNorm = EmailNormalizer.normalizeOrNull(email);
-    if (accountId == null || emailNorm == null) {
-        log.debug("deleteTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
-        return;
+        log.info("📋 ensureTenantIdentityAfterCompletion CHAMADO | email={} | accountId={}", emailNorm, accountId);
+
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                publicSchemaUnitOfWork.requiresNew(() -> {
+                    ensureTenantIdentityNow(emailNorm, accountId);
+                    return null;
+                });
+                log.info("✅ ensureTenantIdentityNow EXECUTADO (afterCompletion) | email={} | accountId={}", emailNorm, accountId);
+            } catch (Exception e) {
+                log.error("❌ Erro no ensureTenantIdentityAfterCompletion | email={} | accountId={} | msg={}",
+                        emailNorm, accountId, e.getMessage(), e);
+            }
+        });
     }
-
-    log.info("📋 deleteTenantIdentityAfterCompletion CHAMADO - email={}, accountId={}", emailNorm, accountId);
-
-    runAfterCompletion(() -> {
-        try {
-            TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
-            tt.executeWithoutResult(status -> deleteTenantIdentityNow(emailNorm, accountId));
-            log.info("✅ deleteTenantIdentityNow EXECUTADO (afterCompletion) para {} | accountId={}", emailNorm, accountId);
-        } catch (Exception e) {
-            log.error("❌ Erro no deleteTenantIdentityAfterCompletion: {}", e.getMessage(), e);
-        }
-    });
-}
-
-
-
-
-
 
     /**
-     * SAFE: agenda o provisioning do CONTROLPLANE_USER para rodar após a transação atual finalizar (commit ou rollback).
+     * SAFE: remove identidade TENANT_ACCOUNT após completion da TX atual.
+     */
+    public void deleteTenantIdentityAfterCompletion(String email, Long accountId) {
+        String emailNorm = EmailNormalizer.normalizeOrNull(email);
+        if (accountId == null || emailNorm == null) {
+            log.debug("deleteTenantIdentityAfterCompletion ignorado: email={}, accountId={}", email, accountId);
+            return;
+        }
+
+        log.info("📋 deleteTenantIdentityAfterCompletion CHAMADO | email={} | accountId={}", emailNorm, accountId);
+
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                publicSchemaUnitOfWork.requiresNew(() -> {
+                    deleteTenantIdentityNow(emailNorm, accountId);
+                    return null;
+                });
+                log.info("✅ deleteTenantIdentityNow EXECUTADO (afterCompletion) | email={} | accountId={}", emailNorm, accountId);
+            } catch (Exception e) {
+                log.error("❌ Erro no deleteTenantIdentityAfterCompletion | email={} | accountId={} | msg={}",
+                        emailNorm, accountId, e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * NOW (somente PUBLIC isolado): UPSERT TENANT_ACCOUNT.
+     * <p><b>Nunca</b> chamar no meio de uma TX TENANT no mesmo thread. Use o método SAFE acima.</p>
+     */
+    public void ensureTenantIdentityNow(String emailNorm, Long accountId) {
+        if (accountId == null || emailNorm == null) return;
+
+        warnIfActiveTx("ensureTenantIdentityNow", emailNorm, accountId);
+
+        String sql = """
+            insert into public.login_identities (email, subject_type, account_id, subject_id)
+            values (?, ?, ?, ?)
+            on conflict (email, account_id) where subject_type = 'TENANT_ACCOUNT'
+            do update set
+                email = excluded.email,
+                subject_id = excluded.subject_id
+        """;
+
+        int rows = jdbcTemplate.update(
+                sql,
+                emailNorm,
+                LoginIdentitySubjectType.TENANT_ACCOUNT.name(),
+                accountId,
+                accountId
+        );
+
+        log.debug("✅ login_identity ensured (tenant) | email={} | accountId={} | rows={}", emailNorm, accountId, rows);
+    }
+
+    /**
+     * NOW (somente PUBLIC isolado): delete TENANT_ACCOUNT.
+     */
+    public void deleteTenantIdentityNow(String emailNorm, Long accountId) {
+        if (accountId == null || emailNorm == null) return;
+
+        warnIfActiveTx("deleteTenantIdentityNow", emailNorm, accountId);
+
+        String sql = """
+            delete from public.login_identities
+             where subject_type = ?
+               and email = ?
+               and account_id = ?
+        """;
+
+        int rows = jdbcTemplate.update(sql,
+                LoginIdentitySubjectType.TENANT_ACCOUNT.name(),
+                emailNorm,
+                accountId
+        );
+
+        log.debug("✅ login_identity deleted (tenant) | email={} | accountId={} | rows={}", emailNorm, accountId, rows);
+    }
+
+    /**
+     * Diagnóstico: existe TENANT_ACCOUNT para (email, accountId)?
+     */
+    public boolean existsTenantIdentity(String email, Long accountId) {
+        String emailNorm = EmailNormalizer.normalizeOrNull(email);
+        if (accountId == null || emailNorm == null) return false;
+
+        String sql = """
+            select count(*)
+              from public.login_identities
+             where email = ?
+               and account_id = ?
+               and subject_type = 'TENANT_ACCOUNT'
+        """;
+
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, emailNorm, accountId);
+        boolean exists = count != null && count > 0;
+        log.info("🔍 existsTenantIdentity | email={} | accountId={} | exists={}", emailNorm, accountId, exists);
+        return exists;
+    }
+
+    // =========================================================
+    // CONTROLPLANE_USER (account_id = null)
+    // =========================================================
+
+    /**
+     * SAFE: garante UPSERT da identidade CONTROLPLANE_USER após completion da TX atual.
+     *
+     * <p>Regra:</p>
+     * <ul>
+     *   <li>{@code account_id} deve ser {@code null} para CONTROLPLANE_USER.</li>
+     *   <li>{@code subject_id} é o id do ControlPlaneUser.</li>
+     * </ul>
      */
     public void ensureControlPlaneIdentityAfterCompletion(String email, Long controlPlaneUserId) {
         String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (controlPlaneUserId == null || emailNorm == null) return;
+        if (controlPlaneUserId == null || emailNorm == null) {
+            log.debug("ensureControlPlaneIdentityAfterCompletion ignorado: email={}, userId={}", email, controlPlaneUserId);
+            return;
+        }
 
-        warnIfActiveTx("ensureControlPlaneIdentityAfterCompletion", emailNorm, null);
+        log.info("📋 ensureControlPlaneIdentityAfterCompletion CHAMADO | email={} | userId={}", emailNorm, controlPlaneUserId);
 
-        runAfterCompletion(() -> ensureControlPlaneIdentityNow(emailNorm, controlPlaneUserId));
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                publicSchemaUnitOfWork.requiresNew(() -> {
+                    ensureControlPlaneIdentityNow(emailNorm, controlPlaneUserId);
+                    return null;
+                });
+                log.info("✅ ensureControlPlaneIdentityNow EXECUTADO (afterCompletion) | email={} | userId={}", emailNorm, controlPlaneUserId);
+            } catch (Exception e) {
+                log.error("❌ Erro no ensureControlPlaneIdentityAfterCompletion | email={} | userId={} | msg={}",
+                        emailNorm, controlPlaneUserId, e.getMessage(), e);
+            }
+        });
     }
 
     /**
-     * SAFE: agenda o delete do CONTROLPLANE_USER (por userId) para rodar após a transação atual finalizar (commit ou rollback).
+     * SAFE: remove identidade CONTROLPLANE_USER por userId após completion da TX atual.
      */
     public void deleteControlPlaneIdentityByUserIdAfterCompletion(Long controlPlaneUserId) {
         if (controlPlaneUserId == null) return;
 
-        warnIfActiveTx("deleteControlPlaneIdentityByUserIdAfterCompletion", null, null);
+        log.info("📋 deleteControlPlaneIdentityByUserIdAfterCompletion CHAMADO | userId={}", controlPlaneUserId);
 
-        runAfterCompletion(() -> deleteControlPlaneIdentityByUserIdNow(controlPlaneUserId));
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                publicSchemaUnitOfWork.requiresNew(() -> {
+                    deleteControlPlaneIdentityByUserIdNow(controlPlaneUserId);
+                    return null;
+                });
+                log.info("✅ deleteControlPlaneIdentityByUserIdNow EXECUTADO (afterCompletion) | userId={}", controlPlaneUserId);
+            } catch (Exception e) {
+                log.error("❌ Erro no deleteControlPlaneIdentityByUserIdAfterCompletion | userId={} | msg={}",
+                        controlPlaneUserId, e.getMessage(), e);
+            }
+        });
     }
 
     /**
-     * SAFE: agenda a troca de email do CONTROLPLANE_USER para rodar após a transação atual finalizar (commit ou rollback).
+     * SAFE: troca email da identidade CONTROLPLANE_USER por userId após completion da TX atual.
      */
     public void moveControlPlaneIdentityAfterCompletion(Long controlPlaneUserId, String newEmail) {
-        String emailNorm = EmailNormalizer.normalizeOrNull(newEmail);
-        if (controlPlaneUserId == null || emailNorm == null) return;
+        String newEmailNorm = EmailNormalizer.normalizeOrNull(newEmail);
+        if (controlPlaneUserId == null || newEmailNorm == null) {
+            log.debug("moveControlPlaneIdentityAfterCompletion ignorado: userId={}, newEmail={}", controlPlaneUserId, newEmail);
+            return;
+        }
 
-        warnIfActiveTx("moveControlPlaneIdentityAfterCompletion", emailNorm, null);
+        log.info("📋 moveControlPlaneIdentityAfterCompletion CHAMADO | userId={} | newEmail={}", controlPlaneUserId, newEmailNorm);
 
-        runAfterCompletion(() -> moveControlPlaneIdentityNow(controlPlaneUserId, emailNorm));
-    }
-
-    // =====================================================================
-    // NOW methods (somente PUBLIC, isolado; nunca chamar "no meio" do TENANT)
-    // =====================================================================
-
-    /**
-     * Executa AGORA (PUBLIC) o UPSERT TENANT_ACCOUNT.
-     *
-     * <p>Somente chame diretamente se você tiver certeza que NÃO está dentro de uma TX TENANT/JPA no mesmo thread.
-     * Caso contrário, use {@link #ensureTenantIdentityAfterCompletion(String, Long)}.</p>
-     */
-    public void ensureTenantIdentityNow(String emailNorm, Long accountId) {
-        if (accountId == null) return;
-        if (emailNorm == null) return;
-
-        warnIfActiveTx("ensureTenantIdentityNow", emailNorm, accountId);
-
-        runInPublicTransaction(() -> {
-            String sql = """
-                insert into public.login_identities (email, subject_type, account_id, subject_id)
-                values (?, ?, ?, ?)
-                on conflict (email, account_id) where subject_type = 'TENANT_ACCOUNT'
-                do update set
-                    email = excluded.email,
-                    subject_id = excluded.subject_id
-            """;
-
-            int rows = jdbcTemplate.update(
-                    sql,
-                    emailNorm,
-                    LoginIdentitySubjectType.TENANT_ACCOUNT.name(),
-                    accountId,
-                    accountId
-            );
-
-            if (log.isDebugEnabled()) {
-                log.debug("✅ login_identity ensured (tenant) | email={} | accountId={} | rows={}",
-                        emailNorm, accountId, rows);
+        afterTransactionCompletion.runAfterCompletion(() -> {
+            try {
+                publicSchemaUnitOfWork.requiresNew(() -> {
+                    moveControlPlaneIdentityNow(controlPlaneUserId, newEmailNorm);
+                    return null;
+                });
+                log.info("✅ moveControlPlaneIdentityNow EXECUTADO (afterCompletion) | userId={} | newEmail={}", controlPlaneUserId, newEmailNorm);
+            } catch (Exception e) {
+                log.error("❌ Erro no moveControlPlaneIdentityAfterCompletion | userId={} | newEmail={} | msg={}",
+                        controlPlaneUserId, newEmailNorm, e.getMessage(), e);
             }
         });
     }
 
     /**
-     * Executa AGORA (PUBLIC) o delete TENANT_ACCOUNT.
-     */
-    public void deleteTenantIdentityNow(String emailNorm, Long accountId) {
-        if (accountId == null) return;
-        if (emailNorm == null) return;
-
-        warnIfActiveTx("deleteTenantIdentityNow", emailNorm, accountId);
-
-        runInPublicTransaction(() -> {
-            String sql = """
-                delete from public.login_identities
-                 where subject_type = ?
-                   and email = ?
-                   and account_id = ?
-            """;
-
-            int rows = jdbcTemplate.update(sql,
-                    LoginIdentitySubjectType.TENANT_ACCOUNT.name(),
-                    emailNorm,
-                    accountId
-            );
-
-            if (log.isDebugEnabled()) {
-                log.debug("✅ login_identity deleted (tenant) | email={} | accountId={} | rows={}",
-                        emailNorm, accountId, rows);
-            }
-        });
-    }
-
-    /**
-     * Executa AGORA (PUBLIC) o UPSERT CONTROLPLANE_USER.
+     * NOW (somente PUBLIC isolado): UPSERT CONTROLPLANE_USER.
      */
     public void ensureControlPlaneIdentityNow(String emailNorm, Long controlPlaneUserId) {
-        if (controlPlaneUserId == null) return;
-        if (emailNorm == null) return;
+        if (controlPlaneUserId == null || emailNorm == null) return;
 
         warnIfActiveTx("ensureControlPlaneIdentityNow", emailNorm, null);
 
-        runInPublicTransaction(() -> {
-            String sql = """
-                insert into public.login_identities (email, subject_type, subject_id, account_id)
-                values (?, ?, ?, null)
-                on conflict (email) where subject_type = 'CONTROLPLANE_USER'
-                do update set
-                    email = excluded.email,
-                    subject_id = excluded.subject_id
-            """;
+        String sql = """
+            insert into public.login_identities (email, subject_type, subject_id, account_id)
+            values (?, ?, ?, null)
+            on conflict (email) where subject_type = 'CONTROLPLANE_USER'
+            do update set
+                email = excluded.email,
+                subject_id = excluded.subject_id
+        """;
 
-            int rows = jdbcTemplate.update(sql,
-                    emailNorm,
-                    LoginIdentitySubjectType.CONTROLPLANE_USER.name(),
-                    controlPlaneUserId
-            );
+        int rows = jdbcTemplate.update(sql,
+                emailNorm,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name(),
+                controlPlaneUserId
+        );
 
-            if (log.isDebugEnabled()) {
-                log.debug("✅ login_identity ensured (controlplane) | email={} | userId={} | rows={}",
-                        emailNorm, controlPlaneUserId, rows);
-            }
-        });
+        log.debug("✅ login_identity ensured (controlplane) | email={} | userId={} | rows={}", emailNorm, controlPlaneUserId, rows);
     }
 
     /**
-     * Executa AGORA (PUBLIC) o delete CONTROLPLANE_USER por userId.
+     * NOW (somente PUBLIC isolado): delete CONTROLPLANE_USER por userId.
      */
     public void deleteControlPlaneIdentityByUserIdNow(Long controlPlaneUserId) {
         if (controlPlaneUserId == null) return;
 
         warnIfActiveTx("deleteControlPlaneIdentityByUserIdNow", null, null);
 
-        runInPublicTransaction(() -> {
-            String sql = """
-                delete from public.login_identities
-                 where subject_type = ?
-                   and subject_id = ?
-            """;
+        String sql = """
+            delete from public.login_identities
+             where subject_type = ?
+               and subject_id = ?
+               and account_id is null
+        """;
 
-            int rows = jdbcTemplate.update(sql,
-                    LoginIdentitySubjectType.CONTROLPLANE_USER.name(),
-                    controlPlaneUserId
-            );
+        int rows = jdbcTemplate.update(sql,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name(),
+                controlPlaneUserId
+        );
 
-            if (log.isDebugEnabled()) {
-                log.debug("✅ login_identity deleted (controlplane) | userId={} | rows={}",
-                        controlPlaneUserId, rows);
-            }
-        });
+        log.debug("✅ login_identity deleted (controlplane) | userId={} | rows={}", controlPlaneUserId, rows);
     }
 
     /**
-     * Executa AGORA (PUBLIC) a troca de email do CONTROLPLANE_USER.
-     *
-     * <p>Implementação segura: remove o registro antigo (por userId) e recria com o novo email (upsert).</p>
+     * NOW (somente PUBLIC isolado): troca email do CONTROLPLANE_USER por userId.
      */
     public void moveControlPlaneIdentityNow(Long controlPlaneUserId, String newEmailNorm) {
-        if (controlPlaneUserId == null) return;
-        if (newEmailNorm == null) return;
+        if (controlPlaneUserId == null || newEmailNorm == null) return;
 
         warnIfActiveTx("moveControlPlaneIdentityNow", newEmailNorm, null);
 
-        runInPublicTransaction(() -> {
-            deleteControlPlaneIdentityByUserIdNow(controlPlaneUserId);
-            ensureControlPlaneIdentityNow(newEmailNorm, controlPlaneUserId);
-        });
+        String sql = """
+            update public.login_identities
+               set email = ?
+             where subject_type = ?
+               and subject_id = ?
+               and account_id is null
+        """;
+
+        int rows = jdbcTemplate.update(sql,
+                newEmailNorm,
+                LoginIdentitySubjectType.CONTROLPLANE_USER.name(),
+                controlPlaneUserId
+        );
+
+        log.debug("✅ login_identity moved (controlplane) | userId={} | rows={}", controlPlaneUserId, rows);
     }
 
-    // =====================================================================
-    // MÉTODO DE VERIFICAÇÃO (para diagnóstico)
-    // =====================================================================
-
-    /**
-     * Verifica se uma identidade de login existe para o tenant (usado apenas para diagnóstico).
-     * 
-     * @param email Email do usuário
-     * @param accountId ID da conta
-     * @return true se existir, false caso contrário
-     */
-    public boolean existsTenantIdentity(String email, Long accountId) {
-        String emailNorm = EmailNormalizer.normalizeOrNull(email);
-        if (accountId == null || emailNorm == null) {
-            log.debug("existsTenantIdentity: parâmetros inválidos - email={}, accountId={}", email, accountId);
-            return false;
-        }
-        
-        try {
-            String sql = """
-                SELECT COUNT(*) FROM public.login_identities 
-                WHERE email = ? 
-                  AND account_id = ? 
-                  AND subject_type = 'TENANT_ACCOUNT'
-            """;
-            
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, emailNorm, accountId);
-            boolean exists = count != null && count > 0;
-            
-            log.info("🔍 existsTenantIdentity: email={}, accountId={}, exists={}", emailNorm, accountId, exists);
-            return exists;
-            
-        } catch (Exception e) {
-            log.error("❌ existsTenantIdentity - Erro ao verificar existência: {}", e.getMessage(), e);
-            return false;
-        }
-    }
-
-    // =====================================================================
-    // Scheduling / Isolation
-    // =====================================================================
-
-    /**
-     * Garante que {@code op} rode após a transação corrente finalizar (commit OU rollback).
-     *
-     * <p>Se não existe synchronization ativa, executa imediatamente.</p>
-     */
-    private void runAfterCompletion(Runnable op) {
-        if (op == null) return;
-
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            op.run();
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                try {
-                    op.run();
-                } catch (Exception e) {
-                    log.warn("⚠️ Falha ao executar provisioning PUBLIC após completion | msg={}", e.getMessage(), e);
-                }
-            }
-        });
-    }
-
-    /**
-     * Executa o runnable em uma transação PUBLIC isolada (TransactionTemplate).
-     */
-    private void runInPublicTransaction(Runnable op) {
-        TransactionTemplate tt = new TransactionTemplate(publicTransactionManager);
-        tt.executeWithoutResult(s -> op.run());
-    }
-
-    // =====================================================================
+    // =========================================================
     // Diagnostics
-    // =====================================================================
+    // =========================================================
 
     private static void warnIfActiveTx(String op, String emailNorm, Long accountId) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) return;
 
         Map<Object, Object> resources = TransactionSynchronizationManager.getResourceMap();
         log.warn("⚠️ LoginIdentityProvisioningService chamado com TX ativa | op={} | email={} | accountId={} | resourcesKeys={}",
-                op,
-                emailNorm,
-                accountId,
-                summarizeResourceKeys(resources));
+                op, emailNorm, accountId, summarizeResourceKeys(resources));
     }
 
     private static String summarizeResourceKeys(Map<Object, Object> resources) {

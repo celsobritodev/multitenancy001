@@ -1,4 +1,3 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/publicschema/audit/SecurityAuditEventPublisher.java
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
@@ -10,12 +9,13 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 
 /**
- * Publica eventos de auditoria para serem persistidos AFTER_COMMIT.
+ * Publica eventos de auditoria para serem persistidos AFTER_COMPLETION.
  *
- * <p>Regra:</p>
+ * <p><b>Regra:</b></p>
  * <ul>
- *   <li>NAO grava audit aqui. Apenas publica o evento.</li>
- *   <li>Persistencia real ocorre em {@link SecurityAuditAfterCommitListener}.</li>
+ *   <li>Não persiste audit aqui. Apenas publica o evento.</li>
+ *   <li>Persistência real ocorre em {@link SecurityAuditAfterCommitListener}
+ *       (AFTER_COMPLETION + @Async) para evitar pre-bound no thread de commit/cleanup.</li>
  * </ul>
  */
 @Component
@@ -24,6 +24,19 @@ public class SecurityAuditEventPublisher {
 
     private final ApplicationEventPublisher publisher;
 
+    /**
+     * Publica um evento pronto.
+     *
+     * @param event evento de auditoria (não nulo)
+     */
+    public void publish(SecurityAuditRequestedEvent event) {
+        if (event == null) return;
+        publisher.publishEvent(event);
+    }
+
+    /**
+     * Publica um evento de auditoria montando o {@link SecurityAuditRequestedEvent}.
+     */
     public void publish(
             Instant occurredAt,
             Long accountId,
