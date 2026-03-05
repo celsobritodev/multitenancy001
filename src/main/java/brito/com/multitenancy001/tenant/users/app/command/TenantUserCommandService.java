@@ -11,7 +11,6 @@ import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.domain.service.LoginIdentityService;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
@@ -39,17 +38,12 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Application Service para comandos relacionados a usuários do Tenant.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>MELHORIAS APLICADAS:</b></p>
  * <ul>
- *   <li>Centralizar lógica de criação, atualização, suspensão e exclusão de usuários.</li>
- *   <li>Garantir consistência entre schema do Tenant e índice público {@code public.login_identities}.</li>
- *   <li>Executar auditoria SOC2-like para operações sensíveis.</li>
+ *   <li>✅ LoginIdentityService agora é usado corretamente</li>
+ *   <li>✅ AfterTransactionCompletion usa apenas Runnable (sem chave - a duplicidade é evitada pelo próprio componente)</li>
+ *   <li>✅ Removido PublicSchemaUnitOfWork desnecessário</li>
  * </ul>
- *
- * <p><b>REGRA CRÍTICA DE NEGÓCIO:</b></p>
- * Para o login multi-tenant ({@code /api/tenant/auth/login}) funcionar, todo usuário ativo em um tenant
- * (não deletado e não suspenso) deve ter entrada correspondente em {@code public.login_identities}
- * com {@code subject_type = 'TENANT_ACCOUNT'}.
  */
 @Slf4j
 @Service
@@ -71,10 +65,7 @@ public class TenantUserCommandService {
     // AfterTransactionCompletion para executar após o commit
     private final AfterTransactionCompletion afterTransactionCompletion;
 
-    // PublicSchemaUnitOfWork para operações no schema public
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-
-    // Usando a interface do domínio
+    // ⭐ Usando a interface do domínio (agora implementada por SafeLoginIdentityService)
     private final LoginIdentityService loginIdentityService;
 
     // =========================================================
@@ -84,16 +75,10 @@ public class TenantUserCommandService {
     /**
      * Cria um usuário de tenant, aplicando permissões finais (base + requested validadas).
      *
-     * <p>Auditoria:</p>
-     * <ul>
-     *   <li>USER_CREATED: ATTEMPT + SUCCESS/FAIL/DENIED</li>
-     *   <li>PERMISSIONS_CHANGED: SUCCESS (reason=create)</li>
-     * </ul>
-     *
      * <p>Index público (login_identities):</p>
      * <ul>
      *   <li>APÓS o COMMIT da transação do tenant, garante (email, accountId) no PUBLIC.</li>
-     *   <li>Se falhar, apenas loga o erro (best-effort) - o usuário já foi criado no tenant.</li>
+     *   <li>A duplicidade é evitada pelo próprio AfterTransactionCompletion.</li>
      * </ul>
      */
     public TenantUser createTenantUser(
@@ -257,14 +242,13 @@ public class TenantUserCommandService {
         final Long finalUserId = savedUserId.get();
 
         if (StringUtils.hasText(finalEmail) && accountId != null) {
+            // ⭐ O AfterTransactionCompletion já evita duplicidade internamente
             afterTransactionCompletion.runAfterCompletion(() -> {
                 try {
-                    publicSchemaUnitOfWork.requiresNew(() -> {
-                        loginIdentityService.ensureTenantIdentity(finalEmail, accountId);
-                        log.info("✅ ensureTenantIdentity executado após completion | email={} accountId={}", 
-                                finalEmail, accountId);
-                        return null;
-                    });
+                    // SafeLoginIdentityService (implementação de LoginIdentityService) já é best-effort
+                    loginIdentityService.ensureTenantIdentity(finalEmail, accountId);
+                    log.info("✅ ensureTenantIdentity executado após completion | email={} accountId={}", 
+                            finalEmail, accountId);
                 } catch (Exception e) {
                     log.error("❌ Falha ao garantir identidade de login (best-effort) | email={} accountId={} | userId={}", 
                             finalEmail, accountId, finalUserId, e);
@@ -362,12 +346,9 @@ public class TenantUserCommandService {
             if (userAfter != null && userAfter.isEnabledDomain()) {
                 afterTransactionCompletion.runAfterCompletion(() -> {
                     try {
-                        publicSchemaUnitOfWork.requiresNew(() -> {
-                            loginIdentityService.ensureTenantIdentity(userEmail, accountId);
-                            log.info("✅ ensureTenantIdentity executado após reativação | email={} accountId={} byAdmin={}", 
-                                    userEmail, accountId, byAdmin);
-                            return null;
-                        });
+                        loginIdentityService.ensureTenantIdentity(userEmail, accountId);
+                        log.info("✅ ensureTenantIdentity executado após reativação | email={} accountId={} byAdmin={}", 
+                                userEmail, accountId, byAdmin);
                     } catch (Exception e) {
                         log.error("❌ Falha ao garantir identidade após reativação (best-effort) | email={} accountId={}", 
                                 userEmail, accountId, e);
@@ -422,12 +403,9 @@ public class TenantUserCommandService {
         if (StringUtils.hasText(restoredEmail.get()) && accountId != null) {
             afterTransactionCompletion.runAfterCompletion(() -> {
                 try {
-                    publicSchemaUnitOfWork.requiresNew(() -> {
-                        loginIdentityService.ensureTenantIdentity(restoredEmail.get(), accountId);
-                        log.info("✅ ensureTenantIdentity executado após restore | email={} accountId={}", 
-                                restoredEmail.get(), accountId);
-                        return null;
-                    });
+                    loginIdentityService.ensureTenantIdentity(restoredEmail.get(), accountId);
+                    log.info("✅ ensureTenantIdentity executado após restore | email={} accountId={}", 
+                            restoredEmail.get(), accountId);
                 } catch (Exception e) {
                     log.error("❌ Falha ao garantir identidade após restore (best-effort) | email={} accountId={}", 
                             restoredEmail.get(), accountId, e);
@@ -498,12 +476,9 @@ public class TenantUserCommandService {
         if (StringUtils.hasText(deletedEmail.get()) && accountId != null) {
             afterTransactionCompletion.runAfterCompletion(() -> {
                 try {
-                    publicSchemaUnitOfWork.requiresNew(() -> {
-                        loginIdentityService.deleteTenantIdentity(deletedEmail.get(), accountId);
-                        log.info("✅ deleteTenantIdentity executado após softDelete | email={} accountId={}", 
-                                deletedEmail.get(), accountId);
-                        return null;
-                    });
+                    loginIdentityService.deleteTenantIdentity(deletedEmail.get(), accountId);
+                    log.info("✅ deleteTenantIdentity executado após softDelete | email={} accountId={}", 
+                            deletedEmail.get(), accountId);
                 } catch (Exception e) {
                     log.error("❌ Falha ao remover identidade após softDelete (best-effort) | email={} accountId={}", 
                             deletedEmail.get(), accountId, e);
