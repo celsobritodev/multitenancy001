@@ -1,25 +1,25 @@
 newman
 
-multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
+multitenancy001-e2e (v16 ULTRA HARDENED SUITE - FIXED)
 
 □ 📦 00 - BOOTSTRAP (V3)
 └ 00.01 health
-  GET http://localhost:8080/actuator/health [200 OK, 844B, 51ms]
+  GET http://localhost:8080/actuator/health [200 OK, 844B, 64ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Health OK
 
 └ 00.02 signup
   ┌
-  │ '📧 Email gerado: e2e_1772757181485@tenant.local'
+  │ '📧 Email gerado: e2e_1773054295142@tenant.local'
   └
-  POST http://localhost:8080/api/signup [201 Created, 845B, 759ms]
+  POST http://localhost:8080/api/signup [201 Created, 845B, 855ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Signup OK (201)
   ┌
   │ '✅ Persistido no collectionVariables:', {
-  │   tenant_email: 'e2e_1772757181485@tenant.local',
+  │   tenant_email: 'e2e_1773054295142@tenant.local',
   │   tenant_password_exists: true
   │ }
   └
@@ -27,16 +27,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 00.03 tenant login
   ┌
   │ '🔐 Tenant login attempt'
-  │ '   email=', 'e2e_1772757181485@tenant.local'
+  │ '   email=', 'e2e_1773054295142@tenant.local'
   │ '   password length=', 8
   └
-  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.06kB, 319ms]
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.06kB, 349ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   ┌
   │ 'STATUS=', 200
   │ 'BODY=', '{"accessToken":"eyJhbGciOiJIUzUxMiJ9.eyJzdWI
-  │ iOiJlMmVfMTc3Mjc1NzE4MTQ4NUB0ZW5hbnQubG9jYWwiLCJhdXRob
+  │ iOiJlMmVfMTc3MzA1NDI5NTE0MkB0ZW5hbnQubG9jYWwiLCJhdXRob
   │ 3JpdGllcyI6IlJPTEVfVEVOQU5UX09XTkVSLFRFTl9VU0VSX1JFQUQ
   │ sVEVOX1VTRVJfQ1JFQVRFLFRFTl9VU0VSX1VQREFURSxURU5fVVNFU
   │ l9TVVNQRU5ELFRFTl9VU0VSX1JFU1RPUkUsVEVOX1VTRVJfREVMRVR
@@ -49,27 +49,27 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ fQklMTElOR19XUklURSxURU5fU0VUVElOR1NfUkVBRCxURU5fU0VUV
   │ ElOR1NfV1JJVEUsVEVOX0lOVkVOVE9SWV9SRUFELFRFTl9JTlZFTlR
   │ PUllfV1JJVEUiLCJhdXRoRG9tYWluIjoiVEVOQU5UIiwiY29udGV4d
-  │ CI6InRfdGVuYW50X2UyZV83ZTVjYTZfNTg5ZmFiM2YiLCJhY2NvdW5
+  │ CI6InRfdGVuYW50X2UyZV81YmRjMjZfNTE0MjFiZjYiLCJhY2NvdW5
   │ 0SWQiOjIsInVzZXJJZCI6MSwicm9sZU5hbWUiOiJURU5BTlRfT1dOR
   │ VIiLCJyb2xlQXV0aG9yaXR5IjoiUk9MRV9URU5BTlRfT1dORVIiLCJ
-  │ pYXQiOjE3NzI3NTcxODIsImV4cCI6MTc3Mjc2MDc4Mn0.OSYARwHWi
-  │ 24gvR9eO3Qed5poFeMfgX6CCuNh4ieBn9Xvg8Bxku3lw69xj6aHgOk
-  │ CkKxpQwR6-n9-naUHpzbBqw","refreshToken":"eyJhbGciOiJIU
-  │ zUxMiJ9.eyJqdGkiOiI3YTgzMDNiYi02YzAzLTQxMGEtYmUxMS0xZm
-  │ VkODAzMDQ2MDMiLCJzdWIiOiJlMmVfMTc3Mjc1NzE4MTQ4NUB0ZW5h
+  │ pYXQiOjE3NzMwNTQyOTYsImV4cCI6MTc3MzA1Nzg5Nn0.vjsQfdf8d
+  │ 3g3WL3szzj3IJuoBRKR73iVpItbSB1t-tn3W6kwq1ods2kSbXAWjRm
+  │ Ft0WWEWQU9cgr2H928n5mFA","refreshToken":"eyJhbGciOiJIU
+  │ zUxMiJ9.eyJqdGkiOiI3ODkwYjkzNS1mNDNmLTQxZTQtOTY5ZC0zMG
+  │ Q1NDc4NTI5OWQiLCJzdWIiOiJlMmVfMTc3MzA1NDI5NTE0MkB0ZW5h
   │ bnQubG9jYWwiLCJhdXRoRG9tYWluIjoiUkVGUkVTSCIsImNvbnRleH
-  │ QiOiJ0X3RlbmFudF9lMmVfN2U1Y2E2XzU4OWZhYjNmIiwiYWNjb3Vu
-  │ dElkIjoyLCJpYXQiOjE3NzI3NTcxODIsImV4cCI6MTc3MzM2MTk4Mn
-  │ 0.g50MCY4NT23L37tAnY1h8dLkMK0_Kor547RDg4pNALf0SHbSXPnr
-  │ WGQ3MRmwa0XR_hKLQlGUeY_eLBaBvjdy5g","tokenType":"Beare
-  │ r","userId":1,"email":"e2e_1772757181485@tenant.local"
+  │ QiOiJ0X3RlbmFudF9lMmVfNWJkYzI2XzUxNDIxYmY2IiwiYWNjb3Vu
+  │ dElkIjoyLCJpYXQiOjE3NzMwNTQyOTYsImV4cCI6MTc3MzY1OTA5Nn
+  │ 0.YQtafi5zh9tHI_BGUEYecPz3em5_lCkqqK2VsLSdL1LC0u01kjz4
+  │ ZKrSoPgZXKb7kv1xwZQlBxuS_nSDzwlTSQ","tokenType":"Beare
+  │ r","userId":1,"email":"e2e_1773054295142@tenant.local"
   │ ,"role":"TENANT_OWNER","accountId":2,"tenantSchema":"t
-  │ _tenant_e2e_7e5ca6_589fab3f"}'
+  │ _tenant_e2e_5bdc26_51421bf6"}'
   └
   √  Tenant login OK
   ┌
   │ '✅ Tenant logado: ID=1 accountId=2 schema=t_tenant_e2e
-  │ _7e5ca6_589fab3f'
+  │ _5bdc26_51421bf6'
   │ '✅ v11 propagation: tenant1_* + account_id synchronize
   │ d'
   └
@@ -81,7 +81,7 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Tenant me OK
 
 └ 00.05 controlplane login (superadmin)
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 263ms]
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 266ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login superadmin OK
@@ -90,19 +90,19 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   └
 
 └ 00.06 login as billing manager
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 121ms]
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 130ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login billing manager OK
 
 └ 00.07 login as support
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 118ms]
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 136ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login support OK
 
 └ 00.08 login as operator
-  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 117ms]
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 120ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login operator OK
@@ -110,31 +110,31 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 □ 🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY (V10.6)
 └ 01.50.01 signup tenant #2
   ┌
-  │ '[v10.8.5] tenant2_email=e2e2_1772757184064_104251@ten
+  │ '[v10.8.5] tenant2_email=e2e2_1773054297935_876ccd@ten
   │ ant.local'
-  │ '[v10.8.5] shared_email=shared_1772757184064_4f418f@te
+  │ '[v10.8.5] shared_email=shared_1773054297935_4db25f@te
   │ nant.local'
   │ '[v10.8.5] tenant2_password=E2ePass123'
   │ '[v10.8.5] tenant2_tax_id_type=CNPJ'
   │ '[v10.8.5] tenant2_tax_id_number=12345678000190'
   │ '🔍 VERIFICAÇÃO FINAL:'
-  │ '   shared_email:', 'shared_1772757184064_4f418f@tenan
+  │ '   shared_email:', 'shared_1773054297935_4db25f@tenan
   │ t.local'
-  │ '   tenant2_email:', 'e2e2_1772757184064_104251@tenant
+  │ '   tenant2_email:', 'e2e2_1773054297935_876ccd@tenant
   │ .local'
   │ '   tenant2_password:', 'E2ePass123'
   └
-  POST http://localhost:8080/api/signup [201 Created, 860B, 337ms]
+  POST http://localhost:8080/api/signup [201 Created, 860B, 392ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant #2 signup OK
   ┌
-  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_f7bdd
-  │ 2_96494c97, Slug=tenant-e2e-2-f7bdd2'
+  │ '✅ Tenant #2 criado: ID=3, Schema=t_tenant_e2e_2_23ab1
+  │ d_b2920a1e, Slug=tenant-e2e-2-23ab1d'
   └
 
 └ 01.50.02 tenant #2 login (admin)
-  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 114ms]
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.1kB, 130ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant #2 login OK (direct)
@@ -146,11 +146,11 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 01.50.03 create shared user in tenant #1
   ┌
   │ '📦 Shared user payload:', '{"name":"Shared User","ema
-  │ il":"shared_1772757184064_4f418f@tenant.local","passwo
+  │ il":"shared_1773054297935_4db25f@tenant.local","passwo
   │ rd":"E2ePass123","role":"TENANT_OWNER","permissions":[
   │ ],"mustChangePassword":false,"origin":"ADMIN"}'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 210ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 260ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create shared user (201 or 409 if already exists)
@@ -158,28 +158,28 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 01.50.04 create shared user in tenant #2
   ┌
   │ '📧 Preparing to create shared user in tenant #2 with 
-  │ email:', 'shared_1772757184064_4f418f@tenant.local'
-  │ '🔑 Using schema:', 't_tenant_e2e_2_f7bdd2_96494c97'
+  │ email:', 'shared_1773054297935_4db25f@tenant.local'
+  │ '🔑 Using schema:', 't_tenant_e2e_2_23ab1d_b2920a1e'
   │ '📊 Tenant2 Account ID:', '3'
   └
-  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 660B, 48ms]
+  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 660B, 53ms]
   ┌
   │ '✅ No existing shared user found'
   │ '✅ Body configurado!'
   │ '📦 Body enviado:', '{"name":"Shared User","email":"sh
-  │ ared_1772757184064_4f418f@tenant.local","password":"E2
+  │ ared_1773054297935_4db25f@tenant.local","password":"E2
   │ ePass123","role":"TENANT_OWNER","permissions":[]}'
   │ '🔍 VERIFICAÇÃO FINAL:'
   │ '   Headers Authorization:', 'PRESENTE'
-  │ '   Headers X-Tenant:', 't_tenant_e2e_2_f7bdd2_96494c9
-  │ 7'
+  │ '   Headers X-Tenant:', 't_tenant_e2e_2_23ab1d_b2920a1
+  │ e'
   │ '   Headers Content-Type:', 'application/json'
   │ '   Body raw:', 'PRESENTE'
   │ '   Body content:', '{"name":"Shared User","email":"sh
-  │ ared_1772757184064_4f418f@tenant.local","password":"E2
+  │ ared_1773054297935_4db25f@tenant.local","password":"E2
   │ ePass123","role":"TENANT_OWNER","permissions":[]}'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 138ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 147ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create shared user in tenant #2 must succeed (201)
@@ -190,21 +190,21 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '✅ Shared user created in tenant #2'
   │ '   ID:', 2
-  │ '   Email:', 'shared_1772757184064_4f418f@tenant.local
+  │ '   Email:', 'shared_1773054297935_4db25f@tenant.local
   │ '
   │ '   Role:', 'TENANT_OWNER'
   └
   √  Account ID matches
 
 └ 01.50.04a controlplane list tenant-users (account #1) - shared index check
-  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 833B, 27ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 833B, 31ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  ControlPlane list tenant-users OK
   √  Shared email must be present in tenant-users index
 
 └ 01.50.04b controlplane list tenant-users (account #2) - shared index check
-  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 844B, 34ms]
+  GET http://localhost:8080/api/controlplane/accounts/3/tenant-users [200 OK, 844B, 44ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  ControlPlane list tenant-users OK
@@ -212,16 +212,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 └ 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED
   ┌
-  │ 'shared_email(effective)=', 'shared_1772757184064_4f41
-  │ 8f@tenant.local'
+  │ 'shared_email(effective)=', 'shared_1773054297935_4db2
+  │ 5f@tenant.local'
   │ 'shared_password(effective)=', '***'
   └
-  POST http://localhost:8080/api/tenant/auth/login [409 Conflict, 892B, 217ms]
+  POST http://localhost:8080/api/tenant/auth/login [409 Conflict, 892B, 245ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   ┌
-  │ 'shared_email(effective)=', 'shared_1772757184064_4f41
-  │ 8f@tenant.local'
+  │ 'shared_email(effective)=', 'shared_1773054297935_4db2
+  │ 5f@tenant.local'
   │ 'shared_password(effective)=', '***'
   └
   √  Ambiguous login must return 409
@@ -240,13 +240,13 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Must include tenantId candidate
   ┌
   │ '✅ login_confirm_payload =', {
-  │   challengeId: 'e39dcaa2-1626-43e2-bc32-a5e09c2e9e05',
+  │   challengeId: 'ac362087-bd08-4b7f-82a4-7bb4b3c277a0',
   │   accountId: 2
   │ }
   └
 
 └ 01.50.06 tenant login confirm (challengeId + tenant selection) => 200 JWT
-  POST http://localhost:8080/api/tenant/auth/login/confirm [200 OK, 2.1kB, 49ms]
+  POST http://localhost:8080/api/tenant/auth/login/confirm [200 OK, 2.1kB, 56ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Confirm login must return 200
@@ -254,7 +254,7 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 □ 🔐 01 - TENANT AUTH TESTS (V3)
 └ 01.01 tenant refresh
-  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.06kB, 56ms]
+  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.06kB, 45ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tenant refresh OK
@@ -267,70 +267,70 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 □ 🎯 02 - CONTROL PLANE AUTH TESTS (V3)
 └ 02.01 controlplane refresh
-  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.72kB, 31ms]
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.72kB, 33ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Controlplane refresh OK
 
 └ 02.02 controlplane logout
-  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 26ms]
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 45ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Controlplane logout OK
 
 □ 💰 03 - BILLING MANAGER TESTS (V4)
 └ 03.01 billing manager me
-  GET http://localhost:8080/api/controlplane/me [200 OK, 689B, 28ms]
+  GET http://localhost:8080/api/controlplane/me [200 OK, 689B, 44ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Billing manager me OK
 
 └ 03.02 billing manager refresh
-  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.58kB, 26ms]
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.58kB, 29ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Refresh OK
 
 └ 03.03 billing manager logout
-  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 21ms]
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Logout OK
 
 □ 🆘 04 - SUPPORT TESTS (V5)
 └ 04.01 support me
-  GET http://localhost:8080/api/controlplane/me [200 OK, 673B, 17ms]
+  GET http://localhost:8080/api/controlplane/me [200 OK, 673B, 19ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Support me OK
 
 └ 04.02 support list accounts
-  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 20ms]
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Support list accounts OK
 
 └ 04.03 support list users
-  GET http://localhost:8080/api/controlplane/users [200 OK, 1.46kB, 26ms]
+  GET http://localhost:8080/api/controlplane/users [200 OK, 1.46kB, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Support list users OK
 
 □ ⚙️ 05 - OPERATOR TESTS (V5)
 └ 05.01 operator me
-  GET http://localhost:8080/api/controlplane/me [200 OK, 676B, 16ms]
+  GET http://localhost:8080/api/controlplane/me [200 OK, 676B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Operator me OK
 
 └ 05.02 operator list accounts
-  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 16ms]
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 18ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Operator list accounts OK
 
 └ 05.03 operator cannot list users
-  GET http://localhost:8080/api/controlplane/users [403 Forbidden, 643B, 41ms]
+  GET http://localhost:8080/api/controlplane/users [403 Forbidden, 643B, 27ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Operator cannot list users (403)
@@ -343,218 +343,218 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Superadmin create payment: created (200) or already exists (409)
 
 └ 06.02 superadmin list pending payments
-  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 21ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 28ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Superadmin list pending payments OK
 
 └ 06.03 superadmin get total paid
-  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z [200 OK, 476B, 26ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z [200 OK, 476B, 29ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Superadmin get total paid OK
 
 └ 06.04 superadmin count completed payments
-  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 18ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 32ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Superadmin count completed OK
 
 └ 06.05 billing manager list pending payments
-  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 14ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 31ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Billing manager list pending payments OK
 
 └ 06.06 support cannot list payments
-  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 12ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Support cannot list payments (403)
 
 └ 06.07 operator cannot list payments
-  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 10ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 14ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Operator cannot list payments (403)
 
 □ 🗂️ 07 - CATEGORY TESTS (V7)
 └ 07.01 create category
-  POST http://localhost:8080/api/tenant/categories [201 Created, 540B, 34ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 540B, 40ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create category OK
 
 └ 07.02 create another category
-  POST http://localhost:8080/api/tenant/categories [201 Created, 534B, 22ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 534B, 27ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create category OK
 
 └ 07.03 list all categories
-  GET http://localhost:8080/api/tenant/categories [200 OK, 592B, 23ms]
+  GET http://localhost:8080/api/tenant/categories [200 OK, 592B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List categories OK
 
 └ 07.04 get category by id
-  GET http://localhost:8080/api/tenant/categories/1 [200 OK, 535B, 22ms]
+  GET http://localhost:8080/api/tenant/categories/1 [200 OK, 535B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Get category OK
 
 └ 07.05 update category
-  PUT http://localhost:8080/api/tenant/categories/1 [200 OK, 546B, 29ms]
+  PUT http://localhost:8080/api/tenant/categories/1 [200 OK, 546B, 34ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PUT)
   √  Update category OK
 
 └ 07.06 toggle category active
-  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [200 OK, 547B, 22ms]
+  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [200 OK, 547B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Toggle active OK
 
 └ 07.07 soft delete category
-  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 24ms]
+  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
   √  Soft delete OK
 
 └ 07.08 restore category
-  PATCH http://localhost:8080/api/tenant/categories/1/restore [200 OK, 546B, 23ms]
+  PATCH http://localhost:8080/api/tenant/categories/1/restore [200 OK, 546B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Restore OK
 
 □ 📂 08 - SUBCATEGORY TESTS (V7)
 └ 08.01 create subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/2 [201 Created, 554B, 37ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/2 [201 Created, 554B, 43ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create subcategory OK
 
 └ 08.02 list subcategories by category
-  GET http://localhost:8080/api/tenant/subcategories/category/2/not-deleted [200 OK, 551B, 22ms]
+  GET http://localhost:8080/api/tenant/subcategories/category/2/not-deleted [200 OK, 551B, 26ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List subcategories OK
 
 □ 🏭 09 - SUPPLIER TESTS (V7)
 └ 09.01 create supplier
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 802B, 44ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 802B, 50ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create supplier OK
 
 └ 09.02 list suppliers
-  GET http://localhost:8080/api/tenant/suppliers [200 OK, 799B, 19ms]
+  GET http://localhost:8080/api/tenant/suppliers [200 OK, 799B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List suppliers OK
 
 □ 📦 10 - PRODUCT TESTS (V7)
 └ 10.01 create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 940B, 79ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 940B, 85ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create product OK
 
 └ 10.02 list products
-  GET http://localhost:8080/api/tenant/products?page=0&size=10 [200 OK, 1.25kB, 39ms]
+  GET http://localhost:8080/api/tenant/products?page=0&size=10 [200 OK, 1.25kB, 54ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List products OK
 
 └ 10.03 get product by id
-  GET http://localhost:8080/api/tenant/products/6e5bd84d-a42b-4673-ba8e-aacce06112a8 [200 OK, 929B, 22ms]
+  GET http://localhost:8080/api/tenant/products/117c9e50-173b-4911-8247-03379785cb74 [200 OK, 929B, 42ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Get product OK
 
 └ 10.04 update product cost
-  PATCH http://localhost:8080/api/tenant/products/6e5bd84d-a42b-4673-ba8e-aacce06112a8/cost-price?costPrice=1500.00 [200 OK, 936B, 32ms]
+  PATCH http://localhost:8080/api/tenant/products/117c9e50-173b-4911-8247-03379785cb74/cost-price?costPrice=1500.00 [200 OK, 936B, 38ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Update cost OK
 
 └ 10.05 toggle product active
-  PATCH http://localhost:8080/api/tenant/products/6e5bd84d-a42b-4673-ba8e-aacce06112a8/toggle-active [200 OK, 937B, 29ms]
+  PATCH http://localhost:8080/api/tenant/products/117c9e50-173b-4911-8247-03379785cb74/toggle-active [200 OK, 937B, 33ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Toggle active OK
 
 □ 🔍 11 - PRODUCT QUERIES (V7)
 └ 11.01 list products by category
-  GET http://localhost:8080/api/tenant/products/category/2 [200 OK, 477B, 25ms]
+  GET http://localhost:8080/api/tenant/products/category/2 [200 OK, 477B, 27ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List by category OK
 
 └ 11.02 count low stock
-  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 19ms]
+  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Count low stock OK
 
 └ 11.03 search products
-  GET http://localhost:8080/api/tenant/products/search?name=Smartphone [200 OK, 936B, 29ms]
+  GET http://localhost:8080/api/tenant/products/search?name=Smartphone [200 OK, 936B, 36ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Search products OK
 
 □ ⚠️ 12 - NEGATIVE TESTS (V7)
 └ 12.01 create product without category
-  POST http://localhost:8080/api/tenant/products/detailed [400 Bad Request, 605B, 41ms]
+  POST http://localhost:8080/api/tenant/products/detailed [400 Bad Request, 605B, 52ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create without category fails (400)
 
 └ 12.02 create duplicate sku
-  POST http://localhost:8080/api/tenant/products/detailed [409 Conflict, 663B, 24ms]
+  POST http://localhost:8080/api/tenant/products/detailed [409 Conflict, 660B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Duplicate SKU fails (409)
 
 □ 👥 13 - TENANT USERS TESTS (ADDED to reach 61)
 └ 13.01 create tenant user
-  POST http://localhost:8080/api/tenant/users [201 Created, 792B, 118ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 792B, 199ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Create tenant user OK
 
 └ 13.02 list tenant users
-  GET http://localhost:8080/api/tenant/users [200 OK, 2.02kB, 43ms]
+  GET http://localhost:8080/api/tenant/users [200 OK, 2.02kB, 42ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  List tenant users OK
 
 └ 13.03 get tenant user by id
-  GET http://localhost:8080/api/tenant/users/3 [200 OK, 787B, 28ms]
+  GET http://localhost:8080/api/tenant/users/3 [200 OK, 787B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Get tenant user OK
 
 └ 13.04 count enabled tenant users
-  GET http://localhost:8080/api/tenant/users/count-enabled [200 OK, 476B, 24ms]
+  GET http://localhost:8080/api/tenant/users/count-enabled [200 OK, 476B, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Count enabled OK
 
 └ 13.05 suspend by admin (status)
-  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=true [200 OK, 596B, 57ms]
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=true [200 OK, 596B, 60ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Suspend status OK
 
 └ 13.06 unsuspend by admin (status)
-  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=false [200 OK, 596B, 59ms]
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=false [200 OK, 596B, 60ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Unsuspend status OK
 
 └ 13.07 soft delete tenant user
-  PATCH http://localhost:8080/api/tenant/users/3/soft-delete [204 No Content, 423B, 32ms]
+  PATCH http://localhost:8080/api/tenant/users/3/soft-delete [204 No Content, 423B, 30ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
   √  Soft delete OK
@@ -568,14 +568,14 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 13.09 tentar criar usuário com email duplicado (deve falhar com 409)
   ┌
   │ '📧 Email para teste de duplicidade: duplicate_test_17
-  │ 72757193949@tenant.local'
+  │ 73054308626@tenant.local'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 807B, 134ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 807B, 174ms]
   ┌
   │ '✅ Primeiro usuário criado com email:', 'duplicate_tes
-  │ t_1772757193949@tenant.local'
+  │ t_1773054308626@tenant.local'
   └
-  POST http://localhost:8080/api/tenant/users [409 Conflict, 685B, 47ms]
+  POST http://localhost:8080/api/tenant/users [409 Conflict, 688B, 49ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Tentar criar usuario com email duplicado deve retornar 409
@@ -584,114 +584,114 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 □ 🏢 14 - CONTROLPLANE ACCOUNT QUERIES (ADDED to reach 61)
 └ 14.01 superadmin get account by id
-  GET http://localhost:8080/api/controlplane/accounts/2 [200 OK, 735B, 19ms]
+  GET http://localhost:8080/api/controlplane/accounts/2 [200 OK, 735B, 18ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Get account OK
 
 └ 14.02 superadmin get account admin details
-  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [200 OK, 951B, 31ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [200 OK, 951B, 35ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Admin details OK
 
 └ 14.03 superadmin list account tenant users
-  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 1.2kB, 25ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [200 OK, 1.2kB, 28ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Tenant users list OK
 
 □ 📊 99 - POPULATE MASS DATA (10 each)
 └ 99.00 - Reset vars (mass)
-  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 18ms]
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  reset ok
 
 └ 99.01.01 - Criar categoria (1/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 19ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 26ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.02 - Criar categoria (2/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 22ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 26ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.03 - Criar categoria (3/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 21ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 33ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.04 - Criar categoria (4/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 19ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 34ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.05 - Criar categoria (5/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 18ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.06 - Criar categoria (6/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 17ms]
-  √  No 5xx in collection
-  √  Status code acceptable for SMOKE (POST)
-  √  status 2xx
-
-└ 99.01.07 - Criar categoria (7/10)
   POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
+└ 99.01.07 - Criar categoria (7/10)
+  POST http://localhost:8080/api/tenant/categories [201 Created, 538B, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx
+
 └ 99.01.08 - Criar categoria (8/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 20ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.09 - Criar categoria (9/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 17ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.01.10 - Criar categoria (10/10)
-  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 18ms]
+  POST http://localhost:8080/api/tenant/categories [201 Created, 539B, 17ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.01 - Criar subcategoria (1/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/3 [201 Created, 553B, 22ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/3 [201 Created, 553B, 26ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.02 - Criar subcategoria (2/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/4 [201 Created, 553B, 25ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/4 [201 Created, 553B, 29ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.03 - Criar subcategoria (3/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/5 [201 Created, 553B, 19ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/5 [201 Created, 553B, 35ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.04 - Criar subcategoria (4/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/6 [201 Created, 553B, 20ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/6 [201 Created, 553B, 27ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
@@ -705,77 +705,77 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 └ 99.02.06 - Criar subcategoria (6/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/8 [201 Created, 553B, 19ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/8 [201 Created, 553B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.07 - Criar subcategoria (7/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/9 [201 Created, 553B, 19ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/9 [201 Created, 553B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.08 - Criar subcategoria (8/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/10 [201 Created, 554B, 21ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/10 [201 Created, 554B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.09 - Criar subcategoria (9/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/11 [201 Created, 555B, 20ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/11 [201 Created, 555B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.02.10 - Criar subcategoria (10/10)
   √  has category id for subcategory
-  POST http://localhost:8080/api/tenant/subcategories/category/12 [201 Created, 555B, 23ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/12 [201 Created, 555B, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx
 
 └ 99.03.01 - Criar fornecedor (1/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 19ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.02 - Criar fornecedor (2/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 21ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.03 - Criar fornecedor (3/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 39ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.04 - Criar fornecedor (4/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 29ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.05 - Criar fornecedor (5/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 18ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.06 - Criar fornecedor (6/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.07 - Criar fornecedor (7/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
@@ -787,48 +787,48 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  status 201 or 409
 
 └ 99.03.09 - Criar fornecedor (9/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.03.10 - Criar fornecedor (10/10)
-  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 20ms]
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 769B, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.01 - Criar produto (1/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 28ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 29ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.02 - Criar produto (2/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 35ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 34ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.03 - Criar produto (3/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 27ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 29ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.04 - Criar produto (4/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 27ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 28ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.05 - Criar produto (5/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 24ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 27ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
@@ -842,28 +842,28 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 └ 99.04.07 - Criar produto (7/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 950B, 32ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 944B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.08 - Criar produto (8/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 945B, 26ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 951B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.09 - Criar produto (9/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 25ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 28ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
 
 └ 99.04.10 - Criar produto (10/10)
   √  has ids to create product
-  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 26ms]
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 952B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 201 or 409
@@ -871,16 +871,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.01 - Criar usuario (1/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_01_1772757200116_029@tenant.local
+  │ '📧 Email: mass_user_01_1773054314794_725@tenant.local
   │ '
-  │ '🔐 Password: DIb1ZHr2y6l4'
+  │ '🔐 Password: x6JbYFu8ffK8'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=4, Minúsculas=4, Números=4'
+  │ '📊 Caracteres: Maiúsculas=4, Minúsculas=5, Números=3'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 110ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 124ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -891,16 +891,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.02 - Criar usuario (2/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_02_1772757200353_054@tenant.local
+  │ '📧 Email: mass_user_02_1773054315016_400@tenant.local
   │ '
-  │ '🔐 Password: I8qg3gT9EaoO'
+  │ '🔐 Password: MkCH8AqNda7t'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=4, Minúsculas=5, Números=3'
+  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=5, Números=2'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 132ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 141ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -912,16 +912,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.03 - Criar usuario (3/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_03_1772757200603_906@tenant.local
+  │ '📧 Email: mass_user_03_1773054315265_049@tenant.local
   │ '
-  │ '🔐 Password: K0RVcvkXBS49'
+  │ '🔐 Password: rrk8YRiHme8q'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=6, Minúsculas=3, Números=3'
+  │ '📊 Caracteres: Maiúsculas=3, Minúsculas=7, Números=2'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 117ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 115ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -932,16 +932,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.04 - Criar usuario (4/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_04_1772757200836_513@tenant.local
+  │ '📧 Email: mass_user_04_1773054315483_266@tenant.local
   │ '
-  │ '🔐 Password: GN04wGWkh7fs'
+  │ '🔐 Password: IsX9qiA1wmt0'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=4, Minúsculas=5, Números=3'
+  │ '📊 Caracteres: Maiúsculas=3, Minúsculas=6, Números=3'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 107ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 117ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -952,16 +952,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.05 - Criar usuario (5/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_05_1772757201056_699@tenant.local
+  │ '📧 Email: mass_user_05_1773054315701_461@tenant.local
   │ '
-  │ '🔐 Password: aqgQ9P9uTTKg'
+  │ '🔐 Password: 61nsPH1BHnxY'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=5, Números=2'
+  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=4, Números=3'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 112ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 804B, 111ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -972,16 +972,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.06 - Criar usuario (6/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_06_1772757201276_763@tenant.local
+  │ '📧 Email: mass_user_06_1773054315917_250@tenant.local
   │ '
-  │ '🔐 Password: PYCTR0s3Zxzp'
+  │ '🔐 Password: JH82qGC0axYb'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=6, Minúsculas=4, Números=2'
+  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=4, Números=3'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 110ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 111ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -992,16 +992,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.07 - Criar usuario (7/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_07_1772757201499_219@tenant.local
+  │ '📧 Email: mass_user_07_1773054316109_302@tenant.local
   │ '
-  │ '🔐 Password: Z2a5KJ7g7pIz'
+  │ '🔐 Password: uLmeCXH3CKXN'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=4, Minúsculas=4, Números=4'
+  │ '📊 Caracteres: Maiúsculas=8, Minúsculas=3, Números=1'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 108ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 120ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -1012,16 +1012,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.08 - Criar usuario (8/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_08_1772757201732_513@tenant.local
+  │ '📧 Email: mass_user_08_1773054316326_972@tenant.local
   │ '
-  │ '🔐 Password: MiTkPo2LUeMt'
+  │ '🔐 Password: BeIXu62wNpLj'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=6, Minúsculas=5, Números=1'
+  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=5, Números=2'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 120ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 116ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -1032,16 +1032,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.09 - Criar usuario (9/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_09_1772757201967_013@tenant.local
+  │ '📧 Email: mass_user_09_1773054316542_999@tenant.local
   │ '
-  │ '🔐 Password: fP37MM1JnHFD'
+  │ '🔐 Password: PeWqBfi6wJDH'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=7, Minúsculas=2, Números=3'
+  │ '📊 Caracteres: Maiúsculas=6, Minúsculas=5, Números=1'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 113ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 115ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -1052,16 +1052,16 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 └ 99.05.10 - Criar usuario (10/10)
   ┌
   │ '=================================================='
-  │ '📧 Email: mass_user_10_1772757202199_596@tenant.local
+  │ '📧 Email: mass_user_10_1773054316765_396@tenant.local
   │ '
-  │ '🔐 Password: osOYQCMQI8aa'
+  │ '🔐 Password: 2xXdvJQ8J6Ia'
   │ '🔐 Password length: 12'
-  │ '📊 Caracteres: Maiúsculas=7, Minúsculas=4, Números=1'
+  │ '📊 Caracteres: Maiúsculas=5, Minúsculas=4, Números=3'
   │ '✅ Válida para regex: SIM'
   │ '=================================================='
   │ '✅ Token presente'
   └
-  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 108ms]
+  POST http://localhost:8080/api/tenant/users [201 Created, 805B, 109ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
@@ -1073,22 +1073,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:22.416Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:16.978Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1097,35 +1097,35 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:22.416Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:16.978Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 58ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 62ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', '2283e422-7c7d-46c3-a4d3-b75
-  │ d517c2efe'
+  │ '✅ Venda criada com ID:', '6deac0bf-9f93-4572-993e-330
+  │ 1a259c573'
   │ '🧾 Total de vendas criadas:', 1
   └
 
@@ -1133,22 +1133,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:22.594Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.158Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1157,143 +1157,23 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:22.594Z'
-  │ '📊 status:', 'DRAFT'
-  │ '=================================================='
-  └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 27ms]
-  √  No 5xx in collection
-  √  Status code acceptable for SMOKE (POST)
-  √  status 2xx/201
-  ┌
-  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
-  │ r usado fallback'
-  │ '✅ Venda criada com ID:', 'e4b87d1e-f897-4432-be95-60c
-  │ 460c517c4'
-  │ '🧾 Total de vendas criadas:', 2
-  └
-
-└ 99.06.03 - Criar venda (3/10)
-  ┌
-  │ '=================================================='
-  │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:22.716Z",\n' +
-  │   '  "status": "DRAFT",\n' +
-  │   '  "items": [\n' +
-  │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
-  │   '      "quantity": 1,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    },\n' +
-  │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
-  │   '      "quantity": 2,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    }\n' +
-  │   '  ]\n' +
-  │   '}'
-  │ '📊 customerId:', undefined
-  │ '📊 items:', '[\n' +
-  │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
-  │   '    "quantity": 1,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  },\n' +
-  │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
-  │   '    "quantity": 2,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  }\n' +
-  │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:22.716Z'
-  │ '📊 status:', 'DRAFT'
-  │ '=================================================='
-  └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 20ms]
-  √  No 5xx in collection
-  √  Status code acceptable for SMOKE (POST)
-  √  status 2xx/201
-  ┌
-  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
-  │ r usado fallback'
-  │ '✅ Venda criada com ID:', '5a2ca600-1ebd-4ca1-9ad2-fe4
-  │ f03d16f08'
-  │ '🧾 Total de vendas criadas:', 3
-  └
-
-└ 99.06.04 - Criar venda (4/10)
-  ┌
-  │ '=================================================='
-  │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:22.859Z",\n' +
-  │   '  "status": "DRAFT",\n' +
-  │   '  "items": [\n' +
-  │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
-  │   '      "quantity": 1,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    },\n' +
-  │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
-  │   '      "quantity": 2,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    }\n' +
-  │   '  ]\n' +
-  │   '}'
-  │ '📊 customerId:', undefined
-  │ '📊 items:', '[\n' +
-  │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
-  │   '    "quantity": 1,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  },\n' +
-  │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
-  │   '    "quantity": 2,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  }\n' +
-  │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:22.859Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.158Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
@@ -1304,8 +1184,128 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', 'd74c8c7f-81d4-461a-b7d2-99a
-  │ a40a412de'
+  │ '✅ Venda criada com ID:', 'bd0ceb04-69e5-4911-bedd-eef
+  │ e8c5ccd3f'
+  │ '🧾 Total de vendas criadas:', 2
+  └
+
+└ 99.06.03 - Criar venda (3/10)
+  ┌
+  │ '=================================================='
+  │ '📦 Body enviado:', '{\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.285Z",\n' +
+  │   '  "status": "DRAFT",\n' +
+  │   '  "items": [\n' +
+  │   '    {\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
+  │   '      "quantity": 1,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    },\n' +
+  │   '    {\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
+  │   '      "quantity": 2,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    }\n' +
+  │   '  ]\n' +
+  │   '}'
+  │ '📊 customerId:', undefined
+  │ '📊 items:', '[\n' +
+  │   '  {\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
+  │   '    "quantity": 1,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  },\n' +
+  │   '  {\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
+  │   '    "quantity": 2,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  }\n' +
+  │   ']'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.285Z'
+  │ '📊 status:', 'DRAFT'
+  │ '=================================================='
+  └
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 22ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx/201
+  ┌
+  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
+  │ r usado fallback'
+  │ '✅ Venda criada com ID:', '3bcabf32-160f-49fb-92b9-151
+  │ a715ea950'
+  │ '🧾 Total de vendas criadas:', 3
+  └
+
+└ 99.06.04 - Criar venda (4/10)
+  ┌
+  │ '=================================================='
+  │ '📦 Body enviado:', '{\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.421Z",\n' +
+  │   '  "status": "DRAFT",\n' +
+  │   '  "items": [\n' +
+  │   '    {\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
+  │   '      "quantity": 1,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    },\n' +
+  │   '    {\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
+  │   '      "quantity": 2,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    }\n' +
+  │   '  ]\n' +
+  │   '}'
+  │ '📊 customerId:', undefined
+  │ '📊 items:', '[\n' +
+  │   '  {\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
+  │   '    "quantity": 1,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  },\n' +
+  │   '  {\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
+  │   '    "quantity": 2,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  }\n' +
+  │   ']'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.421Z'
+  │ '📊 status:', 'DRAFT'
+  │ '=================================================='
+  └
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 19ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx/201
+  ┌
+  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
+  │ r usado fallback'
+  │ '✅ Venda criada com ID:', 'd029b19b-8e0a-44e1-b62d-4bb
+  │ 6787d14e9'
   │ '🧾 Total de vendas criadas:', 4
   └
 
@@ -1313,22 +1313,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.002Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.560Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1337,83 +1337,23 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.002Z'
-  │ '📊 status:', 'DRAFT'
-  │ '=================================================='
-  └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 21ms]
-  √  No 5xx in collection
-  √  Status code acceptable for SMOKE (POST)
-  √  status 2xx/201
-  ┌
-  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
-  │ r usado fallback'
-  │ '✅ Venda criada com ID:', '3ecc4c99-8d50-4e2f-a192-df7
-  │ ede13f454'
-  │ '🧾 Total de vendas criadas:', 5
-  └
-
-└ 99.06.06 - Criar venda (6/10)
-  ┌
-  │ '=================================================='
-  │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.143Z",\n' +
-  │   '  "status": "DRAFT",\n' +
-  │   '  "items": [\n' +
-  │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
-  │   '      "quantity": 1,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    },\n' +
-  │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
-  │   '      "quantity": 2,\n' +
-  │   '      "unitPrice": 100\n' +
-  │   '    }\n' +
-  │   '  ]\n' +
-  │   '}'
-  │ '📊 customerId:', undefined
-  │ '📊 items:', '[\n' +
-  │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
-  │   '    "quantity": 1,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  },\n' +
-  │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
-  │   '    "quantity": 2,\n' +
-  │   '    "unitPrice": 100\n' +
-  │   '  }\n' +
-  │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.143Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.560Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
@@ -1424,8 +1364,68 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', '7f51d76e-eb97-462e-a1c5-ff7
-  │ c05b95372'
+  │ '✅ Venda criada com ID:', '46697fac-b89e-4c3b-92e0-ec8
+  │ 06a3c3fdb'
+  │ '🧾 Total de vendas criadas:', 5
+  └
+
+└ 99.06.06 - Criar venda (6/10)
+  ┌
+  │ '=================================================='
+  │ '📦 Body enviado:', '{\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.703Z",\n' +
+  │   '  "status": "DRAFT",\n' +
+  │   '  "items": [\n' +
+  │   '    {\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
+  │   '      "quantity": 1,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    },\n' +
+  │   '    {\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
+  │   '      "quantity": 2,\n' +
+  │   '      "unitPrice": 100\n' +
+  │   '    }\n' +
+  │   '  ]\n' +
+  │   '}'
+  │ '📊 customerId:', undefined
+  │ '📊 items:', '[\n' +
+  │   '  {\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
+  │   '    "quantity": 1,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  },\n' +
+  │   '  {\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
+  │   '    "quantity": 2,\n' +
+  │   '    "unitPrice": 100\n' +
+  │   '  }\n' +
+  │   ']'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.703Z'
+  │ '📊 status:', 'DRAFT'
+  │ '=================================================='
+  └
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 21ms]
+  √  No 5xx in collection
+  √  Status code acceptable for SMOKE (POST)
+  √  status 2xx/201
+  ┌
+  │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
+  │ r usado fallback'
+  │ '✅ Venda criada com ID:', 'c54b32ee-8743-4acc-a920-a16
+  │ 4e838bf06'
   │ '🧾 Total de vendas criadas:', 6
   └
 
@@ -1433,22 +1433,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.264Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.838Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1457,35 +1457,35 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.264Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.838Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 17ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 18ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', '04d9f780-7ef9-43da-8fd5-581
-  │ 2a6ebdf55'
+  │ '✅ Venda criada com ID:', '41f6ef1d-c7c7-48d3-8edf-83d
+  │ dbcfdef87'
   │ '🧾 Total de vendas criadas:', 7
   └
 
@@ -1493,22 +1493,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.405Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:17.984Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1517,35 +1517,35 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.405Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:17.984Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 17ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 21ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', '211a3469-3e6f-4468-bc76-361
-  │ 8d8238ca4'
+  │ '✅ Venda criada com ID:', '904fbd18-42aa-4c66-8909-701
+  │ ebb218442'
   │ '🧾 Total de vendas criadas:', 8
   └
 
@@ -1553,22 +1553,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.530Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:18.121Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1577,35 +1577,35 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.530Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:18.121Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 22ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', '97d5da42-07b0-47e1-9e6a-5c7
-  │ cf0be8f64'
+  │ '✅ Venda criada com ID:', '486e9bd2-b394-4388-bb15-681
+  │ 37b125a40'
   │ '🧾 Total de vendas criadas:', 9
   └
 
@@ -1613,22 +1613,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   ┌
   │ '=================================================='
   │ '📦 Body enviado:', '{\n' +
-  │   '  "saleDate": "2026-03-06T00:33:23.671Z",\n' +
+  │   '  "saleDate": "2026-03-09T11:05:18.265Z",\n' +
   │   '  "status": "DRAFT",\n' +
   │   '  "items": [\n' +
   │   '    {\n' +
-  │   '      "productId": "98769ca7-686d-4a93-a086-8d3f3ac
-  │ cba7f",\n' +
-  │   '      "productName": "Product 98769ca7-686d-4a93-a0
-  │ 86-8d3f3accba7f",\n' +
+  │   '      "productId": "214165f3-948b-43bd-89cb-87de73b
+  │ 7f866",\n' +
+  │   '      "productName": "Product 214165f3-948b-43bd-89
+  │ cb-87de73b7f866",\n' +
   │   '      "quantity": 1,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    },\n' +
   │   '    {\n' +
-  │   '      "productId": "27eff0a6-b016-4cc1-a109-5cf339d
-  │ 69753",\n' +
-  │   '      "productName": "Product 27eff0a6-b016-4cc1-a1
-  │ 09-5cf339d69753",\n' +
+  │   '      "productId": "02f91fe8-4053-40be-8390-c5b12ab
+  │ 8ce34",\n' +
+  │   '      "productName": "Product 02f91fe8-4053-40be-83
+  │ 90-c5b12ab8ce34",\n' +
   │   '      "quantity": 2,\n' +
   │   '      "unitPrice": 100\n' +
   │   '    }\n' +
@@ -1637,40 +1637,40 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   │ '📊 customerId:', undefined
   │ '📊 items:', '[\n' +
   │   '  {\n' +
-  │   '    "productId": "98769ca7-686d-4a93-a086-8d3f3accb
-  │ a7f",\n' +
-  │   '    "productName": "Product 98769ca7-686d-4a93-a086
-  │ -8d3f3accba7f",\n' +
+  │   '    "productId": "214165f3-948b-43bd-89cb-87de73b7f
+  │ 866",\n' +
+  │   '    "productName": "Product 214165f3-948b-43bd-89cb
+  │ -87de73b7f866",\n' +
   │   '    "quantity": 1,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  },\n' +
   │   '  {\n' +
-  │   '    "productId": "27eff0a6-b016-4cc1-a109-5cf339d69
-  │ 753",\n' +
-  │   '    "productName": "Product 27eff0a6-b016-4cc1-a109
-  │ -5cf339d69753",\n' +
+  │   '    "productId": "02f91fe8-4053-40be-8390-c5b12ab8c
+  │ e34",\n' +
+  │   '    "productName": "Product 02f91fe8-4053-40be-8390
+  │ -c5b12ab8ce34",\n' +
   │   '    "quantity": 2,\n' +
   │   '    "unitPrice": 100\n' +
   │   '  }\n' +
   │   ']'
-  │ '📊 saleDate:', '2026-03-06T00:33:23.671Z'
+  │ '📊 saleDate:', '2026-03-09T11:05:18.265Z'
   │ '📊 status:', 'DRAFT'
   │ '=================================================='
   └
-  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 17ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 1.1kB, 20ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  status 2xx/201
   ┌
   │ '⚠️ Nenhum customer ID encontrado, mas a venda pode te
   │ r usado fallback'
-  │ '✅ Venda criada com ID:', 'cfeff142-64b4-4605-afac-3fa
-  │ 95f21b18a'
+  │ '✅ Venda criada com ID:', '967daff6-5edc-4c65-8f31-3ed
+  │ f374743fd'
   │ '🧾 Total de vendas criadas:', 10
   └
 
 └ 99.07 - Verificar contagem final
-  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 15ms]
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 16ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   ┌
@@ -1699,22 +1699,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 □ 🧩 v10 - FULL (disabled extras) / TENANT (auto-header) - EXTRA
 └ DELETE /api/tenant/categories/{id}
-  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 17ms]
+  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 15ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
 
 └ DELETE /api/tenant/subcategories/{id}
-  DELETE http://localhost:8080/api/tenant/subcategories/1 [204 No Content, 423B, 17ms]
+  DELETE http://localhost:8080/api/tenant/subcategories/1 [204 No Content, 423B, 19ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
 
 └ DELETE /api/tenant/suppliers/{id}
-  DELETE http://localhost:8080/api/tenant/suppliers/4e0a0600-9aa9-4ef5-91df-797cfbcf7639 [204 No Content, 423B, 19ms]
+  DELETE http://localhost:8080/api/tenant/suppliers/34477e45-a0be-4b1a-aef3-7d16fcec1ba8 [204 No Content, 423B, 23ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
 
 └ DELETE /api/tenant/users/{userId:\\d+}
-  DELETE http://localhost:8080/api/tenant/users/1 [204 No Content, 423B, 27ms]
+  DELETE http://localhost:8080/api/tenant/users/1 [204 No Content, 423B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
 
@@ -1724,12 +1724,12 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (DELETE)
 
 └ GET /api/tenant/_debug/schema
-  GET http://localhost:8080/api/tenant/_debug/schema [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/_debug/schema [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/billing/payments/account/{accountId}
-  GET http://localhost:8080/api/tenant/billing/payments/account/2 [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/billing/payments/account/2 [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1739,17 +1739,17 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/billing/payments/account/{accountId}/{paymentId}
-  GET http://localhost:8080/api/tenant/billing/payments/account/2/00000000-0000-0000-0000-000000000000 [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/billing/payments/account/2/00000000-0000-0000-0000-000000000000 [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/categories/active
-  GET http://localhost:8080/api/tenant/categories/active [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/categories/active [401 Unauthorized, 678B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/categories/admin
-  GET http://localhost:8080/api/tenant/categories/admin [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/categories/admin [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1759,7 +1759,7 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/categories/{id}
-  GET http://localhost:8080/api/tenant/categories/1 [401 Unauthorized, 681B, 10ms]
+  GET http://localhost:8080/api/tenant/categories/1 [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1769,12 +1769,12 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/any/brand
-  GET http://localhost:8080/api/tenant/products/any/brand [401 Unauthorized, 681B, 12ms]
+  GET http://localhost:8080/api/tenant/products/any/brand [401 Unauthorized, 678B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/any/category/{categoryId}
-  GET http://localhost:8080/api/tenant/products/any/category/1 [401 Unauthorized, 681B, 10ms]
+  GET http://localhost:8080/api/tenant/products/any/category/1 [401 Unauthorized, 678B, 11ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1784,22 +1784,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/category/{categoryId}
-  GET http://localhost:8080/api/tenant/products/category/1 [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/products/category/1 [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/count-by-supplier
-  GET http://localhost:8080/api/tenant/products/count-by-supplier [401 Unauthorized, 678B, 9ms]
+  GET http://localhost:8080/api/tenant/products/count-by-supplier [401 Unauthorized, 681B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/inventory-value
-  GET http://localhost:8080/api/tenant/products/inventory-value [401 Unauthorized, 681B, 7ms]
+  GET http://localhost:8080/api/tenant/products/inventory-value [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/low-stock/count
-  GET http://localhost:8080/api/tenant/products/low-stock/count [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/products/low-stock/count [401 Unauthorized, 678B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1809,22 +1809,22 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/subcategory/{subcategoryId}
-  GET http://localhost:8080/api/tenant/products/subcategory/1 [401 Unauthorized, 681B, 10ms]
+  GET http://localhost:8080/api/tenant/products/subcategory/1 [401 Unauthorized, 678B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/supplier/{supplierId}
-  GET http://localhost:8080/api/tenant/products/supplier/4e0a0600-9aa9-4ef5-91df-797cfbcf7639 [401 Unauthorized, 652B, 8ms]
+  GET http://localhost:8080/api/tenant/products/supplier/34477e45-a0be-4b1a-aef3-7d16fcec1ba8 [401 Unauthorized, 649B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/products/{id}
-  GET http://localhost:8080/api/tenant/products/1 [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/products/1 [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/subcategories/category/{categoryId}/admin
-  GET http://localhost:8080/api/tenant/subcategories/category/1/admin [401 Unauthorized, 681B, 9ms]
+  GET http://localhost:8080/api/tenant/subcategories/category/1/admin [401 Unauthorized, 678B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1834,12 +1834,12 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/subcategories/{id}
-  GET http://localhost:8080/api/tenant/subcategories/1 [401 Unauthorized, 681B, 11ms]
+  GET http://localhost:8080/api/tenant/subcategories/1 [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/suppliers/active
-  GET http://localhost:8080/api/tenant/suppliers/active [401 Unauthorized, 681B, 10ms]
+  GET http://localhost:8080/api/tenant/suppliers/active [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
@@ -1849,72 +1849,72 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/suppliers/email
-  GET http://localhost:8080/api/tenant/suppliers/email [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/suppliers/email [401 Unauthorized, 681B, 11ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/suppliers/email/any
-  GET http://localhost:8080/api/tenant/suppliers/email/any [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/suppliers/email/any [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/suppliers/search
-  GET http://localhost:8080/api/tenant/suppliers/search [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/suppliers/search [401 Unauthorized, 678B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/suppliers/{id}
-  GET http://localhost:8080/api/tenant/suppliers/1 [401 Unauthorized, 681B, 10ms]
+  GET http://localhost:8080/api/tenant/suppliers/1 [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/users/enabled
-  GET http://localhost:8080/api/tenant/users/enabled [401 Unauthorized, 678B, 9ms]
+  GET http://localhost:8080/api/tenant/users/enabled [401 Unauthorized, 681B, 11ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/users/enabled/count
-  GET http://localhost:8080/api/tenant/users/enabled/count [401 Unauthorized, 681B, 11ms]
+  GET http://localhost:8080/api/tenant/users/enabled/count [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/users/enabled/{userId:\\d+}
-  GET http://localhost:8080/api/tenant/users/enabled/1 [401 Unauthorized, 681B, 11ms]
+  GET http://localhost:8080/api/tenant/users/enabled/1 [401 Unauthorized, 681B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/tenant/users/{userId:\\d+}
-  GET http://localhost:8080/api/tenant/users/1 [401 Unauthorized, 681B, 8ms]
+  GET http://localhost:8080/api/tenant/users/1 [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ PATCH /api/tenant/admin/users/{userId}/suspend
-  PATCH http://localhost:8080/api/tenant/admin/users/1/suspend [401 Unauthorized, 681B, 11ms]
+  PATCH http://localhost:8080/api/tenant/admin/users/1/suspend [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/categories/{id}/restore
-  PATCH http://localhost:8080/api/tenant/categories/1/restore [401 Unauthorized, 681B, 10ms]
+  PATCH http://localhost:8080/api/tenant/categories/1/restore [401 Unauthorized, 678B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/categories/{id}/toggle-active
-  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [401 Unauthorized, 681B, 9ms]
+  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/me/password
-  PATCH http://localhost:8080/api/tenant/me/password [401 Unauthorized, 681B, 9ms]
+  PATCH http://localhost:8080/api/tenant/me/password [401 Unauthorized, 681B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/products/{id}/cost-price
-  PATCH http://localhost:8080/api/tenant/products/1/cost-price [401 Unauthorized, 681B, 8ms]
+  PATCH http://localhost:8080/api/tenant/products/1/cost-price [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/products/{id}/toggle-active
-  PATCH http://localhost:8080/api/tenant/products/1/toggle-active [401 Unauthorized, 681B, 10ms]
+  PATCH http://localhost:8080/api/tenant/products/1/toggle-active [401 Unauthorized, 681B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
@@ -1924,42 +1924,42 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/subcategories/{id}/toggle-active
-  PATCH http://localhost:8080/api/tenant/subcategories/1/toggle-active [401 Unauthorized, 678B, 9ms]
+  PATCH http://localhost:8080/api/tenant/subcategories/1/toggle-active [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/suppliers/{id}/restore
-  PATCH http://localhost:8080/api/tenant/suppliers/1/restore [401 Unauthorized, 681B, 9ms]
+  PATCH http://localhost:8080/api/tenant/suppliers/1/restore [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/suppliers/{id}/toggle-active
-  PATCH http://localhost:8080/api/tenant/suppliers/1/toggle-active [401 Unauthorized, 681B, 7ms]
+  PATCH http://localhost:8080/api/tenant/suppliers/1/toggle-active [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/users/{userId:\\d+}/password
-  PATCH http://localhost:8080/api/tenant/users/1/password [401 Unauthorized, 681B, 9ms]
+  PATCH http://localhost:8080/api/tenant/users/1/password [401 Unauthorized, 681B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/users/{userId:\\d+}/restore
-  PATCH http://localhost:8080/api/tenant/users/1/restore [401 Unauthorized, 681B, 11ms]
+  PATCH http://localhost:8080/api/tenant/users/1/restore [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/users/{userId:\\d+}/soft-delete
-  PATCH http://localhost:8080/api/tenant/users/1/soft-delete [401 Unauthorized, 678B, 9ms]
+  PATCH http://localhost:8080/api/tenant/users/1/soft-delete [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/users/{userId:\\d+}/status
-  PATCH http://localhost:8080/api/tenant/users/1/status [401 Unauthorized, 681B, 11ms]
+  PATCH http://localhost:8080/api/tenant/users/1/status [401 Unauthorized, 681B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/tenant/users/{userId:\\d+}/transfer-admin
-  PATCH http://localhost:8080/api/tenant/users/1/transfer-admin [401 Unauthorized, 681B, 8ms]
+  PATCH http://localhost:8080/api/tenant/users/1/transfer-admin [401 Unauthorized, 678B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
@@ -1969,7 +1969,7 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/tenant/password/forgot
-  POST http://localhost:8080/api/tenant/password/forgot [400 Bad Request, 645B, 7ms]
+  POST http://localhost:8080/api/tenant/password/forgot [400 Bad Request, 645B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
@@ -1979,17 +1979,17 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/tenant/subcategories/category/{categoryId}
-  POST http://localhost:8080/api/tenant/subcategories/category/1 [401 Unauthorized, 681B, 10ms]
+  POST http://localhost:8080/api/tenant/subcategories/category/1 [401 Unauthorized, 681B, 11ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 └ PUT /api/tenant/categories/{id}
-  PUT http://localhost:8080/api/tenant/categories/1 [401 Unauthorized, 681B, 9ms]
+  PUT http://localhost:8080/api/tenant/categories/1 [401 Unauthorized, 678B, 11ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PUT)
 
 └ PUT /api/tenant/me
-  PUT http://localhost:8080/api/tenant/me [401 Unauthorized, 681B, 9ms]
+  PUT http://localhost:8080/api/tenant/me [401 Unauthorized, 681B, 7ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PUT)
 
@@ -1999,13 +1999,13 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (PUT)
 
 └ PUT /api/tenant/suppliers/{id}
-  PUT http://localhost:8080/api/tenant/suppliers/1 [401 Unauthorized, 681B, 8ms]
+  PUT http://localhost:8080/api/tenant/suppliers/1 [401 Unauthorized, 681B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PUT)
 
 □ 🧩 v10 - FULL (disabled extras) / CONTROL PLANE (superadmin_token) - EXTRA
 └ DELETE /api/controlplane/accounts/{accountId}
-  DELETE http://localhost:8080/api/controlplane/accounts/2 [204 No Content, 423B, 31ms]
+  DELETE http://localhost:8080/api/controlplane/accounts/2 [204 No Content, 423B, 36ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (DELETE)
 
@@ -2015,77 +2015,77 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (DELETE)
 
 └ GET /api/controlplane/accounts/by-status
-  GET http://localhost:8080/api/controlplane/accounts/by-status [400 Bad Request, 659B, 9ms]
+  GET http://localhost:8080/api/controlplane/accounts/by-status [400 Bad Request, 662B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/created-between
-  GET http://localhost:8080/api/controlplane/accounts/created-between [400 Bad Request, 660B, 9ms]
+  GET http://localhost:8080/api/controlplane/accounts/created-between [400 Bad Request, 660B, 15ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/query/payment-due-before
-  GET http://localhost:8080/api/controlplane/accounts/query/payment-due-before [400 Bad Request, 658B, 11ms]
+  GET http://localhost:8080/api/controlplane/accounts/query/payment-due-before [400 Bad Request, 658B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/query/{id}
-  GET http://localhost:8080/api/controlplane/accounts/query/1 [200 OK, 697B, 18ms]
+  GET http://localhost:8080/api/controlplane/accounts/query/1 [200 OK, 697B, 15ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/query/{id}/enabled
-  GET http://localhost:8080/api/controlplane/accounts/query/1/enabled [200 OK, 697B, 12ms]
+  GET http://localhost:8080/api/controlplane/accounts/query/1/enabled [200 OK, 697B, 16ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/search
-  GET http://localhost:8080/api/controlplane/accounts/search [400 Bad Request, 658B, 9ms]
+  GET http://localhost:8080/api/controlplane/accounts/search [400 Bad Request, 658B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/{accountId}
-  GET http://localhost:8080/api/controlplane/accounts/2 [404 Not Found, 659B, 15ms]
+  GET http://localhost:8080/api/controlplane/accounts/2 [404 Not Found, 659B, 16ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/{accountId}/admin-details
-  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [404 Not Found, 656B, 14ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/admin-details [404 Not Found, 659B, 14ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/{accountId}/provisioning-events
-  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events [200 OK, 1.58kB, 18ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events [200 OK, 1.58kB, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/{accountId}/provisioning-events/latest
-  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events/latest [200 OK, 869B, 22ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/provisioning-events/latest [200 OK, 869B, 14ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/accounts/{accountId}/tenant-users
-  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [404 Not Found, 658B, 14ms]
+  GET http://localhost:8080/api/controlplane/accounts/2/tenant-users [404 Not Found, 658B, 13ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/users/enabled
-  GET http://localhost:8080/api/controlplane/users/enabled [200 OK, 1.46kB, 16ms]
+  GET http://localhost:8080/api/controlplane/users/enabled [200 OK, 1.46kB, 17ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/users/{userId}
-  GET http://localhost:8080/api/controlplane/users/1 [200 OK, 715B, 20ms]
+  GET http://localhost:8080/api/controlplane/users/1 [200 OK, 715B, 13ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/controlplane/users/{userId}/enabled
-  GET http://localhost:8080/api/controlplane/users/1/enabled [200 OK, 715B, 16ms]
+  GET http://localhost:8080/api/controlplane/users/1/enabled [200 OK, 715B, 15ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ PATCH /api/controlplane/me/password
-  PATCH http://localhost:8080/api/controlplane/me/password [400 Bad Request, 645B, 8ms]
+  PATCH http://localhost:8080/api/controlplane/me/password [400 Bad Request, 645B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
@@ -2095,7 +2095,7 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/controlplane/users/{userId}/permissions
-  PATCH http://localhost:8080/api/controlplane/users/1/permissions [400 Bad Request, 645B, 10ms]
+  PATCH http://localhost:8080/api/controlplane/users/1/permissions [400 Bad Request, 645B, 19ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
@@ -2105,32 +2105,32 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (PATCH)
 
 └ PATCH /api/controlplane/users/{userId}/restore
-  PATCH http://localhost:8080/api/controlplane/users/1/restore [409 Conflict, 757B, 13ms]
+  PATCH http://localhost:8080/api/controlplane/users/1/restore [409 Conflict, 754B, 17ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (PATCH)
 
 └ POST /api/controlplane/accounts/query/count
-  POST http://localhost:8080/api/controlplane/accounts/query/count [400 Bad Request, 642B, 7ms]
+  POST http://localhost:8080/api/controlplane/accounts/query/count [400 Bad Request, 645B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/controlplane/accounts/signup
-  POST http://localhost:8080/api/controlplane/accounts/signup [400 Bad Request, 645B, 8ms]
+  POST http://localhost:8080/api/controlplane/accounts/signup [400 Bad Request, 645B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/controlplane/accounts/{accountId}/restore
-  POST http://localhost:8080/api/controlplane/accounts/2/restore [204 No Content, 423B, 20ms]
+  POST http://localhost:8080/api/controlplane/accounts/2/restore [204 No Content, 423B, 25ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/controlplane/accounts/{accountId}/status
-  POST http://localhost:8080/api/controlplane/accounts/2/status [400 Bad Request, 645B, 8ms]
+  POST http://localhost:8080/api/controlplane/accounts/2/status [400 Bad Request, 645B, 9ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/controlplane/accounts/{accountId}/tenant-users/{userId}/suspended-by-admin
-  POST http://localhost:8080/api/controlplane/accounts/2/tenant-users/1/suspended-by-admin [400 Bad Request, 660B, 11ms]
+  POST http://localhost:8080/api/controlplane/accounts/2/tenant-users/1/suspended-by-admin [400 Bad Request, 660B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
@@ -2145,48 +2145,48 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
   √  Status code acceptable for SMOKE (POST)
 
 └ POST /api/controlplane/users/{userId}/suspend-by-admin
-  POST http://localhost:8080/api/controlplane/users/1/suspend-by-admin [409 Conflict, 757B, 16ms]
+  POST http://localhost:8080/api/controlplane/users/1/suspend-by-admin [409 Conflict, 757B, 14ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
 
 □ 🧩 v10 - FULL (disabled extras) / ADMIN (superadmin_token) - EXTRA
 └ GET /api/admin/billing/payments/query/accounts/{accountId}/count-completed
-  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 9ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 10ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/admin/billing/payments/query/accounts/{accountId}/total-paid
-  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid [400 Bad Request, 665B, 8ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid [400 Bad Request, 668B, 8ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 └ GET /api/admin/billing/payments/query/status/{status}
-  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 15ms]
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 12ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
 
 □ 🧪 99 - ENTERPRISE MULTI-TENANT TESTS
 └ 99.01 tenant isolation check
-  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 20ms]
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 17ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Tenant isolation basic
 
 └ 99.02 race condition detector
-  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.06kB, 104ms]
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.06kB, 112ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Login must not fail under race
 
 □ 🔥 100 - STRIPE GRADE SAAS TESTS
 └ 100.01 token reuse attack
-  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 18ms]
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 24ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Token reuse allowed but valid
 
 └ 100.02 cross tenant data leak detector
-  GET http://localhost:8080/api/tenant/me [200 OK, 796B, 14ms]
+  GET http://localhost:8080/api/tenant/me [200 OK, 796B, 15ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Tenant isolation
@@ -2199,40 +2199,40 @@ multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)
 
 □ 🚀 200 - ULTRA SAAS SCALE TESTS
 └ 200.01 massive sales load
-  POST http://localhost:8080/api/tenant/sales [200 OK, 900B, 15ms]
+  POST http://localhost:8080/api/tenant/sales [200 OK, 900B, 17ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Sales endpoint responsive
 
 └ 200.02 inventory low-stock smoke
-  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 12ms]
+  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 14ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (GET)
   √  Inventory endpoint valid
 
 └ 200.03 billing smoke
-  POST http://localhost:8080/api/controlplane/billing/payments [409 Conflict, 686B, 18ms]
+  POST http://localhost:8080/api/controlplane/billing/payments [409 Conflict, 683B, 22ms]
   √  No 5xx in collection
   √  Status code acceptable for SMOKE (POST)
   √  Billing endpoint ok
   √  Billing conflict has business error body
 
-┌─────────────────────────┬───────────────────┬───────────────────┐
-│                         │          executed │            failed │
-├─────────────────────────┼───────────────────┼───────────────────┤
-│              iterations │                 1 │                 0 │
-├─────────────────────────┼───────────────────┼───────────────────┤
-│                requests │               235 │                 0 │
-├─────────────────────────┼───────────────────┼───────────────────┤
-│            test-scripts │               373 │                 0 │
-├─────────────────────────┼───────────────────┼───────────────────┤
-│      prerequest-scripts │               309 │                 0 │
-├─────────────────────────┼───────────────────┼───────────────────┤
-│              assertions │               647 │                 0 │
-├─────────────────────────┴───────────────────┴───────────────────┤
-│ total run duration: 32.7s                                       │
-├─────────────────────────────────────────────────────────────────┤
-│ total data received: 70.61kB (approx)                           │
-├─────────────────────────────────────────────────────────────────┤
-│ average response time: 40ms [min: 6ms, max: 1099ms, s.d.: 95ms] │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────┬────────────────────┬───────────────────┐
+│                         │           executed │            failed │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              iterations │                  1 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│                requests │                235 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│            test-scripts │                373 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│      prerequest-scripts │                309 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              assertions │                647 │                 0 │
+├─────────────────────────┴────────────────────┴───────────────────┤
+│ total run duration: 33.3s                                        │
+├──────────────────────────────────────────────────────────────────┤
+│ total data received: 70.6kB (approx)                             │
+├──────────────────────────────────────────────────────────────────┤
+│ average response time: 43ms [min: 6ms, max: 1099ms, s.d.: 101ms] │
+└──────────────────────────────────────────────────────────────────┘

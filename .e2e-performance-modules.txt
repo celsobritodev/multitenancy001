@@ -1,0 +1,6 @@
+AUTH            requests=   1 avg_ms=    6.00 p95_ms=    6.00
+BILLING         requests=  18 avg_ms=   85.72 p95_ms=  130.00
+CATALOG         requests=  46 avg_ms=   21.24 p95_ms=   50.00
+OTHER           requests= 130 avg_ms=   48.86 p95_ms=  130.00
+SALES           requests=   1 avg_ms=   17.00 p95_ms=   17.00
+USERS           requests=  39 avg_ms=   35.28 p95_ms=  147.00

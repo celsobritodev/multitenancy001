@@ -1,0 +1,242 @@
+V16 ULTRA HARDENED - PERFORMANCE REPORT
+
+requests_total: 235
+latency_avg_ms: 40.35
+latency_p95_ms: 118.3
+latency_p99_ms: 331.24
+latency_max_ms: 1075.0
+
+REQUEST COUNTS BY MODULE
+- 00.01 health: requests=1 avg_ms=56.0 p95_ms=56.0
+- 00.02 signup: requests=1 avg_ms=768.0 p95_ms=768.0
+- 00.03 tenant login: requests=1 avg_ms=289.0 p95_ms=289.0
+- 00.04 tenant me: requests=1 avg_ms=95.0 p95_ms=95.0
+- 00.05 controlplane login (superadmin): requests=1 avg_ms=277.0 p95_ms=277.0
+- 00.06 login as billing manager: requests=1 avg_ms=114.0 p95_ms=114.0
+- 00.07 login as support: requests=1 avg_ms=113.0 p95_ms=113.0
+- 00.08 login as operator: requests=1 avg_ms=111.0 p95_ms=111.0
+- 01.01 tenant refresh: requests=1 avg_ms=44.0 p95_ms=44.0
+- 01.02 tenant logout: requests=1 avg_ms=27.0 p95_ms=27.0
+- 01.50.01 signup tenant #2: requests=1 avg_ms=353.0 p95_ms=353.0
+- 01.50.02 tenant #2 login (admin): requests=1 avg_ms=114.0 p95_ms=114.0
+- 01.50.03 create shared user in tenant #1: requests=1 avg_ms=200.0 p95_ms=200.0
+- 01.50.04 create shared user in tenant #2: requests=2 avg_ms=141.0 p95_ms=141.0
+- 01.50.04a controlplane list tenant-users (account #1) - shared index check: requests=1 avg_ms=26.0 p95_ms=26.0
+- 01.50.04b controlplane list tenant-users (account #2) - shared index check: requests=1 avg_ms=27.0 p95_ms=27.0
+- 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED: requests=1 avg_ms=219.0 p95_ms=219.0
+- 01.50.06 tenant login confirm (challengeId + tenant selection) => 200 JWT: requests=1 avg_ms=52.0 p95_ms=52.0
+- 02.01 controlplane refresh: requests=1 avg_ms=29.0 p95_ms=29.0
+- 02.02 controlplane logout: requests=1 avg_ms=26.0 p95_ms=26.0
+- 03.01 billing manager me: requests=1 avg_ms=27.0 p95_ms=27.0
+- 03.02 billing manager refresh: requests=1 avg_ms=28.0 p95_ms=28.0
+- 03.03 billing manager logout: requests=1 avg_ms=21.0 p95_ms=21.0
+- 04.01 support me: requests=1 avg_ms=18.0 p95_ms=18.0
+- 04.02 support list accounts: requests=1 avg_ms=22.0 p95_ms=22.0
+- 04.03 support list users: requests=1 avg_ms=23.0 p95_ms=23.0
+- 05.01 operator me: requests=1 avg_ms=15.0 p95_ms=15.0
+- 05.02 operator list accounts: requests=1 avg_ms=22.0 p95_ms=22.0
+- 05.03 operator cannot list users: requests=1 avg_ms=24.0 p95_ms=24.0
+- 06.01 superadmin create payment: requests=1 avg_ms=1075.0 p95_ms=1075.0
+- 06.02 superadmin list pending payments: requests=1 avg_ms=23.0 p95_ms=23.0
+- 06.03 superadmin get total paid: requests=1 avg_ms=50.0 p95_ms=50.0
+- 06.04 superadmin count completed payments: requests=1 avg_ms=24.0 p95_ms=24.0
+- 06.05 billing manager list pending payments: requests=1 avg_ms=12.0 p95_ms=12.0
+- 06.06 support cannot list payments: requests=1 avg_ms=14.0 p95_ms=14.0
+- 06.07 operator cannot list payments: requests=1 avg_ms=12.0 p95_ms=12.0
+- 07.01 create category: requests=1 avg_ms=38.0 p95_ms=38.0
+- 07.02 create another category: requests=1 avg_ms=20.0 p95_ms=20.0
+- 07.03 list all categories: requests=1 avg_ms=23.0 p95_ms=23.0
+- 07.04 get category by id: requests=1 avg_ms=21.0 p95_ms=21.0
+- 07.05 update category: requests=1 avg_ms=29.0 p95_ms=29.0
+- 07.06 toggle category active: requests=1 avg_ms=23.0 p95_ms=23.0
+- 07.07 soft delete category: requests=1 avg_ms=20.0 p95_ms=20.0
+- 07.08 restore category: requests=1 avg_ms=22.0 p95_ms=22.0
+- 08.01 create subcategory: requests=1 avg_ms=37.0 p95_ms=37.0
+- 08.02 list subcategories by category: requests=1 avg_ms=22.0 p95_ms=22.0
+- 09.01 create supplier: requests=1 avg_ms=43.0 p95_ms=43.0
+- 09.02 list suppliers: requests=1 avg_ms=20.0 p95_ms=20.0
+- 10.01 create product: requests=1 avg_ms=74.0 p95_ms=74.0
+- 10.02 list products: requests=1 avg_ms=41.0 p95_ms=41.0
+- 10.03 get product by id: requests=1 avg_ms=24.0 p95_ms=24.0
+- 10.04 update product cost: requests=1 avg_ms=34.0 p95_ms=34.0
+- 10.05 toggle product active: requests=1 avg_ms=29.0 p95_ms=29.0
+- 100.01 token reuse attack: requests=1 avg_ms=14.0 p95_ms=14.0
+- 100.02 cross tenant data leak detector: requests=1 avg_ms=15.0 p95_ms=15.0
+- 100.03 tenant migration smoke: requests=1 avg_ms=8.0 p95_ms=8.0
+- 11.01 list products by category: requests=1 avg_ms=25.0 p95_ms=25.0
+- 11.02 count low stock: requests=1 avg_ms=19.0 p95_ms=19.0
+- 11.03 search products: requests=1 avg_ms=31.0 p95_ms=31.0
+- 12.01 create product without category: requests=1 avg_ms=40.0 p95_ms=40.0
+- 12.02 create duplicate sku: requests=1 avg_ms=26.0 p95_ms=26.0
+- 13.01 create tenant user: requests=1 avg_ms=123.0 p95_ms=123.0
+- 13.02 list tenant users: requests=1 avg_ms=41.0 p95_ms=41.0
+- 13.03 get tenant user by id: requests=1 avg_ms=26.0 p95_ms=26.0
+- 13.04 count enabled tenant users: requests=1 avg_ms=22.0 p95_ms=22.0
+- 13.05 suspend by admin (status): requests=1 avg_ms=56.0 p95_ms=56.0
+- 13.06 unsuspend by admin (status): requests=1 avg_ms=57.0 p95_ms=57.0
+- 13.07 soft delete tenant user: requests=1 avg_ms=32.0 p95_ms=32.0
+- 13.08 restore tenant user: requests=1 avg_ms=37.0 p95_ms=37.0
+- 13.09 tentar criar usuário com email duplicado (deve falhar com 409): requests=2 avg_ms=46.0 p95_ms=46.0
+- 14.01 superadmin get account by id: requests=1 avg_ms=17.0 p95_ms=17.0
+- 14.02 superadmin get account admin details: requests=1 avg_ms=29.0 p95_ms=29.0
+- 14.03 superadmin list account tenant users: requests=1 avg_ms=22.0 p95_ms=22.0
+- 200.01 massive sales load: requests=1 avg_ms=17.0 p95_ms=17.0
+- 200.02 inventory low-stock smoke: requests=1 avg_ms=12.0 p95_ms=12.0
+- 200.03 billing smoke: requests=1 avg_ms=16.0 p95_ms=16.0
+- 99.00 - Reset vars (mass): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.01 tenant isolation check: requests=1 avg_ms=17.0 p95_ms=17.0
+- 99.01.01 - Criar categoria (1/10): requests=1 avg_ms=19.0 p95_ms=19.0
+- 99.01.02 - Criar categoria (2/10): requests=1 avg_ms=24.0 p95_ms=24.0
+- 99.01.03 - Criar categoria (3/10): requests=1 avg_ms=21.0 p95_ms=21.0
+- 99.01.04 - Criar categoria (4/10): requests=1 avg_ms=27.0 p95_ms=27.0
+- 99.01.05 - Criar categoria (5/10): requests=1 avg_ms=21.0 p95_ms=21.0
+- 99.01.06 - Criar categoria (6/10): requests=1 avg_ms=19.0 p95_ms=19.0
+- 99.01.07 - Criar categoria (7/10): requests=1 avg_ms=22.0 p95_ms=22.0
+- 99.01.08 - Criar categoria (8/10): requests=1 avg_ms=26.0 p95_ms=26.0
+- 99.01.09 - Criar categoria (9/10): requests=1 avg_ms=27.0 p95_ms=27.0
+- 99.01.10 - Criar categoria (10/10): requests=1 avg_ms=46.0 p95_ms=46.0
+- 99.02 race condition detector: requests=1 avg_ms=107.0 p95_ms=107.0
+- 99.02.01 - Criar subcategoria (1/10): requests=1 avg_ms=24.0 p95_ms=24.0
+- 99.02.02 - Criar subcategoria (2/10): requests=1 avg_ms=28.0 p95_ms=28.0
+- 99.02.03 - Criar subcategoria (3/10): requests=1 avg_ms=25.0 p95_ms=25.0
+- 99.02.04 - Criar subcategoria (4/10): requests=1 avg_ms=21.0 p95_ms=21.0
+- 99.02.05 - Criar subcategoria (5/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.02.06 - Criar subcategoria (6/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.02.07 - Criar subcategoria (7/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.02.08 - Criar subcategoria (8/10): requests=1 avg_ms=22.0 p95_ms=22.0
+- 99.02.09 - Criar subcategoria (9/10): requests=1 avg_ms=19.0 p95_ms=19.0
+- 99.02.10 - Criar subcategoria (10/10): requests=1 avg_ms=21.0 p95_ms=21.0
+- 99.03.01 - Criar fornecedor (1/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.03.02 - Criar fornecedor (2/10): requests=1 avg_ms=24.0 p95_ms=24.0
+- 99.03.03 - Criar fornecedor (3/10): requests=1 avg_ms=19.0 p95_ms=19.0
+- 99.03.04 - Criar fornecedor (4/10): requests=1 avg_ms=19.0 p95_ms=19.0
+- 99.03.05 - Criar fornecedor (5/10): requests=1 avg_ms=18.0 p95_ms=18.0
+- 99.03.06 - Criar fornecedor (6/10): requests=1 avg_ms=18.0 p95_ms=18.0
+- 99.03.07 - Criar fornecedor (7/10): requests=1 avg_ms=17.0 p95_ms=17.0
+- 99.03.08 - Criar fornecedor (8/10): requests=1 avg_ms=35.0 p95_ms=35.0
+- 99.03.09 - Criar fornecedor (9/10): requests=1 avg_ms=26.0 p95_ms=26.0
+- 99.03.10 - Criar fornecedor (10/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.04.01 - Criar produto (1/10): requests=1 avg_ms=26.0 p95_ms=26.0
+- 99.04.02 - Criar produto (2/10): requests=1 avg_ms=32.0 p95_ms=32.0
+- 99.04.03 - Criar produto (3/10): requests=1 avg_ms=31.0 p95_ms=31.0
+- 99.04.04 - Criar produto (4/10): requests=1 avg_ms=27.0 p95_ms=27.0
+- 99.04.05 - Criar produto (5/10): requests=1 avg_ms=27.0 p95_ms=27.0
+- 99.04.06 - Criar produto (6/10): requests=1 avg_ms=25.0 p95_ms=25.0
+- 99.04.07 - Criar produto (7/10): requests=1 avg_ms=27.0 p95_ms=27.0
+- 99.04.08 - Criar produto (8/10): requests=1 avg_ms=28.0 p95_ms=28.0
+- 99.04.09 - Criar produto (9/10): requests=1 avg_ms=24.0 p95_ms=24.0
+- 99.04.10 - Criar produto (10/10): requests=1 avg_ms=26.0 p95_ms=26.0
+- 99.05.01 - Criar usuario (1/10): requests=1 avg_ms=116.0 p95_ms=116.0
+- 99.05.02 - Criar usuario (2/10): requests=1 avg_ms=132.0 p95_ms=132.0
+- 99.05.03 - Criar usuario (3/10): requests=1 avg_ms=119.0 p95_ms=119.0
+- 99.05.04 - Criar usuario (4/10): requests=1 avg_ms=115.0 p95_ms=115.0
+- 99.05.05 - Criar usuario (5/10): requests=1 avg_ms=114.0 p95_ms=114.0
+- 99.05.06 - Criar usuario (6/10): requests=1 avg_ms=112.0 p95_ms=112.0
+- 99.05.07 - Criar usuario (7/10): requests=1 avg_ms=111.0 p95_ms=111.0
+- 99.05.08 - Criar usuario (8/10): requests=1 avg_ms=109.0 p95_ms=109.0
+- 99.05.09 - Criar usuario (9/10): requests=1 avg_ms=118.0 p95_ms=118.0
+- 99.05.10 - Criar usuario (10/10): requests=1 avg_ms=109.0 p95_ms=109.0
+- 99.06.01 - Criar venda (1/10): requests=1 avg_ms=59.0 p95_ms=59.0
+- 99.06.02 - Criar venda (2/10): requests=1 avg_ms=26.0 p95_ms=26.0
+- 99.06.03 - Criar venda (3/10): requests=1 avg_ms=21.0 p95_ms=21.0
+- 99.06.04 - Criar venda (4/10): requests=1 avg_ms=23.0 p95_ms=23.0
+- 99.06.05 - Criar venda (5/10): requests=1 avg_ms=17.0 p95_ms=17.0
+- 99.06.06 - Criar venda (6/10): requests=1 avg_ms=22.0 p95_ms=22.0
+- 99.06.07 - Criar venda (7/10): requests=1 avg_ms=17.0 p95_ms=17.0
+- 99.06.08 - Criar venda (8/10): requests=1 avg_ms=18.0 p95_ms=18.0
+- 99.06.09 - Criar venda (9/10): requests=1 avg_ms=18.0 p95_ms=18.0
+- 99.06.10 - Criar venda (10/10): requests=1 avg_ms=20.0 p95_ms=20.0
+- 99.07 - Verificar contagem final: requests=1 avg_ms=15.0 p95_ms=15.0
+- DELETE /api/controlplane/accounts/{accountId}: requests=1 avg_ms=32.0 p95_ms=32.0
+- DELETE /api/controlplane/users/{userId}: requests=1 avg_ms=21.0 p95_ms=21.0
+- DELETE /api/tenant/categories/{id}: requests=1 avg_ms=15.0 p95_ms=15.0
+- DELETE /api/tenant/subcategories/{id}: requests=1 avg_ms=17.0 p95_ms=17.0
+- DELETE /api/tenant/suppliers/{id}: requests=1 avg_ms=18.0 p95_ms=18.0
+- DELETE /api/tenant/users/{userId:\\d+}: requests=1 avg_ms=27.0 p95_ms=27.0
+- DELETE /api/tenant/users/{userId:\\d+}/hard: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/admin/billing/payments/query/accounts/{accountId}/count-completed: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/admin/billing/payments/query/accounts/{accountId}/total-paid: requests=1 avg_ms=7.0 p95_ms=7.0
+- GET /api/admin/billing/payments/query/status/{status}: requests=1 avg_ms=11.0 p95_ms=11.0
+- GET /api/controlplane/accounts/by-status: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/controlplane/accounts/created-between: requests=1 avg_ms=13.0 p95_ms=13.0
+- GET /api/controlplane/accounts/query/payment-due-before: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/controlplane/accounts/query/{id}: requests=1 avg_ms=17.0 p95_ms=17.0
+- GET /api/controlplane/accounts/query/{id}/enabled: requests=1 avg_ms=14.0 p95_ms=14.0
+- GET /api/controlplane/accounts/search: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/controlplane/accounts/{accountId}: requests=1 avg_ms=13.0 p95_ms=13.0
+- GET /api/controlplane/accounts/{accountId}/admin-details: requests=1 avg_ms=14.0 p95_ms=14.0
+- GET /api/controlplane/accounts/{accountId}/provisioning-events: requests=1 avg_ms=20.0 p95_ms=20.0
+- GET /api/controlplane/accounts/{accountId}/provisioning-events/latest: requests=1 avg_ms=14.0 p95_ms=14.0
+- GET /api/controlplane/accounts/{accountId}/tenant-users: requests=1 avg_ms=13.0 p95_ms=13.0
+- GET /api/controlplane/users/enabled: requests=1 avg_ms=17.0 p95_ms=17.0
+- GET /api/controlplane/users/{userId}: requests=1 avg_ms=14.0 p95_ms=14.0
+- GET /api/controlplane/users/{userId}/enabled: requests=1 avg_ms=15.0 p95_ms=15.0
+- GET /api/tenant/_debug/schema: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/billing/payments/account/{accountId}: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/billing/payments/account/{accountId}/has-active: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/billing/payments/account/{accountId}/{paymentId}: requests=1 avg_ms=11.0 p95_ms=11.0
+- GET /api/tenant/categories/active: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/categories/admin: requests=1 avg_ms=7.0 p95_ms=7.0
+- GET /api/tenant/categories/search: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/categories/{id}: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products/any/brand: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/products/any/category/{categoryId}: requests=1 avg_ms=11.0 p95_ms=11.0
+- GET /api/tenant/products/any/subcategory/{subcategoryId}: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/tenant/products/category/{categoryId}: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/products/count-by-supplier: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products/inventory-value: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/tenant/products/low-stock/count: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products/search: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products/subcategory/{subcategoryId}: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/products/supplier/{supplierId}: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/products/{id}: requests=1 avg_ms=11.0 p95_ms=11.0
+- GET /api/tenant/subcategories/category/{categoryId}/admin: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/subcategories/category/{categoryId}/not-deleted: requests=1 avg_ms=11.0 p95_ms=11.0
+- GET /api/tenant/subcategories/{id}: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/suppliers/active: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/suppliers/document/{document}: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/suppliers/email: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/tenant/suppliers/email/any: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/suppliers/search: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/suppliers/{id}: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/users/enabled: requests=1 avg_ms=8.0 p95_ms=8.0
+- GET /api/tenant/users/enabled/count: requests=1 avg_ms=9.0 p95_ms=9.0
+- GET /api/tenant/users/enabled/{userId:\\d+}: requests=1 avg_ms=10.0 p95_ms=10.0
+- GET /api/tenant/users/{userId:\\d+}: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/controlplane/me/password: requests=1 avg_ms=11.0 p95_ms=11.0
+- PATCH /api/controlplane/users/{userId}: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/controlplane/users/{userId}/permissions: requests=1 avg_ms=12.0 p95_ms=12.0
+- PATCH /api/controlplane/users/{userId}/reset-password: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/controlplane/users/{userId}/restore: requests=1 avg_ms=16.0 p95_ms=16.0
+- PATCH /api/tenant/admin/users/{userId}/suspend: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/tenant/categories/{id}/restore: requests=1 avg_ms=11.0 p95_ms=11.0
+- PATCH /api/tenant/categories/{id}/toggle-active: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/me/password: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/products/{id}/cost-price: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/tenant/products/{id}/toggle-active: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/subcategories/{id}/restore: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/subcategories/{id}/toggle-active: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/suppliers/{id}/restore: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/tenant/suppliers/{id}/toggle-active: requests=1 avg_ms=8.0 p95_ms=8.0
+- PATCH /api/tenant/users/{userId:\\d+}/password: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/tenant/users/{userId:\\d+}/restore: requests=1 avg_ms=9.0 p95_ms=9.0
+- PATCH /api/tenant/users/{userId:\\d+}/soft-delete: requests=1 avg_ms=12.0 p95_ms=12.0
+- PATCH /api/tenant/users/{userId:\\d+}/status: requests=1 avg_ms=10.0 p95_ms=10.0
+- PATCH /api/tenant/users/{userId:\\d+}/transfer-admin: requests=1 avg_ms=9.0 p95_ms=9.0
+- POST /api/controlplane/accounts/query/count: requests=1 avg_ms=8.0 p95_ms=8.0
+- POST /api/controlplane/accounts/signup: requests=1 avg_ms=8.0 p95_ms=8.0
+- POST /api/controlplane/accounts/{accountId}/restore: requests=1 avg_ms=22.0 p95_ms=22.0
+- POST /api/controlplane/accounts/{accountId}/status: requests=1 avg_ms=8.0 p95_ms=8.0
+- POST /api/controlplane/accounts/{accountId}/tenant-users/{userId}/suspended-by-admin: requests=1 avg_ms=10.0 p95_ms=10.0
+- POST /api/controlplane/users: requests=1 avg_ms=8.0 p95_ms=8.0
+- POST /api/controlplane/users/{userId}/restore-by-admin: requests=1 avg_ms=16.0 p95_ms=16.0
+- POST /api/controlplane/users/{userId}/suspend-by-admin: requests=1 avg_ms=17.0 p95_ms=17.0
+- POST /api/tenant/auth/login/confirm: requests=1 avg_ms=6.0 p95_ms=6.0
+- POST /api/tenant/password/forgot: requests=1 avg_ms=7.0 p95_ms=7.0
+- POST /api/tenant/password/reset: requests=1 avg_ms=8.0 p95_ms=8.0
+- POST /api/tenant/subcategories/category/{categoryId}: requests=1 avg_ms=13.0 p95_ms=13.0
+- PUT /api/tenant/categories/{id}: requests=1 avg_ms=8.0 p95_ms=8.0
+- PUT /api/tenant/me: requests=1 avg_ms=9.0 p95_ms=9.0
+- PUT /api/tenant/subcategories/{id}: requests=1 avg_ms=9.0 p95_ms=9.0
+- PUT /api/tenant/suppliers/{id}: requests=1 avg_ms=9.0 p95_ms=9.0
