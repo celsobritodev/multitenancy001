@@ -7,19 +7,20 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * Update sale request (simple: replace header + replace items).
+ * Update sale request.
+ *
+ * <p>Atualiza cabeçalho e substitui itens.</p>
+ * <p>O vínculo com o customer é feito por {@code customerId}.</p>
  */
 public record SaleUpdateRequest(
 
         @NotNull(message = "saleDate is required")
         Instant saleDate,
 
-        String customerName,
-        String customerDocument,
-        String customerEmail,
-        String customerPhone,
+        UUID customerId,
 
         @NotNull(message = "status is required")
         SaleStatus status,
@@ -27,10 +28,4 @@ public record SaleUpdateRequest(
         @NotEmpty(message = "items is required")
         List<@Valid SaleItemRequest> items
 ) {
-    public SaleUpdateRequest {
-        if (customerName != null) customerName = customerName.trim();
-        if (customerDocument != null) customerDocument = customerDocument.trim();
-        if (customerEmail != null) customerEmail = customerEmail.trim();
-        if (customerPhone != null) customerPhone = customerPhone.trim();
-    }
 }

@@ -7,19 +7,21 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Create sale request.
+ *
+ * <p>Agora a integração com customers é feita por {@code customerId}.</p>
+ * <p>Os dados snapshot do customer não devem mais vir do request;
+ * eles serão preenchidos automaticamente pelo service.</p>
  */
 public record SaleCreateRequest(
 
         @NotNull(message = "saleDate is required")
         Instant saleDate,
 
-        String customerName,
-        String customerDocument,
-        String customerEmail,
-        String customerPhone,
+        UUID customerId,
 
         @NotNull(message = "status is required")
         SaleStatus status,
@@ -27,10 +29,4 @@ public record SaleCreateRequest(
         @NotEmpty(message = "items is required")
         List<@Valid SaleItemRequest> items
 ) {
-    public SaleCreateRequest {
-        if (customerName != null) customerName = customerName.trim();
-        if (customerDocument != null) customerDocument = customerDocument.trim();
-        if (customerEmail != null) customerEmail = customerEmail.trim();
-        if (customerPhone != null) customerPhone = customerPhone.trim();
-    }
 }

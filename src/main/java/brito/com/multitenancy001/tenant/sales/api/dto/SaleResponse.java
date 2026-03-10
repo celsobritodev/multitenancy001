@@ -7,11 +7,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Response de venda.
+ */
 public record SaleResponse(
         UUID id,
         Instant saleDate,
         BigDecimal totalAmount,
 
+        UUID customerId,
         String customerName,
         String customerDocument,
         String customerEmail,

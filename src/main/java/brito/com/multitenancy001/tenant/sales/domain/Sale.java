@@ -6,6 +6,7 @@ import brito.com.multitenancy001.shared.domain.audit.SoftDeletable;
 import brito.com.multitenancy001.shared.domain.audit.jpa.AuditEntityListener;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,10 +14,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Entidade de venda do contexto TENANT.
+ *
+ * <p>Integração com customers:</p>
+ * <ul>
+ *   <li>{@code customerId} representa o vínculo lógico com o customer cadastrado.</li>
+ *   <li>Os campos {@code customerName}, {@code customerDocument},
+ *       {@code customerEmail} e {@code customerPhone} armazenam snapshot
+ *       do customer no momento da venda.</li>
+ * </ul>
+ *
+ * <p>Assim, mesmo que os dados do customer mudem depois, a venda continua
+ * preservando o histórico do momento em que foi emitida.</p>
+ */
 @Entity
 @Table(name = "sales", indexes = {
         @Index(name = "idx_sales_sale_date", columnList = "sale_date"),
-        @Index(name = "idx_sales_status", columnList = "status")
+        @Index(name = "idx_sales_status", columnList = "status"),
+        @Index(name = "idx_sales_customer_id", columnList = "customer_id")
 })
 @EntityListeners(AuditEntityListener.class)
 @Getter
@@ -25,6 +41,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "items")
+@Slf4j
 public class Sale implements Auditable, SoftDeletable {
 
     @Id
@@ -43,6 +60,15 @@ public class Sale implements Auditable, SoftDeletable {
     @Builder.Default
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
+    /**
+     * Referência lógica ao customer cadastrado.
+     */
+    @Column(name = "customer_id", columnDefinition = "uuid")
+    private UUID customerId;
+
+    /**
+     * Snapshot do customer no momento da venda.
+     */
     @Column(name = "customer_name", length = 200)
     private String customerName;
 
@@ -86,37 +112,46 @@ public class Sale implements Auditable, SoftDeletable {
         return deleted;
     }
 
-    // =========================
-    // Soft delete (padrão do projeto)
-    // - NÃO passa Instant para domínio
-    // - AuditEntityListener seta audit.deletedAt com AppClock
-    // =========================
+    /**
+     * Soft delete padrão do projeto.
+     *
+     * <p>Não recebe tempo no domínio. O listener centraliza a auditoria.</p>
+     */
     public void softDelete() {
-        if (this.deleted) return;
+        if (this.deleted) {
+            log.debug("Sale já estava deletada. id={}", this.id);
+            return;
+        }
         this.deleted = true;
-        // deletedAt/deletedBy serão setados pelo AuditEntityListener ao atualizar
+        log.info("Soft delete aplicado em sale. id={}", this.id);
     }
 
     /**
-     * Compat com código antigo que chamava softDelete(Instant).
-     * A auditoria é responsabilidade do listener, então o parâmetro é ignorado.
+     * Compatibilidade com chamadas antigas.
+     *
+     * @param ignoredNow parâmetro ignorado; auditoria é responsabilidade do listener
      */
     public void softDelete(Instant ignoredNow) {
         softDelete();
     }
 
+    /**
+     * Restaura uma venda deletada logicamente.
+     */
     public void restore() {
-        if (!this.deleted) return;
-        this.deleted = false;
+        if (!this.deleted) {
+            log.debug("Sale não estava deletada. id={}", this.id);
+            return;
+        }
 
-        // política: restore limpa deletedAt/deletedBy
-        // (se você preferir manter histórico de deleção, remova essa linha)
+        this.deleted = false;
         this.audit.clearDeleted();
+        log.info("Sale restaurada com sucesso. id={}", this.id);
     }
 
-    // =========================
-    // Itens / total
-    // =========================
+    /**
+     * Adiciona item à venda e recalcula o total.
+     */
     public void addItem(SaleItem item) {
         if (item == null) return;
         item.setSale(this);
@@ -124,6 +159,9 @@ public class Sale implements Auditable, SoftDeletable {
         recalcTotal();
     }
 
+    /**
+     * Remove item da venda e recalcula o total.
+     */
     public void removeItem(SaleItem item) {
         if (item == null) return;
         this.items.remove(item);
@@ -131,19 +169,31 @@ public class Sale implements Auditable, SoftDeletable {
         recalcTotal();
     }
 
+    /**
+     * Recalcula o valor total da venda com base nos itens não deletados.
+     */
     public void recalcTotal() {
         BigDecimal sum = BigDecimal.ZERO;
+
         if (items != null) {
             for (SaleItem it : items) {
-                if (it != null && it.getTotalPrice() != null) {
+                if (it == null) continue;
+                if (it.isDeleted()) continue;
+                if (it.getTotalPrice() != null) {
                     sum = sum.add(it.getTotalPrice());
                 }
             }
         }
+
         this.totalAmount = sum;
+        log.debug("Total recalculado para sale id={} total={}", this.id, this.totalAmount);
     }
 
+    /**
+     * Cancela a venda.
+     */
     public void cancel() {
         this.status = SaleStatus.CANCELLED;
+        log.info("Sale cancelada. id={}", this.id);
     }
 }

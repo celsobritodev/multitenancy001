@@ -15,6 +15,10 @@ public enum TenantPermission implements PermissionCode {
     TEN_USER_DELETE,
 
     TEN_ROLE_TRANSFER,
+    
+    TEN_CUSTOMER_READ,
+    TEN_CUSTOMER_WRITE,
+    TEN_CUSTOMER_DELETE,
 
     TEN_PRODUCT_READ,
     TEN_PRODUCT_WRITE,

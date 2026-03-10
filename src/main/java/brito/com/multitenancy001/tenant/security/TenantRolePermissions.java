@@ -37,6 +37,12 @@ public final class TenantRolePermissions {
 
                 // Transfer ownership/admin
                 TEN_ROLE_TRANSFER,
+                
+                // customer
+                TEN_CUSTOMER_READ,
+                TEN_CUSTOMER_WRITE,
+                TEN_CUSTOMER_DELETE,
+                
 
                 // Products + Inventory
                 TEN_PRODUCT_READ,

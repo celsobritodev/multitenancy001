@@ -138,6 +138,17 @@ public enum ApiErrorCode {
     PAYMENT_NOT_REFUNDABLE(ApiErrorCategory.BILLING, 409, "Pagamento não reembolsável"),
     INVALID_PAYMENT_STATUS(ApiErrorCategory.BILLING, 400, "Status de pagamento inválido"),
     INVALID_TRANSACTION_ID(ApiErrorCategory.BILLING, 400, "TransactionId inválido"),
+    
+    
+ // =========================
+ // Customers (TENANT)
+ // =========================
+ CUSTOMER_REQUIRED(ApiErrorCategory.CUSTOMERS, 400, "Cliente é obrigatório"),
+ CUSTOMER_ID_REQUIRED(ApiErrorCategory.CUSTOMERS, 400, "ID do cliente é obrigatório"),
+ CUSTOMER_NOT_FOUND(ApiErrorCategory.CUSTOMERS, 404, "Cliente não encontrado"),
+ CUSTOMER_DELETED(ApiErrorCategory.CUSTOMERS, 409, "Cliente removido"),
+ CUSTOMER_NAME_REQUIRED(ApiErrorCategory.CUSTOMERS, 400, "Nome do cliente é obrigatório"),
+ CUSTOMER_DOCUMENT_ALREADY_EXISTS(ApiErrorCategory.CONFLICT, 409, "Documento do cliente já existe"),
 
     // =========================
     // Products
@@ -208,6 +219,8 @@ public enum ApiErrorCode {
  SALE_NOT_FOUND(ApiErrorCategory.SALES, 404, "Venda não encontrada"),
  SALE_ITEM_REQUIRED(ApiErrorCategory.SALES, 400, "Item da venda é obrigatório"),
  SALE_ITEMS_REQUIRED(ApiErrorCategory.SALES, 400, "items é obrigatório"),
+ SALE_CUSTOMER_NOT_FOUND(ApiErrorCategory.SALES,404, "Customer da venda não encontrado"),
+ SALE_CUSTOMER_INACTIVE(ApiErrorCategory.SALES,409, "Customer da venda está inativo"),
 
     // =========================
     // Generic validation / request

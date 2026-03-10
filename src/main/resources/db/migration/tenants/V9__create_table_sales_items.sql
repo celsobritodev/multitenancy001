@@ -1,4 +1,4 @@
--- V8__create_table_sales_items.sql
+-- V9__create_table_sales_items.sql
 
 CREATE TABLE IF NOT EXISTS sale_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

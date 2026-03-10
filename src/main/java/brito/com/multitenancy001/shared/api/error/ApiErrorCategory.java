@@ -27,6 +27,7 @@ public enum ApiErrorCategory {
     BILLING,
 
     // Catálogos do Tenant
+    CUSTOMERS,
     PRODUCTS,
     CATEGORIES,
     SUBCATEGORIES,

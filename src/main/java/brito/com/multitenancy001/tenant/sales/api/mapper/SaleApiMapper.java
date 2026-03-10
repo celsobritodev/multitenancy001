@@ -5,6 +5,7 @@ import brito.com.multitenancy001.tenant.sales.api.dto.SaleItemResponse;
 import brito.com.multitenancy001.tenant.sales.api.dto.SaleResponse;
 import brito.com.multitenancy001.tenant.sales.domain.Sale;
 import brito.com.multitenancy001.tenant.sales.domain.SaleItem;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -12,11 +13,15 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Maps Sale entities to API responses.
+ * Mapper de Sale para response da API.
  */
 @Component
+@Slf4j
 public class SaleApiMapper {
 
+    /**
+     * Converte uma entidade Sale em SaleResponse.
+     */
     public SaleResponse toResponse(Sale s) {
         if (s == null) return null;
 
@@ -26,10 +31,13 @@ public class SaleApiMapper {
                 .map(this::toItemResponse)
                 .toList();
 
+        log.debug("Mapeando sale para response. saleId={} items={}", s.getId(), items.size());
+
         return new SaleResponse(
                 s.getId(),
                 s.getSaleDate(),
                 s.getTotalAmount(),
+                s.getCustomerId(),
                 s.getCustomerName(),
                 s.getCustomerDocument(),
                 s.getCustomerEmail(),
@@ -39,6 +47,9 @@ public class SaleApiMapper {
         );
     }
 
+    /**
+     * Converte item de venda em response.
+     */
     private SaleItemResponse toItemResponse(SaleItem i) {
         return new SaleItemResponse(
                 i.getId(),
@@ -50,12 +61,13 @@ public class SaleApiMapper {
         );
     }
 
+    /**
+     * Extrai createdAt do item para ordenação determinística.
+     */
     private static Instant createdAtOrNull(SaleItem i) {
         if (i == null) return null;
         AuditInfo audit = i.getAudit();
         if (audit == null) return null;
-
-        // Ajuste aqui se o seu AuditInfo usar outro nome (ex: createdAt() ao inves de getCreatedAt()).
         return audit.getCreatedAt();
     }
 }

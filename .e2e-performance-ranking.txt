@@ -1,20 +1,20 @@
-06.01 superadmin create payment                                            1099 ms
-00.02 signup                                                                855 ms
-01.50.01 signup tenant #2                                                   392 ms
-00.03 tenant login                                                          349 ms
-00.05 controlplane login (superadmin)                                       266 ms
-01.50.03 create shared user in tenant #1                                    260 ms
-01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED          245 ms
-13.01 create tenant user                                                    199 ms
-01.50.04 create shared user in tenant #2                                    147 ms
-01.50.04 create shared user in tenant #2                                    147 ms
-99.05.02 - Criar usuario (2/10)                                             141 ms
-00.07 login as support                                                      136 ms
-01.50.02 tenant #2 login (admin)                                            130 ms
-00.06 login as billing manager                                              130 ms
-99.05.01 - Criar usuario (1/10)                                             124 ms
-99.05.07 - Criar usuario (7/10)                                             120 ms
-00.08 login as operator                                                     120 ms
-99.05.04 - Criar usuario (4/10)                                             117 ms
-99.05.08 - Criar usuario (8/10)                                             116 ms
-99.05.09 - Criar usuario (9/10)                                             115 ms
+06.01 superadmin create payment                                            1117 ms
+200.03 billing smoke                                                       1041 ms
+00.02 signup                                                                815 ms
+01.50.01 signup tenant #2                                                   421 ms
+00.03 tenant login                                                          352 ms
+00.05 controlplane login (superadmin)                                       299 ms
+01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED          225 ms
+01.50.03 create shared user in tenant #1                                    208 ms
+01.50.04 create shared user in tenant #2                                    150 ms
+01.50.04 create shared user in tenant #2                                    150 ms
+00.06 login as billing manager                                              134 ms
+00.07 login as support                                                      127 ms
+99.05.02 - Criar usuario (2/10)                                             122 ms
+99.05.01 - Criar usuario (1/10)                                             121 ms
+13.01 create tenant user                                                    121 ms
+01.50.02 tenant #2 login (admin)                                            121 ms
+99.05.08 - Criar usuario (8/10)                                             119 ms
+99.05.03 - Criar usuario (3/10)                                             117 ms
+99.05.04 - Criar usuario (4/10)                                             116 ms
+99.05.10 - Criar usuario (10/10)                                            115 ms

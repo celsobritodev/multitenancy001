@@ -1,0 +1,20 @@
+# v6.0 - Enterprise
+COLLECTION="e2e/multitenancy001.postman_collection.v12.0.enterprise.json" ENV_FILE="e2e/multitenancy001.local.postman_environment.v8.0.json" ./e2e/run-e2e-reset.v6.0.fixed.sh
+
+# v7.0 - Stripe-grade
+COLLECTION="e2e/multitenancy001.postman_collection.v13.0.stripe-grade.json" ENV_FILE="e2e/multitenancy001.local.postman_environment.v9.0.enterprise.json" ./e2e/run-e2e-reset.v7.0.enterprise.fixed.sh
+
+# v8.0 - Ultra
+COLLECTION="e2e/multitenancy001.postman_collection.v14.0.ultra.json" ENV_FILE="e2e/multitenancy001.local.postman_environment.v10.0.ultra.json" ./e2e/run-e2e-reset.v8.0.ultra.fixed.sh
+
+# v8.1 - Ultra Fixed
+COLLECTION="e2e/multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED).postman_collection.json" ENV_FILE="e2e/multitenancy001.local.postman_environment.v10.3.ultra.uploaded.fixed.json" ./e2e/run-e2e-reset.v8.1.ultra.fixed.sh
+
+# v16 - Ultra Hardened
+COLLECTION="e2e/multitenancy001-e2e.v16-ultra-hardened.postman_collection.json" ENV_FILE="e2e/multitenancy001-local.v16-ultra-hardened.postman_environment.json" ./e2e/run-e2e-reset.v16.ultra-hardened.fixed.sh
+
+# v17 - Ultra Observability
+COLLECTION="e2e/multitenancy001-e2e (v14.3 ULTRA SAAS SUITE - UPLOADED FIXED)X2.postman_collection.json" ENV_FILE="e2e/multitenancy001-local (v10.3 ULTRA TESTS - UPLOADED FIXED)X2.postman_environment.json" ./e2e/run-e2e-reset.v17.ultra-observability.fixed.sh
+
+# v18 - Ultra Compat (RECOMENDADO)
+COLLECTION="e2e/multitenancy001-e2e.v16-ultra-hardened.postman_collection.json" ENV_FILE="e2e/multitenancy001-local.v16-ultra-hardened.postman_environment.json" ./e2e/run-e2e-reset.v18.ultra-compat.fixed.sh
