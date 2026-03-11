@@ -43,7 +43,7 @@ public class TenantInventoryController {
      * @return estado atual do estoque
      */
     @GetMapping("/products/{productId}")
-    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_INVENTORY_READ.asAuthority())")  // ✅ CORRETO
     public InventoryResponse getInventoryByProduct(@PathVariable UUID productId) {
 
         log.info("API inventory get by product start | productId={}", productId);
@@ -67,7 +67,7 @@ public class TenantInventoryController {
      * @return lista de movimentações
      */
     @GetMapping("/products/{productId}/movements")
-    @PreAuthorize("hasAuthority('TEN_INVENTORY_READ')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_INVENTORY_READ.asAuthority())")  // ✅ CORRETO
     public List<InventoryMovementResponse> listMovementsByProduct(@PathVariable UUID productId) {
 
         log.info("API inventory movement list start | productId={}", productId);
@@ -90,7 +90,7 @@ public class TenantInventoryController {
      * @return inventory atualizado
      */
     @PostMapping("/adjustments")
-    @PreAuthorize("hasAuthority('TEN_INVENTORY_WRITE')")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_INVENTORY_WRITE.asAuthority())")
     public InventoryResponse adjustInventory(@Valid @RequestBody InventoryAdjustRequest request) {
 
         log.info(

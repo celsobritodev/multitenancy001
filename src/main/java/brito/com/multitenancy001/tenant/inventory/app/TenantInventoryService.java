@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.inventory.app;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.inventory.app.command.AdjustInventoryCommand;
 import brito.com.multitenancy001.tenant.inventory.domain.InventoryItem;
@@ -7,6 +9,7 @@ import brito.com.multitenancy001.tenant.inventory.domain.InventoryMovement;
 import brito.com.multitenancy001.tenant.inventory.domain.InventoryMovementType;
 import brito.com.multitenancy001.tenant.inventory.persistence.InventoryMovementRepository;
 import brito.com.multitenancy001.tenant.inventory.persistence.TenantInventoryRepository;
+import brito.com.multitenancy001.tenant.products.persistence.TenantProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +27,7 @@ import java.util.UUID;
  *   <li>Aplicar ajustes de quantidade disponível.</li>
  *   <li>Aplicar reservas/liberação de reservas.</li>
  *   <li>Registrar histórico de movimentações.</li>
- *   <li>Expor operações preparadas para futura integração com Sales.</li>
+ *   <li>Expor operações preparadas para integração com Sales.</li>
  * </ul>
  */
 @Slf4j
@@ -34,6 +37,7 @@ public class TenantInventoryService {
 
     private final TenantInventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
+    private final TenantProductRepository tenantProductRepository;
     private final AppClock clock;
 
     /**
@@ -43,6 +47,7 @@ public class TenantInventoryService {
      * @return estado atual do estoque
      */
     public InventoryItem getOrCreateInventory(UUID productId) {
+        validateProductExists(productId);
 
         log.debug("Inventory getOrCreate start | productId={}", productId);
 
@@ -66,6 +71,7 @@ public class TenantInventoryService {
      * @return lista de movimentações
      */
     public List<InventoryMovement> listMovementsByProduct(UUID productId) {
+        validateProductExists(productId);
 
         log.info("Inventory movement list start | productId={}", productId);
 
@@ -83,19 +89,24 @@ public class TenantInventoryService {
     /**
      * Ajusta estoque com base em um comando manual ou sistêmico.
      *
-     * <p>Regras:</p>
-     * <ul>
-     *   <li>RESERVATION aumenta quantityReserved.</li>
-     *   <li>RELEASE_RESERVATION reduz quantityReserved.</li>
-     *   <li>OUTBOUND reduz quantityAvailable.</li>
-     *   <li>INBOUND/RETURN aumentam quantityAvailable.</li>
-     *   <li>ADJUSTMENT aplica delta direto em quantityAvailable.</li>
-     * </ul>
-     *
      * @param command comando de ajuste
      * @return inventory atualizado
      */
     public InventoryItem adjustInventory(AdjustInventoryCommand command) {
+        if (command == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "inventory command is required", 400);
+        }
+        if (command.getProductId() == null) {
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "productId is required", 400);
+        }
+        if (command.getQuantity() == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "quantity is required", 400);
+        }
+        if (command.getMovementType() == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "movementType is required", 400);
+        }
+
+        validateProductExists(command.getProductId());
 
         log.info(
                 "Inventory adjust start | productId={} | quantity={} | movementType={} | referenceType={} | referenceId={}",
@@ -106,17 +117,29 @@ public class TenantInventoryService {
                 command.getReferenceId()
         );
 
-        InventoryItem item = getOrCreateInventory(command.getProductId());
+        InventoryItem item = inventoryRepository.findWithLockByProductId(command.getProductId())
+                .orElseGet(() -> createInventory(command.getProductId()));
 
         BigDecimal currentAvailable = safe(item.getQuantityAvailable());
         BigDecimal currentReserved = safe(item.getQuantityReserved());
 
+        validateStockRules(item, command);
+
         switch (command.getMovementType()) {
-            case INBOUND, RETURN, ADJUSTMENT -> item.setQuantityAvailable(currentAvailable.add(command.getQuantity()));
-            case OUTBOUND -> item.setQuantityAvailable(currentAvailable.add(command.getQuantity())); // esperado quantity negativo
-            case RESERVATION -> item.setQuantityReserved(currentReserved.add(command.getQuantity()));
-            case RELEASE_RESERVATION -> item.setQuantityReserved(currentReserved.add(command.getQuantity())); // esperado quantity negativo
-            default -> throw new IllegalStateException("Unsupported movementType: " + command.getMovementType());
+            case INBOUND, RETURN, ADJUSTMENT ->
+                    item.setQuantityAvailable(currentAvailable.add(command.getQuantity()));
+
+            case OUTBOUND ->
+                    item.setQuantityAvailable(currentAvailable.add(command.getQuantity())); // quantity negativa
+
+            case RESERVATION ->
+                    item.setQuantityReserved(currentReserved.add(command.getQuantity()));
+
+            case RELEASE_RESERVATION ->
+                    item.setQuantityReserved(currentReserved.add(command.getQuantity())); // quantity negativa
+
+            default ->
+                    throw new IllegalStateException("Unsupported movementType: " + command.getMovementType());
         }
 
         item.setUpdatedAt(clock.instant());
@@ -140,14 +163,21 @@ public class TenantInventoryService {
     /**
      * Consome estoque disponível por item de venda.
      *
-     * <p>Método preparado para futura integração com Sales.</p>
-     *
      * @param saleId id da venda
      * @param productId id do produto
      * @param quantity quantidade a ser consumida
      * @return inventory atualizado
      */
     public InventoryItem consumeStockForSale(UUID saleId, UUID productId, BigDecimal quantity) {
+        if (saleId == null) {
+            throw new ApiException(ApiErrorCode.SALE_NOT_FOUND, "saleId is required", 400);
+        }
+        if (productId == null) {
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "productId is required", 400);
+        }
+        if (quantity == null || quantity.signum() <= 0) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "sale item quantity must be positive", 400);
+        }
 
         log.info(
                 "Consume stock for sale start | saleId={} | productId={} | quantity={}",
@@ -180,14 +210,21 @@ public class TenantInventoryService {
     /**
      * Devolve estoque anteriormente consumido por venda.
      *
-     * <p>Método preparado para futura integração com Sales canceladas/estornadas.</p>
-     *
      * @param saleId id da venda
      * @param productId id do produto
      * @param quantity quantidade a retornar
      * @return inventory atualizado
      */
     public InventoryItem restoreStockFromSale(UUID saleId, UUID productId, BigDecimal quantity) {
+        if (saleId == null) {
+            throw new ApiException(ApiErrorCode.SALE_NOT_FOUND, "saleId is required", 400);
+        }
+        if (productId == null) {
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "productId is required", 400);
+        }
+        if (quantity == null || quantity.signum() <= 0) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "restore quantity must be positive", 400);
+        }
 
         log.info(
                 "Restore stock from sale start | saleId={} | productId={} | quantity={}",
@@ -221,7 +258,6 @@ public class TenantInventoryService {
      * Cria o registro inicial de inventory para um produto.
      */
     private InventoryItem createInventory(UUID productId) {
-
         log.info("Creating inventory item | productId={}", productId);
 
         InventoryItem item = new InventoryItem();
@@ -243,7 +279,6 @@ public class TenantInventoryService {
      * Registra uma movimentação no histórico.
      */
     private void registerMovement(AdjustInventoryCommand command) {
-
         log.info(
                 "Registering inventory movement | productId={} | quantity={} | movementType={} | referenceType={} | referenceId={}",
                 command.getProductId(),
@@ -270,6 +305,46 @@ public class TenantInventoryService {
                 savedMovement.getProductId(),
                 savedMovement.getMovementType()
         );
+    }
+
+    /**
+     * Valida se o produto existe no tenant atual.
+     */
+    private void validateProductExists(UUID productId) {
+        if (!tenantProductRepository.existsById(productId)) {
+            throw new ApiException(ApiErrorCode.PRODUCT_NOT_FOUND, "product not found", 404);
+        }
+    }
+
+    /**
+     * Regras de bloqueio de estoque negativo.
+     */
+    private void validateStockRules(InventoryItem item, AdjustInventoryCommand command) {
+        BigDecimal available = safe(item.getQuantityAvailable());
+        BigDecimal reserved = safe(item.getQuantityReserved());
+        BigDecimal delta = safe(command.getQuantity());
+
+        if (command.getMovementType() == InventoryMovementType.OUTBOUND) {
+            BigDecimal resulting = available.add(delta);
+            if (resulting.compareTo(BigDecimal.ZERO) < 0) {
+                throw new ApiException(
+                        ApiErrorCode.INSUFFICIENT_STOCK,
+                        "insufficient stock for outbound movement",
+                        409
+                );
+            }
+        }
+
+        if (command.getMovementType() == InventoryMovementType.RELEASE_RESERVATION) {
+            BigDecimal resultingReserved = reserved.add(delta);
+            if (resultingReserved.compareTo(BigDecimal.ZERO) < 0) {
+                throw new ApiException(
+                        ApiErrorCode.INVALID_REQUEST,
+                        "cannot release more reserved stock than available",
+                        400
+                );
+            }
+        }
     }
 
     private BigDecimal safe(BigDecimal value) {

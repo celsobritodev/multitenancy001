@@ -171,6 +171,14 @@ public enum ApiErrorCode {
     INVALID_LEAD_TIME(ApiErrorCategory.PRODUCTS, 400, "Lead time inválido"),
     INVALID_STORAGE_DELTA(ApiErrorCategory.PRODUCTS, 400, "Delta de estoque inválido"),
     
+ // =========================
+ // Inventory
+ // =========================
+ INSUFFICIENT_STOCK(ApiErrorCategory.INVENTORY, 409, "Estoque insuficiente"),
+ INVENTORY_ITEM_NOT_FOUND(ApiErrorCategory.INVENTORY, 404, "Registro de estoque não encontrado"),
+ INVALID_INVENTORY_MOVEMENT(ApiErrorCategory.INVENTORY, 400, "Movimentação de estoque inválida"),
+    
+    
     // =========================
     // Generic fields (reutilizáveis)
     // =========================
