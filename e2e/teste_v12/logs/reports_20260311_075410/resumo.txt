@@ -1,0 +1,42 @@
+╔════════════════════════════════════════════════════════════╗
+║           RELATÓRIO DE TESTES V12 - MULTITENANCY001       ║
+╚════════════════════════════════════════════════════════════╝
+
+Data da execução: Wed Mar 11 07:55:22     2026
+Timestamp: 20260311_075410
+Diretório: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12
+
+═══════════════════════════════════════════════════════════════
+
+📊 ESTATÍSTICAS GERAIS
+─────────────────────────────────
+Requests totais: 229
+Assertions totais: 628
+Falhas totais: 0
+
+⏱️  TEMPOS DE RESPOSTA
+─────────────────────────────────
+Mínimo: 0ms
+Máximo: 0ms
+Média: 0ms
+Mediana: 0ms
+P95: 0ms
+P99: 0ms
+
+📋 ENDPOINTS MAIS LENTOS (TOP 10)
+─────────────────────────────────
+   06.01 superadmin create payment...                    1071ms
+   00.02 signup...                                        699ms
+   01.50.01 signup tenant #2...                           368ms
+   00.03 tenant login...                                  287ms
+   00.05 controlplane login (superadmin)...               275ms
+   01.50.03 create shared user in tenant #1...            269ms
+   01.50.05 tenant login (ambiguous) => 409 TENANT_SE...     230ms
+   01.50.04 create shared user in tenant #2...            158ms
+   01.50.04 create shared user in tenant #2...            158ms
+   00.06 login as billing manager...                      136ms
+
+═══════════════════════════════════════════════════════════════
+Log completo: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12/logs/execucao_v12_20260311_075410.log
+Tokens salvos em: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12/logs/reports_20260311_075410/tokens.txt
+═══════════════════════════════════════════════════════════════

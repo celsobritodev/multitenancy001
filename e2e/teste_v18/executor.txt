@@ -1,2 +1,0 @@
-Usuario@SANDESK-MICRO MINGW64 ~/eclipse-workspace/multitenancy001 (main)
-$ COLLECTION="e2e/multitenancy001-e2e.v16-ultra-hardened.postman_collection.json" ENV_FILE="e2e/multitenancy001-local.v16-ultra-hardened.postman_environment.json" ./e2e/run-e2e-reset.v18.ultra-compat.sh
