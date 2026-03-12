@@ -1,0 +1,42 @@
+╔════════════════════════════════════════════════════════════╗
+║      RELATÓRIO DE TESTES V12.6 - CUSTOMERS + SALES        ║
+╚════════════════════════════════════════════════════════════╝
+
+Data da execução: Thu Mar 12 07:08:02     2026
+Timestamp: 20260312_070658
+Diretório: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6
+
+═══════════════════════════════════════════════════════════════
+
+📊 ESTATÍSTICAS GERAIS
+─────────────────────────────────
+Requests totais: 83
+Assertions totais: 169
+Falhas totais: 0
+
+⏱️  TEMPOS DE RESPOSTA
+─────────────────────────────────
+Mínimo: 0ms
+Máximo: 0ms
+Média: 0ms
+Mediana: 0ms
+P95: 0ms
+P99: 0ms
+
+📋 ENDPOINTS MAIS LENTOS (TOP 10)
+─────────────────────────────────
+   06.01 superadmin create payment...                    1097ms
+   00.02 signup...                                        852ms
+   01.50.01 signup tenant #2...                           449ms
+   00.03 tenant login...                                  352ms
+   00.05 controlplane login (superadmin)...               277ms
+   01.50.05 tenant login (ambiguous) => 409 TENANT_SE...     251ms
+   01.50.03 create shared user in tenant #1...            248ms
+   13.01 create tenant user...                            208ms
+   01.50.04 create shared user in tenant #2...            157ms
+   12.01 create product without category...               151ms
+
+═══════════════════════════════════════════════════════════════
+Log completo: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/logs/execucao_v12.6_20260312_070658.log
+Tokens salvos em: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/logs/reports_20260312_070658/tokens.txt
+═══════════════════════════════════════════════════════════════

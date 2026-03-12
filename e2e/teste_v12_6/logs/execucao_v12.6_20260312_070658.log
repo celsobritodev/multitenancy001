@@ -1,0 +1,953 @@
+[2026-03-12 07:07:01] === INÍCIO DA EXECUÇÃO ===
+[2026-03-12 07:07:01] Script: ./run-teste-v12.6-ultra.sh
+[2026-03-12 07:07:02] Diretório: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6
+[2026-03-12 07:07:02] Timestamp: 20260312_070658
+[2026-03-12 07:07:02] Iniciando verificação de requisitos
+[2026-03-12 07:07:03] Node.js OK: v22.18.0
+[2026-03-12 07:07:05] Newman OK: 6.2.2
+[2026-03-12 07:07:05] PostgreSQL OK: psql (PostgreSQL) 18.1
+[2026-03-12 07:07:05] curl OK: curl 8.6.0 (x86_64-w64-mingw32) libcurl/8.6.0 Schannel zlib/1.3.1 brotli/1.1.0 zstd/1.5.5 libidn2/2.3.7 libpsl/0.21.5 libssh2/1.11.0
+[2026-03-12 07:07:05] Maven Wrapper OK: /c/Users/Usuario/eclipse-workspace/multitenancy001/mvnw
+[2026-03-12 07:07:05] Verificando arquivos de teste
+[2026-03-12 07:07:05] Collection OK: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/multitenancy001.postman_collection.v12.6.enterprise.json
+[2026-03-12 07:07:06] Environment OK: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/multitenancy001.local.postman_environment.v12.6.json
+[2026-03-12 07:07:06] Verificando disponibilidade da porta 8080
+[2026-03-12 07:07:06] Porta 8080 disponível
+[2026-03-12 07:07:06] Resetando banco de dados db_multitenancy
+[2026-03-12 07:07:06] Banco db_multitenancy removido
+[2026-03-12 07:07:07] Banco db_multitenancy criado
+[2026-03-12 07:07:07] Preparando environment de teste
+[2026-03-12 07:07:07] Environment preparado: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/.env.effective.json
+[2026-03-12 07:07:08] Criando links simbólicos necessários
+[2026-03-12 07:07:08] Link criado: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/mvnw -> /c/Users/Usuario/eclipse-workspace/multitenancy001/mvnw
+[2026-03-12 07:07:08] Iniciando aplicação
+[2026-03-12 07:07:08] Comando: cd /c/Users/Usuario/eclipse-workspace/multitenancy001 && ./mvnw spring-boot:run
+[2026-03-12 07:07:08] Aplicação iniciada com PID 60301
+[2026-03-12 07:07:08] Aguardando inicialização por até 180s
+[2026-03-12 07:07:41] Aplicação iniciada após 21s (padrão: Started .* in .* seconds)
+[2026-03-12 07:07:41] Realizando health check: http://localhost:8080/actuator/health
+[2026-03-12 07:07:41] Health check OK após 0s
+[2026-03-12 07:07:41] Iniciando execução do Newman
+[2026-03-12 07:07:41] Comando Newman: newman run "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/multitenancy001.postman_collection.v12.6.enterprise.json" -e "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/.env.effective.json" --export-environment "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/.env.effective.json" --reporters cli,json --reporter-json-export "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/.newman-report.json" --timeout-request 30000 --timeout-script 30000
+newman
+
+multitenancy001-e2e (v12.6 CUSTOMERS + SALES SUITE)
+
+□ 📦 00 - BOOTSTRAP (V3)
+└ 00.01 health
+  GET http://localhost:8080/actuator/health [200 OK, 844B, 58ms]
+  √  No 5xx in collection
+  √  Health OK
+
+└ 00.02 signup
+  ┌
+  │ '📧 Email gerado: e2e_1773310064715@tenant.local'
+  └
+  POST http://localhost:8080/api/signup [201 Created, 845B, 852ms]
+  √  No 5xx in collection
+  √  Signup OK (201)
+
+└ 00.03 tenant login
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'ausente', 'Schema:', un
+  │ defined
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '⚠️ Token não disponível para:', '{{base_url}}/api/ten
+  │ ant/auth/login'
+  │ '⚠️ Schema não disponível para:', '{{base_url}}/api/te
+  │ nant/auth/login'
+  │ '🔓 Endpoint público - headers removidos'
+  └
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.14kB, 352ms]
+  √  No 5xx in collection
+  √  Tenant login OK
+
+└ 00.04 tenant me
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/me [200 OK, 785B, 122ms]
+  √  No 5xx in collection
+  √  Tenant me OK
+
+└ 00.05 controlplane login (superadmin)
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.67kB, 277ms]
+  √  No 5xx in collection
+  √  Login superadmin OK
+
+└ 00.06 login as billing manager
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.52kB, 129ms]
+  √  No 5xx in collection
+  √  Login billing manager OK
+
+└ 00.07 login as support
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.54kB, 124ms]
+  √  No 5xx in collection
+  √  Login support OK
+
+└ 00.08 login as operator
+  POST http://localhost:8080/api/controlplane/auth/login [200 OK, 1.45kB, 128ms]
+  √  No 5xx in collection
+  √  Login operator OK
+
+□ 🔐 01 - TENANT AUTH TESTS (V3) / 01.50 - MULTI-TENANT LOGIN AMBIGUITY
+└ 01.50.01 signup tenant #2
+  POST http://localhost:8080/api/signup [201 Created, 860B, 449ms]
+  √  No 5xx in collection
+  √  Tenant #2 signup OK
+
+└ 01.50.02 tenant #2 login (admin)
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'ausente', 'Schema:', 't
+  │ _tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '⚠️ Token não disponível para:', '{{base_url}}/api/ten
+  │ ant/auth/login'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_2_d2231
+  │ 7_6cd6c184'
+  │ '🔓 Endpoint público - headers removidos'
+  └
+  POST http://localhost:8080/api/tenant/auth/login [200 OK, 2.17kB, 127ms]
+  √  No 5xx in collection
+  √  Tenant #2 login OK
+
+└ 01.50.03 create shared user in tenant #1
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 248ms]
+  √  No 5xx in collection
+  √  Create shared user (201 or 409)
+
+└ 01.50.04 create shared user in tenant #2
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/users [201 Created, 801B, 157ms]
+  √  No 5xx in collection
+  √  Create shared user in tenant #2 must succeed (201)
+
+└ 01.50.05 tenant login (ambiguous) => 409 TENANT_SELECTION_REQUIRED
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  │ '🔓 Endpoint público - headers removidos'
+  └
+  POST http://localhost:8080/api/tenant/auth/login [409 Conflict, 892B, 251ms]
+  √  No 5xx in collection
+  √  Ambiguous login must return 409
+  √  Error must be TENANT_SELECTION_REQUIRED
+  √  Must include challengeId
+  √  Must include tenants list
+
+└ 01.50.06 tenant login confirm => 200 JWT
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  │ '🔓 Endpoint público - headers removidos'
+  └
+  POST http://localhost:8080/api/tenant/auth/login/confirm [200 OK, 2.17kB, 86ms]
+  √  No 5xx in collection
+  √  Confirm login must return 200
+  √  Confirm response must contain token
+
+□ 🔐 01 - TENANT AUTH TESTS (V3)
+└ 01.01 tenant refresh
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  │ '🔓 Endpoint público - headers removidos'
+  └
+  POST http://localhost:8080/api/tenant/auth/refresh [200 OK, 2.14kB, 71ms]
+  √  No 5xx in collection
+  √  Tenant refresh OK
+
+└ 01.02 tenant logout
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/auth/logout [204 No Content, 423B, 43ms]
+  √  No 5xx in collection
+  √  Tenant logout OK
+
+□ 💰 02 - CONTROL PLANE AUTH TESTS
+└ 02.01 controlplane refresh
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.72kB, 38ms]
+  √  No 5xx in collection
+  √  Controlplane refresh OK
+
+└ 02.02 controlplane logout
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 28ms]
+  √  No 5xx in collection
+  √  Controlplane logout OK
+
+□ 💳 03 - BILLING MANAGER TESTS
+└ 03.01 billing manager me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 689B, 36ms]
+  √  No 5xx in collection
+  √  Billing manager me OK
+
+└ 03.02 billing manager refresh
+  POST http://localhost:8080/api/controlplane/auth/refresh [200 OK, 1.58kB, 31ms]
+  √  No 5xx in collection
+  √  Refresh OK
+
+└ 03.03 billing manager logout
+  POST http://localhost:8080/api/controlplane/auth/logout [204 No Content, 423B, 24ms]
+  √  No 5xx in collection
+  √  Logout OK
+
+□ 🆘 04 - SUPPORT TESTS
+└ 04.01 support me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 673B, 20ms]
+  √  No 5xx in collection
+  √  Support me OK
+
+└ 04.02 support list accounts
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 26ms]
+  √  No 5xx in collection
+  √  Support list accounts OK
+
+└ 04.03 support list users
+  GET http://localhost:8080/api/controlplane/users [200 OK, 1.46kB, 29ms]
+  √  No 5xx in collection
+  √  Support list users OK
+
+□ ⚙️ 05 - OPERATOR TESTS
+└ 05.01 operator me
+  GET http://localhost:8080/api/controlplane/me [200 OK, 676B, 21ms]
+  √  No 5xx in collection
+  √  Operator me OK
+
+└ 05.02 operator list accounts
+  GET http://localhost:8080/api/controlplane/accounts [200 OK, 1.24kB, 24ms]
+  √  No 5xx in collection
+  √  Operator list accounts OK
+
+└ 05.03 operator cannot list users
+  GET http://localhost:8080/api/controlplane/users [403 Forbidden, 643B, 31ms]
+  √  No 5xx in collection
+  √  Operator cannot list users (403)
+
+□ 💵 06 - BILLING TESTS
+└ 06.01 superadmin create payment
+  POST http://localhost:8080/api/controlplane/billing/payments [200 OK, 813B, 1097ms]
+  √  No 5xx in collection
+  √  Superadmin create payment: created (200) or already exists (409)
+
+└ 06.02 superadmin list pending payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 27ms]
+  √  No 5xx in collection
+  √  Superadmin list pending payments OK
+
+└ 06.03 superadmin get total paid
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/total-paid?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z [200 OK, 476B, 30ms]
+  √  No 5xx in collection
+  √  Superadmin get total paid OK
+
+└ 06.04 superadmin count completed payments
+  GET http://localhost:8080/api/admin/billing/payments/query/accounts/2/count-completed [200 OK, 476B, 21ms]
+  √  No 5xx in collection
+  √  Superadmin count completed OK
+
+└ 06.05 billing manager list pending payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [200 OK, 477B, 18ms]
+  √  No 5xx in collection
+  √  Billing manager list pending payments OK
+
+└ 06.06 support cannot list payments
+  GET http://localhost:8080/api/admin/billing/payments/query/status/PENDING [403 Forbidden, 643B, 15ms]
+  √  No 5xx in collection
+  √  Support cannot list payments (403)
+
+□ 📂 07 - CATEGORY TESTS
+└ 07.01 create category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/categories [201 Created, 540B, 54ms]
+  √  No 5xx in collection
+  √  Create category OK
+
+└ 07.02 create another category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/categories [201 Created, 534B, 36ms]
+  √  No 5xx in collection
+  √  Create category OK
+
+└ 07.03 list all categories
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/categories [200 OK, 592B, 41ms]
+  √  No 5xx in collection
+  √  List categories OK
+
+└ 07.04 get category by id
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/categories/1 [200 OK, 535B, 27ms]
+  √  No 5xx in collection
+  √  Get category OK
+
+└ 07.05 update category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PUT http://localhost:8080/api/tenant/categories/1 [200 OK, 546B, 43ms]
+  √  No 5xx in collection
+  √  Update category OK
+
+└ 07.06 toggle category active
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/categories/1/toggle-active [200 OK, 547B, 31ms]
+  √  No 5xx in collection
+  √  Toggle active OK
+
+└ 07.07 soft delete category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  DELETE http://localhost:8080/api/tenant/categories/1 [204 No Content, 423B, 26ms]
+  √  No 5xx in collection
+  √  Soft delete OK
+
+└ 07.08 restore category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/categories/1/restore [200 OK, 546B, 26ms]
+  √  No 5xx in collection
+  √  Restore OK
+
+□ 📁 08 - SUBCATEGORY TESTS
+└ 08.01 create subcategory
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/subcategories/category/2 [201 Created, 554B, 44ms]
+  √  No 5xx in collection
+  √  Create subcategory OK
+
+└ 08.02 list subcategories by category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/subcategories/category/2/not-deleted [200 OK, 551B, 28ms]
+  √  No 5xx in collection
+  √  List subcategories OK
+
+□ 🏭 09 - SUPPLIER TESTS
+└ 09.01 create supplier
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/suppliers [201 Created, 802B, 55ms]
+  √  No 5xx in collection
+  √  Create supplier OK
+
+└ 09.02 list suppliers
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/suppliers [200 OK, 799B, 26ms]
+  √  No 5xx in collection
+  √  List suppliers OK
+
+□ 📦 10 - PRODUCT TESTS
+└ 10.01 create product
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/products/detailed [201 Created, 940B, 88ms]
+  √  No 5xx in collection
+  √  Create product OK
+
+└ 10.02 list products
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/products?page=0&size=10 [200 OK, 1.25kB, 47ms]
+  √  No 5xx in collection
+  √  List products OK
+
+└ 10.03 get product by id
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/products/4c1e7acb-9c1d-40f8-9773-860465a0311a [200 OK, 929B, 33ms]
+  √  No 5xx in collection
+  √  Get product OK
+
+└ 10.04 update product cost
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/products/4c1e7acb-9c1d-40f8-9773-860465a0311a/cost-price?costPrice=1500.00 [200 OK, 936B, 60ms]
+  √  No 5xx in collection
+  √  Update cost OK
+
+└ 10.05 toggle product active
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/products/4c1e7acb-9c1d-40f8-9773-860465a0311a/toggle-active [200 OK, 937B, 42ms]
+  √  No 5xx in collection
+  √  Toggle active OK
+
+□ 🔍 11 - PRODUCT QUERIES
+└ 11.01 list products by category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/products/category/2 [200 OK, 477B, 30ms]
+  √  No 5xx in collection
+  √  List by category OK
+
+└ 11.02 count low stock
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/products/low-stock/count?threshold=5 [200 OK, 476B, 26ms]
+  √  No 5xx in collection
+  √  Count low stock OK
+
+└ 11.03 search products
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/products/search?name=Smartphone [200 OK, 936B, 47ms]
+  √  No 5xx in collection
+  √  Search products OK
+
+□ ⚠️ 12 - NEGATIVE TESTS
+└ 12.01 create product without category
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/products/detailed [400 Bad Request, 602B, 151ms]
+  √  No 5xx in collection
+  √  Create without category fails (400)
+
+└ 12.02 create duplicate sku
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/products/detailed [409 Conflict, 663B, 53ms]
+  √  No 5xx in collection
+  √  Duplicate SKU fails (409)
+
+□ 👥 13 - TENANT USERS TESTS
+└ 13.01 create tenant user
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  POST http://localhost:8080/api/tenant/users [201 Created, 792B, 208ms]
+  √  No 5xx in collection
+  √  Create tenant user OK
+
+└ 13.02 list tenant users
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/users [200 OK, 2.12kB, 68ms]
+  √  No 5xx in collection
+  √  List tenant users OK
+
+└ 13.03 get tenant user by id
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/users/3 [200 OK, 787B, 34ms]
+  √  No 5xx in collection
+  √  Get tenant user OK
+
+└ 13.04 count enabled tenant users
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  GET http://localhost:8080/api/tenant/users/count-enabled [200 OK, 476B, 31ms]
+  √  No 5xx in collection
+  √  Count enabled OK
+
+└ 13.05 suspend by admin (status)
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=true [200 OK, 596B, 77ms]
+  √  No 5xx in collection
+  √  Suspend status OK
+
+└ 13.06 unsuspend by admin (status)
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/users/3/status?suspendedByAdmin=false [200 OK, 596B, 71ms]
+  √  No 5xx in collection
+  √  Unsuspend status OK
+
+└ 13.07 soft delete tenant user
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/users/3/soft-delete [204 No Content, 423B, 43ms]
+  √  No 5xx in collection
+  √  Soft delete OK
+
+└ 13.08 restore tenant user
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'ausente', 'Tenant:', 'ausen
+  │ te'
+  │ '✅ Header Authorization adicionado'
+  │ '✅ Header X-Tenant adicionado:', 't_tenant_e2e_41eddf_
+  │ 19327a41'
+  └
+  PATCH http://localhost:8080/api/tenant/users/3/restore [200 OK, 596B, 68ms]
+  √  No 5xx in collection
+  √  Restore OK
+
+└ 13.09 tentar criar usuário com email duplicado (deve falhar com 409)
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/users [201 Created, 807B, 190ms]
+  POST http://localhost:8080/api/tenant/users [409 Conflict, 688B, 79ms]
+  √  No 5xx in collection
+  √  Tentar criar usuario com email duplicado deve retornar 409
+  √  Erro deve ser EMAIL_ALREADY_REGISTERED_IN_ACCOUNT
+
+□ 🆕 14 - CUSTOMERS CRUD (TENANT)
+└ 14.01 Criar Customer 1
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/customers [201 Created, 761B, 69ms]
+  √  No 5xx in collection
+  √  Criar customer deve retornar 201
+  ┌
+  │ 'customer1_id=', 'c5adfc35-05dd-4093-a9d1-2e41f6c2eccc
+  │ '
+  └
+
+└ 14.02 Criar Customer 2
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/customers [201 Created, 762B, 26ms]
+  √  No 5xx in collection
+  √  Criar customer 2 deve retornar 201
+
+└ 14.03 Listar Customers
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers [200 OK, 1.04kB, 27ms]
+  √  No 5xx in collection
+  √  Listar customers deve retornar 200 com lista
+
+└ 14.04 Buscar Customer por ID
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [200 OK, 756B, 26ms]
+  √  No 5xx in collection
+  √  Buscar customer por ID deve retornar 200
+
+└ 14.05 Buscar Customer por Email
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers/email?email=joao.silva@email.com [200 OK, 758B, 26ms]
+  √  No 5xx in collection
+  √  Buscar customer por email deve retornar 200
+
+└ 14.06 Buscar Customers por Documento
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers?search=12345678901 [200 OK, 1.04kB, 18ms]
+  √  No 5xx in collection
+  √  Buscar customer por documento deve retornar 200
+
+└ 14.07 Buscar Customers por Nome (search)
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers?search=Silva [200 OK, 1.04kB, 22ms]
+  √  No 5xx in collection
+  √  Buscar customer por nome deve retornar 200
+
+└ 14.08 Atualizar Customer (PATCH)
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  PUT http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [200 OK, 767B, 44ms]
+  √  No 5xx in collection
+  √  Atualizar customer deve retornar 200
+
+└ 14.09 Alternar Status Ativo/Inativo
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  PATCH http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc/toggle-active [200 OK, 768B, 23ms]
+  √  No 5xx in collection
+  √  Toggle active deve retornar 200
+
+└ 14.10 Soft Delete Customer
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  DELETE http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [204 No Content, 423B, 22ms]
+  √  No 5xx in collection
+  √  Soft delete deve retornar 204 ou 200
+
+└ 14.11 Restaurar Customer
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  PATCH http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc/restore [200 OK, 767B, 25ms]
+  √  No 5xx in collection
+  √  Restaurar deve retornar 200
+
+□ 🆕 15 - SALES BY CUSTOMER
+└ 15.01 Criar Venda com Customer 1
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  POST http://localhost:8080/api/tenant/sales [200 OK, 983B, 86ms]
+  √  No 5xx in collection
+  √  Criar venda com customer deve retornar 200 ou 201
+  ┌
+  │ 'sale_with_customer_id=', '9bddfa06-425f-4e1a-85c8-46c
+  │ 3cf8a278a'
+  └
+
+└ 15.02 Listar Vendas por Customer ID
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/sales?customerId=c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [200 OK, 1.3kB, 42ms]
+  √  No 5xx in collection
+  √  Listar vendas por customer deve retornar 200
+
+└ 15.03 Verificar Venda tem Customer Snapshot
+  ┌
+  │ '🔷 Usando TENANT1 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_41eddf_19327a41'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/sales/9bddfa06-425f-4e1a-85c8-46c3cf8a278a [200 OK, 987B, 27ms]
+  √  No 5xx in collection
+  √  Buscar venda deve incluir snapshot do customer
+
+□ 🆕 16 - TENANT ISOLATION (CUSTOMERS)
+└ 16.01 Tenant 2 tenta listar customers do Tenant 1
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers [200 OK, 477B, 25ms]
+  √  No 5xx in collection
+  √  Tenant 2 lista customers do Tenant 1 (deve retornar 200 com lista vazia)
+
+└ 16.02 Tenant 2 tenta buscar customer do Tenant 1 por ID
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  GET http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [404 Not Found, 661B, 29ms]
+  √  No 5xx in collection
+  √  Tenant 2 buscar customer do Tenant 1 (deve retornar 403/404)
+
+└ 16.03 Tenant 2 tenta atualizar customer do Tenant 1
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  PUT http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [404 Not Found, 661B, 25ms]
+  √  No 5xx in collection
+  √  Tenant 2 atualizar customer do Tenant 1 (deve retornar 403/404)
+
+└ 16.04 Tenant 2 tenta deletar customer do Tenant 1
+  ┌
+  │ '🔷 Usando TENANT2 - Token:', 'presente', 'Schema:', '
+  │ t_tenant_e2e_2_d22317_6cd6c184'
+  │ 'Headers atuais - Auth:', 'presente', 'Tenant:', true
+  └
+  DELETE http://localhost:8080/api/tenant/customers/c5adfc35-05dd-4093-a9d1-2e41f6c2eccc [404 Not Found, 661B, 19ms]
+  √  No 5xx in collection
+  √  Tenant 2 deletar customer do Tenant 1 (deve retornar 403/404)
+
+┌─────────────────────────┬────────────────────┬────────────────────┐
+│                         │           executed │             failed │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│              iterations │                  1 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│                requests │                 83 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│            test-scripts │                164 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│      prerequest-scripts │                102 │                  0 │
+├─────────────────────────┼────────────────────┼────────────────────┤
+│              assertions │                169 │                  0 │
+├─────────────────────────┴────────────────────┴────────────────────┤
+│ total run duration: 16.2s                                         │
+├───────────────────────────────────────────────────────────────────┤
+│ total data received: 33.48kB (approx)                             │
+├───────────────────────────────────────────────────────────────────┤
+│ average response time: 89ms [min: 15ms, max: 1097ms, s.d.: 159ms] │
+└───────────────────────────────────────────────────────────────────┘
+[2026-03-12 07:08:00] Newman finalizado com código 0
+[2026-03-12 07:08:01] Estatísticas: requests=83, assertions=169, failures=0
+[2026-03-12 07:08:01] Extraindo tokens gerados pelos testes
+[2026-03-12 07:08:02] Tokens extraídos e salvos em /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v12_6/logs/reports_20260312_070658/tokens.txt
+[2026-03-12 07:08:02] Gerando relatório de execução
+[2026-03-12 07:08:03] Tempo total: 64s
+[2026-03-12 07:08:03] === FIM DA EXECUÇÃO (código: 0) ===
+[2026-03-12 07:08:03] Iniciando limpeza (exit code: 0)
+[2026-03-12 07:08:03] Aplicação parada
