@@ -1,0 +1,28 @@
+e2e/
+├── oldscripts/                      # Scripts de versões anteriores (mantidos para referência)
+│
+├── teste_v12/                       # Suite original (v12.0)
+│   ├── cleanup.sh
+│   ├── multitenancy001.local.postman_environment.v8.0.json
+│   ├── multitenancy001.postman_collection.v12.0.enterprise.json
+│   ├── run-teste-v12-simples.sh
+│   ├── run-teste-v12-ultra.sh
+│   ├── readme.md
+│   └── logs/
+│
+├── teste_v16/                       # Suite v16 (versão "hardened")
+│   ├── [arquivos específicos da v16]
+│   └── logs/
+│
+├── teste_v18/                       # Suite v18 (versão "compat")
+│   ├── [arquivos específicos da v18]
+│   └── logs/
+│
+└── teste_v12_6/                      # ⭐ NOVA SUITE (Customers + Sales)
+    ├── cleanup.sh                    # Limpa processos e recria o banco
+    ├── multitenancy001.local.postman_environment.v12.6.json  # Environment com variáveis de customer
+    ├── multitenancy001.postman_collection.v12.6.enterprise.json  # Collection com testes de customer
+    ├── run-teste-v12.6-simples.sh     # Runner simples
+    ├── run-teste-v12.6-ultra.sh       # Runner ultra (com logs e retry)
+    ├── readme.md                      # Documentação específica da v12.6
+    └── logs/                           # Logs de execução
