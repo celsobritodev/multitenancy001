@@ -1,5 +1,6 @@
 package brito.com.multitenancy001.tenant.inventory.app;
 
+import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -92,6 +93,7 @@ public class TenantInventoryService {
      * @param command comando de ajuste
      * @return inventory atualizado
      */
+    @TenantTx
     public InventoryItem adjustInventory(AdjustInventoryCommand command) {
         if (command == null) {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "inventory command is required", 400);
@@ -168,6 +170,7 @@ public class TenantInventoryService {
      * @param quantity quantidade a ser consumida
      * @return inventory atualizado
      */
+    @TenantTx
     public InventoryItem consumeStockForSale(UUID saleId, UUID productId, BigDecimal quantity) {
         if (saleId == null) {
             throw new ApiException(ApiErrorCode.SALE_NOT_FOUND, "saleId is required", 400);
@@ -215,6 +218,7 @@ public class TenantInventoryService {
      * @param quantity quantidade a retornar
      * @return inventory atualizado
      */
+    @TenantTx
     public InventoryItem restoreStockFromSale(UUID saleId, UUID productId, BigDecimal quantity) {
         if (saleId == null) {
             throw new ApiException(ApiErrorCode.SALE_NOT_FOUND, "saleId is required", 400);
@@ -317,12 +321,46 @@ public class TenantInventoryService {
     }
 
     /**
-     * Regras de bloqueio de estoque negativo.
+     * Regras de bloqueio de estoque negativo e coerência de sinal por tipo de movimento.
      */
     private void validateStockRules(InventoryItem item, AdjustInventoryCommand command) {
         BigDecimal available = safe(item.getQuantityAvailable());
         BigDecimal reserved = safe(item.getQuantityReserved());
         BigDecimal delta = safe(command.getQuantity());
+
+        if (delta.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "quantity cannot be zero",
+                    400
+            );
+        }
+
+        switch (command.getMovementType()) {
+            case INBOUND, RETURN, ADJUSTMENT, RESERVATION -> {
+                if (delta.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ApiException(
+                            ApiErrorCode.INVALID_REQUEST,
+                            "quantity must be positive for movement type " + command.getMovementType(),
+                            400
+                    );
+                }
+            }
+
+            case OUTBOUND, RELEASE_RESERVATION -> {
+                if (delta.compareTo(BigDecimal.ZERO) >= 0) {
+                    throw new ApiException(
+                            ApiErrorCode.INVALID_REQUEST,
+                            "quantity must be negative for movement type " + command.getMovementType(),
+                            400
+                    );
+                }
+            }
+
+            default -> {
+                // nada
+            }
+        }
 
         if (command.getMovementType() == InventoryMovementType.OUTBOUND) {
             BigDecimal resulting = available.add(delta);

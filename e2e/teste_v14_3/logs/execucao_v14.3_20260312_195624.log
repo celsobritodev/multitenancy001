@@ -1,0 +1,28 @@
+[2026-03-12 19:56:25] Iniciando verificação de requisitos
+[2026-03-12 19:56:28] Verificando disponibilidade da porta 8080
+[2026-03-12 19:56:28] Porta 8080 disponível
+[2026-03-12 19:56:28] Resetando banco de dados db_multitenancy
+[2026-03-12 19:56:29] Banco db_multitenancy removido
+[2026-03-12 19:56:29] Banco db_multitenancy criado
+[2026-03-12 19:56:29] Preparando environment de teste
+[2026-03-12 19:56:30] Environment preparado: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/.env.effective.json
+[2026-03-12 19:56:30] Criando links simbólicos necessários
+[2026-03-12 19:56:30] Link criado: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/mvnw -> /c/Users/Usuario/eclipse-workspace/multitenancy001/mvnw
+[2026-03-12 19:56:30] Pasta .mvn copiada para /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/.mvn
+[2026-03-12 19:56:30] Iniciando aplicação
+[2026-03-12 19:56:30] Comando: cd /c/Users/Usuario/eclipse-workspace/multitenancy001 && ./mvnw spring-boot:run
+[2026-03-12 19:56:30] Aplicação iniciada com PID 64986
+[2026-03-12 19:56:30] Aguardando inicialização por até 180s
+[2026-03-12 19:56:59] Aplicação iniciada após 25s
+[2026-03-12 19:57:00] Realizando health check: http://localhost:8080/actuator/health
+[2026-03-12 19:57:01] Health check OK após 0s
+[2026-03-12 19:57:02] Iniciando execução do Newman
+[2026-03-12 19:57:03] Comando Newman: newman run "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/multitenancy001.postman_collection.v14.3.enterprise-inventory-hardening.strict.json" -e "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/.env.effective.json" --export-environment "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/.env.effective.json" --reporters cli,json --reporter-json-export "/c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/.newman-report.json" --timeout-request 30000 --timeout-script 30000
+[2026-03-12 19:57:28] Newman finalizado com código 0
+[2026-03-12 19:57:28] Estatísticas: requests=118, assertions=252, failures=0
+[2026-03-12 19:57:28] Extraindo tokens gerados pelos testes
+[2026-03-12 19:57:29] Tokens extraídos e salvos em /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14_3/logs/reports_20260312_195624/tokens.txt
+[2026-03-12 19:57:29] Gerando relatório de execução
+[2026-03-12 19:57:31] Tempo total: concluído
+[2026-03-12 19:57:31] Iniciando limpeza (exit code: 0)
+[2026-03-12 19:57:32] Aplicação parada

@@ -1,0 +1,39 @@
+╔════════════════════════════════════════════════════════════╗
+║ RELATÓRIO DE TESTES V14.3 - ENTERPRISE + INVENTORY HARDENING (STRICT) ║
+╚════════════════════════════════════════════════════════════╝
+
+Data da execução: Thu Mar 12 19:45:26     2026
+Timestamp: 20260312_194426
+Diretório: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14
+
+═══════════════════════════════════════════════════════════════
+
+📊 ESTATÍSTICAS GERAIS
+─────────────────────────────────
+Requests totais: 118
+Assertions totais: 252
+Falhas totais: 0
+
+⏱️  TEMPOS DE RESPOSTA
+─────────────────────────────────
+Mínimo: 13 ms
+Máximo: 1086 ms
+Média: 60 ms
+
+📋 ENDPOINTS MAIS LENTOS (TOP 10)
+─────────────────────────────────
+   06.01 superadmin create payment...                    1086ms
+   00.02 signup...                                        764ms
+   01.50.01 signup tenant #2...                           488ms
+   00.03 tenant login...                                  307ms
+   00.05 controlplane login (superadmin)...               264ms
+   01.50.03 create shared user in tenant #1...            254ms
+   01.50.05 tenant login (ambiguous) => 409 TENANT_SE...     221ms
+   01.50.04 create shared user in tenant #2...            158ms
+   00.08 login as operator...                             128ms
+   13.01 create tenant user...                            123ms
+
+═══════════════════════════════════════════════════════════════
+Log completo: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14/logs/execucao_v14.3_20260312_194426.log
+Tokens salvos em: /c/Users/Usuario/eclipse-workspace/multitenancy001/e2e/teste_v14/logs/reports_20260312_194426/tokens.txt
+═══════════════════════════════════════════════════════════════
