@@ -4,6 +4,7 @@ CREATE TABLE inventory_items (
     quantity_available NUMERIC(19, 4) NOT NULL DEFAULT 0,
     quantity_reserved NUMERIC(19, 4) NOT NULL DEFAULT 0,
     min_stock NUMERIC(19, 4) NOT NULL DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );

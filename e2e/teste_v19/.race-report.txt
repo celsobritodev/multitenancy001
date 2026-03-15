@@ -1,0 +1,4 @@
+attempts=20
+parallelism=20
+success_count=20
+failure_count=0

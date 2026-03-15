@@ -1,0 +1,8 @@
+attempts=100
+parallelism=100
+max_jitter_ms=250
+base_delay_ms=20
+retry_count=2
+success_count=100
+failure_count=0
+rollback_like_count=0

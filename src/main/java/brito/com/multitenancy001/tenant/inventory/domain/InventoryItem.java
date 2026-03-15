@@ -9,13 +9,19 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Representa o saldo de estoque atual de um produto dentro do tenant.
+ * Representa o saldo consolidado de estoque de um produto no tenant.
  *
- * <p>Observações:</p>
+ * <p>Campos principais:</p>
  * <ul>
- *   <li>quantityAvailable = saldo fisicamente disponível para venda/uso.</li>
- *   <li>quantityReserved = saldo reservado para fluxos futuros.</li>
- *   <li>minStock = ponto mínimo configurado para alertas operacionais.</li>
+ *   <li>{@code quantityAvailable}: saldo fisicamente disponível.</li>
+ *   <li>{@code quantityReserved}: saldo reservado para fluxos futuros.</li>
+ *   <li>{@code minStock}: ponto mínimo para alerta operacional.</li>
+ * </ul>
+ *
+ * <p>Observação importante para concorrência:</p>
+ * <ul>
+ *   <li>Esta entidade possui {@link Version} para ajudar na proteção contra
+ *   lost updates em cenários concorrentes.</li>
  * </ul>
  */
 @Entity
@@ -57,6 +63,14 @@ public class InventoryItem {
     @Column(name = "min_stock", nullable = false, precision = 19, scale = 4)
     private BigDecimal minStock;
 
+    /**
+     * Controle de versão otimista para reduzir risco de lost update
+     * em cenários concorrentes.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -64,7 +78,9 @@ public class InventoryItem {
     private Instant updatedAt;
 
     /**
-     * Retorna true quando o estoque disponível está abaixo do mínimo configurado.
+     * Indica se o estoque disponível está abaixo do mínimo configurado.
+     *
+     * @return true quando quantityAvailable < minStock
      */
     public boolean isLowStock() {
         BigDecimal available = quantityAvailable != null ? quantityAvailable : BigDecimal.ZERO;

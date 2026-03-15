@@ -11,12 +11,27 @@ import java.util.UUID;
 /**
  * Histórico imutável de movimentações de estoque.
  *
- * <p>Exemplos:</p>
+ * <p>Esta entidade representa o ledger operacional do estoque.</p>
+ *
+ * <p>Exemplos de origem:</p>
  * <ul>
- *   <li>Entrada manual de mercadoria</li>
- *   <li>Baixa por venda</li>
- *   <li>Correção de inventário</li>
- *   <li>Reserva/liberação de estoque</li>
+ *   <li>entrada manual de mercadoria</li>
+ *   <li>baixa por venda</li>
+ *   <li>devolução</li>
+ *   <li>ajuste operacional</li>
+ *   <li>reserva/liberação</li>
+ * </ul>
+ *
+ * <p>Convenção de quantidade:</p>
+ * <ul>
+ *   <li>positivos normalmente aumentam saldo</li>
+ *   <li>negativos normalmente reduzem saldo</li>
+ * </ul>
+ *
+ * <p>Para reconciliação ledger:</p>
+ * <ul>
+ *   <li>O ideal é que cada movimento seja persistido exatamente uma vez.</li>
+ *   <li>O conjunto de movimentos deve explicar o saldo atual do {@link InventoryItem}.</li>
  * </ul>
  */
 @Entity
@@ -44,13 +59,13 @@ public class InventoryMovement {
 
     /**
      * Quantidade movimentada.
-     *
-     * <p>Convenção:
-     * positivos geralmente aumentam saldo; negativos reduzem saldo.</p>
      */
     @Column(name = "quantity", nullable = false, precision = 19, scale = 4)
     private BigDecimal quantity;
 
+    /**
+     * Tipo funcional da movimentação.
+     */
     @Enumerated(EnumType.STRING)
     @Column(name = "movement_type", nullable = false, length = 40)
     private InventoryMovementType movementType;
@@ -58,7 +73,7 @@ public class InventoryMovement {
     /**
      * Tipo da referência que originou a movimentação.
      *
-     * <p>Ex.: SALE, MANUAL_ADJUSTMENT, RETURN, IMPORT</p>
+     * <p>Ex.: SALE, SALE_CANCEL, MANUAL_ADJUSTMENT, RETURN.</p>
      */
     @Column(name = "reference_type", length = 40)
     private String referenceType;
@@ -75,6 +90,9 @@ public class InventoryMovement {
     @Column(name = "notes", length = 500)
     private String notes;
 
+    /**
+     * Data/hora de criação do movimento.
+     */
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }
