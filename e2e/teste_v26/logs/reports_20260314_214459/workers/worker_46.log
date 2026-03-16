@@ -1,5 +1,0 @@
-workerIndex=46 phase=START status=OPEN affectsInventory=1
-attempt=1 workerIndex=46 code=409 apiCode= status=OPEN affectsInventory=1 elapsedMs=114 saleId= body={"timestamp":"2026-03-15T00:46:57.572456Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}
-attempt=2 workerIndex=46 code=409 apiCode= status=OPEN affectsInventory=1 elapsedMs=55 saleId= body={"timestamp":"2026-03-15T00:47:25.815874300Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}
-attempt=3 workerIndex=46 code=409 apiCode= status=OPEN affectsInventory=1 elapsedMs=38 saleId= body={"timestamp":"2026-03-15T00:47:56.508013700Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}
-FINAL_RESULT workerIndex=46 attempt=3 code=409 apiCode= status=OPEN affectsInventory=1 elapsedMs=38 saleId=

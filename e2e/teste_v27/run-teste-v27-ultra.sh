@@ -32,14 +32,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_DIR="${SCRIPT_DIR}/logs"
-APP_LOG="${LOG_DIR}/app_${TIMESTAMP}.log"
-REPORT_DIR="${LOG_DIR}/reports_${TIMESTAMP}"
+APP_LOG="${LOG_DIR}/app_ultra_${TIMESTAMP}.log"
+REPORT_DIR="${LOG_DIR}/reports_ultra_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v27.distributed-chaos-telemetry-fix.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v27.distributed-chaos-telemetry-fix.json"
+COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v27.chaos-grid.json"
+ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v27.chaos-grid.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
-TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.json"
+TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.ultra.json"
 CHAOS_RACE_REPORT="${SCRIPT_DIR}/.chaos-race-report.txt"
 WORKER_SCRIPT="${SCRIPT_DIR}/chaos-race-worker-sale.sh"
 AGGREGATOR_SCRIPT="${SCRIPT_DIR}/chaos-race-aggregate.py"
@@ -204,7 +204,7 @@ PY
 }
 
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V26.1 DISTRIBUTED CHAOS TELEMETRY FIX (ULTRA SUITE)"
+echo "🔷 TESTE V27 CHAOS GRID (ULTRA SUITE)"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: $SCRIPT_DIR"
 echo "────────────────────────────────────────────────────"
@@ -270,7 +270,7 @@ curl -fsS "${BASE_URL}/actuator/health" >/dev/null
 ok "Health check OK"
 hr
 
-title "Executando suíte base V26.0"
+title "Executando suíte base V27"
 newman run "${COLLECTION}" -e "${TEMP_ENV}" --export-environment "${TEMP_ENV}" --reporters cli,json --reporter-json-export "${TEMP_NEWMAN}"
 ok "Suíte base executada"
 hr
@@ -332,7 +332,7 @@ statuses_file="${REPORT_DIR}/chaos-race-statuses.tsv"
 chaos_elapsed_file="${REPORT_DIR}/chaos-elapsed-ms.txt"
 worker_log_dir="${REPORT_DIR}/workers"
 agg_json="${REPORT_DIR}/chaos-aggregate.json"
-chaos_run_id="v26-$(date +%s)-$$"
+chaos_run_id="v27-$(date +%s)-$$"
 mkdir -p "$worker_log_dir"
 : > "$statuses_file"
 : > "$chaos_elapsed_file"
@@ -357,7 +357,11 @@ done
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 title "Consolidando resultados do chaos race"
-python "${AGGREGATOR_SCRIPT}"   --statuses "${statuses_file}"   --worker-dir "${worker_log_dir}"   --output-json "${agg_json}"   --elapsed-out "${chaos_elapsed_file}"
+python "${AGGREGATOR_SCRIPT}" \
+  --statuses "${statuses_file}" \
+  --worker-dir "${worker_log_dir}" \
+  --output-json "${agg_json}" \
+  --elapsed-out "${chaos_elapsed_file}"
 ok "Agregação consolidada gerada"
 
 success_count="$(jq -r '.success_count // 0' "${agg_json}")"
@@ -633,7 +637,8 @@ hr
 update_env_value final_suite_result PASSED
 update_env_value ledger_race_result PASSED
 ok "STATUS FINAL: PASS com reconciliação consistente"
+ok "TESTE V27 CHAOS GRID ULTRA FINALIZADO"
 hr
-title "V26 - Observação"
-detail "A V26.0 evolui a V25.3 e evolui o Distributed Chaos com multi-product contention, cross-node chaos, transaction abort, replay ledger rebuild e snapshot drift detector."
+title "V27 - Observação"
+detail "A V27 mantém integralmente a V26.1 e adiciona os blocos finais de multi-product contention, distributed cross-node chaos, transaction abort kill, ledger rebuild validation e snapshot drift detector."
 detail "Runner ultra alinhado ao parser correto, usando worker logs como source of truth com métricas determinísticas por tentativa."

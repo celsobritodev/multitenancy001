@@ -36,8 +36,8 @@ APP_LOG="${LOG_DIR}/app_strict_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_strict_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v27.distributed-chaos-telemetry-fix.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v27.distributed-chaos-telemetry-fix.json"
+COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v27.chaos-grid.json"
+ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v27.chaos-grid.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.strict.json"
 APP_PID=""
@@ -60,7 +60,7 @@ read_env_value() {
 }
 
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V26.1 DISTRIBUTED CHAOS TELEMETRY FIX - STRICT SUITE"
+echo "🔷 TESTE V27 CHAOS GRID - STRICT SUITE"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: ${SCRIPT_DIR}"
 echo "────────────────────────────────────────────────────"
@@ -185,7 +185,7 @@ step "Newman JSON: ${TEMP_NEWMAN}"
 step "Report dir: ${REPORT_DIR}"
 hr
 
-ok "TESTE V26 DETERMINISTIC CHAOS ENGINE PATCHED FINALIZADO"
-title "V26 - Observação"
-detail "A V26 mantém integralmente o modelo operacional da V25.3: porta limpa, reset de banco, boot limpo e execução determinística."
-detail "Além da base anterior, esta linha adiciona probes de cancel / return, ledger reversal validation e inventory reconciliation extended com patch de compatibilidade para respostas paginadas."
+ok "TESTE V27 CHAOS GRID STRICT FINALIZADO"
+title "V27 - Observação"
+detail "A V27 mantém integralmente a V26.1 e adiciona os blocos finais de multi-product contention, distributed node race, transaction abort kill, ledger rebuild validation e snapshot drift detector."
+detail "O modelo operacional permanece determinístico: porta limpa, reset de banco, boot limpo, execução Newman e validação final de contexto."

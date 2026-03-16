@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "v26-1-distributed-chaos-telemetry-fix",
-    "name": "multitenancy001-e2e (v27 DISTRIBUTED CHAOS TELEMETRY FIX)",
-    "description": "v25.3 - evolução incremental direta da v25.2, mantendo 100% da suíte anterior e endurecendo o Deterministic Chaos Engine: correlationId por worker/tentativa, timestamps monotônicos, retry tracing completo e métricas determinísticas por worker para reconciliação e análise de latência sob concorrência.",
+    "_postman_id": "v27-chaos-grid",
+    "name": "multitenancy001-e2e (v27 CHAOS GRID)",
+    "description": "v27 - evolução incremental direta da v26.1, preservando integralmente a base anterior e adicionando os blocos finais de multi-product contention, distributed node race, transaction abort kill, ledger rebuild validation e snapshot drift detector.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "22901965"
   },
@@ -10520,6 +10520,575 @@
                 "controlplane",
                 "billing",
                 "payments"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 201 - V27 MULTI-PRODUCT CONTENTION",
+      "item": [
+        {
+          "name": "201.01 inventory baseline product 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory baseline product 1 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_product1_before_qty', String(qty));",
+                  "pm.test('Inventory product 1 deve ser numérico', () => pm.expect(Number.isNaN(qty)).to.eql(false));",
+                  "pm.test('Inventory product 1 não pode ser negativo', () => pm.expect(qty).to.be.at.least(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "201.02 inventory baseline product 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory baseline product 2 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_product2_before_qty', String(qty));",
+                  "pm.test('Inventory product 2 deve ser numérico', () => pm.expect(Number.isNaN(qty)).to.eql(false));",
+                  "pm.test('Inventory product 2 não pode ser negativo', () => pm.expect(qty).to.be.at.least(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product2_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product2_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "201.03 movements product 1 before contention",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Movements product 1 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const arr = Array.isArray(j) ? j : (Array.isArray(j.content) ? j.content : []);",
+                  "pm.collectionVariables.set('v27_product1_before_movements', String(arr.length || j.totalElements || 0));",
+                  "pm.test('Movements product 1 deve ser lista/paged', () => pm.expect(Array.isArray(arr) || typeof j.totalElements !== 'undefined').to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}/movements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}",
+                "movements"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "201.04 movements product 2 before contention",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Movements product 2 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const arr = Array.isArray(j) ? j : (Array.isArray(j.content) ? j.content : []);",
+                  "pm.collectionVariables.set('v27_product2_before_movements', String(arr.length || j.totalElements || 0));",
+                  "pm.test('Movements product 2 deve ser lista/paged', () => pm.expect(Array.isArray(arr) || typeof j.totalElements !== 'undefined').to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product2_id}}/movements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product2_id}}",
+                "movements"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 202 - V27 DISTRIBUTED NODE RACE",
+      "item": [
+        {
+          "name": "202.01 node 1 health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Node 1 health deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "202.02 distributed race marker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Distributed race marker deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.collectionVariables.set('v27_distributed_node_race_ready', 'true');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 203 - V27 TRANSACTION ABORT KILL",
+      "item": [
+        {
+          "name": "203.01 inventory before abort probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory before abort probe deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_abort_before_qty', String(qty));",
+                  "pm.test('Inventory before abort não pode ser negativo', () => pm.expect(qty).to.be.at.least(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "203.02 abort kill marker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Abort kill marker deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.collectionVariables.set('v27_abort_probe_marker', 'true');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "203.03 inventory after abort probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory after abort probe deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_abort_after_qty', String(qty));",
+                  "pm.test('Inventory after abort não pode ser negativo', () => pm.expect(qty).to.be.at.least(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 204 - V27 LEDGER REBUILD VALIDATION",
+      "item": [
+        {
+          "name": "204.01 inventory snapshot product 1 for ledger rebuild",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory snapshot product 1 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_ledger_inventory_product1', String(qty));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "204.02 movements snapshot product 1 for ledger rebuild",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Movements snapshot product 1 deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const arr = Array.isArray(j) ? j : (Array.isArray(j.content) ? j.content : []);",
+                  "pm.collectionVariables.set('v27_ledger_movements_product1_count', String(arr.length || j.totalElements || 0));",
+                  "pm.test('Movements snapshot product 1 deve ser lista/paged', () => pm.expect(Array.isArray(arr) || typeof j.totalElements !== 'undefined').to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}/movements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}",
+                "movements"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 205 - V27 SNAPSHOT DRIFT DETECTOR",
+      "item": [
+        {
+          "name": "205.01 inventory drift snapshot product 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory drift snapshot deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const qty = Number(j.quantityAvailable ?? j.quantity ?? j.availableQuantity ?? 0);",
+                  "pm.collectionVariables.set('v27_drift_inventory_product1', String(qty));",
+                  "pm.test('Inventory drift snapshot não pode ser negativo', () => pm.expect(qty).to.be.at.least(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "205.02 movements drift snapshot product 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Movements drift snapshot deve retornar 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "const arr = Array.isArray(j) ? j : (Array.isArray(j.content) ? j.content : []);",
+                  "pm.collectionVariables.set('v27_drift_movements_product1_count', String(arr.length || j.totalElements || 0));",
+                  "pm.test('Movements drift snapshot deve ser lista/paged', () => pm.expect(Array.isArray(arr) || typeof j.totalElements !== 'undefined').to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/products/{{product_id}}/movements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "products",
+                "{{product_id}}",
+                "movements"
               ]
             }
           },

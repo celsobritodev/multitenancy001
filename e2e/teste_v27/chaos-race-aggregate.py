@@ -220,7 +220,7 @@ def summarize(final_rows, attempt_rows, status_rows_count, worker_rows_count, wa
     correlation_complete = all(bool(r.get('correlation_id')) for r in final_rows)
     correlation_unique = len({r.get('correlation_id') for r in final_rows if r.get('correlation_id')}) == len(final_rows)
     return {
-        'parser_version': 'v26.1',
+        'parser_version': 'v27',
         'source_of_truth': 'worker_logs' if worker_rows_count else 'statuses_tsv',
         'warnings': warnings,
         'status_rows_count': status_rows_count,

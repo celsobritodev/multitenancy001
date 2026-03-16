@@ -1,3 +1,0 @@
-workerIndex=10 phase=START status=OPEN affectsInventory=1
-attempt=1 workerIndex=10 code=200 apiCode= status=OPEN affectsInventory=1 elapsedMs=50 saleId=87e6ea2b-27c4-4254-859e-4873ec40cc21 body={"id":"87e6ea2b-27c4-4254-859e-4873ec40cc21","saleDate":"2026-03-15T00:46:26Z","totalAmount":1999.99,"customerId":"ea7c4f4c-914f-41e8-8d54-95def306eb03","customerName":"Maria Souza","customerDocument":"98765432100","customerEmail":"maria.souza@email.com","customerPhone":"11888888888","status":"OPEN","items":[{"id":"3c495cdc-71ad-4508-8a8d-77b01887833f","productId":"9b674935-f853-41a7-9f42-450a6440
-FINAL_RESULT workerIndex=10 attempt=1 code=200 apiCode= status=OPEN affectsInventory=1 elapsedMs=50 saleId=87e6ea2b-27c4-4254-859e-4873ec40cc21
