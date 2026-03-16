@@ -11,14 +11,32 @@ INSERT INTO account_entitlements (
 )
 SELECT
     a.id,
-    5,
-    100,
-    100,
+    CASE a.subscription_plan
+        WHEN 'FREE' THEN 5
+        WHEN 'PRO' THEN 20
+        WHEN 'ENTERPRISE' THEN 999999
+        ELSE 5
+    END AS max_users,
+    CASE a.subscription_plan
+        WHEN 'FREE' THEN 100
+        WHEN 'PRO' THEN 1000
+        WHEN 'ENTERPRISE' THEN 999999
+        ELSE 100
+    END AS max_products,
+    CASE a.subscription_plan
+        WHEN 'FREE' THEN 100
+        WHEN 'PRO' THEN 1024
+        WHEN 'ENTERPRISE' THEN 999999
+        ELSE 100
+    END AS max_storage_mb,
     now(),
     now()
 FROM accounts a
 WHERE a.deleted = false
   AND a.account_type = 'TENANT'
   AND a.account_origin <> 'BUILT_IN'
-ON CONFLICT (account_id) DO NOTHING;
-
+ON CONFLICT (account_id) DO UPDATE SET
+    max_users = EXCLUDED.max_users,
+    max_products = EXCLUDED.max_products,
+    max_storage_mb = EXCLUDED.max_storage_mb,
+    updated_at = now();

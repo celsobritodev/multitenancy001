@@ -76,9 +76,6 @@ public class TenantProductService {
         Product product = fromCreateCommand(createProductCommand);
         validateProductForCreate(product);
 
-        // ⚠️ NÃO precisa de requireBoundTenantSchema() - já está em transação via @TenantTx
-        // ⚠️ NÃO precisa de tenantSchemaUnitOfWork.tx() - já está em transação
-
         resolveCategoryAndSubcategory(product);
         resolveSupplier(product);
         validateSubcategoryBelongsToCategory(product);
@@ -101,9 +98,6 @@ public class TenantProductService {
 
         validateUpdateCommand(updateProductCommand);
 
-        // ⚠️ NÃO precisa de requireBoundTenantSchema() - já está em transação via @TenantTx
-        // ⚠️ NÃO precisa de tenantSchemaUnitOfWork.tx() - já está em transação
-
         Product existing = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.PRODUCT_NOT_FOUND,
                         "Produto não encontrado com ID: " + id, 404));
@@ -123,9 +117,6 @@ public class TenantProductService {
     @TenantTx
     public Product toggleActive(UUID id) {
         if (id == null) throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
-
-        // ⚠️ NÃO precisa de requireBoundTenantSchema() - já está em transação via @TenantTx
-        // ⚠️ NÃO precisa de tenantSchemaUnitOfWork.tx() - já está em transação
 
         Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.PRODUCT_NOT_FOUND,
@@ -155,9 +146,6 @@ public class TenantProductService {
             throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo", 400);
         }
 
-        // ⚠️ NÃO precisa de requireBoundTenantSchema() - já está em transação via @TenantTx
-        // ⚠️ NÃO precisa de tenantSchemaUnitOfWork.tx() - já está em transação
-
         Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.PRODUCT_NOT_FOUND,
                         "Produto não encontrado com ID: " + id, 404));
@@ -171,15 +159,12 @@ public class TenantProductService {
     }
 
     // =========================================================
-    // READ endpoints da API (mantidos iguais)
+    // READ endpoints da API
     // =========================================================
 
     @TenantReadOnlyTx
     public List<SupplierProductCountData> countProductsBySupplier() {
-        List<Object[]> rows = tenantProductRepository.countProductsBySupplier();
-        return rows.stream()
-                .map(row -> new SupplierProductCountData((UUID) row[0], ((Number) row[1]).longValue()))
-                .toList();
+        return tenantProductRepository.countProductsBySupplier();
     }
 
     @TenantReadOnlyTx
@@ -234,7 +219,7 @@ public class TenantProductService {
     }
 
     // =========================================================
-    // Helpers (extraídos para melhorar legibilidade)
+    // Helpers
     // =========================================================
 
     private void applyUpdates(Product existing, UpdateProductCommand cmd) {

@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS account_entitlements (
     max_users       INTEGER NOT NULL,
     max_products    INTEGER NOT NULL,
     max_storage_mb  INTEGER NOT NULL DEFAULT 100,
-
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -24,8 +23,11 @@ BEGIN
     ) THEN
         ALTER TABLE public.account_entitlements
             ADD CONSTRAINT fk_account_entitlements_account
-            FOREIGN KEY (account_id) REFERENCES public.accounts(id)
+            FOREIGN KEY (account_id)
+            REFERENCES public.accounts(id)
             ON DELETE CASCADE;
     END IF;
 END $$;
 
+CREATE INDEX IF NOT EXISTS idx_account_entitlements_updated_at
+    ON public.account_entitlements(updated_at);
