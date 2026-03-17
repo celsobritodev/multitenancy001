@@ -1,0 +1,1355 @@
+{
+  "info": {
+    "_postman_id": "v100-heavy-data-population-grid",
+    "name": "multitenancy001-e2e (v100 HEAVY DATA POPULATION GRID)",
+    "description": "V100 heavy data population grid baseada no contrato funcional validado do projeto. Popula multiplas contas, usuarios de control plane, billings, usuarios tenant, categorias, subcategorias, fornecedores, customers, produtos, inventario e vendas multi-item via requisicoes HTTP.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "📦 00 - BOOTSTRAP",
+      "item": [
+        {
+          "name": "00.01 bootstrap init",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{app_health_url}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bootstrap init OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const cv = pm.collectionVariables;",
+                  "function envNum(key, dflt) {",
+                  "  const v = pm.environment.get(key);",
+                  "  const n = parseInt(v || String(dflt), 10);",
+                  "  return Number.isFinite(n) ? n : dflt;",
+                  "}",
+                  "cv.set('tenant_count', String(envNum('tenant_count', 8)));",
+                  "cv.set('controlplane_user_count', String(envNum('controlplane_user_count', 18)));",
+                  "cv.set('billing_count', String(envNum('billing_count', 24)));",
+                  "cv.set('tenant_user_count', String(envNum('tenant_user_count', 20)));",
+                  "cv.set('category_count', String(envNum('category_count', 10)));",
+                  "cv.set('subcategory_count', String(envNum('subcategory_count', 16)));",
+                  "cv.set('supplier_count', String(envNum('supplier_count', 12)));",
+                  "cv.set('customer_count', String(envNum('customer_count', 24)));",
+                  "cv.set('product_count', String(envNum('product_count', 32)));",
+                  "cv.set('sales_count', String(envNum('sales_count', 48)));",
+                  "cv.set('max_items_per_sale', String(envNum('max_items_per_sale', 5)));",
+                  "cv.set('inventory_seed_qty', String(envNum('inventory_seed_qty', 240)));",
+                  "['tenant_signup_index','cp_user_index','billing_index','tenant_loop_index','tenant_user_index','category_index','subcategory_index','supplier_index','customer_index','product_index','inventory_index','sale_index'].forEach(k => cv.set(k,'0'));",
+                  "['tenant_account_ids','tenant_admin_emails','tenant_schemas','created_cp_user_ids','created_billing_ids','global_category_ids','global_subcategory_ids','global_supplier_ids','global_customer_ids','global_product_refs','global_sale_ids'].forEach(k => cv.set(k, '[]'));",
+                  "cv.set('current_category_ids', '[]');",
+                  "cv.set('current_subcategory_ids', '[]');",
+                  "cv.set('current_supplier_ids', '[]');",
+                  "cv.set('current_customer_ids', '[]');",
+                  "cv.set('current_product_refs', '[]');",
+                  "cv.set('current_sale_ids', '[]');",
+                  "postman.setNextRequest('00.02 controlplane login superadmin');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.02 controlplane login superadmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/auth/login"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{superadmin_email}}\",\"password\":\"{{superadmin_password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Control plane login OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('cp_token', j.accessToken);",
+                  "pm.environment.set('cp_refresh', j.refreshToken);",
+                  "pm.collectionVariables.set('cp_token', j.accessToken);",
+                  "postman.setNextRequest('01.01 signup tenant account grid');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 01 - ACCOUNTS / TENANTS GRID",
+      "item": [
+        {
+          "name": "01.01 signup tenant account grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/signup"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_signup_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts') || String(Date.now());",
+                  "pm.collectionVariables.set('run_ts', runTs);",
+                  "const email = `v100.tenant.${runTs}.${idx}@tenant.local`;",
+                  "const suffix = String(idx).padStart(4, '0');",
+                  "const tax = `900000000${suffix}99`.slice(0,14);",
+                  "const body = {",
+                  "  displayName: `V100 Tenant ${idx + 1}`,",
+                  "  loginEmail: email,",
+                  "  taxIdType: pm.environment.get('tenant_tax_id_type') || 'CNPJ',",
+                  "  taxIdNumber: tax,",
+                  "  password: pm.environment.get('tenant_admin_password') || 'admin123',",
+                  "  confirmPassword: pm.environment.get('tenant_admin_password') || 'admin123'",
+                  "};",
+                  "pm.variables.set('signup_email', email);",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Signup tenant grid OK', function () { pm.expect(pm.response.code).to.eql(201); });",
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_signup_index') || '0', 10);",
+                  "const j = pm.response.json();",
+                  "const accountIds = JSON.parse(pm.collectionVariables.get('tenant_account_ids') || '[]');",
+                  "const emails = JSON.parse(pm.collectionVariables.get('tenant_admin_emails') || '[]');",
+                  "accountIds.push(String((j.account && j.account.id) || j.accountId || ''));",
+                  "emails.push(pm.variables.get('signup_email'));",
+                  "pm.collectionVariables.set('tenant_account_ids', JSON.stringify(accountIds));",
+                  "pm.collectionVariables.set('tenant_admin_emails', JSON.stringify(emails));",
+                  "pm.collectionVariables.set('tenant_signup_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('tenant_count'), 10)) {",
+                  "  postman.setNextRequest('01.01 signup tenant account grid');",
+                  "} else {",
+                  "  postman.setNextRequest('02.01 create control plane user grid');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 02 - CONTROL PLANE USERS GRID",
+      "item": [
+        {
+          "name": "02.01 create control plane user grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cp_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/users"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('cp_user_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts');",
+                  "const roleTemplates = [",
+                  "  { role: 'CONTROLPLANE_ADMIN', permissions: ['CP_ME_READ','CP_USER_READ','CP_USER_WRITE','CP_TENANT_READ','CP_TENANT_CREATE','CP_BILLING_READ'] },",
+                  "  { role: 'CONTROLPLANE_BILLING_MANAGER', permissions: ['CP_ME_READ','CP_BILLING_READ','CP_BILLING_WRITE','CP_TENANT_READ'] },",
+                  "  { role: 'CONTROLPLANE_SUPPORT', permissions: ['CP_ME_READ','CP_TENANT_READ','CP_USER_READ','CP_BILLING_READ'] },",
+                  "  { role: 'CONTROLPLANE_OPERATOR', permissions: ['CP_ME_READ','CP_TENANT_READ','CP_BILLING_READ'] },",
+                  "  { role: 'CONTROLPLANE_VIEWER', permissions: ['CP_ME_READ','CP_TENANT_READ','CP_USER_READ'] }",
+                  "];",
+                  "const tpl = roleTemplates[idx % roleTemplates.length];",
+                  "const body = {",
+                  "  name: `V100 CP User ${idx + 1}`,",
+                  "  email: `v100.cp.${runTs}.${idx}@platform.local`,",
+                  "  password: 'Admin123!',",
+                  "  role: tpl.role,",
+                  "  permissions: tpl.permissions",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Control plane user grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('cp_user_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const ids = JSON.parse(pm.collectionVariables.get('created_cp_user_ids') || '[]');",
+                  "  if (j && j.id != null) ids.push(String(j.id));",
+                  "  pm.collectionVariables.set('created_cp_user_ids', JSON.stringify(ids));",
+                  "}",
+                  "pm.collectionVariables.set('cp_user_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('controlplane_user_count'), 10)) {",
+                  "  postman.setNextRequest('02.01 create control plane user grid');",
+                  "} else {",
+                  "  postman.setNextRequest('03.01 create billing grid');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 03 - BILLING GRID",
+      "item": [
+        {
+          "name": "03.01 create billing grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cp_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/billing/payments"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('billing_index') || '0', 10);",
+                  "const accountIds = JSON.parse(pm.collectionVariables.get('tenant_account_ids') || '[]');",
+                  "if (!accountIds.length) throw new Error('tenant_account_ids vazio para billing');",
+                  "const gateways = ['STRIPE','MERCADO_PAGO','PAGSEGURO'];",
+                  "const methods = ['CREDIT_CARD','PIX','BANK_SLIP'];",
+                  "const accountId = accountIds[idx % accountIds.length];",
+                  "const amount = (99.90 + ((idx % 7) * 25)).toFixed(2);",
+                  "const body = {",
+                  "  accountId: Number(accountId),",
+                  "  amount: Number(amount),",
+                  "  paymentMethod: methods[idx % methods.length],",
+                  "  paymentGateway: gateways[idx % gateways.length],",
+                  "  description: `V100 billing seed ${idx + 1}`",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billing grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('billing_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const ids = JSON.parse(pm.collectionVariables.get('created_billing_ids') || '[]');",
+                  "  if (j && j.id != null) ids.push(String(j.id));",
+                  "  pm.collectionVariables.set('created_billing_ids', JSON.stringify(ids));",
+                  "}",
+                  "pm.collectionVariables.set('billing_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('billing_count'), 10)) {",
+                  "  postman.setNextRequest('03.01 create billing grid');",
+                  "} else {",
+                  "  postman.setNextRequest('04.00 init current tenant context');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 04 - TENANT POPULATION GRID",
+      "item": [
+        {
+          "name": "04.00 init current tenant context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{app_health_url}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant loop init OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "if (idx >= parseInt(pm.collectionVariables.get('tenant_count'), 10)) {",
+                  "  postman.setNextRequest('99.01 controlplane final accounts smoke');",
+                  "  return;",
+                  "}",
+                  "['tenant_user_index','category_index','subcategory_index','supplier_index','customer_index','product_index','inventory_index','sale_index'].forEach(k => pm.collectionVariables.set(k,'0'));",
+                  "pm.collectionVariables.set('current_category_ids', '[]');",
+                  "pm.collectionVariables.set('current_subcategory_ids', '[]');",
+                  "pm.collectionVariables.set('current_supplier_ids', '[]');",
+                  "pm.collectionVariables.set('current_customer_ids', '[]');",
+                  "pm.collectionVariables.set('current_product_refs', '[]');",
+                  "pm.collectionVariables.set('current_sale_ids', '[]');",
+                  "postman.setNextRequest('04.01 tenant login current admin');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.01 tenant login current admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/login"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const emails = JSON.parse(pm.collectionVariables.get('tenant_admin_emails') || '[]');",
+                  "const email = emails[idx];",
+                  "if (!email) throw new Error('tenant admin email ausente para tenant_loop_index=' + idx);",
+                  "pm.request.body.update(JSON.stringify({ email, password: pm.environment.get('tenant_admin_password') || 'admin123' }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant admin login OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('tenant_token', j.accessToken);",
+                  "pm.environment.set('tenant_schema', j.tenantSchema);",
+                  "pm.environment.set('tenant_account_id', String(j.accountId));",
+                  "pm.collectionVariables.set('tenant_token', j.accessToken);",
+                  "pm.collectionVariables.set('tenant_schema', j.tenantSchema);",
+                  "pm.collectionVariables.set('tenant_account_id', String(j.accountId));",
+                  "const schemas = JSON.parse(pm.collectionVariables.get('tenant_schemas') || '[]');",
+                  "schemas[idx] = String(j.tenantSchema || '');",
+                  "pm.collectionVariables.set('tenant_schemas', JSON.stringify(schemas));",
+                  "postman.setNextRequest('04.02 create tenant user grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.02 create tenant user grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/users"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_user_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts');",
+                  "const templates = [",
+                  "  { role: 'TENANT_MANAGER', permissions: ['TEN_USER_READ','TEN_CUSTOMER_READ','TEN_PRODUCT_READ','TEN_SALE_READ','TEN_INVENTORY_READ'] },",
+                  "  { role: 'TENANT_PRODUCT_MANAGER', permissions: ['TEN_PRODUCT_READ','TEN_PRODUCT_WRITE','TEN_CATEGORY_READ','TEN_CATEGORY_WRITE','TEN_SUPPLIER_READ','TEN_SUPPLIER_WRITE','TEN_INVENTORY_READ'] },",
+                  "  { role: 'TENANT_SALES_MANAGER', permissions: ['TEN_SALE_READ','TEN_SALE_WRITE','TEN_CUSTOMER_READ','TEN_CUSTOMER_WRITE','TEN_REPORT_SALES_READ','TEN_INVENTORY_READ'] },",
+                  "  { role: 'TENANT_OPERATOR', permissions: ['TEN_PRODUCT_READ','TEN_CUSTOMER_READ','TEN_SALE_READ','TEN_INVENTORY_READ'] },",
+                  "  { role: 'TENANT_READ_ONLY', permissions: ['TEN_PRODUCT_READ','TEN_CUSTOMER_READ','TEN_SALE_READ','TEN_INVENTORY_READ','TEN_SUPPLIER_READ','TEN_CATEGORY_READ'] }",
+                  "];",
+                  "const tpl = templates[idx % templates.length];",
+                  "const body = {",
+                  "  name: `Tenant ${tenantIdx + 1} User ${idx + 1}`,",
+                  "  email: `v100.t${tenantIdx + 1}.u${idx + 1}.${runTs}@tenant.local`,",
+                  "  password: 'Admin123!',",
+                  "  role: tpl.role,",
+                  "  permissions: tpl.permissions,",
+                  "  locale: 'pt-BR',",
+                  "  timezone: 'America/Sao_Paulo',",
+                  "  mustChangePassword: false,",
+                  "  origin: 'INTERNAL'",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant user grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_user_index') || '0', 10);",
+                  "pm.collectionVariables.set('tenant_user_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('tenant_user_count'), 10)) {",
+                  "  postman.setNextRequest('04.02 create tenant user grid');",
+                  "} else {",
+                  "  postman.setNextRequest('04.03 create category grid');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.03 create category grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/categories"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('category_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "pm.request.body.update(JSON.stringify({ name: `Categoria T${tenantIdx + 1} ${idx + 1}` }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Category grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('category_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const arr = JSON.parse(pm.collectionVariables.get('current_category_ids') || '[]');",
+                  "  const all = JSON.parse(pm.collectionVariables.get('global_category_ids') || '[]');",
+                  "  if (j && j.id != null) { arr.push(String(j.id)); all.push(String(j.id)); }",
+                  "  pm.collectionVariables.set('current_category_ids', JSON.stringify(arr));",
+                  "  pm.collectionVariables.set('global_category_ids', JSON.stringify(all));",
+                  "}",
+                  "pm.collectionVariables.set('category_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('category_count'), 10)) postman.setNextRequest('04.03 create category grid');",
+                  "else postman.setNextRequest('04.04 create subcategory grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.04 create subcategory grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subcategories/category/1"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('subcategory_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const categories = JSON.parse(pm.collectionVariables.get('current_category_ids') || '[]');",
+                  "if (!categories.length) throw new Error('Sem categorias para criar subcategorias');",
+                  "const categoryId = categories[idx % categories.length];",
+                  "pm.variables.set('subcategory_category_id', categoryId);",
+                  "pm.request.url = pm.variables.replaceIn(`{{base_url}}/api/tenant/subcategories/category/${categoryId}`);",
+                  "pm.request.body.update(JSON.stringify({ name: `Subcategoria T${tenantIdx + 1} ${idx + 1}` }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Subcategory grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('subcategory_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const arr = JSON.parse(pm.collectionVariables.get('current_subcategory_ids') || '[]');",
+                  "  const all = JSON.parse(pm.collectionVariables.get('global_subcategory_ids') || '[]');",
+                  "  if (j && j.id != null) { arr.push(String(j.id)); all.push(String(j.id)); }",
+                  "  pm.collectionVariables.set('current_subcategory_ids', JSON.stringify(arr));",
+                  "  pm.collectionVariables.set('global_subcategory_ids', JSON.stringify(all));",
+                  "}",
+                  "pm.collectionVariables.set('subcategory_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('subcategory_count'), 10)) postman.setNextRequest('04.04 create subcategory grid');",
+                  "else postman.setNextRequest('04.05 create supplier grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.05 create supplier grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/suppliers"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('supplier_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts');",
+                  "const body = {",
+                  "  name: `Fornecedor T${tenantIdx + 1} ${idx + 1}`,",
+                  "  email: `supplier.t${tenantIdx + 1}.${idx + 1}.${runTs}@example.com`,",
+                  "  phone: `1199${String(tenantIdx + 1).padStart(2,'0')}${String(idx + 1).padStart(6,'0')}`.slice(0,11),",
+                  "  document: `55${String(tenantIdx + 1).padStart(2,'0')}${String(idx + 1).padStart(10,'0')}`.slice(0,14),",
+                  "  documentType: 'CNPJ'",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Supplier grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('supplier_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const arr = JSON.parse(pm.collectionVariables.get('current_supplier_ids') || '[]');",
+                  "  const all = JSON.parse(pm.collectionVariables.get('global_supplier_ids') || '[]');",
+                  "  const id = String((j && (j.id || j.supplierId)) || '');",
+                  "  if (id) { arr.push(id); all.push(id); }",
+                  "  pm.collectionVariables.set('current_supplier_ids', JSON.stringify(arr));",
+                  "  pm.collectionVariables.set('global_supplier_ids', JSON.stringify(all));",
+                  "}",
+                  "pm.collectionVariables.set('supplier_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('supplier_count'), 10)) postman.setNextRequest('04.05 create supplier grid');",
+                  "else postman.setNextRequest('04.06 create customer grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.06 create customer grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/customers"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('customer_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts');",
+                  "const doc = `${tenantIdx + 1}${String(idx + 1).padStart(10,'0')}`.slice(0,11);",
+                  "const body = {",
+                  "  name: `Cliente T${tenantIdx + 1} ${idx + 1}`,",
+                  "  email: `customer.t${tenantIdx + 1}.${idx + 1}.${runTs}@example.com`,",
+                  "  phone: `1198${String(tenantIdx + 1).padStart(2,'0')}${String(idx + 1).padStart(6,'0')}`.slice(0,11),",
+                  "  document: doc,",
+                  "  documentType: 'CPF',",
+                  "  address: `Rua Volume ${idx + 1}`,",
+                  "  city: 'Sao Paulo',",
+                  "  state: 'SP',",
+                  "  zipCode: '01001000',",
+                  "  country: 'Brasil',",
+                  "  notes: 'Seed V100'",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Customer grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('customer_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const arr = JSON.parse(pm.collectionVariables.get('current_customer_ids') || '[]');",
+                  "  const all = JSON.parse(pm.collectionVariables.get('global_customer_ids') || '[]');",
+                  "  const id = String((j && (j.id || j.customerId)) || '');",
+                  "  if (id) { arr.push(id); all.push(id); }",
+                  "  pm.collectionVariables.set('current_customer_ids', JSON.stringify(arr));",
+                  "  pm.collectionVariables.set('global_customer_ids', JSON.stringify(all));",
+                  "}",
+                  "pm.collectionVariables.set('customer_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('customer_count'), 10)) postman.setNextRequest('04.06 create customer grid');",
+                  "else postman.setNextRequest('04.07 create product grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.07 create product grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products/detailed"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('product_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const runTs = pm.collectionVariables.get('run_ts');",
+                  "const categories = JSON.parse(pm.collectionVariables.get('current_category_ids') || '[]');",
+                  "const subcategories = JSON.parse(pm.collectionVariables.get('current_subcategory_ids') || '[]');",
+                  "const suppliers = JSON.parse(pm.collectionVariables.get('current_supplier_ids') || '[]');",
+                  "if (!categories.length) throw new Error('Sem categorias para produtos');",
+                  "const categoryId = Number(categories[idx % categories.length]);",
+                  "const subcategoryId = subcategories.length ? Number(subcategories[idx % subcategories.length]) : null;",
+                  "const supplierId = suppliers.length ? suppliers[idx % suppliers.length] : null;",
+                  "const sku = `V100-T${tenantIdx + 1}-P${idx + 1}-${runTs}`.slice(0, 40);",
+                  "const price = Number((49 + ((idx % 12) * 13.75)).toFixed(2));",
+                  "const body = {",
+                  "  name: `Produto T${tenantIdx + 1} ${idx + 1}`,",
+                  "  description: `Seed V100 produto ${idx + 1}`,",
+                  "  sku,",
+                  "  price,",
+                  "  costPrice: Number((price * 0.62).toFixed(2)),",
+                  "  stockQuantity: 0,",
+                  "  minStock: 5,",
+                  "  maxStock: 999,",
+                  "  brand: `Marca ${((idx % 5) + 1)}`,",
+                  "  active: true,",
+                  "  supplierId,",
+                  "  categoryId,",
+                  "  subcategoryId",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product grid request accepted', function () { pm.expect([200,201,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('product_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const id = String((j && (j.id || j.productId)) || '');",
+                  "  if (id) {",
+                  "    const arr = JSON.parse(pm.collectionVariables.get('current_product_refs') || '[]');",
+                  "    const all = JSON.parse(pm.collectionVariables.get('global_product_refs') || '[]');",
+                  "    const ref = { id, name: String((j && j.name) || `Produto Seed ${idx + 1}`), price: Number((j && j.price) || 10) };",
+                  "    arr.push(ref); all.push(ref);",
+                  "    pm.collectionVariables.set('current_product_refs', JSON.stringify(arr));",
+                  "    pm.collectionVariables.set('global_product_refs', JSON.stringify(all));",
+                  "  }",
+                  "}",
+                  "pm.collectionVariables.set('product_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('product_count'), 10)) postman.setNextRequest('04.07 create product grid');",
+                  "else postman.setNextRequest('04.08 inventory inbound grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.08 inventory inbound grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/inventory/adjustments"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('inventory_index') || '0', 10);",
+                  "const refs = JSON.parse(pm.collectionVariables.get('current_product_refs') || '[]');",
+                  "if (!refs.length) throw new Error('Sem products para inventory');",
+                  "const ref = refs[idx % refs.length];",
+                  "const qty = Number(pm.collectionVariables.get('inventory_seed_qty') || '240') + (idx % 17);",
+                  "const body = {",
+                  "  productId: ref.id,",
+                  "  quantity: qty,",
+                  "  movementType: 'INBOUND',",
+                  "  referenceType: 'V100_SEED',",
+                  "  referenceId: `INV-${idx + 1}`,",
+                  "  notes: 'Carga inicial pesada V100'",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory inbound grid request accepted', function () { pm.expect([200,201,400]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('inventory_index') || '0', 10);",
+                  "pm.collectionVariables.set('inventory_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('product_count'), 10)) postman.setNextRequest('04.08 inventory inbound grid');",
+                  "else postman.setNextRequest('04.09 create sales grid');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.09 create sales grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/sales"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const idx = parseInt(pm.collectionVariables.get('sale_index') || '0', 10);",
+                  "const tenantIdx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "const refs = JSON.parse(pm.collectionVariables.get('current_product_refs') || '[]');",
+                  "const customers = JSON.parse(pm.collectionVariables.get('current_customer_ids') || '[]');",
+                  "if (!refs.length) throw new Error('Sem products para sales');",
+                  "if (!customers.length) throw new Error('Sem customers para sales');",
+                  "const maxItems = parseInt(pm.collectionVariables.get('max_items_per_sale') || '5', 10);",
+                  "const itemCount = 1 + (idx % Math.max(1, maxItems));",
+                  "const items = [];",
+                  "for (let i = 0; i < itemCount; i += 1) {",
+                  "  const ref = refs[(idx + i) % refs.length];",
+                  "  items.push({",
+                  "    productId: ref.id,",
+                  "    productName: ref.name,",
+                  "    quantity: 1 + ((idx + i) % 3),",
+                  "    unitPrice: Number(ref.price || 10)",
+                  "  });",
+                  "}",
+                  "const body = {",
+                  "  customerId: customers[idx % customers.length],",
+                  "  saleDate: new Date().toISOString(),",
+                  "  status: 'OPEN',",
+                  "  items",
+                  "};",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sales grid request accepted', function () { pm.expect([200,201,400,409]).to.include(pm.response.code); });",
+                  "const idx = parseInt(pm.collectionVariables.get('sale_index') || '0', 10);",
+                  "if ([200,201].includes(pm.response.code)) {",
+                  "  const j = pm.response.json();",
+                  "  const id = String((j && (j.id || j.saleId)) || '');",
+                  "  if (id) {",
+                  "    const arr = JSON.parse(pm.collectionVariables.get('current_sale_ids') || '[]');",
+                  "    const all = JSON.parse(pm.collectionVariables.get('global_sale_ids') || '[]');",
+                  "    arr.push(id); all.push(id);",
+                  "    pm.collectionVariables.set('current_sale_ids', JSON.stringify(arr));",
+                  "    pm.collectionVariables.set('global_sale_ids', JSON.stringify(all));",
+                  "  }",
+                  "}",
+                  "pm.collectionVariables.set('sale_index', String(idx + 1));",
+                  "if ((idx + 1) < parseInt(pm.collectionVariables.get('sales_count'), 10)) postman.setNextRequest('04.09 create sales grid');",
+                  "else postman.setNextRequest('04.10 read tenant sale sample');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.10 read tenant sale sample",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/sales/00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = JSON.parse(pm.collectionVariables.get('current_sale_ids') || '[]');",
+                  "const saleId = ids.length ? ids[0] : '00000000-0000-0000-0000-000000000000';",
+                  "pm.request.url = pm.variables.replaceIn(`{{base_url}}/api/tenant/sales/${saleId}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read tenant sale sample accepted', function () { pm.expect([200,404]).to.include(pm.response.code); });",
+                  "postman.setNextRequest('04.11 advance to next tenant');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.11 advance to next tenant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{app_health_url}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Advance tenant loop OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const idx = parseInt(pm.collectionVariables.get('tenant_loop_index') || '0', 10);",
+                  "pm.collectionVariables.set('tenant_loop_index', String(idx + 1));",
+                  "postman.setNextRequest('04.00 init current tenant context');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 99 - FINAL CONSISTENCY SMOKE",
+      "item": [
+        {
+          "name": "99.01 controlplane final accounts smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cp_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/controlplane/accounts"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final control plane accounts smoke OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "postman.setNextRequest('99.02 tenant login first admin');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.02 tenant login first admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/auth/login"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const emails = JSON.parse(pm.collectionVariables.get('tenant_admin_emails') || '[]');",
+                  "const email = emails[0];",
+                  "if (!email) throw new Error('Sem tenant admin email para final login');",
+                  "pm.request.body.update(JSON.stringify({ email, password: pm.environment.get('tenant_admin_password') || 'admin123' }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final first tenant login OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('tenant_token', j.accessToken);",
+                  "pm.environment.set('tenant_schema', j.tenantSchema);",
+                  "postman.setNextRequest('99.03 tenant me smoke');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.03 tenant me smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant me smoke OK', function () { pm.expect(pm.response.code).to.eql(200); }); postman.setNextRequest('99.04 products smoke');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.04 products smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products?page=0&size=20"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Products smoke OK', function () { pm.expect(pm.response.code).to.eql(200); }); postman.setNextRequest('99.05 customers smoke');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.05 customers smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/customers"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Customers smoke OK', function () { pm.expect(pm.response.code).to.eql(200); }); postman.setNextRequest('99.06 final summary');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.06 final summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{app_health_url}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final summary OK', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "const summary = {",
+                  "  tenants: JSON.parse(pm.collectionVariables.get('tenant_account_ids') || '[]').length,",
+                  "  controlplaneUsers: parseInt(pm.collectionVariables.get('controlplane_user_count') || '0', 10),",
+                  "  billings: parseInt(pm.collectionVariables.get('billing_count') || '0', 10),",
+                  "  tenantUsersPerTenant: parseInt(pm.collectionVariables.get('tenant_user_count') || '0', 10),",
+                  "  categoriesPerTenant: parseInt(pm.collectionVariables.get('category_count') || '0', 10),",
+                  "  subcategoriesPerTenant: parseInt(pm.collectionVariables.get('subcategory_count') || '0', 10),",
+                  "  suppliersPerTenant: parseInt(pm.collectionVariables.get('supplier_count') || '0', 10),",
+                  "  customersPerTenant: parseInt(pm.collectionVariables.get('customer_count') || '0', 10),",
+                  "  productsPerTenant: parseInt(pm.collectionVariables.get('product_count') || '0', 10),",
+                  "  salesPerTenant: parseInt(pm.collectionVariables.get('sales_count') || '0', 10),",
+                  "  createdSales: JSON.parse(pm.collectionVariables.get('global_sale_ids') || '[]').length,",
+                  "  createdProducts: JSON.parse(pm.collectionVariables.get('global_product_refs') || '[]').length,",
+                  "  createdCustomers: JSON.parse(pm.collectionVariables.get('global_customer_ids') || '[]').length",
+                  "};",
+                  "console.log('V100 HEAVY SUMMARY');",
+                  "Object.keys(summary).forEach(k => console.log(`${k}=${summary[k]}`));",
+                  "postman.setNextRequest(null);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

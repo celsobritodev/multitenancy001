@@ -2,8 +2,13 @@ package brito.com.multitenancy001.controlplane.billing.app;
 
 import brito.com.multitenancy001.controlplane.accounts.app.AccountStatusService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.AccountPlanChangeService;
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.ChangeAccountPlanCommand;
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanChangeType;
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanEligibilityResult;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
+import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.billing.app.audit.ControlPlaneBillingSecurityAuditRecorder;
 import brito.com.multitenancy001.controlplane.billing.domain.Payment;
@@ -14,6 +19,8 @@ import brito.com.multitenancy001.shared.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
+import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
+import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -22,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -34,14 +42,19 @@ import java.util.stream.Collectors;
 /**
  * Application Service do Control Plane para Billing/Payments (public schema).
  *
- * Regras:
- * - Controller NÃO grava auditoria; auditoria é responsabilidade do AppService.
- * - Auditoria SOC2-like:
- *   - create payment -> PAYMENT_CREATED (ATTEMPT/SUCCESS/DENIED/FAILURE)
- *   - status change -> PAYMENT_STATUS_CHANGED (ATTEMPT/SUCCESS/DENIED/FAILURE)
- * - Details SEMPRE estruturado (Map/record), nunca string montada na unha.
- * - Nunca registrar segredos (token gateway, dados sensíveis).
- * - Fonte de tempo única: AppClock (Instant).
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Controller não grava auditoria; auditoria é responsabilidade do AppService.</li>
+ *   <li>Auditoria:
+ *     <ul>
+ *       <li>create payment -> PAYMENT_CREATED (ATTEMPT/SUCCESS/DENIED/FAILURE)</li>
+ *       <li>status change -> PAYMENT_STATUS_CHANGED (ATTEMPT/SUCCESS/DENIED/FAILURE)</li>
+ *     </ul>
+ *   </li>
+ *   <li>Quando o pagamento for de {@link PaymentPurpose#PLAN_UPGRADE}, a conclusão do pagamento
+ *       dispara a aplicação do upgrade via {@link AccountPlanChangeService}.</li>
+ *   <li>Fonte única de tempo: {@link AppClock}.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -55,6 +68,7 @@ public class ControlPlanePaymentService {
     private final ControlPlaneRequestIdentityService requestIdentity;
     private final AppClock appClock;
     private final AccountStatusService accountStatusService;
+    private final AccountPlanChangeService accountPlanChangeService;
 
     private final ControlPlaneBillingSecurityAuditRecorder billingAudit;
 
@@ -62,9 +76,11 @@ public class ControlPlanePaymentService {
     // Scheduled
     // =========================================================
 
+    /**
+     * Job de verificação de pagamentos, trials expirados, contas overdue e pendências antigas.
+     */
     @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
     public void checkPayments() {
-        /* Job: aplica regras automáticas de trial expirado, overdue e expiração de pending. */
         log.info("Iniciando verificação de pagamentos...");
         Instant now = appClock.instant();
 
@@ -89,12 +105,17 @@ public class ControlPlanePaymentService {
         checkExpiredPendingPayments(now);
     }
 
+    /**
+     * Suspende conta por id.
+     *
+     * @param accountId id da conta
+     * @param reason motivo
+     */
     private void suspendAccountById(Long accountId, String reason) {
-        /* Aplica suspensão de account (side-effect + email). */
-    	accountStatusService.changeAccountStatus(
-    		    accountId,
-    		    new AccountStatusChangeCommand(AccountStatus.SUSPENDED, reason, "billing_job")
-    		);
+        accountStatusService.changeAccountStatus(
+                accountId,
+                new AccountStatusChangeCommand(AccountStatus.SUSPENDED, reason, "billing_job")
+        );
 
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findAnyById(accountId)
@@ -104,8 +125,12 @@ public class ControlPlanePaymentService {
         sendSuspensionEmail(account, reason);
     }
 
+    /**
+     * Expira pagamentos pendentes antigos.
+     *
+     * @param now instante atual
+     */
     private void checkExpiredPendingPayments(Instant now) {
-        /* Expira pagamentos PENDING antigos (ex.: 30min) e audita mudança de status. */
         Instant thirtyMinutesAgo = now.minusSeconds(30 * 60);
 
         publicSchemaUnitOfWork.tx(() -> {
@@ -134,6 +159,7 @@ public class ControlPlanePaymentService {
                     throw ex;
                 }
             }
+            return null;
         });
     }
 
@@ -141,20 +167,27 @@ public class ControlPlanePaymentService {
     // Commands
     // =========================================================
 
+    /**
+     * Cria e processa um pagamento administrativo para uma conta.
+     *
+     * @param adminPaymentRequest request administrativo
+     * @return resposta final
+     */
     public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
-        /* Cria pagamento para uma account (admin) e processa gateway. */
         if (adminPaymentRequest == null || adminPaymentRequest.accountId() == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
 
         Instant now = appClock.instant();
 
-        // Pré-audit: create payment attempt
         Map<String, Object> createDetails = billingAudit.baseDetails("payment_create_admin", adminPaymentRequest.accountId(), null);
         createDetails.put("amount", adminPaymentRequest.amount());
         createDetails.put("paymentMethod", adminPaymentRequest.paymentMethod());
         createDetails.put("paymentGateway", adminPaymentRequest.paymentGateway());
         createDetails.put("description", adminPaymentRequest.description());
+        createDetails.put("targetPlan", adminPaymentRequest.targetPlan());
+        createDetails.put("billingCycle", adminPaymentRequest.billingCycle());
+        createDetails.put("purpose", adminPaymentRequest.purpose());
 
         billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_CREATED, adminPaymentRequest.accountId(), null, createDetails);
 
@@ -167,15 +200,29 @@ public class ControlPlanePaymentService {
                         .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
                 validatePayment(account, adminPaymentRequest.amount(), now);
+                validateBillingBinding(
+                        account,
+                        adminPaymentRequest.targetPlan(),
+                        adminPaymentRequest.billingCycle(),
+                        adminPaymentRequest.purpose()
+                );
 
                 Payment payment = Payment.builder()
                         .account(account)
                         .amount(adminPaymentRequest.amount())
                         .paymentMethod(adminPaymentRequest.paymentMethod())
                         .paymentGateway(adminPaymentRequest.paymentGateway())
-                        .description(adminPaymentRequest.description())
+                        .description(normalize(adminPaymentRequest.description()))
                         .status(PaymentStatus.PENDING)
                         .paymentDate(now)
+                        .targetPlan(adminPaymentRequest.targetPlan())
+                        .billingCycle(resolveBillingCycle(adminPaymentRequest.billingCycle()))
+                        .paymentPurpose(resolvePurpose(adminPaymentRequest.purpose()))
+                        .planPriceSnapshot(resolvePlanPriceSnapshot(adminPaymentRequest.planPriceSnapshot(), adminPaymentRequest.amount()))
+                        .currency(resolveCurrencyCode(adminPaymentRequest.currencyCode()))
+                        .effectiveFrom(adminPaymentRequest.effectiveFrom())
+                        .coverageEndDate(adminPaymentRequest.coverageEndDate())
+                        .validUntil(adminPaymentRequest.coverageEndDate())
                         .build();
 
                 Payment saved = controlPlanePaymentRepository.save(payment);
@@ -205,7 +252,14 @@ public class ControlPlanePaymentService {
                         adminPaymentRequest.amount(),
                         adminPaymentRequest.paymentMethod(),
                         adminPaymentRequest.paymentGateway(),
-                        adminPaymentRequest.description()
+                        adminPaymentRequest.description(),
+                        adminPaymentRequest.targetPlan(),
+                        adminPaymentRequest.billingCycle(),
+                        adminPaymentRequest.purpose(),
+                        adminPaymentRequest.planPriceSnapshot(),
+                        adminPaymentRequest.currencyCode(),
+                        adminPaymentRequest.effectiveFrom(),
+                        adminPaymentRequest.coverageEndDate()
                 )
         );
 
@@ -231,7 +285,6 @@ public class ControlPlanePaymentService {
             }
         }
 
-        // Falhou gateway: status -> FAILED (auditar)
         Map<String, Object> failDetails = billingAudit.baseDetails("payment_status_change_fail_gateway", adminPaymentRequest.accountId(), accountEmail);
         failDetails.put("paymentId", paymentId);
         failDetails.put("fromStatus", PaymentStatus.PENDING.name());
@@ -258,8 +311,13 @@ public class ControlPlanePaymentService {
         throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Falha no processamento do pagamento", 402);
     }
 
+    /**
+     * Cria e processa pagamento para a própria conta do usuário autenticado.
+     *
+     * @param paymentRequest request
+     * @return resposta final
+     */
     public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
-        /* Cria pagamento para a account do usuário logado e processa gateway. */
         if (paymentRequest == null) {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Request inválido", 400);
         }
@@ -272,6 +330,9 @@ public class ControlPlanePaymentService {
         createDetails.put("paymentMethod", paymentRequest.paymentMethod());
         createDetails.put("paymentGateway", paymentRequest.paymentGateway());
         createDetails.put("description", paymentRequest.description());
+        createDetails.put("targetPlan", paymentRequest.targetPlan());
+        createDetails.put("billingCycle", paymentRequest.billingCycle());
+        createDetails.put("purpose", paymentRequest.purpose());
 
         billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_CREATED, accountId, null, createDetails);
 
@@ -284,15 +345,29 @@ public class ControlPlanePaymentService {
                         .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
                 validatePayment(account, paymentRequest.amount(), now);
+                validateBillingBinding(
+                        account,
+                        paymentRequest.targetPlan(),
+                        paymentRequest.billingCycle(),
+                        paymentRequest.purpose()
+                );
 
                 Payment payment = Payment.builder()
                         .account(account)
                         .amount(paymentRequest.amount())
                         .paymentMethod(paymentRequest.paymentMethod())
                         .paymentGateway(paymentRequest.paymentGateway())
-                        .description(paymentRequest.description())
+                        .description(normalize(paymentRequest.description()))
                         .status(PaymentStatus.PENDING)
                         .paymentDate(now)
+                        .targetPlan(paymentRequest.targetPlan())
+                        .billingCycle(resolveBillingCycle(paymentRequest.billingCycle()))
+                        .paymentPurpose(resolvePurpose(paymentRequest.purpose()))
+                        .planPriceSnapshot(resolvePlanPriceSnapshot(paymentRequest.planPriceSnapshot(), paymentRequest.amount()))
+                        .currency(resolveCurrencyCode(paymentRequest.currencyCode()))
+                        .effectiveFrom(paymentRequest.effectiveFrom())
+                        .coverageEndDate(paymentRequest.coverageEndDate())
+                        .validUntil(paymentRequest.coverageEndDate())
                         .build();
 
                 Payment saved = controlPlanePaymentRepository.save(payment);
@@ -366,8 +441,13 @@ public class ControlPlanePaymentService {
         throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Falha no processamento do pagamento", 402);
     }
 
+    /**
+     * Completa manualmente um pagamento pendente.
+     *
+     * @param paymentId id do pagamento
+     * @return response
+     */
     public PaymentResponse completePaymentManually(Long paymentId) {
-        /* Completa um pagamento PENDING manualmente e audita mudança de status. */
         if (paymentId == null) {
             throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
@@ -414,8 +494,15 @@ public class ControlPlanePaymentService {
         }
     }
 
+    /**
+     * Reembolsa pagamento.
+     *
+     * @param paymentId id
+     * @param amount valor
+     * @param reason motivo
+     * @return response
+     */
     public PaymentResponse refundPayment(Long paymentId, BigDecimal amount, String reason) {
-        /* Reembolso (parcial/total) e audita mudança de status (ou evento de refund). */
         if (paymentId == null) {
             throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
@@ -435,7 +522,7 @@ public class ControlPlanePaymentService {
         details.put("amount", amount);
         details.put("reason", reason);
         details.put("fromStatus", before.getStatus() != null ? before.getStatus().name() : null);
-        details.put("toStatus", "REFUNDED_OR_PARTIAL"); // sem depender de enum específico
+        details.put("toStatus", "REFUNDED_OR_PARTIAL");
 
         billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_STATUS_CHANGED, accountId, accountEmail, details);
 
@@ -474,8 +561,13 @@ public class ControlPlanePaymentService {
     // Queries
     // =========================================================
 
+    /**
+     * Busca pagamento por id para a conta autenticada.
+     *
+     * @param paymentId id
+     * @return response
+     */
     public PaymentResponse getPaymentByIdForMyAccount(Long paymentId) {
-        /* Query: pagamento por id escopado à account do usuário logado. */
         Long accountId = requestIdentity.getCurrentAccountId();
 
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
@@ -486,20 +578,33 @@ public class ControlPlanePaymentService {
         return mapToResponse(payment);
     }
 
+    /**
+     * Lista pagamentos da conta autenticada.
+     *
+     * @return lista
+     */
     public List<PaymentResponse> getPaymentsByMyAccount() {
-        /* Query: lista pagamentos da account do usuário logado. */
         Long accountId = requestIdentity.getCurrentAccountId();
         return getPaymentsByAccount(accountId);
     }
 
+    /**
+     * Verifica se a conta autenticada possui pagamento ativo.
+     *
+     * @return true se ativo
+     */
     public boolean hasActivePaymentMyAccount() {
-        /* Query: verifica pagamento ativo para a account do usuário logado. */
         Long accountId = requestIdentity.getCurrentAccountId();
         return hasActivePayment(accountId);
     }
 
+    /**
+     * Lista pagamentos por conta.
+     *
+     * @param accountId id da conta
+     * @return lista
+     */
     public List<PaymentResponse> getPaymentsByAccount(Long accountId) {
-        /* Query: lista pagamentos por accountId. */
         return publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findByAccount_Id(accountId)
                         .stream()
@@ -508,14 +613,24 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Verifica se existe pagamento ativo.
+     *
+     * @param accountId id da conta
+     * @return true se existir
+     */
     public boolean hasActivePayment(Long accountId) {
-        /* Query: existe pagamento ativo? */
         Instant now = appClock.instant();
         return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository.existsActivePayment(accountId, now));
     }
 
+    /**
+     * Busca pagamento por id.
+     *
+     * @param paymentId id
+     * @return response
+     */
     public PaymentResponse getPaymentById(Long paymentId) {
-        /* Query: pagamento por id (admin). */
         Payment payment = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.findById(paymentId)
                         .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404))
@@ -523,8 +638,14 @@ public class ControlPlanePaymentService {
         return mapToResponse(payment);
     }
 
+    /**
+     * Calcula receita total no período.
+     *
+     * @param startDate início
+     * @param endDate fim
+     * @return receita total
+     */
     public BigDecimal getTotalRevenue(Instant startDate, Instant endDate) {
-        /* Query: receita agregada no período. */
         List<Object[]> revenueByAccount = publicSchemaUnitOfWork.readOnly(() ->
                 controlPlanePaymentRepository.getRevenueByAccount(startDate, endDate)
         );
@@ -534,8 +655,14 @@ public class ControlPlanePaymentService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Verifica se paymentId pertence à conta.
+     *
+     * @param paymentId id do pagamento
+     * @param accountId id da conta
+     * @return true se existir
+     */
     public boolean paymentExistsForAccount(Long paymentId, Long accountId) {
-        /* Query: verifica existência de paymentId para accountId. */
         if (paymentId == null) {
             throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
         }
@@ -547,8 +674,14 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Lista pagamentos por conta e status.
+     *
+     * @param accountId id da conta
+     * @param status status
+     * @return lista
+     */
     public List<PaymentResponse> getPaymentsByAccountAndStatus(Long accountId, PaymentStatus status) {
-        /* Query: lista pagamentos por accountId + status. */
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
@@ -564,9 +697,14 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Busca pagamento por transactionId.
+     *
+     * @param transactionId transactionId
+     * @return response
+     */
     public PaymentResponse getPaymentByTransactionId(String transactionId) {
-        /* Query: pagamento por transactionId. */
-        if (transactionId == null || transactionId.isBlank()) {
+        if (!StringUtils.hasText(transactionId)) {
             throw new ApiException(ApiErrorCode.INVALID_TRANSACTION_ID, "transactionId é obrigatório", 400);
         }
 
@@ -578,9 +716,14 @@ public class ControlPlanePaymentService {
         return mapToResponse(payment);
     }
 
+    /**
+     * Verifica existência por transactionId.
+     *
+     * @param transactionId transactionId
+     * @return true se existir
+     */
     public boolean existsByTransactionId(String transactionId) {
-        /* Query: existe payment por transactionId? */
-        if (transactionId == null || transactionId.isBlank()) {
+        if (!StringUtils.hasText(transactionId)) {
             throw new ApiException(ApiErrorCode.INVALID_TRANSACTION_ID, "transactionId é obrigatório", 400);
         }
         return publicSchemaUnitOfWork.readOnly(() ->
@@ -588,8 +731,14 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Lista pagamentos por validade e status.
+     *
+     * @param date data
+     * @param status status
+     * @return lista
+     */
     public List<PaymentResponse> getPaymentsByValidUntilBeforeAndStatus(Instant date, PaymentStatus status) {
-        /* Query: lista pagamentos por validUntil < date e status. */
         if (date == null) {
             throw new ApiException(ApiErrorCode.INVALID_DATE, "date é obrigatório", 400);
         }
@@ -605,8 +754,13 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Lista pagamentos concluídos por conta.
+     *
+     * @param accountId id da conta
+     * @return lista
+     */
     public List<PaymentResponse> getCompletedPaymentsByAccount(Long accountId) {
-        /* Query: lista pagamentos completados por accountId. */
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
@@ -619,8 +773,14 @@ public class ControlPlanePaymentService {
         );
     }
 
+    /**
+     * Lista pagamentos no período.
+     *
+     * @param startDate início
+     * @param endDate fim
+     * @return lista
+     */
     public List<PaymentResponse> getPaymentsInPeriod(Instant startDate, Instant endDate) {
-        /* Query: lista pagamentos no período. */
         if (startDate == null || endDate == null) {
             throw new ApiException(ApiErrorCode.INVALID_DATE_RANGE, "startDate e endDate são obrigatórios", 400);
         }
@@ -640,8 +800,17 @@ public class ControlPlanePaymentService {
     // Domain-ish helpers
     // =========================================================
 
+    /**
+     * Completa um pagamento por id.
+     *
+     * <p>Se o pagamento for de upgrade de plano, o upgrade aprovado é aplicado
+     * imediatamente após a conclusão do pagamento.</p>
+     *
+     * @param paymentId id do pagamento
+     * @param now instante atual
+     * @return pagamento atualizado
+     */
     private Payment completePaymentById(Long paymentId, Instant now) {
-        /* Domain helper: marca payment como COMPLETED e ativa account (paymentDueDate). */
         Payment payment = controlPlanePaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
@@ -653,6 +822,10 @@ public class ControlPlanePaymentService {
         payment.markAsCompleted(now);
         controlPlanePaymentRepository.save(payment);
 
+        if (payment.requiresPlanBinding()) {
+            applyApprovedPlanUpgrade(payment);
+        }
+
         account.setStatus(AccountStatus.ACTIVE);
         account.setPaymentDueDate(calculateNextDueDate(payment.getValidUntil(), now));
         accountRepository.save(account);
@@ -660,8 +833,13 @@ public class ControlPlanePaymentService {
         return payment;
     }
 
+    /**
+     * Marca pagamento como falho.
+     *
+     * @param paymentId id do pagamento
+     * @param reason motivo
+     */
     private void failPaymentById(Long paymentId, String reason) {
-        /* Domain helper: marca payment como FAILED com reason (sem segredos). */
         Payment payment = controlPlanePaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
 
@@ -669,8 +847,14 @@ public class ControlPlanePaymentService {
         controlPlanePaymentRepository.save(payment);
     }
 
+    /**
+     * Valida regras gerais de pagamento.
+     *
+     * @param account conta
+     * @param amount valor
+     * @param now instante atual
+     */
     private void validatePayment(Account account, BigDecimal amount, Instant now) {
-        /* Valida regras de pagamento (valor, conta, duplicidade de pagamento ativo). */
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "Valor do pagamento inválido", 400);
         }
@@ -689,42 +873,160 @@ public class ControlPlanePaymentService {
         }
     }
 
+    /**
+     * Valida coerência entre billing e subscription.
+     *
+     * @param account conta
+     * @param targetPlan plano alvo
+     * @param billingCycle ciclo
+     * @param purpose finalidade
+     */
+    private void validateBillingBinding(
+            Account account,
+            SubscriptionPlan targetPlan,
+            BillingCycle billingCycle,
+            PaymentPurpose purpose
+    ) {
+        PaymentPurpose safePurpose = resolvePurpose(purpose);
+
+        if (safePurpose == PaymentPurpose.PLAN_UPGRADE) {
+            if (targetPlan == null) {
+                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento de upgrade exige targetPlan", 400);
+            }
+
+            if (billingCycle == null) {
+                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento de upgrade exige billingCycle", 400);
+            }
+
+            PlanEligibilityResult preview = accountPlanChangeService.previewChange(
+                    new ChangeAccountPlanCommand(
+                            account.getId(),
+                            targetPlan,
+                            "billing_preview",
+                            "billing_system",
+                            "Pré-validação de upgrade por billing"
+                    )
+            );
+
+            if (preview.changeType() != PlanChangeType.UPGRADE) {
+                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "O targetPlan informado não representa um upgrade válido", 409);
+            }
+        } else if (targetPlan != null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan só pode ser enviado para purpose=PLAN_UPGRADE", 400);
+        }
+    }
+
+    /**
+     * Aplica upgrade aprovado vinculado ao pagamento.
+     *
+     * @param payment pagamento concluído
+     */
+    private void applyApprovedPlanUpgrade(Payment payment) {
+        if (payment.getTargetPlan() == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento de upgrade sem targetPlan vinculado", 409);
+        }
+
+        log.info(
+                "Aplicando upgrade aprovado via billing. paymentId={}, accountId={}, targetPlan={}, purpose={}",
+                payment.getId(),
+                payment.getAccount().getId(),
+                payment.getTargetPlan(),
+                payment.getPaymentPurpose()
+        );
+
+        accountPlanChangeService.applyApprovedUpgrade(
+                new ChangeAccountPlanCommand(
+                        payment.getAccount().getId(),
+                        payment.getTargetPlan(),
+                        "billing_payment_completed",
+                        "billing_system",
+                        "Upgrade aprovado via pagamento " + payment.getId()
+                )
+        );
+
+        log.info(
+                "Upgrade aplicado com sucesso via billing. paymentId={}, accountId={}, targetPlan={}",
+                payment.getId(),
+                payment.getAccount().getId(),
+                payment.getTargetPlan()
+        );
+    }
+
     // =========================================================
     // Side-effects / mapping
     // =========================================================
 
+    /**
+     * Side-effect de envio de email de suspensão.
+     *
+     * @param account conta
+     * @param reason motivo
+     */
     private void sendSuspensionEmail(Account account, String reason) {
-        /* Side-effect: notificação de suspensão. */
-        log.info("Enviando email de suspensão para: {}", account.getLoginEmail());
+        log.info("Enviando email de suspensão para: {}, reason={}", account.getLoginEmail(), reason);
     }
 
+    /**
+     * Side-effect de confirmação de pagamento.
+     *
+     * @param account conta
+     * @param payment pagamento
+     */
     private void sendPaymentConfirmationEmail(Account account, Payment payment) {
-        /* Side-effect: confirmação de pagamento. */
-        log.info("Enviando confirmação de pagamento para: {}", account.getLoginEmail());
+        log.info(
+                "Enviando confirmação de pagamento para: {}, paymentId={}, purpose={}, targetPlan={}",
+                account.getLoginEmail(),
+                payment.getId(),
+                payment.getPaymentPurpose(),
+                payment.getTargetPlan()
+        );
     }
 
+    /**
+     * Calcula próxima data de vencimento.
+     *
+     * @param validUntil validade
+     * @param now instante atual
+     * @return due date
+     */
     private LocalDate calculateNextDueDate(Instant validUntil, Instant now) {
-        /* Calcula próxima data de vencimento como data civil UTC (LocalDate <-> DATE). */
         Instant base = (validUntil != null ? validUntil : now.plusSeconds(30L * 24 * 3600));
         return LocalDate.ofInstant(base, ZoneOffset.UTC);
     }
 
+    /**
+     * Stub de processamento no gateway.
+     *
+     * @param paymentId id do pagamento
+     * @param paymentRequest request
+     * @return true se sucesso
+     */
     private boolean processWithPaymentGateway(Long paymentId, PaymentRequest paymentRequest) {
-        /* Stub do gateway (simulado). Não logar dados sensíveis. */
-        log.info("Processando pagamento={} com gateway: {}", paymentId, paymentRequest.paymentGateway());
+        log.info(
+                "Processando pagamento no gateway. paymentId={}, gateway={}, purpose={}, targetPlan={}",
+                paymentId,
+                paymentRequest.paymentGateway(),
+                paymentRequest.purpose(),
+                paymentRequest.targetPlan()
+        );
 
         try {
             Thread.sleep(1000);
             return Math.random() < 0.9;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("Erro ao processar pagamento no gateway", e);
+            log.error("Erro ao processar pagamento no gateway. paymentId={}", paymentId, e);
             return false;
         }
     }
 
+    /**
+     * Mapeia entidade para DTO.
+     *
+     * @param payment entidade
+     * @return response
+     */
     private PaymentResponse mapToResponse(Payment payment) {
-        /* Mapeia entidade Payment -> DTO de resposta. */
         PaymentResponse response = new PaymentResponse(
                 payment.getId(),
                 payment.getAccount().getId(),
@@ -735,6 +1037,14 @@ public class ControlPlanePaymentService {
                 payment.getStatus(),
 
                 payment.getDescription(),
+
+                payment.getTargetPlan(),
+                payment.getBillingCycle(),
+                payment.getPaymentPurpose(),
+                payment.getPlanPriceSnapshot(),
+                payment.getCurrency(),
+                payment.getEffectiveFrom(),
+                payment.getCoverageEndDate(),
 
                 payment.getPaymentDate(),
                 payment.getValidUntil(),
@@ -755,12 +1065,22 @@ public class ControlPlanePaymentService {
     // Audit helper
     // =========================================================
 
-    private void recordOutcomeForApiException(SecurityAuditActionType type,
-                                              Long accountId,
-                                              String accountEmail,
-                                              Map<String, Object> details,
-                                              ApiException ex) {
-        /* Aplica regra: 401/403 -> DENIED; demais -> FAILURE (com error/status). */
+    /**
+     * Registra outcome para ApiException.
+     *
+     * @param type tipo da ação
+     * @param accountId id da conta
+     * @param accountEmail email da conta
+     * @param details detalhes
+     * @param ex exceção
+     */
+    private void recordOutcomeForApiException(
+            SecurityAuditActionType type,
+            Long accountId,
+            String accountEmail,
+            Map<String, Object> details,
+            ApiException ex
+    ) {
         details.put("error", ex.getError());
         details.put("status", ex.getStatus());
 
@@ -771,9 +1091,63 @@ public class ControlPlanePaymentService {
         }
     }
 
-    // =========================================================
-    // Small internal DTO
-    // =========================================================
+    /**
+     * Resolve purpose com default.
+     *
+     * @param purpose purpose informado
+     * @return purpose resolvido
+     */
+    private PaymentPurpose resolvePurpose(PaymentPurpose purpose) {
+        return purpose != null ? purpose : PaymentPurpose.OTHER;
+    }
 
-    private record PaymentCreatedSnapshot(Long paymentId, String accountEmail) {}
+    /**
+     * Resolve ciclo com default.
+     *
+     * @param billingCycle ciclo informado
+     * @return ciclo resolvido
+     */
+    private BillingCycle resolveBillingCycle(BillingCycle billingCycle) {
+        return billingCycle != null ? billingCycle : BillingCycle.ONE_TIME;
+    }
+
+    /**
+     * Resolve snapshot de preço.
+     *
+     * @param provided snapshot informado
+     * @param fallback fallback
+     * @return valor resolvido
+     */
+    private BigDecimal resolvePlanPriceSnapshot(BigDecimal provided, BigDecimal fallback) {
+        return provided != null ? provided : fallback;
+    }
+
+    /**
+     * Resolve currency code com default BRL.
+     *
+     * @param currencyCode moeda informada
+     * @return moeda resolvida
+     */
+    private String resolveCurrencyCode(String currencyCode) {
+        return StringUtils.hasText(currencyCode) ? currencyCode.trim().toUpperCase() : "BRL";
+    }
+
+    /**
+     * Normaliza texto opcional.
+     *
+     * @param value valor
+     * @return texto normalizado
+     */
+    private String normalize(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /**
+     * Snapshot interno de criação inicial do pagamento.
+     *
+     * @param paymentId id do pagamento
+     * @param accountEmail email da conta
+     */
+    private record PaymentCreatedSnapshot(Long paymentId, String accountEmail) {
+    }
 }

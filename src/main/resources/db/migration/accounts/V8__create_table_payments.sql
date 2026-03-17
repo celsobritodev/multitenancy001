@@ -6,10 +6,8 @@ CREATE TABLE IF NOT EXISTS payments (
 
     account_id BIGINT NOT NULL REFERENCES accounts(id),
 
-    -- alinhado com Payment.java
     amount NUMERIC(14,2) NOT NULL,
 
-    -- enums como STRING
     payment_method  VARCHAR(50) NOT NULL,
     payment_gateway VARCHAR(50) NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -23,7 +21,13 @@ CREATE TABLE IF NOT EXISTS payments (
     invoice_url   TEXT,
     receipt_url   TEXT,
 
-    -- instantes reais (Instant <-> TIMESTAMPTZ)
+    target_plan         VARCHAR(40),
+    billing_cycle       VARCHAR(20),
+    payment_purpose     VARCHAR(40) NOT NULL DEFAULT 'OTHER',
+    plan_price_snapshot NUMERIC(14,2),
+    effective_from      TIMESTAMPTZ,
+    coverage_end_date   TIMESTAMPTZ,
+
     payment_date TIMESTAMPTZ NOT NULL,
     valid_until  TIMESTAMPTZ,
     refunded_at  TIMESTAMPTZ,
@@ -31,7 +35,6 @@ CREATE TABLE IF NOT EXISTS payments (
     refund_amount NUMERIC(14,2),
     refund_reason VARCHAR(500),
 
-    -- auditoria (seu padrão AuditInfo)
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -47,6 +50,8 @@ CREATE TABLE IF NOT EXISTS payments (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_payments_account_id ON payments (account_id);
-CREATE INDEX IF NOT EXISTS idx_payments_status     ON payments (status);
-CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments (payment_date);
+CREATE INDEX IF NOT EXISTS idx_payments_account_id      ON payments (account_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status          ON payments (status);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_date    ON payments (payment_date);
+CREATE INDEX IF NOT EXISTS idx_payments_target_plan     ON payments (target_plan);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_purpose ON payments (payment_purpose);

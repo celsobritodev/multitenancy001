@@ -1,0 +1,425 @@
+package brito.com.multitenancy001.controlplane.accounts.app.subscription;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+
+import org.springframework.stereotype.Service;
+
+import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanChangeResponse;
+import brito.com.multitenancy001.controlplane.accounts.domain.Account;
+import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
+import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
+import brito.com.multitenancy001.controlplane.billing.app.ControlPlanePaymentService;
+import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
+import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
+import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
+import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
+import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
+import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Command service do Control Plane para mudança de plano por accountId.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Executar preview e decidir o fluxo.</li>
+ *   <li>Aplicar downgrade elegível imediatamente.</li>
+ *   <li>Processar upgrade via billing binding.</li>
+ *   <li>Manter a orquestração no application layer, sem acessar HTTP nem controller.</li>
+ * </ul>
+ *
+ * <p>Observação importante:</p>
+ * <ul>
+ *   <li>Este service não abre uma transação externa para o fluxo completo.</li>
+ *   <li>O preview roda em readOnly.</li>
+ *   <li>O downgrade usa o transaction boundary do AccountPlanChangeService.</li>
+ *   <li>O upgrade usa o transaction boundary do ControlPlanePaymentService.</li>
+ * </ul>
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ControlPlaneAccountSubscriptionCommandService {
+
+    private static final String DEFAULT_CURRENCY = "BRL";
+    private static final String CHANGE_SOURCE = "control_plane_admin";
+
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    private final AccountRepository accountRepository;
+    private final AccountPlanUsageService accountPlanUsageService;
+    private final PlanChangePolicy planChangePolicy;
+    private final AccountPlanChangeService accountPlanChangeService;
+    private final ControlPlanePaymentService controlPlanePaymentService;
+    private final AppClock appClock;
+
+    /**
+     * Solicita mudança de plano para uma conta.
+     *
+     * <p>Regras:</p>
+     * <ul>
+     *   <li>NO_CHANGE → bloqueia.</li>
+     *   <li>DOWNGRADE elegível → aplica imediatamente.</li>
+     *   <li>UPGRADE → processa via billing e retorna o estado final do pagamento/upgrade.</li>
+     * </ul>
+     *
+     * @param accountId id da conta
+     * @param targetPlan plano alvo
+     * @param billingCycle ciclo de cobrança para upgrade
+     * @param paymentMethod método de pagamento para upgrade
+     * @param paymentGateway gateway para upgrade
+     * @param amount valor a cobrar
+     * @param planPriceSnapshot snapshot opcional do preço
+     * @param currencyCode moeda opcional
+     * @param requestedBy ator solicitante
+     * @param reason motivo funcional
+     * @return resultado final da operação
+     */
+    public AccountPlanChangeResponse changePlan(
+            Long accountId,
+            SubscriptionPlan targetPlan,
+            BillingCycle billingCycle,
+            PaymentMethod paymentMethod,
+            PaymentGateway paymentGateway,
+            BigDecimal amount,
+            BigDecimal planPriceSnapshot,
+            String currencyCode,
+            String requestedBy,
+            String reason
+    ) {
+        validateBaseInputs(accountId, targetPlan);
+
+        log.info(
+                "Solicitando mudança de plano no control plane. accountId={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}, amount={}, requestedBy={}, reason={}",
+                accountId,
+                targetPlan,
+                billingCycle,
+                paymentMethod,
+                paymentGateway,
+                amount,
+                normalize(requestedBy),
+                normalize(reason)
+        );
+
+        Account account = loadAccount(accountId);
+        PlanEligibilityResult preview = preview(account, targetPlan);
+
+        log.info(
+                "Preview calculado para mudança de plano no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
+                accountId,
+                preview.currentPlan(),
+                preview.targetPlan(),
+                preview.changeType(),
+                preview.eligible()
+        );
+
+        if (preview.changeType() == PlanChangeType.NO_CHANGE) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "A conta já está no plano informado", 409);
+        }
+
+        ChangeAccountPlanCommand command = new ChangeAccountPlanCommand(
+                accountId,
+                targetPlan,
+                normalize(reason),
+                normalize(requestedBy),
+                CHANGE_SOURCE
+        );
+
+        if (preview.changeType() == PlanChangeType.DOWNGRADE) {
+            return handleDowngrade(command, preview);
+        }
+
+        return handleUpgrade(
+                account,
+                preview,
+                billingCycle,
+                paymentMethod,
+                paymentGateway,
+                amount,
+                planPriceSnapshot,
+                currencyCode,
+                normalize(reason)
+        );
+    }
+
+    /**
+     * Aplica downgrade elegível imediatamente.
+     *
+     * @param command comando consolidado
+     * @param preview preview já calculado
+     * @return response final
+     */
+    private AccountPlanChangeResponse handleDowngrade(
+            ChangeAccountPlanCommand command,
+            PlanEligibilityResult preview
+    ) {
+        if (!preview.eligible()) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Downgrade não elegível para a conta atual", 409);
+        }
+
+        AccountPlanChangeResult result = accountPlanChangeService.applyEligibleDowngrade(command);
+
+        log.info(
+                "Downgrade aplicado com sucesso no control plane. accountId={}, oldPlan={}, newPlan={}, changeType={}",
+                result.accountId(),
+                result.oldPlan(),
+                result.newPlan(),
+                result.changeType()
+        );
+
+        return new AccountPlanChangeResponse(
+                result.accountId(),
+                result.oldPlan().name(),
+                result.newPlan().name(),
+                result.newPlan().name(),
+                result.changeType().name(),
+                result.eligibility().eligible(),
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Downgrade aplicado com sucesso."
+        );
+    }
+
+    /**
+     * Processa upgrade via billing binding.
+     *
+     * @param account conta alvo
+     * @param preview preview calculado
+     * @param billingCycle ciclo de cobrança
+     * @param paymentMethod método de pagamento
+     * @param paymentGateway gateway
+     * @param amount valor a cobrar
+     * @param planPriceSnapshot snapshot opcional do preço
+     * @param currencyCode moeda opcional
+     * @param reason motivo funcional
+     * @return response final
+     */
+    private AccountPlanChangeResponse handleUpgrade(
+            Account account,
+            PlanEligibilityResult preview,
+            BillingCycle billingCycle,
+            PaymentMethod paymentMethod,
+            PaymentGateway paymentGateway,
+            BigDecimal amount,
+            BigDecimal planPriceSnapshot,
+            String currencyCode,
+            String reason
+    ) {
+        validateUpgradeInputs(billingCycle, paymentMethod, paymentGateway, amount);
+
+        Instant effectiveFrom = appClock.instant();
+        Instant coverageEndDate = resolveCoverageEndDate(effectiveFrom, billingCycle);
+
+        log.info(
+                "Iniciando upgrade via billing no control plane. accountId={}, currentPlan={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}, amount={}, effectiveFrom={}, coverageEndDate={}",
+                account.getId(),
+                account.getSubscriptionPlan(),
+                preview.targetPlan(),
+                billingCycle,
+                paymentMethod,
+                paymentGateway,
+                amount,
+                effectiveFrom,
+                coverageEndDate
+        );
+
+        PaymentResponse payment = controlPlanePaymentService.processPaymentForAccount(
+                new AdminPaymentRequest(
+                        account.getId(),
+                        amount,
+                        paymentMethod,
+                        paymentGateway,
+                        buildUpgradeDescription(account, preview.targetPlan(), reason),
+                        preview.targetPlan(),
+                        billingCycle,
+                        PaymentPurpose.PLAN_UPGRADE,
+                        planPriceSnapshot,
+                        normalizeCurrency(currencyCode),
+                        effectiveFrom,
+                        coverageEndDate
+                )
+        );
+
+        log.info(
+                "Upgrade via billing concluído no control plane. accountId={}, paymentId={}, paymentStatus={}, oldPlan={}, targetPlan={}",
+                account.getId(),
+                payment.id(),
+                payment.paymentStatus(),
+                account.getSubscriptionPlan(),
+                preview.targetPlan()
+        );
+
+        return new AccountPlanChangeResponse(
+                account.getId(),
+                account.getSubscriptionPlan().name(),
+                payment.targetPlan() != null ? payment.targetPlan().name() : account.getSubscriptionPlan().name(),
+                preview.targetPlan().name(),
+                preview.changeType().name(),
+                preview.eligible(),
+                true,
+                payment.id(),
+                payment.paymentStatus() != null ? payment.paymentStatus().name() : null,
+                payment.paymentMethod() != null ? payment.paymentMethod().name() : null,
+                payment.paymentGateway() != null ? payment.paymentGateway().name() : null,
+                payment.billingCycle() != null ? payment.billingCycle().name() : null,
+                payment.amount(),
+                payment.currencyCode(),
+                payment.effectiveFrom(),
+                payment.coverageEndDate(),
+                "Upgrade processado via billing com sucesso."
+        );
+    }
+
+    /**
+     * Carrega a conta em modo readOnly.
+     *
+     * @param accountId id da conta
+     * @return conta carregada
+     */
+    private Account loadAccount(Long accountId) {
+        return publicSchemaUnitOfWork.readOnly(() ->
+                accountRepository.findByIdAndDeletedFalse(accountId)
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
+        );
+    }
+
+    /**
+     * Executa o preview de mudança de plano.
+     *
+     * @param account conta alvo
+     * @param targetPlan plano alvo
+     * @return preview calculado
+     */
+    private PlanEligibilityResult preview(Account account, SubscriptionPlan targetPlan) {
+        PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
+        return planChangePolicy.previewChange(usage, targetPlan);
+    }
+
+    /**
+     * Valida entradas básicas independentes do tipo de mudança.
+     *
+     * @param accountId id da conta
+     * @param targetPlan plano alvo
+     */
+    private void validateBaseInputs(Long accountId, SubscriptionPlan targetPlan) {
+        if (accountId == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        }
+
+        if (targetPlan == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
+        }
+    }
+
+    /**
+     * Valida os campos obrigatórios do fluxo de upgrade.
+     *
+     * @param billingCycle ciclo
+     * @param paymentMethod método
+     * @param paymentGateway gateway
+     * @param amount valor
+     */
+    private void validateUpgradeInputs(
+            BillingCycle billingCycle,
+            PaymentMethod paymentMethod,
+            PaymentGateway paymentGateway,
+            BigDecimal amount
+    ) {
+        if (billingCycle == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "billingCycle é obrigatório para upgrade", 400);
+        }
+
+        if (paymentMethod == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "paymentMethod é obrigatório para upgrade", 400);
+        }
+
+        if (paymentGateway == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "paymentGateway é obrigatório para upgrade", 400);
+        }
+
+        if (amount == null || amount.signum() <= 0) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "amount deve ser maior que zero para upgrade", 400);
+        }
+    }
+
+    /**
+     * Calcula a cobertura comercial a partir do ciclo.
+     *
+     * @param effectiveFrom início efetivo
+     * @param billingCycle ciclo informado
+     * @return data final da cobertura ou null quando não aplicável
+     */
+    private Instant resolveCoverageEndDate(Instant effectiveFrom, BillingCycle billingCycle) {
+        if (effectiveFrom == null || billingCycle == null) {
+            return null;
+        }
+
+        ZonedDateTime base = effectiveFrom.atZone(ZoneOffset.UTC);
+
+        return switch (billingCycle) {
+            case MONTHLY -> base.plusMonths(1).toInstant();
+            case YEARLY -> base.plusYears(1).toInstant();
+            case ONE_TIME -> effectiveFrom;
+        };
+    }
+
+    /**
+     * Monta descrição funcional do upgrade.
+     *
+     * @param account conta alvo
+     * @param targetPlan plano alvo
+     * @param reason motivo
+     * @return descrição final
+     */
+    private String buildUpgradeDescription(Account account, SubscriptionPlan targetPlan, String reason) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Upgrade de plano da conta ").append(account.getId()).append(" para ").append(targetPlan.name());
+
+        if (reason != null && !reason.isBlank()) {
+            sb.append(". reason=").append(reason.trim());
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Normaliza valor textual.
+     *
+     * @param value valor bruto
+     * @return valor normalizado
+     */
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    /**
+     * Normaliza moeda, aplicando BRL como padrão.
+     *
+     * @param currencyCode moeda informada
+     * @return moeda final
+     */
+    private String normalizeCurrency(String currencyCode) {
+        String normalized = normalize(currencyCode);
+        return normalized == null ? DEFAULT_CURRENCY : normalized.toUpperCase();
+    }
+}
