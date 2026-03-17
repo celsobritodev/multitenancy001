@@ -35,3 +35,7 @@ build/
 ~$*.doc
 ~$*.xlsx
 ~$*.pptx
+# Test reports and logs
+**/.newman-report*.json
+**/logs/
+*.log
