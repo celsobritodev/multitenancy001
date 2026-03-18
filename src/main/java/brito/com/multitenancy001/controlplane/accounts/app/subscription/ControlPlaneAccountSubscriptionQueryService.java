@@ -26,6 +26,14 @@ import java.util.List;
  *   <li>Consultar uso real e limites atuais.</li>
  *   <li>Executar preview de mudança de plano por accountId.</li>
  * </ul>
+ *
+ * <p>Regra arquitetural crítica:</p>
+ * <ul>
+ *   <li>Leitura da conta ocorre no PUBLIC schema.</li>
+ *   <li>Cálculo de uso não pode ocorrer dentro do mesmo bloco do PUBLIC UoW,
+ *       pois o cálculo de usage entra no tenant schema.</li>
+ *   <li>Evitar bind de tenant dentro de transação PUBLIC já ativa.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -45,59 +53,91 @@ public class ControlPlaneAccountSubscriptionQueryService {
      * @return response consolidado
      */
     public AccountSubscriptionAdminResponse getSubscription(Long accountId) {
+        if (accountId == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        }
+
         log.info("Consultando assinatura da conta no control plane. accountId={}", accountId);
 
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            Account account = loadAccount(accountId);
-            PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
-            PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
+        Account account = publicSchemaUnitOfWork.readOnly(() -> loadAccount(accountId));
 
-            long remainingUsers = calculateRemaining(usage.currentUsers(), limits.maxUsers(), limits.unlimited());
-            long remainingProducts = calculateRemaining(usage.currentProducts(), limits.maxProducts(), limits.unlimited());
-            long remainingStorageMb = calculateRemaining(usage.currentStorageMb(), limits.maxStorageMb(), limits.unlimited());
+        PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
+        PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
 
-            List<String> eligibleDowngrades = new ArrayList<>();
-            List<String> blockedDowngrades = new ArrayList<>();
-            List<String> availableUpgrades = new ArrayList<>();
+        long remainingUsers = calculateRemaining(
+                usage.currentUsers(),
+                limits.maxUsers(),
+                limits.unlimited()
+        );
 
-            for (SubscriptionPlan candidate : orderedCommercialPlans()) {
-                if (candidate == account.getSubscriptionPlan()) {
-                    continue;
-                }
+        long remainingProducts = calculateRemaining(
+                usage.currentProducts(),
+                limits.maxProducts(),
+                limits.unlimited()
+        );
 
-                PlanChangeType changeType = subscriptionPlanCatalog.classifyChange(account.getSubscriptionPlan(), candidate);
-                PlanEligibilityResult preview = planChangePolicy.previewChange(usage, candidate);
+        long remainingStorageMb = calculateRemaining(
+                usage.currentStorageMb(),
+                limits.maxStorageMb(),
+                limits.unlimited()
+        );
 
-                if (changeType == PlanChangeType.UPGRADE) {
-                    availableUpgrades.add(candidate.name());
-                } else if (changeType == PlanChangeType.DOWNGRADE) {
-                    if (preview.eligible()) {
-                        eligibleDowngrades.add(candidate.name());
-                    } else {
-                        blockedDowngrades.add(candidate.name());
-                    }
-                }
+        List<String> eligibleDowngrades = new ArrayList<>();
+        List<String> blockedDowngrades = new ArrayList<>();
+        List<String> availableUpgrades = new ArrayList<>();
+
+        for (SubscriptionPlan candidate : orderedCommercialPlans()) {
+            if (candidate == account.getSubscriptionPlan()) {
+                continue;
             }
 
-            return new AccountSubscriptionAdminResponse(
-                    account.getId(),
-                    account.getStatus().name(),
-                    account.getSubscriptionPlan().name(),
-                    limits.maxUsers(),
-                    limits.maxProducts(),
-                    limits.maxStorageMb(),
-                    limits.unlimited(),
-                    usage.currentUsers(),
-                    usage.currentProducts(),
-                    usage.currentStorageMb(),
-                    remainingUsers,
-                    remainingProducts,
-                    remainingStorageMb,
-                    List.copyOf(eligibleDowngrades),
-                    List.copyOf(blockedDowngrades),
-                    List.copyOf(availableUpgrades)
+            PlanChangeType changeType = subscriptionPlanCatalog.classifyChange(
+                    account.getSubscriptionPlan(),
+                    candidate
             );
-        });
+
+            PlanEligibilityResult preview = planChangePolicy.previewChange(usage, candidate);
+
+            if (changeType == PlanChangeType.UPGRADE) {
+                availableUpgrades.add(candidate.name());
+            } else if (changeType == PlanChangeType.DOWNGRADE) {
+                if (preview.eligible()) {
+                    eligibleDowngrades.add(candidate.name());
+                } else {
+                    blockedDowngrades.add(candidate.name());
+                }
+            }
+        }
+
+        AccountSubscriptionAdminResponse response = new AccountSubscriptionAdminResponse(
+                account.getId(),
+                account.getStatus().name(),
+                account.getSubscriptionPlan().name(),
+                limits.maxUsers(),
+                limits.maxProducts(),
+                limits.maxStorageMb(),
+                limits.unlimited(),
+                usage.currentUsers(),
+                usage.currentProducts(),
+                usage.currentStorageMb(),
+                remainingUsers,
+                remainingProducts,
+                remainingStorageMb,
+                List.copyOf(eligibleDowngrades),
+                List.copyOf(blockedDowngrades),
+                List.copyOf(availableUpgrades)
+        );
+
+        log.info(
+                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
+                account.getId(),
+                account.getSubscriptionPlan(),
+                usage.currentUsers(),
+                usage.currentProducts(),
+                usage.currentStorageMb()
+        );
+
+        return response;
     }
 
     /**
@@ -108,42 +148,84 @@ public class ControlPlaneAccountSubscriptionQueryService {
      * @return preview completo
      */
     public AccountPlanChangePreviewResponse previewChange(Long accountId, SubscriptionPlan targetPlan) {
-        log.info("Executando preview de mudança de plano no control plane. accountId={}, targetPlan={}", accountId, targetPlan);
+        if (accountId == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        }
 
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            Account account = loadAccount(accountId);
-            PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
-            PlanEligibilityResult result = planChangePolicy.previewChange(usage, targetPlan);
+        if (targetPlan == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
+        }
 
-            return new AccountPlanChangePreviewResponse(
-                    account.getId(),
-                    result.currentPlan().name(),
-                    result.targetPlan().name(),
-                    result.changeType().name(),
-                    result.eligible(),
-                    result.currentUsage().currentUsers(),
-                    result.currentUsage().currentProducts(),
-                    result.currentUsage().currentStorageMb(),
-                    result.targetLimits().maxUsers(),
-                    result.targetLimits().maxProducts(),
-                    result.targetLimits().maxStorageMb(),
-                    result.targetLimits().unlimited(),
-                    result.violations().stream().map(v -> new AccountPlanViolationResponse(
-                            v.type().name(),
-                            v.resource(),
-                            v.currentValue(),
-                            v.allowedValue(),
-                            v.message()
-                    )).toList()
-            );
-        });
+        log.info(
+                "Executando preview de mudança de plano no control plane. accountId={}, targetPlan={}",
+                accountId,
+                targetPlan
+        );
+
+        Account account = publicSchemaUnitOfWork.readOnly(() -> loadAccount(accountId));
+
+        PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
+        PlanEligibilityResult result = planChangePolicy.previewChange(usage, targetPlan);
+
+        AccountPlanChangePreviewResponse response = new AccountPlanChangePreviewResponse(
+                account.getId(),
+                result.currentPlan().name(),
+                result.targetPlan().name(),
+                result.changeType().name(),
+                result.eligible(),
+                result.currentUsage().currentUsers(),
+                result.currentUsage().currentProducts(),
+                result.currentUsage().currentStorageMb(),
+                result.targetLimits().maxUsers(),
+                result.targetLimits().maxProducts(),
+                result.targetLimits().maxStorageMb(),
+                result.targetLimits().unlimited(),
+                result.violations().stream()
+                        .map(v -> new AccountPlanViolationResponse(
+                                v.type().name(),
+                                v.resource(),
+                                v.currentValue(),
+                                v.allowedValue(),
+                                v.message()
+                        ))
+                        .toList()
+        );
+
+        log.info(
+                "Preview de mudança de plano calculado com sucesso no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
+                accountId,
+                result.currentPlan(),
+                result.targetPlan(),
+                result.changeType(),
+                result.eligible()
+        );
+
+        return response;
     }
 
+    /**
+     * Carrega a conta ativa/não deletada.
+     *
+     * @param accountId id da conta
+     * @return conta encontrada
+     */
     private Account loadAccount(Long accountId) {
         return accountRepository.findByIdAndDeletedFalse(accountId)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.ACCOUNT_NOT_FOUND,
+                        "Conta não encontrada",
+                        404
+                ));
     }
 
+    /**
+     * Calcula saldo restante para um recurso.
+     *
+     * @param currentValue uso atual
+     * @param maxValue limite
+     * @param unlimited indica se o plano é ilimitado
+     * @return saldo restante
+     */
     private long calculateRemaining(long currentValue, int maxValue, boolean unlimited) {
         if (unlimited) {
             return Long.MAX_VALUE;
@@ -151,6 +233,11 @@ public class ControlPlaneAccountSubscriptionQueryService {
         return Math.max(0L, (long) maxValue - currentValue);
     }
 
+    /**
+     * Retorna os planos comerciais ordenados por ranking.
+     *
+     * @return lista ordenada de planos self-service permitidos
+     */
     private List<SubscriptionPlan> orderedCommercialPlans() {
         return List.of(SubscriptionPlan.values()).stream()
                 .filter(subscriptionPlanCatalog::isSelfServiceAllowed)

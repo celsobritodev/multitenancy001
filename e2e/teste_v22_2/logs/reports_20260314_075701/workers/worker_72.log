@@ -1,3 +1,0 @@
-attempt=1 code=409 status=OPEN affectsInventory=1 saleId= body={"timestamp":"2026-03-14T10:59:10.518110600Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}
-attempt=2 code=409 status=OPEN affectsInventory=1 saleId= body={"timestamp":"2026-03-14T10:59:20.830435300Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}
-attempt=3 code=409 status=OPEN affectsInventory=1 saleId= body={"timestamp":"2026-03-14T10:59:30.137986300Z","error":"INSUFFICIENT_STOCK","message":"insufficient stock for outbound movement","field":null,"invalidValue":null,"allowedValues":null,"details":409}

@@ -5,6 +5,7 @@ import brito.com.multitenancy001.integration.security.TenantRequestIdentityServi
 import brito.com.multitenancy001.shared.account.UserLimitPolicy;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
+import brito.com.multitenancy001.shared.executor.TenantToPublicBridgeExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
@@ -43,6 +44,7 @@ public class TenantUserCurrentContextCommandService {
 
     private final TenantRequestIdentityService requestIdentity;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
+    private final TenantToPublicBridgeExecutor tenantToPublicBridgeExecutor;
 
     /**
      * Transfere ownership do tenant do usuário autenticado (from) para outro usuário (to).
@@ -103,10 +105,10 @@ public class TenantUserCurrentContextCommandService {
         }
 
         Boolean mustChangePassword = (req.mustChangePassword() == null) ? Boolean.FALSE : req.mustChangePassword();
-
         long currentUsers = tenantUserQueryService.countUsersForLimit(accountId, UserLimitPolicy.SEATS_IN_USE);
-        accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
-
+        tenantToPublicBridgeExecutor.run(() ->
+                accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers)
+        );
         return tenantUserCommandService.createTenantUser(
                 accountId,
                 tenantSchema,

@@ -18,12 +18,9 @@ import java.util.Optional;
 @Repository
 public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
 
-    // =========================================================
-    // API "DDD": accountId (o domínio trabalha com ids)
-    // Internamente (JPA): account.id (property-path)
-    // =========================================================
+    @Query("SELECT p FROM Payment p JOIN FETCH p.account WHERE p.id = :id")
+    Optional<Payment> findByIdWithAccount(@Param("id") Long id);
 
-    // ---------- scoped ----------
     default Optional<Payment> findScopedByIdAndAccountId(Long id, Long accountId) {
         return findByIdAndAccount_Id(id, accountId);
     }
@@ -36,7 +33,6 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
         return existsByIdAndAccount_Id(id, accountId);
     }
 
-    // ---------- queries por account ----------
     default List<Payment> findByAccountId(Long accountId) {
         return findByAccount_Id(accountId);
     }
@@ -50,7 +46,6 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
     }
 
     default List<Payment> findByAccountIdOrderByCreatedAtDesc(Long accountId) {
-        // compat: se alguém ainda chamar esse nome antigo
         return findByAccount_IdOrderByAudit_CreatedAtDesc(accountId);
     }
 
@@ -58,31 +53,19 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
         return findByAccount_IdOrderByAudit_CreatedAtDesc(accountId);
     }
 
-    // =========================================================
-    // Métodos reais (JPA property-path) - NÃO use diretamente nos services
-    // =========================================================
-
     Optional<Payment> findByIdAndAccount_Id(Long id, Long accountId);
     boolean existsByIdAndAccount_Id(Long id, Long accountId);
 
     List<Payment> findByAccount_Id(Long accountId);
     Page<Payment> findByAccount_Id(Long accountId, Pageable pageable);
     List<Payment> findByAccount_IdAndStatus(Long accountId, PaymentStatus status);
-
     List<Payment> findByAccount_IdOrderByAudit_CreatedAtDesc(Long accountId);
-
-    // =========================================================
-    // Outras queries
-    // =========================================================
 
     Optional<Payment> findByTransactionId(String transactionId);
     boolean existsByTransactionId(String transactionId);
 
     List<Payment> findByStatus(PaymentStatus status);
-
-    // ✅ audit.createdAt (clean, sem JPQL)
     List<Payment> findByStatusAndAudit_CreatedAtBefore(PaymentStatus status, Instant date);
-
     List<Payment> findByValidUntilBeforeAndStatus(Instant date, PaymentStatus status);
 
     @Query("""

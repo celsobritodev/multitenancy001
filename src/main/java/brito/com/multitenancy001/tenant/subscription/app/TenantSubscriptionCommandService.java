@@ -27,30 +27,13 @@ import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
 import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
+import brito.com.multitenancy001.shared.executor.TenantToPublicBridgeExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanChangeResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Application Service de comandos de assinatura no contexto do Tenant.
- *
- * <p>Responsabilidades:</p>
- * <ul>
- *   <li>Resolver a conta atual do tenant autenticado.</li>
- *   <li>Executar preview antes de aplicar.</li>
- *   <li>Aplicar downgrade elegível imediatamente.</li>
- *   <li>Processar upgrade via billing binding da própria conta.</li>
- * </ul>
- *
- * <p>Observação importante:</p>
- * <ul>
- *   <li>Este service usa apenas orchestrations de application layer.</li>
- *   <li>Não abre transação externa abrangendo todo o fluxo.</li>
- *   <li>O processamento efetivo do pagamento permanece encapsulado no ControlPlanePaymentService.</li>
- * </ul>
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -62,6 +45,7 @@ public class TenantSubscriptionCommandService {
 
     private final TenantRequestIdentityService requestIdentity;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    private final TenantToPublicBridgeExecutor tenantToPublicBridgeExecutor;
     private final AccountRepository accountRepository;
     private final brito.com.multitenancy001.controlplane.accounts.app.subscription.AccountPlanUsageService accountPlanUsageService;
     private final PlanChangePolicy planChangePolicy;
@@ -69,26 +53,6 @@ public class TenantSubscriptionCommandService {
     private final ControlPlanePaymentService controlPlanePaymentService;
     private final AppClock appClock;
 
-    /**
-     * Solicita mudança de plano da conta autenticada.
-     *
-     * <p>Regras:</p>
-     * <ul>
-     *   <li>NO_CHANGE → bloqueia.</li>
-     *   <li>DOWNGRADE elegível → aplica imediatamente.</li>
-     *   <li>UPGRADE → processa via billing da própria conta.</li>
-     * </ul>
-     *
-     * @param targetPlan plano alvo
-     * @param billingCycle ciclo de cobrança para upgrade
-     * @param paymentMethod método de pagamento para upgrade
-     * @param paymentGateway gateway de pagamento para upgrade
-     * @param amount valor a cobrar
-     * @param planPriceSnapshot snapshot opcional do preço
-     * @param currencyCode moeda opcional
-     * @param reason motivo da solicitação
-     * @return resultado final da operação
-     */
     public TenantPlanChangeResponse changePlan(
             SubscriptionPlan targetPlan,
             BillingCycle billingCycle,
@@ -161,13 +125,6 @@ public class TenantSubscriptionCommandService {
         );
     }
 
-    /**
-     * Aplica downgrade elegível imediatamente.
-     *
-     * @param command comando consolidado
-     * @param preview preview já calculado
-     * @return response final
-     */
     private TenantPlanChangeResponse handleDowngrade(
             ChangeAccountPlanCommand command,
             PlanEligibilityResult preview
@@ -176,7 +133,9 @@ public class TenantSubscriptionCommandService {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Downgrade não elegível para a conta atual", 409);
         }
 
-        AccountPlanChangeResult result = accountPlanChangeService.applyEligibleDowngrade(command);
+        AccountPlanChangeResult result = tenantToPublicBridgeExecutor.call(() ->
+                accountPlanChangeService.applyEligibleDowngrade(command)
+        );
 
         log.info(
                 "Downgrade aplicado com sucesso no tenant. accountId={}, oldPlan={}, newPlan={}, changeType={}",
@@ -207,20 +166,6 @@ public class TenantSubscriptionCommandService {
         );
     }
 
-    /**
-     * Processa upgrade via billing da própria conta.
-     *
-     * @param account conta alvo
-     * @param preview preview calculado
-     * @param billingCycle ciclo de cobrança
-     * @param paymentMethod método de pagamento
-     * @param paymentGateway gateway
-     * @param amount valor a cobrar
-     * @param planPriceSnapshot snapshot opcional do preço
-     * @param currencyCode moeda opcional
-     * @param reason motivo funcional
-     * @return response final
-     */
     private TenantPlanChangeResponse handleUpgrade(
             Account account,
             PlanEligibilityResult preview,
@@ -250,19 +195,21 @@ public class TenantSubscriptionCommandService {
                 coverageEndDate
         );
 
-        PaymentResponse payment = controlPlanePaymentService.processPaymentForMyAccount(
-                new PaymentRequest(
-                        amount,
-                        paymentMethod,
-                        paymentGateway,
-                        buildUpgradeDescription(account, preview.targetPlan(), reason),
-                        preview.targetPlan(),
-                        billingCycle,
-                        PaymentPurpose.PLAN_UPGRADE,
-                        planPriceSnapshot,
-                        normalizeCurrency(currencyCode),
-                        effectiveFrom,
-                        coverageEndDate
+        PaymentResponse payment = tenantToPublicBridgeExecutor.call(() ->
+                controlPlanePaymentService.processPaymentForMyAccount(
+                        new PaymentRequest(
+                                amount,
+                                paymentMethod,
+                                paymentGateway,
+                                buildUpgradeDescription(account, preview.targetPlan(), reason),
+                                preview.targetPlan(),
+                                billingCycle,
+                                PaymentPurpose.PLAN_UPGRADE,
+                                planPriceSnapshot,
+                                normalizeCurrency(currencyCode),
+                                effectiveFrom,
+                                coverageEndDate
+                        )
                 )
         );
 
@@ -296,39 +243,20 @@ public class TenantSubscriptionCommandService {
         );
     }
 
-    /**
-     * Carrega a conta em modo readOnly.
-     *
-     * @param accountId id da conta
-     * @return conta carregada
-     */
     private Account loadAccount(Long accountId) {
-        return publicSchemaUnitOfWork.readOnly(() ->
-                accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
+        return tenantToPublicBridgeExecutor.call(() ->
+                publicSchemaUnitOfWork.readOnly(() ->
+                        accountRepository.findByIdAndDeletedFalse(accountId)
+                                .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404))
+                )
         );
     }
 
-    /**
-     * Executa o preview de mudança de plano.
-     *
-     * @param account conta alvo
-     * @param targetPlan plano alvo
-     * @return preview calculado
-     */
     private PlanEligibilityResult preview(Account account, SubscriptionPlan targetPlan) {
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
         return planChangePolicy.previewChange(usage, targetPlan);
     }
 
-    /**
-     * Valida os campos obrigatórios do fluxo de upgrade.
-     *
-     * @param billingCycle ciclo
-     * @param paymentMethod método
-     * @param paymentGateway gateway
-     * @param amount valor
-     */
     private void validateUpgradeInputs(
             BillingCycle billingCycle,
             PaymentMethod paymentMethod,
@@ -352,13 +280,6 @@ public class TenantSubscriptionCommandService {
         }
     }
 
-    /**
-     * Calcula a cobertura comercial a partir do ciclo.
-     *
-     * @param effectiveFrom início efetivo
-     * @param billingCycle ciclo informado
-     * @return data final da cobertura ou null quando não aplicável
-     */
     private Instant resolveCoverageEndDate(Instant effectiveFrom, BillingCycle billingCycle) {
         if (effectiveFrom == null || billingCycle == null) {
             return null;
@@ -373,14 +294,6 @@ public class TenantSubscriptionCommandService {
         };
     }
 
-    /**
-     * Monta descrição funcional do upgrade.
-     *
-     * @param account conta alvo
-     * @param targetPlan plano alvo
-     * @param reason motivo
-     * @return descrição final
-     */
     private String buildUpgradeDescription(Account account, SubscriptionPlan targetPlan, String reason) {
         StringBuilder sb = new StringBuilder();
         sb.append("Upgrade de plano da conta ").append(account.getId()).append(" para ").append(targetPlan.name());
@@ -392,12 +305,6 @@ public class TenantSubscriptionCommandService {
         return sb.toString();
     }
 
-    /**
-     * Normaliza valor textual.
-     *
-     * @param value valor bruto
-     * @return valor normalizado
-     */
     private String normalize(String value) {
         if (value == null) {
             return null;
@@ -407,12 +314,6 @@ public class TenantSubscriptionCommandService {
         return trimmed.isBlank() ? null : trimmed;
     }
 
-    /**
-     * Normaliza moeda, aplicando BRL como padrão.
-     *
-     * @param currencyCode moeda informada
-     * @return moeda final
-     */
     private String normalizeCurrency(String currencyCode) {
         String normalized = normalize(currencyCode);
         return normalized == null ? DEFAULT_CURRENCY : normalized.toUpperCase();
