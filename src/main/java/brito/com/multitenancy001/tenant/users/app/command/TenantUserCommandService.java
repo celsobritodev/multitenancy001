@@ -51,9 +51,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Diretrizes arquiteturais:</p>
  * <ul>
- *   <li>O enforcement de seats deve ocorrer neste service, e não apenas em flows de contexto.</li>
- *   <li>O índice público de login identities é sincronizado após completion da transação do tenant.</li>
- *   <li>Não usar PublicSchemaUnitOfWork diretamente aqui.</li>
+ *   <li>O enforcement de seats ocorre neste service.</li>
+ *   <li>A validação de quota deve acontecer antes da transação tenant de escrita.</li>
+ *   <li>Evitar crossing PUBLIC dentro do bloco principal de save do tenant.</li>
  * </ul>
  */
 @Slf4j
@@ -76,19 +76,8 @@ public class TenantUserCommandService {
     private final LoginIdentityService loginIdentityService;
     private final TenantQuotaEnforcementService tenantQuotaEnforcementService;
 
-    // =========================================================
-    // CREATE
-    // =========================================================
-
     /**
      * Cria um usuário de tenant, aplicando permissões finais (base + requested validadas).
-     *
-     * <p>Regras importantes:</p>
-     * <ul>
-     *   <li>Executa enforcement de quota no write-path principal.</li>
-     *   <li>Audita tentativa/sucesso/falha.</li>
-     *   <li>Após completion da transação do tenant, garante identidade pública best-effort.</li>
-     * </ul>
      *
      * @param accountId id da conta
      * @param tenantSchema schema tenant
@@ -122,6 +111,20 @@ public class TenantUserCommandService {
     ) {
         log.info("🚀 createTenantUser INICIANDO | email={} accountId={} tenantSchema={}", email, accountId, tenantSchema);
 
+        validateCreateInputs(accountId, tenantSchema, name, email, rawPassword, role);
+
+        String normEmail = EmailNormalizer.normalizeOrNull(email);
+        if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email invalido", 400);
+        }
+        if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
+            throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
+        }
+
+        // IMPORTANTE:
+        // enforcement antes da tx tenant de escrita, para evitar crossing PUBLIC dentro do tx tenant.
+        tenantQuotaEnforcementService.assertCanCreateUser(accountId, tenantSchema);
+
         AtomicReference<String> savedEmail = new AtomicReference<>();
         AtomicReference<Long> savedUserId = new AtomicReference<>();
 
@@ -130,36 +133,9 @@ public class TenantUserCommandService {
                     "createTenantUser DENTRO DA TRANSAÇÃO | threadId={} threadName={} email={} accountId={}",
                     Thread.currentThread().threadId(),
                     Thread.currentThread().getName(),
-                    email,
+                    normEmail,
                     accountId
             );
-
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
-            }
-            if (!StringUtils.hasText(tenantSchema)) {
-                throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
-            }
-            if (!StringUtils.hasText(name)) {
-                throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatorio", 400);
-            }
-            if (!StringUtils.hasText(email)) {
-                throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatorio", 400);
-            }
-            if (!StringUtils.hasText(rawPassword)) {
-                throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatoria", 400);
-            }
-            if (role == null) {
-                throw new ApiException(ApiErrorCode.INVALID_ROLE, "Role é obrigatoria", 400);
-            }
-
-            String normEmail = EmailNormalizer.normalizeOrNull(email);
-            if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
-                throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email invalido", 400);
-            }
-            if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
-                throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
-            }
 
             final Actor actor = resolveActorOrNull(accountId, tenantSchema);
             final int requestedCount = (requestedPermissions == null) ? 0 : requestedPermissions.size();
@@ -183,8 +159,6 @@ public class TenantUserCommandService {
             );
 
             try {
-                tenantQuotaEnforcementService.assertCanCreateUser(accountId);
-
                 boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
                 if (exists) {
                     throw new ApiException(ApiErrorCode.EMAIL_ALREADY_REGISTERED_IN_ACCOUNT);
@@ -195,7 +169,6 @@ public class TenantUserCommandService {
 
                 user.rename(name);
                 user.changeEmail(normEmail);
-
                 user.setPassword(passwordEncoder.encode(rawPassword));
                 user.setRole(role);
 
@@ -276,7 +249,7 @@ public class TenantUserCommandService {
                 return savedUser;
 
             } catch (ApiException ex) {
-                log.error("❌ createTenantUser ApiException | email={} | msg={}", email, ex.getMessage());
+                log.error("❌ createTenantUser ApiException | email={} | msg={}", normEmail, ex.getMessage());
                 recordAudit(
                         SecurityAuditActionType.USER_CREATED,
                         outcomeFrom(ex),
@@ -289,7 +262,7 @@ public class TenantUserCommandService {
                 );
                 throw ex;
             } catch (Exception ex) {
-                log.error("❌ createTenantUser Exception inesperada | email={}", email, ex);
+                log.error("❌ createTenantUser Exception inesperada | email={}", normEmail, ex);
                 recordAudit(
                         SecurityAuditActionType.USER_CREATED,
                         AuditOutcome.FAILURE,
@@ -333,43 +306,42 @@ public class TenantUserCommandService {
         return saved;
     }
 
-    // =========================================================
-    // UPDATE: STATUS / PROFILE
-    // =========================================================
+    private void validateCreateInputs(
+            Long accountId,
+            String tenantSchema,
+            String name,
+            String email,
+            String rawPassword,
+            TenantRole role
+    ) {
+        if (accountId == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
+        }
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
+        }
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatorio", 400);
+        }
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email é obrigatorio", 400);
+        }
+        if (!StringUtils.hasText(rawPassword)) {
+            throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "Senha é obrigatoria", 400);
+        }
+        if (role == null) {
+            throw new ApiException(ApiErrorCode.INVALID_ROLE, "Role é obrigatoria", 400);
+        }
+    }
 
-    /**
-     * Define o status de suspensão por admin de um usuário.
-     *
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @param userId id do usuário
-     * @param suspended flag de suspensão
-     */
     public void setSuspendedByAdmin(Long accountId, String tenantSchema, Long userId, boolean suspended) {
         setSuspension(accountId, tenantSchema, userId, suspended, true);
     }
 
-    /**
-     * Define o status de suspensão por account (sistema/plano) de um usuário.
-     *
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @param userId id do usuário
-     * @param suspended flag de suspensão
-     */
     public void setSuspendedByAccount(Long accountId, String tenantSchema, Long userId, boolean suspended) {
         setSuspension(accountId, tenantSchema, userId, suspended, false);
     }
 
-    /**
-     * Lógica centralizada de suspensão/reativação.
-     *
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @param userId id do usuário
-     * @param suspended flag de suspensão
-     * @param byAdmin indica se a suspensão é administrativa
-     */
     private void setSuspension(Long accountId, String tenantSchema, Long userId, boolean suspended, boolean byAdmin) {
         log.info("setSuspension INICIANDO | userId={} suspended={} byAdmin={}", userId, suspended, byAdmin);
 
@@ -470,18 +442,6 @@ public class TenantUserCommandService {
         }
     }
 
-    // =========================================================
-    // RESTORE
-    // =========================================================
-
-    /**
-     * Restaura usuário previamente deletado e reabilita identidade pública.
-     *
-     * @param userId id do usuário
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @return usuário restaurado
-     */
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
         log.info("restore INICIANDO | userId={} accountId={}", userId, accountId);
 
@@ -539,25 +499,14 @@ public class TenantUserCommandService {
                             restoredEmail.get(),
                             accountId,
                             e
-                    );
-                }
-            });
+                        );
+                    }
+                });
         }
 
         return saved;
     }
 
-    // =========================================================
-    // DELETE
-    // =========================================================
-
-    /**
-     * Aplica soft delete em usuário e remove identidade pública.
-     *
-     * @param userId id do usuário
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     */
     public void softDelete(Long userId, Long accountId, String tenantSchema) {
         log.info("softDelete INICIANDO | userId={} accountId={}", userId, accountId);
 
@@ -638,10 +587,6 @@ public class TenantUserCommandService {
         }
     }
 
-    // =========================================================
-    // Outros métodos (mantidos como estavam)
-    // =========================================================
-
     public TenantUser resetPassword(Long userId, Long accountId, String tenantSchema, String newPassword) {
         throw new UnsupportedOperationException("Implementar conforme necessario");
     }
@@ -670,28 +615,12 @@ public class TenantUserCommandService {
         // Implementacao existente
     }
 
-    // =========================================================
-    // HELPERS
-    // =========================================================
-
-    /**
-     * Bloqueia mutação em usuário built-in.
-     *
-     * @param user usuário
-     * @param message mensagem de erro
-     */
     private void requireNotBuiltInForMutation(TenantUser user, String message) {
         if (user != null && user.getOrigin() == EntityOrigin.BUILT_IN) {
             throw new ApiException(ApiErrorCode.USER_BUILT_IN_IMMUTABLE, message);
         }
     }
 
-    /**
-     * Verifica se o usuário é owner ativo.
-     *
-     * @param user usuário
-     * @return true se for owner ativo
-     */
     private boolean isActiveOwner(TenantUser user) {
         if (user == null) {
             return false;
@@ -708,12 +637,6 @@ public class TenantUserCommandService {
         return user.getRole() != null && user.getRole().isTenantOwner();
     }
 
-    /**
-     * Garante que ainda restará ao menos um owner ativo.
-     *
-     * @param accountId id da conta
-     * @param message mensagem de erro
-     */
     private void requireWillStillHaveAtLeastOneActiveOwner(Long accountId, String message) {
         long owners = tenantUserRepository.countActiveOwnersByAccountId(accountId, TenantRole.TENANT_OWNER);
         if (owners <= 1) {
@@ -721,40 +644,15 @@ public class TenantUserCommandService {
         }
     }
 
-    /**
-     * Retorna o tamanho do set ou zero.
-     *
-     * @param s set
-     * @return tamanho ou zero
-     */
     private static int sizeOrZero(Set<?> s) {
         return s == null ? 0 : s.size();
     }
-
-    // =========================================================
-    // Audit helpers
-    // =========================================================
 
     @FunctionalInterface
     private interface AuditCallable<T> {
         T call();
     }
 
-    /**
-     * Executa bloco auditado com attempt/success/failure.
-     *
-     * @param actionType tipo da ação
-     * @param actor ator
-     * @param targetEmail email alvo
-     * @param targetUserId userId alvo
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @param attemptDetails detalhes de tentativa
-     * @param successDetails detalhes de sucesso
-     * @param block bloco executável
-     * @return resultado do bloco
-     * @param <T> tipo do resultado
-     */
     private <T> T auditAttemptSuccessFail(
             SecurityAuditActionType actionType,
             Actor actor,
@@ -784,18 +682,6 @@ public class TenantUserCommandService {
         }
     }
 
-    /**
-     * Registra evento de auditoria de segurança.
-     *
-     * @param actionType tipo da ação
-     * @param outcome resultado
-     * @param actor ator
-     * @param targetEmail email alvo
-     * @param targetUserId userId alvo
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @param details detalhes
-     */
     private void recordAudit(
             SecurityAuditActionType actionType,
             AuditOutcome outcome,
@@ -835,12 +721,6 @@ public class TenantUserCommandService {
         });
     }
 
-    /**
-     * Converte detalhes em JSON.
-     *
-     * @param details detalhes
-     * @return json ou null
-     */
     private String toJson(Object details) {
         if (details == null) {
             return null;
@@ -854,13 +734,6 @@ public class TenantUserCommandService {
         return node.toString();
     }
 
-    /**
-     * Resolve ator atual de forma best-effort.
-     *
-     * @param accountId id da conta
-     * @param tenantSchema schema tenant
-     * @return ator resolvido ou anônimo
-     */
     private Actor resolveActorOrNull(Long accountId, String tenantSchema) {
         try {
             Long actorUserId = securityUtils.getCurrentUserId();
@@ -888,12 +761,6 @@ public class TenantUserCommandService {
         }
     }
 
-    /**
-     * Traduz ApiException em AuditOutcome.
-     *
-     * @param ex exception
-     * @return outcome
-     */
     private static AuditOutcome outcomeFrom(ApiException ex) {
         if (ex == null) {
             return AuditOutcome.FAILURE;
@@ -902,13 +769,6 @@ public class TenantUserCommandService {
         return (s == 401 || s == 403) ? AuditOutcome.DENIED : AuditOutcome.FAILURE;
     }
 
-    /**
-     * Monta detalhes padronizados de falha controlada.
-     *
-     * @param scope escopo
-     * @param ex exception
-     * @return mapa de detalhes
-     */
     private static Map<String, Object> failureDetails(String scope, ApiException ex) {
         return m(
                 "scope", scope,
@@ -918,13 +778,6 @@ public class TenantUserCommandService {
         );
     }
 
-    /**
-     * Monta detalhes padronizados de falha inesperada.
-     *
-     * @param scope escopo
-     * @param ex exception
-     * @return mapa de detalhes
-     */
     private static Map<String, Object> unexpectedFailureDetails(String scope, Exception ex) {
         return m(
                 "scope", scope,
@@ -933,12 +786,6 @@ public class TenantUserCommandService {
         );
     }
 
-    /**
-     * Sanitiza mensagem para auditoria/log estruturado.
-     *
-     * @param msg mensagem
-     * @return mensagem segura
-     */
     private static String safeMessage(String msg) {
         if (!StringUtils.hasText(msg)) {
             return null;
@@ -946,12 +793,6 @@ public class TenantUserCommandService {
         return msg.replace("\n", " ").replace("\r", " ").replace("\t", " ").trim();
     }
 
-    /**
-     * Helper para montar mapas de detalhes.
-     *
-     * @param kv pares chave/valor
-     * @return mapa montado
-     */
     private static Map<String, Object> m(Object... kv) {
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) {
@@ -967,12 +808,6 @@ public class TenantUserCommandService {
         return m;
     }
 
-    /**
-     * Representa o ator responsável pela ação auditada.
-     *
-     * @param userId id do usuário ator
-     * @param email email do ator
-     */
     private record Actor(Long userId, String email) {
         static Actor anonymous() {
             return new Actor(null, null);

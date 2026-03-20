@@ -9,10 +9,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import brito.com.multitenancy001.integration.security.TenantRequestIdentityService;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.products.api.dto.ProductResponse;
 import brito.com.multitenancy001.tenant.products.api.dto.ProductUpdateRequest;
@@ -41,7 +43,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Diretriz importante:</p>
  * <ul>
  *   <li>Para criação de produto, o controller resolve o {@code accountId} atual da identidade tenant.</li>
- *   <li>Esse {@code accountId} é enviado ao write-path para enforcement de quota.</li>
+ *   <li>Para criação de produto, o controller resolve também o {@code tenantSchema} atual.</li>
+ *   <li>Essas informações são enviadas ao write-path para enforcement de quota fora da transação tenant.</li>
  * </ul>
  */
 @RestController
@@ -200,6 +203,7 @@ public class TenantProductController {
      * <ul>
      *   <li>Controller não cria entity de domínio.</li>
      *   <li>Controller resolve o {@code accountId} da identidade tenant atual.</li>
+     *   <li>Controller resolve o {@code tenantSchema} atual.</li>
      *   <li>Controller monta command e delega ao service.</li>
      * </ul>
      *
@@ -210,10 +214,12 @@ public class TenantProductController {
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_PRODUCT_WRITE.asAuthority())")
     public ResponseEntity<ProductResponse> createDetailedProduct(@Valid @RequestBody ProductUpsertRequest req) {
         Long accountId = requireCurrentAccountId();
+        String tenantSchema = requireCurrentTenantSchema();
 
         log.info(
-                "Recebida requisição de criação detalhada de produto. accountId={}, sku={}, name={}",
+                "Recebida requisição de criação detalhada de produto. accountId={}, tenantSchema={}, sku={}, name={}",
                 accountId,
+                tenantSchema,
                 req.sku(),
                 req.name()
         );
@@ -238,11 +244,12 @@ public class TenantProductController {
                 req.supplierId()
         );
 
-        Product savedProduct = tenantProductService.create(cmd);
+        Product savedProduct = tenantProductService.create(cmd, tenantSchema);
 
         log.info(
-                "Produto criado via API com sucesso. accountId={}, productId={}",
+                "Produto criado via API com sucesso. accountId={}, tenantSchema={}, productId={}",
                 accountId,
+                tenantSchema,
                 savedProduct.getId()
         );
 
@@ -385,7 +392,7 @@ public class TenantProductController {
     }
 
     /**
-     * Monta o command de update com regra correta para subcategoria.
+     * Helper: monta UpdateProductCommand com regra correta de subcategory.
      *
      * @param req request HTTP
      * @return command de update
@@ -435,5 +442,24 @@ public class TenantProductController {
         }
 
         return accountId;
+    }
+
+    /**
+     * Resolve o tenantSchema atual do contexto.
+     *
+     * @return tenantSchema atual
+     */
+    private String requireCurrentTenantSchema() {
+        String tenantSchema = TenantContext.getOrNull();
+
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(
+                    ApiErrorCode.TENANT_CONTEXT_REQUIRED,
+                    "Não foi possível resolver o tenantSchema do contexto atual",
+                    400
+            );
+        }
+
+        return tenantSchema;
     }
 }

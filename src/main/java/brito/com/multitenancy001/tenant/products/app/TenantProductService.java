@@ -42,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Métodos com {@code @TenantTx}/{@code @TenantReadOnlyTx} já executam em transação tenant.</li>
  *   <li>Não abrir {@code TenantSchemaUnitOfWork} manualmente dentro destes métodos.</li>
- *   <li>O enforcement de quota precisa ocorrer no write-path canônico.</li>
+ *   <li>O enforcement de quota precisa ocorrer fora da transação tenant de escrita.</li>
  * </ul>
  */
 @Service
@@ -98,11 +98,17 @@ public class TenantProductService {
     /**
      * Cria um novo produto com validação completa e enforcement de quota.
      *
+     * <p>Importante:</p>
+     * <ul>
+     *   <li>A validação de quota ocorre fora da transação tenant de escrita.</li>
+     *   <li>Isso evita crossing PUBLIC dentro de {@code @TenantTx}.</li>
+     * </ul>
+     *
      * @param createProductCommand payload de criação
+     * @param tenantSchema schema do tenant
      * @return produto criado com relações carregadas
      */
-    @TenantTx
-    public Product create(CreateProductCommand createProductCommand) {
+    public Product create(CreateProductCommand createProductCommand, String tenantSchema) {
         if (createProductCommand == null) {
             throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
         }
@@ -111,14 +117,40 @@ public class TenantProductService {
             throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
         }
 
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
+        }
+
         log.info(
-                "Iniciando criação de produto. accountId={}, sku={}, name={}",
+                "Iniciando criação de produto (PRE-QUOTA). accountId={}, tenantSchema={}, sku={}, name={}",
                 createProductCommand.accountId(),
+                tenantSchema,
                 createProductCommand.sku(),
                 createProductCommand.name()
         );
 
-        tenantQuotaEnforcementService.assertCanCreateProduct(createProductCommand.accountId());
+        tenantQuotaEnforcementService.assertCanCreateProduct(
+                createProductCommand.accountId(),
+                tenantSchema
+        );
+
+        return createInternal(createProductCommand);
+    }
+
+    /**
+     * Executa a criação efetiva do produto dentro de transação tenant.
+     *
+     * @param createProductCommand payload de criação
+     * @return produto criado
+     */
+    @TenantTx
+    protected Product createInternal(CreateProductCommand createProductCommand) {
+        log.info(
+                "Iniciando criação de produto (TX). accountId={}, sku={}, name={}",
+                createProductCommand.accountId(),
+                createProductCommand.sku(),
+                createProductCommand.name()
+        );
 
         Product product = fromCreateCommand(createProductCommand);
         validateProductForCreate(product);
