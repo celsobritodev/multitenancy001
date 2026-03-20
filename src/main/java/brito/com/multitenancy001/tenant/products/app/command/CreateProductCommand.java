@@ -6,12 +6,21 @@ import java.util.UUID;
 /**
  * Command de criação de Product (Tenant).
  *
- * Regras de camada:
- * - Command pertence à Application Layer (APP)
- * - Carrega apenas dados primitivos/ids necessários ao use-case
- * - Nunca carrega Entities do domínio
+ * <p>Regras de camada:</p>
+ * <ul>
+ *   <li>Command pertence à Application Layer (APP).</li>
+ *   <li>Carrega apenas dados primitivos e ids necessários ao use-case.</li>
+ *   <li>Nunca carrega entities do domínio.</li>
+ * </ul>
+ *
+ * <p>Observação importante:</p>
+ * <ul>
+ *   <li>O campo {@code accountId} é obrigatório para enforcement de quota no write-path.</li>
+ *   <li>Ele permite que o serviço aplique validação de plano antes da criação do produto.</li>
+ * </ul>
  */
 public record CreateProductCommand(
+        Long accountId,
         String name,
         String description,
         String sku,

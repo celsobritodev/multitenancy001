@@ -16,11 +16,7 @@ import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanUsag
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.SubscriptionPlanCatalog;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
-import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.integration.security.TenantRequestIdentityService;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.executor.TenantToPublicBridgeExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanChangePreviewResponse;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanLimitsResponse;
@@ -28,27 +24,45 @@ import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanViolation
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Serviço de consulta de subscription no contexto tenant.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Resolver a conta atual do tenant autenticado.</li>
+ *   <li>Calcular uso e limites do plano corrente.</li>
+ *   <li>Executar preview de mudança de plano.</li>
+ *   <li>Expor visão consolidada de upgrades e downgrades elegíveis/bloqueados.</li>
+ * </ul>
+ *
+ * <p>Diretriz arquitetural:</p>
+ * <ul>
+ *   <li>Este service não executa mais crossing TENANT -&gt; PUBLIC diretamente.</li>
+ *   <li>A resolução da conta atual fica centralizada em {@link TenantSubscriptionAccountResolver}.</li>
+ *   <li>Reduz boundary leak e simplifica manutenção futura.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TenantSubscriptionQueryService {
 
-    private final TenantRequestIdentityService requestIdentity;
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-    private final TenantToPublicBridgeExecutor tenantToPublicBridgeExecutor;
-    private final AccountRepository accountRepository;
+    private final TenantSubscriptionAccountResolver tenantSubscriptionAccountResolver;
     private final AccountPlanUsageService accountPlanUsageService;
     private final SubscriptionPlanCatalog subscriptionPlanCatalog;
     private final PlanChangePolicy planChangePolicy;
 
+    /**
+     * Retorna a visão consolidada dos limites e do uso atual da conta autenticada.
+     *
+     * @return resposta de limites do plano atual
+     */
     public TenantPlanLimitsResponse getMyLimits() {
-        Long accountId = requireCurrentAccountId();
+        Account account = tenantSubscriptionAccountResolver.resolveCurrentAccount();
 
-        log.info("Consultando limites da assinatura do tenant autenticado. accountId={}", accountId);
+        log.info("Consultando limites da assinatura do tenant autenticado. accountId={}", account.getId());
 
-        Account account = loadAccount(accountId);
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
-
         PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
 
         long remainingUsers = calculateRemaining(
@@ -74,7 +88,9 @@ public class TenantSubscriptionQueryService {
         List<String> availableUpgrades = new ArrayList<>();
 
         for (SubscriptionPlan candidate : orderedCommercialPlans()) {
-            if (candidate == account.getSubscriptionPlan()) continue;
+            if (candidate == account.getSubscriptionPlan()) {
+                continue;
+            }
 
             PlanChangeType changeType = subscriptionPlanCatalog.classifyChange(
                     account.getSubscriptionPlan(),
@@ -117,7 +133,7 @@ public class TenantSubscriptionQueryService {
         );
 
         log.info(
-                "Limites da assinatura do tenant carregados com sucesso. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
+                "Limites da assinatura carregados com sucesso. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
                 usage.currentUsers(),
@@ -128,33 +144,43 @@ public class TenantSubscriptionQueryService {
         return response;
     }
 
+    /**
+     * Alias semântico para consulta dos limites atuais.
+     *
+     * @return limites atuais da conta
+     */
     public TenantPlanLimitsResponse getCurrentLimits() {
         return getMyLimits();
     }
 
+    /**
+     * Executa preview de mudança de plano para a conta atual do tenant.
+     *
+     * @param targetPlan plano alvo
+     * @return preview consolidado da mudança
+     */
     public TenantPlanChangePreviewResponse previewChange(SubscriptionPlan targetPlan) {
-        Long accountId = requireCurrentAccountId();
-
         if (targetPlan == null) {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
         }
 
+        Account account = tenantSubscriptionAccountResolver.resolveCurrentAccount();
+
         log.info(
-                "Executando preview de mudança de plano no tenant. accountId={}, targetPlan={}",
-                accountId,
+                "Executando preview de mudança de plano no tenant. accountId={}, currentPlan={}, targetPlan={}",
+                account.getId(),
+                account.getSubscriptionPlan(),
                 targetPlan
         );
 
-        Account account = loadAccount(accountId);
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
-
         PlanEligibilityResult result = planChangePolicy.previewChange(usage, targetPlan);
 
         TenantPlanChangePreviewResponse response = toPreviewResponse(result);
 
         log.info(
-                "Preview de mudança de plano calculado com sucesso no tenant. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
-                accountId,
+                "Preview de mudança de plano calculado com sucesso. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
+                account.getId(),
                 result.currentPlan(),
                 result.targetPlan(),
                 result.changeType(),
@@ -164,33 +190,12 @@ public class TenantSubscriptionQueryService {
         return response;
     }
 
-    private Long requireCurrentAccountId() {
-        Long accountId = requestIdentity.getCurrentAccountId();
-
-        if (accountId == null) {
-            throw new ApiException(
-                    ApiErrorCode.ACCOUNT_REQUIRED,
-                    "Não foi possível resolver a conta do tenant autenticado",
-                    400
-            );
-        }
-
-        return accountId;
-    }
-
-    private Account loadAccount(Long accountId) {
-        return tenantToPublicBridgeExecutor.call(() ->
-                publicSchemaUnitOfWork.readOnly(() ->
-                        accountRepository.findByIdAndDeletedFalse(accountId)
-                                .orElseThrow(() -> new ApiException(
-                                        ApiErrorCode.ACCOUNT_NOT_FOUND,
-                                        "Conta não encontrada para o tenant autenticado",
-                                        404
-                                ))
-                )
-        );
-    }
-
+    /**
+     * Converte o resultado de elegibilidade em DTO de resposta da API tenant.
+     *
+     * @param result resultado de elegibilidade
+     * @return resposta de preview de mudança de plano
+     */
     private TenantPlanChangePreviewResponse toPreviewResponse(PlanEligibilityResult result) {
         List<TenantPlanViolationResponse> violations = result.violations().stream()
                 .map(this::toViolationResponse)
@@ -212,6 +217,12 @@ public class TenantSubscriptionQueryService {
         );
     }
 
+    /**
+     * Converte violação de elegibilidade em DTO da API.
+     *
+     * @param violation violação do domínio
+     * @return resposta de violação
+     */
     private TenantPlanViolationResponse toViolationResponse(PlanEligibilityViolation violation) {
         return new TenantPlanViolationResponse(
                 violation.type().name(),
@@ -222,6 +233,14 @@ public class TenantSubscriptionQueryService {
         );
     }
 
+    /**
+     * Calcula capacidade restante de um recurso.
+     *
+     * @param currentValue uso atual
+     * @param maxValue valor máximo permitido
+     * @param unlimited indica se o plano é ilimitado
+     * @return restante disponível
+     */
     private long calculateRemaining(long currentValue, int maxValue, boolean unlimited) {
         if (unlimited) {
             return Long.MAX_VALUE;
@@ -230,6 +249,11 @@ public class TenantSubscriptionQueryService {
         return Math.max(0L, (long) maxValue - currentValue);
     }
 
+    /**
+     * Retorna a lista de planos self-service ordenados por rank comercial.
+     *
+     * @return lista ordenada de planos
+     */
     private List<SubscriptionPlan> orderedCommercialPlans() {
         return List.of(SubscriptionPlan.values()).stream()
                 .filter(subscriptionPlanCatalog::isSelfServiceAllowed)
