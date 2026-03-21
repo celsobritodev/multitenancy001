@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Contar usuários habilitados no Tenant Schema.</li>
  *   <li>Contar produtos não deletados no Tenant Schema.</li>
  *   <li>Resolver storage atual consumido pela conta.</li>
+ *   <li>Manter coerência entre snapshot de uso e enforcement de quotas.</li>
  * </ul>
  *
  * <p><b>Regras arquiteturais:</b></p>
@@ -34,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
  *       e segue para leituras tenant-aware apenas fora de TX pública.</li>
  *   <li>Conta built-in retorna uso zerado.</li>
  *   <li>Conta sem tenantSchema válido falha explicitamente.</li>
+ *   <li>A semântica de contagem deve permanecer alinhada com {@code TenantQuotaEnforcementService}.</li>
  * </ul>
  */
 @Slf4j
@@ -75,12 +77,14 @@ public class AccountPlanUsageService {
 
         PlanUsageSnapshot snapshot = calculateUsage(account);
 
-        log.info("Uso de plano calculado por accountId com sucesso. accountId={}, plan={}, users={}, products={}, storageMb={}",
+        log.info(
+                "Uso de plano calculado por accountId com sucesso. accountId={}, plan={}, users={}, products={}, storageMb={}",
                 snapshot.accountId(),
                 snapshot.currentPlan(),
                 snapshot.currentUsers(),
                 snapshot.currentProducts(),
-                snapshot.currentStorageMb());
+                snapshot.currentStorageMb()
+        );
 
         return snapshot;
     }
@@ -88,7 +92,7 @@ public class AccountPlanUsageService {
     /**
      * Calcula o snapshot completo de uso a partir da própria conta.
      *
-     * <p>Este método NÃO recarrega a conta no PUBLIC. Ele parte do princípio
+     * <p>Este método não recarrega a conta no PUBLIC. Ele parte do princípio
      * de que a conta já foi obtida corretamente em etapa anterior.</p>
      *
      * @param account conta já resolvida
@@ -97,15 +101,20 @@ public class AccountPlanUsageService {
     public PlanUsageSnapshot calculateUsage(Account account) {
         validateAccount(account);
 
-        log.info("Calculando uso de plano a partir da conta já resolvida. accountId={}, plan={}, tenantSchema={}",
+        log.info(
+                "Calculando uso de plano a partir da conta já resolvida. accountId={}, plan={}, tenantSchema={}, builtIn={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
-                account.getTenantSchema());
+                account.getTenantSchema(),
+                account.isBuiltInAccount()
+        );
 
         if (account.isBuiltInAccount()) {
-            log.info("Conta built-in detectada durante cálculo de uso. accountId={}, plan={}",
+            log.info(
+                    "Conta built-in detectada durante cálculo de uso. accountId={}, plan={}",
                     account.getId(),
-                    account.getSubscriptionPlan());
+                    account.getSubscriptionPlan()
+            );
 
             return new PlanUsageSnapshot(
                     account.getId(),
@@ -118,8 +127,11 @@ public class AccountPlanUsageService {
 
         String tenantSchema = normalizeTenantSchema(account.getTenantSchema());
 
-        log.info("Iniciando leituras tenant-aware para cálculo de uso. accountId={}, tenantSchema={}",
-                account.getId(), tenantSchema);
+        log.info(
+                "Iniciando leituras tenant-aware para cálculo de uso. accountId={}, tenantSchema={}",
+                account.getId(),
+                tenantSchema
+        );
 
         long currentUsers = tenantSchemaUnitOfWork.readOnly(
                 tenantSchema,
@@ -181,12 +193,14 @@ public class AccountPlanUsageService {
 
         PlanUsageSnapshot snapshot = calculateUsage(account);
 
-        log.info("Uso de plano para conta operacional calculado com sucesso. accountId={}, plan={}, users={}, products={}, storageMb={}",
+        log.info(
+                "Uso de plano para conta operacional calculado com sucesso. accountId={}, plan={}, users={}, products={}, storageMb={}",
                 snapshot.accountId(),
                 snapshot.currentPlan(),
                 snapshot.currentUsers(),
                 snapshot.currentProducts(),
-                snapshot.currentStorageMb());
+                snapshot.currentStorageMb()
+        );
 
         return snapshot;
     }

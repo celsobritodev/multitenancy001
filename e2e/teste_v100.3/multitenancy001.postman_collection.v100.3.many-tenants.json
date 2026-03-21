@@ -1,0 +1,1420 @@
+{
+  "info": {
+    "name": "multitenancy001-e2e (v100 ENTERPRISE DATA POPULATION GRID MANY TENANTS)",
+    "_postman_id": "b5328b2b-06cf-46f2-b283-8e4ae1fe1003",
+    "description": "V100.3 - população pesada com muitos tenants, mantendo endpoints/contrato funcional já validados na linha V100.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "📦 00 - BOOTSTRAP",
+      "item": [
+        {
+          "name": "00.01 bootstrap init",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Bootstrap init OK\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.collectionVariables.set(\"TENANT_COUNT\", \"12\");",
+                  "pm.collectionVariables.set(\"CP_USER_TARGET\", \"18\");",
+                  "pm.collectionVariables.set(\"BILLING_TARGET\", \"36\");",
+                  "pm.collectionVariables.set(\"CURRENT_CP_USER_INDEX\", \"0\");",
+                  "pm.collectionVariables.set(\"CURRENT_BILLING_INDEX\", \"0\");",
+                  "pm.collectionVariables.set(\"CURRENT_TENANT_LOOP_INDEX\", \"0\");",
+                  "pm.collectionVariables.set(\"TENANT_IDS_JSON\", \"[]\");",
+                  "pm.collectionVariables.set(\"TENANT_EMAILS_JSON\", \"[]\");",
+                  "pm.collectionVariables.set(\"TENANT_PASSWORDS_JSON\", \"[]\");",
+                  "pm.collectionVariables.set(\"LAST_SALE_ID\", \"\");",
+                  "pm.execution.setNextRequest(\"00.02 controlplane login superadmin\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.02 controlplane login superadmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{cp_superadmin_email}}\",\n  \"password\": \"{{cp_superadmin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Control plane login OK\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "const token = json.accessToken || json.token || (json.data && (json.data.accessToken || json.data.token));",
+                  "pm.collectionVariables.set(\"CP_TOKEN\", token || \"\");",
+                  "pm.execution.setNextRequest(\"01.01 signup tenant account grid\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 01 - ACCOUNTS / TENANTS GRID",
+      "item": [
+        {
+          "name": "01.01 signup tenant account grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"V100.3 Tenant {{signupIx}}\",\n  \"ownerName\": \"Owner {{signupIx}}\",\n  \"email\": \"v1003.tenant{{signupIx}}@example.com\",\n  \"password\": \"StrongP@ssw0rd123!\",\n  \"confirmPassword\": \"StrongP@ssw0rd123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_TENANT_SIGNUP_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"TENANT_COUNT\") || \"12\");",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"01.02 controlplane list accounts and capture tenant ids\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.variables.set(\"signupIx\", String(ix));",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_SIGNUP_INDEX\", String(ix));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.test(\"Signup tenant grid OK\", function () { pm.response.to.have.status(201); });",
+                  "  const emails = JSON.parse(pm.collectionVariables.get(\"TENANT_EMAILS_JSON\") || \"[]\");",
+                  "  const passwords = JSON.parse(pm.collectionVariables.get(\"TENANT_PASSWORDS_JSON\") || \"[]\");",
+                  "  emails.push(`v1003.tenant${pm.variables.get(\"signupIx\")}@example.com`);",
+                  "  passwords.push(\"StrongP@ssw0rd123!\");",
+                  "  pm.collectionVariables.set(\"TENANT_EMAILS_JSON\", JSON.stringify(emails));",
+                  "  pm.collectionVariables.set(\"TENANT_PASSWORDS_JSON\", JSON.stringify(passwords));",
+                  "}",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_TENANT_SIGNUP_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"TENANT_COUNT\") || \"0\");",
+                  "pm.execution.setNextRequest(current < target ? \"01.01 signup tenant account grid\" : \"01.02 controlplane list accounts and capture tenant ids\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.02 controlplane list accounts and capture tenant ids",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CP_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "accounts"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Control plane list accounts OK\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const arr = Array.isArray(body) ? body : (body.content || body.data || []);",
+                  "const tenantIds = [];",
+                  "for (const row of arr) {",
+                  "  if (row && row.id && tenantIds.length < 12) tenantIds.push(row.id);",
+                  "}",
+                  "pm.collectionVariables.set(\"TENANT_IDS_JSON\", JSON.stringify(tenantIds));",
+                  "pm.collectionVariables.set(\"CURRENT_CP_USER_INDEX\", \"0\");",
+                  "pm.execution.setNextRequest(\"02.01 create control plane user grid\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 02 - CONTROL PLANE USERS GRID",
+      "item": [
+        {
+          "name": "02.01 create control plane user grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CP_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 CP User {{cpUserIx}}\",\n  \"email\": \"v1003.cp.user{{cpUserIx}}@example.com\",\n  \"password\": \"StrongP@ssw0rd123!\",\n  \"role\": \"{{cpUserRole}}\",\n  \"permissions\": \"{{cpUserPermissions}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CP_USER_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"CP_USER_TARGET\") || \"0\");",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"03.01 create billing grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.variables.set(\"cpUserIx\", String(ix));",
+                  "  pm.collectionVariables.set(\"CURRENT_CP_USER_INDEX\", String(ix));",
+                  "  const roles = [",
+                  "    \"CONTROLPLANE_ADMIN\",",
+                  "    \"CONTROLPLANE_SUPPORT\",",
+                  "    \"CONTROLPLANE_VIEWER\",",
+                  "    \"CONTROLPLANE_OPERATOR\",",
+                  "    \"CONTROLPLANE_BILLING_MANAGER\"",
+                  "  ];",
+                  "  const perms = {",
+                  "    \"CONTROLPLANE_ADMIN\": [\"CP_USER_READ\",\"CP_USER_WRITE\",\"CP_BILLING_READ\",\"CP_BILLING_WRITE\",\"CP_TENANT_READ\",\"CP_ME_READ\"],",
+                  "    \"CONTROLPLANE_SUPPORT\": [\"CP_USER_READ\",\"CP_BILLING_READ\",\"CP_TENANT_READ\",\"CP_ME_READ\"],",
+                  "    \"CONTROLPLANE_VIEWER\": [\"CP_USER_READ\",\"CP_BILLING_READ\",\"CP_TENANT_READ\",\"CP_ME_READ\"],",
+                  "    \"CONTROLPLANE_OPERATOR\": [\"CP_USER_READ\",\"CP_TENANT_READ\",\"CP_ME_READ\"],",
+                  "    \"CONTROLPLANE_BILLING_MANAGER\": [\"CP_BILLING_READ\",\"CP_BILLING_WRITE\",\"CP_ME_READ\"]",
+                  "  };",
+                  "  const role = roles[(ix - 1) % roles.length];",
+                  "  pm.variables.set(\"cpUserRole\", role);",
+                  "  pm.variables.set(\"cpUserPermissions\", JSON.stringify(perms[role]));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Control plane user grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CP_USER_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"CP_USER_TARGET\") || \"0\");",
+                  "pm.execution.setNextRequest(current < target ? \"02.01 create control plane user grid\" : \"03.01 create billing grid\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 03 - BILLING GRID",
+      "item": [
+        {
+          "name": "03.01 create billing grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CP_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/billing/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "billing",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"{{billingTenantId}}\",\n  \"externalReference\": \"V1003-BILL-{{billingIx}}\",\n  \"amount\": \"{{billingAmount}}\",\n  \"currency\": \"BRL\",\n  \"description\": \"V100.3 billing grid {{billingIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_BILLING_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"BILLING_TARGET\") || \"0\");",
+                  "const tenantIds = JSON.parse(pm.collectionVariables.get(\"TENANT_IDS_JSON\") || \"[]\");",
+                  "if (current >= target || tenantIds.length === 0) {",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_LOOP_INDEX\", \"0\");",
+                  "  pm.execution.setNextRequest(\"04.00 init current tenant context\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.variables.set(\"billingIx\", String(ix));",
+                  "  pm.collectionVariables.set(\"CURRENT_BILLING_INDEX\", String(ix));",
+                  "  const tenantId = tenantIds[(ix - 1) % tenantIds.length];",
+                  "  pm.variables.set(\"billingTenantId\", String(tenantId));",
+                  "  const amount = (100 + ((ix - 1) % 9) * 25).toFixed(2);",
+                  "  pm.variables.set(\"billingAmount\", amount);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Billing grid request accepted\", function () {",
+                  "  pm.expect([200,201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_BILLING_INDEX\") || \"0\");",
+                  "const target = Number(pm.collectionVariables.get(\"BILLING_TARGET\") || \"0\");",
+                  "pm.execution.setNextRequest(current < target ? \"03.01 create billing grid\" : \"04.00 init current tenant context\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 04 - TENANT POPULATION GRID",
+      "item": [
+        {
+          "name": "04.00 init current tenant context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant loop init OK\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const tenantIds = JSON.parse(pm.collectionVariables.get(\"TENANT_IDS_JSON\") || \"[]\");",
+                  "const emails = JSON.parse(pm.collectionVariables.get(\"TENANT_EMAILS_JSON\") || \"[]\");",
+                  "const passwords = JSON.parse(pm.collectionVariables.get(\"TENANT_PASSWORDS_JSON\") || \"[]\");",
+                  "const loopIndex = Number(pm.collectionVariables.get(\"CURRENT_TENANT_LOOP_INDEX\") || \"0\");",
+                  "if (loopIndex >= tenantIds.length || loopIndex >= 12) {",
+                  "  pm.execution.setNextRequest(\"99.01 controlplane final accounts smoke\");",
+                  "} else {",
+                  "  pm.collectionVariables.set(\"CURRENT_CATEGORY_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_SUBCATEGORY_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_SUPPLIER_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_CUSTOMER_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_PRODUCT_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_INVENTORY_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_SALE_INDEX\", \"0\");",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_ID\", String(tenantIds[loopIndex]));",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_EMAIL\", String(emails[loopIndex]));",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_PASSWORD\", String(passwords[loopIndex]));",
+                  "  pm.collectionVariables.set(\"CURRENT_LOOP_1BASED\", String(loopIndex + 1));",
+                  "  pm.execution.setNextRequest(\"04.01 tenant login current admin\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.01 tenant login current admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{CURRENT_TENANT_EMAIL}}\",\n  \"password\": \"{{CURRENT_TENANT_PASSWORD}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant admin login OK\", function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const token = json.accessToken || json.token || (json.data && (json.data.accessToken || json.data.token));",
+                  "pm.collectionVariables.set(\"TENANT_TOKEN\", token || \"\");",
+                  "pm.execution.setNextRequest(\"04.02 create tenant user grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.02 create tenant user grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 Tenant {{CURRENT_LOOP_1BASED}} User {{tenantUserIx}}\",\n  \"email\": \"v1003.t{{CURRENT_LOOP_1BASED}}.user{{tenantUserIx}}@example.com\",\n  \"password\": \"StrongP@ssw0rd123!\",\n  \"role\": \"{{tenantUserRole}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_TENANT_USER_INDEX\") || \"0\");",
+                  "const target = 6;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.03 create category grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_TENANT_USER_INDEX\", String(ix));",
+                  "  const roles = [\"TENANT_ADMIN\",\"TENANT_MANAGER\",\"TENANT_OPERATOR\",\"TENANT_VIEWER\"];",
+                  "  pm.variables.set(\"tenantUserIx\", String(ix));",
+                  "  pm.variables.set(\"tenantUserRole\", roles[(ix - 1) % roles.length]);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant user grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_TENANT_USER_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 6 ? \"04.02 create tenant user grid\" : \"04.03 create category grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.03 create category grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 T{{CURRENT_LOOP_1BASED}} Category {{categoryIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CATEGORY_INDEX\") || \"0\");",
+                  "const target = 6;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.04 create subcategory grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_CATEGORY_INDEX\", String(ix));",
+                  "  pm.variables.set(\"categoryIx\", String(ix));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Category grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CATEGORY_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 6 ? \"04.03 create category grid\" : \"04.04 create subcategory grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.04 create subcategory grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/subcategories/category/{{subcategoryCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "category",
+                "{{subcategoryCategoryId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 T{{CURRENT_LOOP_1BASED}} Subcategory {{subcategoryIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SUBCATEGORY_INDEX\") || \"0\");",
+                  "const target = 8;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.05 create supplier grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_SUBCATEGORY_INDEX\", String(ix));",
+                  "  pm.variables.set(\"subcategoryIx\", String(ix));",
+                  "  pm.variables.set(\"subcategoryCategoryId\", String(((ix - 1) % 6) + 1));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Subcategory grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SUBCATEGORY_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 8 ? \"04.04 create subcategory grid\" : \"04.05 create supplier grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.05 create supplier grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/suppliers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 Supplier T{{CURRENT_LOOP_1BASED}}-{{supplierIx}}\",\n  \"document\": \"0000000000{{supplierIx}}\",\n  \"email\": \"v1003.t{{CURRENT_LOOP_1BASED}}.supplier{{supplierIx}}@example.com\",\n  \"phone\": \"119999900{{supplierIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SUPPLIER_INDEX\") || \"0\");",
+                  "const target = 5;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.06 create customer grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_SUPPLIER_INDEX\", String(ix));",
+                  "  pm.variables.set(\"supplierIx\", String(ix));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Supplier grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SUPPLIER_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 5 ? \"04.05 create supplier grid\" : \"04.06 create customer grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.06 create customer grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "customers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 Customer T{{CURRENT_LOOP_1BASED}}-{{customerIx}}\",\n  \"email\": \"v1003.t{{CURRENT_LOOP_1BASED}}.customer{{customerIx}}@example.com\",\n  \"phone\": \"118888800{{customerIx}}\",\n  \"document\": \"1111111111{{customerIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CUSTOMER_INDEX\") || \"0\");",
+                  "const target = 10;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.07 create product grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_CUSTOMER_INDEX\", String(ix));",
+                  "  pm.variables.set(\"customerIx\", String(ix));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Customer grid request accepted\", function () {",
+                  "  pm.expect([201,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_CUSTOMER_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 10 ? \"04.06 create customer grid\" : \"04.07 create product grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.07 create product grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/products/detailed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "detailed"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"V100.3 Product T{{CURRENT_LOOP_1BASED}}-{{productIx}}\",\n  \"sku\": \"V1003-T{{CURRENT_LOOP_1BASED}}-P{{productIx}}\",\n  \"barcode\": \"789000000{{CURRENT_LOOP_1BASED}}{{productIx}}\",\n  \"categoryId\": \"{{productCategoryId}}\",\n  \"subcategoryId\": \"{{productSubcategoryId}}\",\n  \"supplierId\": \"{{productSupplierId}}\",\n  \"costPrice\": \"{{#unless productIsValid}}0.00{{/unless}}{{#if productIsValid}}10.00{{/if}}\",\n  \"salePrice\": \"{{#unless productIsValid}}0.00{{/unless}}{{#if productIsValid}}20.00{{/if}}\",\n  \"quantity\": \"0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_PRODUCT_INDEX\") || \"0\");",
+                  "const target = 12;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.08 inventory inbound grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_PRODUCT_INDEX\", String(ix));",
+                  "  pm.variables.set(\"productIx\", String(ix));",
+                  "  const validTarget = 8;",
+                  "  pm.variables.set(\"productIsValid\", ix <= validTarget ? \"true\" : \"false\");",
+                  "  pm.variables.set(\"productCategoryId\", String(((Math.min(ix, validTarget) - 1) % 6) + 1));",
+                  "  pm.variables.set(\"productSubcategoryId\", String(((Math.min(ix, validTarget) - 1) % 8) + 1));",
+                  "  pm.variables.set(\"productSupplierId\", String(((Math.min(ix, validTarget) - 1) % 5) + 1));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Product grid request accepted\", function () {",
+                  "  pm.expect([201,400,409]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_PRODUCT_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 12 ? \"04.07 create product grid\" : \"04.08 inventory inbound grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.08 inventory inbound grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/inventory/adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "adjustments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{inventoryProductId}}\",\n  \"type\": \"IN\",\n  \"quantity\": \"10\",\n  \"reason\": \"V100.3 inbound {{inventoryIx}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_INVENTORY_INDEX\") || \"0\");",
+                  "const target = 12;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.09 create sales grid\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_INVENTORY_INDEX\", String(ix));",
+                  "  pm.variables.set(\"inventoryIx\", String(ix));",
+                  "  pm.variables.set(\"inventoryProductId\", String(((ix - 1) % 8) + 1));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Inventory inbound grid request accepted\", function () {",
+                  "  pm.expect([200,201]).to.include(pm.response.code);",
+                  "});",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_INVENTORY_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 12 ? \"04.08 inventory inbound grid\" : \"04.09 create sales grid\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.09 create sales grid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "sales"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{saleCustomerId}}\",\n  \"items\": \"{{saleItemsJson}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SALE_INDEX\") || \"0\");",
+                  "const target = 20;",
+                  "if (current >= target) {",
+                  "  pm.execution.setNextRequest(\"04.10 read tenant sale sample\");",
+                  "} else {",
+                  "  const ix = current + 1;",
+                  "  pm.collectionVariables.set(\"CURRENT_SALE_INDEX\", String(ix));",
+                  "  pm.variables.set(\"saleIx\", String(ix));",
+                  "  const customerId = ((ix - 1) % 10) + 1;",
+                  "  pm.variables.set(\"saleCustomerId\", String(customerId));",
+                  "  const mod = (ix - 1) % 4;",
+                  "  let items;",
+                  "  if (mod === 0) items = [{ productId: 1, quantity: 1, unitPrice: 20.00 }];",
+                  "  else if (mod === 1) items = [{ productId: 1, quantity: 1, unitPrice: 20.00 }, { productId: 2, quantity: 1, unitPrice: 20.00 }];",
+                  "  else if (mod === 2) items = [{ productId: 1, quantity: 1, unitPrice: 20.00 }, { productId: 2, quantity: 1, unitPrice: 20.00 }, { productId: 3, quantity: 1, unitPrice: 20.00 }];",
+                  "  else items = [{ productId: 1, quantity: 1, unitPrice: 20.00 }, { productId: 2, quantity: 1, unitPrice: 20.00 }, { productId: 3, quantity: 1, unitPrice: 20.00 }, { productId: 4, quantity: 1, unitPrice: 20.00 }];",
+                  "  pm.variables.set(\"saleItemsJson\", JSON.stringify(items));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Sales grid request accepted\", function () {",
+                  "  pm.expect([200,201]).to.include(pm.response.code);",
+                  "});",
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const saleId = json.id || json.saleId || (json.data && (json.data.id || json.data.saleId));",
+                  "  if (saleId) pm.collectionVariables.set(\"LAST_SALE_ID\", String(saleId));",
+                  "} catch (e) {}",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_SALE_INDEX\") || \"0\");",
+                  "pm.execution.setNextRequest(current < 20 ? \"04.09 create sales grid\" : \"04.10 read tenant sale sample\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.10 read tenant sale sample",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/sales/{{LAST_SALE_ID}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "sales",
+                "{{LAST_SALE_ID}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Read tenant sale sample accepted\", function () {",
+                  "  pm.expect([200,404]).to.include(pm.response.code);",
+                  "});",
+                  "pm.execution.setNextRequest(\"04.11 advance to next tenant\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.11 advance to next tenant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Advance tenant loop OK\", function () { pm.response.to.have.status(200); });",
+                  "const current = Number(pm.collectionVariables.get(\"CURRENT_TENANT_LOOP_INDEX\") || \"0\");",
+                  "pm.collectionVariables.set(\"CURRENT_TENANT_LOOP_INDEX\", String(current + 1));",
+                  "pm.collectionVariables.set(\"CURRENT_TENANT_USER_INDEX\", \"0\");",
+                  "pm.execution.setNextRequest(\"04.00 init current tenant context\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📦 99 - FINAL CONSISTENCY SMOKE",
+      "item": [
+        {
+          "name": "99.01 controlplane final accounts smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CP_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "accounts"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Final control plane accounts smoke OK\", function () { pm.response.to.have.status(200); });",
+                  "pm.execution.setNextRequest(\"99.02 tenant login first admin\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.02 tenant login first admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{finalTenantEmail}}\",\n  \"password\": \"{{finalTenantPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const emails = JSON.parse(pm.collectionVariables.get(\"TENANT_EMAILS_JSON\") || \"[]\");",
+                  "const passwords = JSON.parse(pm.collectionVariables.get(\"TENANT_PASSWORDS_JSON\") || \"[]\");",
+                  "pm.variables.set(\"finalTenantEmail\", emails[0] || \"\");",
+                  "pm.variables.set(\"finalTenantPassword\", passwords[0] || \"\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Final first tenant login OK\", function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const token = json.accessToken || json.token || (json.data && (json.data.accessToken || json.data.token));",
+                  "pm.collectionVariables.set(\"TENANT_TOKEN\", token || \"\");",
+                  "pm.execution.setNextRequest(\"99.03 tenant me smoke\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.03 tenant me smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant me smoke OK\", function () { pm.expect([200,204]).to.include(pm.response.code); });",
+                  "pm.execution.setNextRequest(\"99.04 products smoke\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.04 products smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/products?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Products smoke OK\", function () { pm.expect([200,204]).to.include(pm.response.code); });",
+                  "pm.execution.setNextRequest(\"99.05 customers smoke\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.05 customers smoke",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TENANT_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "customers"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Customers smoke OK\", function () { pm.expect([200,204]).to.include(pm.response.code); });",
+                  "pm.execution.setNextRequest(\"99.06 final summary\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "99.06 final summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Final summary OK\", function () { pm.response.to.have.status(200); });",
+                  "console.log(\"V100.3 SUMMARY\");",
+                  "console.log(\"tenants=\", 12);",
+                  "console.log(\"controlplaneUsers=\", 18);",
+                  "console.log(\"billings=\", 36);",
+                  "console.log(\"tenantUsers=\", 72);",
+                  "console.log(\"categories=\", 72);",
+                  "console.log(\"subcategories=\", 96);",
+                  "console.log(\"suppliers=\", 60);",
+                  "console.log(\"customers=\", 120);",
+                  "console.log(\"products=\", 96);",
+                  "console.log(\"sales=\", 240);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

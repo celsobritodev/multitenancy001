@@ -39,9 +39,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Application Service para comandos relacionados a usuários do Tenant.
+ * Application Service para comandos relacionados a usuários do tenant.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
  *   <li>Criar, suspender, restaurar e excluir usuários do tenant.</li>
  *   <li>Garantir auditoria de segurança nas mutações relevantes.</li>
@@ -49,11 +49,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Aplicar enforcement de quota no write-path canônico de criação.</li>
  * </ul>
  *
- * <p>Diretrizes arquiteturais:</p>
+ * <p><b>Diretrizes arquiteturais:</b></p>
  * <ul>
  *   <li>O enforcement de seats ocorre neste service.</li>
  *   <li>A validação de quota deve acontecer antes da transação tenant de escrita.</li>
  *   <li>Evitar crossing PUBLIC dentro do bloco principal de save do tenant.</li>
+ *   <li>Na V30, o bloqueio por hard limit deve acontecer no write-path antes do save.</li>
  * </ul>
  */
 @Slf4j
@@ -78,6 +79,15 @@ public class TenantUserCommandService {
 
     /**
      * Cria um usuário de tenant, aplicando permissões finais (base + requested validadas).
+     *
+     * <p><b>Fluxo crítico da V30:</b></p>
+     * <ol>
+     *   <li>Validar payload e contexto.</li>
+     *   <li>Normalizar email e validar senha.</li>
+     *   <li>Executar quota enforcement fora da transação tenant de escrita.</li>
+     *   <li>Persistir usuário dentro da transação tenant.</li>
+     *   <li>Executar sincronização de login identity após completion, em best-effort.</li>
+     * </ol>
      *
      * @param accountId id da conta
      * @param tenantSchema schema tenant
@@ -109,43 +119,45 @@ public class TenantUserCommandService {
             Boolean mustChangePassword,
             EntityOrigin origin
     ) {
-        log.info("🚀 createTenantUser INICIANDO | email={} accountId={} tenantSchema={}", email, accountId, tenantSchema);
+        log.info(
+                "Iniciando criação de usuário tenant (PRE-CHECK). accountId={}, tenantSchema={}, email={}, role={}",
+                accountId,
+                tenantSchema,
+                email,
+                role
+        );
 
         validateCreateInputs(accountId, tenantSchema, name, email, rawPassword, role);
 
+        String normalizedTenantSchema = tenantSchema.trim();
+        String normalizedName = name.trim();
         String normEmail = EmailNormalizer.normalizeOrNull(email);
+
         if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
             throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email invalido", 400);
         }
+
         if (!rawPassword.matches(ValidationPatterns.PASSWORD_PATTERN)) {
             throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
-        // IMPORTANTE:
-        // enforcement antes da tx tenant de escrita, para evitar crossing PUBLIC dentro do tx tenant.
-        tenantQuotaEnforcementService.assertCanCreateUser(accountId, tenantSchema);
+        tenantQuotaEnforcementService.assertCanCreateUser(accountId, normalizedTenantSchema);
 
         AtomicReference<String> savedEmail = new AtomicReference<>();
         AtomicReference<Long> savedUserId = new AtomicReference<>();
 
-        TenantUser saved = tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
+        TenantUser saved = tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
             log.debug(
-                    "createTenantUser DENTRO DA TRANSAÇÃO | threadId={} threadName={} email={} accountId={}",
-                    Thread.currentThread().threadId(),
-                    Thread.currentThread().getName(),
+                    "Criando usuário dentro da transação tenant. accountId={}, tenantSchema={}, email={}, threadId={}, threadName={}",
+                    accountId,
+                    normalizedTenantSchema,
                     normEmail,
-                    accountId
+                    Thread.currentThread().threadId(),
+                    Thread.currentThread().getName()
             );
 
-            final Actor actor = resolveActorOrNull(accountId, tenantSchema);
-            final int requestedCount = (requestedPermissions == null) ? 0 : requestedPermissions.size();
-
-            final Map<String, Object> attemptDetails = m(
-                    "scope", SCOPE,
-                    "stage", "before_save",
-                    "role", role.name(),
-                    "requestedPermissionsCount", requestedCount
-            );
+            final Actor actor = resolveActorOrNull(accountId, normalizedTenantSchema);
+            final int requestedCount = requestedPermissions == null ? 0 : requestedPermissions.size();
 
             recordAudit(
                     SecurityAuditActionType.USER_CREATED,
@@ -154,8 +166,13 @@ public class TenantUserCommandService {
                     normEmail,
                     null,
                     accountId,
-                    tenantSchema,
-                    attemptDetails
+                    normalizedTenantSchema,
+                    m(
+                            "scope", SCOPE,
+                            "stage", "before_save",
+                            "role", role.name(),
+                            "requestedPermissionsCount", requestedCount
+                    )
             );
 
             try {
@@ -166,12 +183,10 @@ public class TenantUserCommandService {
 
                 TenantUser user = new TenantUser();
                 user.setAccountId(accountId);
-
-                user.rename(name);
+                user.rename(normalizedName);
                 user.changeEmail(normEmail);
                 user.setPassword(passwordEncoder.encode(rawPassword));
                 user.setRole(role);
-
                 user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
                 user.setMustChangePassword(Boolean.TRUE.equals(mustChangePassword));
 
@@ -180,35 +195,35 @@ public class TenantUserCommandService {
 
                 user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
                 user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
-                user.setLocale(StringUtils.hasText(locale) ? locale.trim() : null);
-                user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : null);
+                user.setLocale(StringUtils.hasText(locale) ? locale.trim() : "pt_BR");
+                user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : "America/Sao_Paulo");
 
                 user.setSuspendedByAccount(false);
                 user.setSuspendedByAdmin(false);
 
-                Set<TenantPermission> base = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
-                Set<TenantPermission> desired = new LinkedHashSet<>();
+                Set<TenantPermission> basePermissions = new LinkedHashSet<>(TenantRolePermissions.permissionsFor(role));
+                Set<TenantPermission> desiredPermissions = new LinkedHashSet<>();
 
                 if (requestedPermissions != null && !requestedPermissions.isEmpty()) {
-                    desired.addAll(requestedPermissions);
+                    desiredPermissions.addAll(requestedPermissions);
                 }
 
-                desired = PermissionScopeValidator.validateTenantPermissionsStrict(desired);
+                desiredPermissions = PermissionScopeValidator.validateTenantPermissionsStrict(desiredPermissions);
 
-                Set<TenantPermission> finalPerms = new LinkedHashSet<>(base);
-                finalPerms.addAll(desired);
-                user.setPermissions(finalPerms);
-
-                if (!StringUtils.hasText(user.getLocale())) {
-                    user.setLocale("pt_BR");
-                }
-                if (!StringUtils.hasText(user.getTimezone())) {
-                    user.setTimezone("America/Sao_Paulo");
-                }
+                Set<TenantPermission> finalPermissions = new LinkedHashSet<>(basePermissions);
+                finalPermissions.addAll(desiredPermissions);
+                user.setPermissions(finalPermissions);
 
                 TenantUser savedUser = tenantUserRepository.save(user);
 
-                log.info("✅ Usuário salvo no tenant | id={} email={} accountId={}", savedUser.getId(), savedUser.getEmail(), accountId);
+                log.info(
+                        "Usuário salvo com sucesso no tenant. accountId={}, tenantSchema={}, userId={}, email={}, role={}",
+                        accountId,
+                        normalizedTenantSchema,
+                        savedUser.getId(),
+                        savedUser.getEmail(),
+                        savedUser.getRole()
+                );
 
                 savedEmail.set(savedUser.getEmail());
                 savedUserId.set(savedUser.getId());
@@ -220,7 +235,7 @@ public class TenantUserCommandService {
                         savedUser.getEmail(),
                         savedUser.getId(),
                         accountId,
-                        tenantSchema,
+                        normalizedTenantSchema,
                         m(
                                 "scope", SCOPE,
                                 "stage", "after_save",
@@ -236,20 +251,28 @@ public class TenantUserCommandService {
                         savedUser.getEmail(),
                         savedUser.getId(),
                         accountId,
-                        tenantSchema,
+                        normalizedTenantSchema,
                         m(
                                 "scope", SCOPE,
                                 "reason", "create",
-                                "baseCount", base.size(),
+                                "baseCount", basePermissions.size(),
                                 "requestedCount", requestedCount,
-                                "finalCount", finalPerms.size()
+                                "finalCount", finalPermissions.size()
                         )
                 );
 
                 return savedUser;
-
             } catch (ApiException ex) {
-                log.error("❌ createTenantUser ApiException | email={} | msg={}", normEmail, ex.getMessage());
+                log.error(
+                        "Falha de negócio ao criar usuário tenant. accountId={}, tenantSchema={}, email={}, status={}, error={}, msg={}",
+                        accountId,
+                        normalizedTenantSchema,
+                        normEmail,
+                        ex.getStatus(),
+                        ex.getError(),
+                        ex.getMessage()
+                );
+
                 recordAudit(
                         SecurityAuditActionType.USER_CREATED,
                         outcomeFrom(ex),
@@ -257,12 +280,19 @@ public class TenantUserCommandService {
                         normEmail,
                         null,
                         accountId,
-                        tenantSchema,
+                        normalizedTenantSchema,
                         failureDetails(SCOPE, ex)
                 );
                 throw ex;
             } catch (Exception ex) {
-                log.error("❌ createTenantUser Exception inesperada | email={}", normEmail, ex);
+                log.error(
+                        "Falha inesperada ao criar usuário tenant. accountId={}, tenantSchema={}, email={}",
+                        accountId,
+                        normalizedTenantSchema,
+                        normEmail,
+                        ex
+                );
+
                 recordAudit(
                         SecurityAuditActionType.USER_CREATED,
                         AuditOutcome.FAILURE,
@@ -270,7 +300,7 @@ public class TenantUserCommandService {
                         normEmail,
                         null,
                         accountId,
-                        tenantSchema,
+                        normalizedTenantSchema,
                         unexpectedFailureDetails(SCOPE, ex)
                 );
                 throw ex;
@@ -285,27 +315,44 @@ public class TenantUserCommandService {
                 try {
                     loginIdentityService.ensureTenantIdentity(finalEmail, accountId);
                     log.info(
-                            "✅ ensureTenantIdentity executado após completion | email={} accountId={} userId={}",
-                            finalEmail,
+                            "ensureTenantIdentity executado após completion. accountId={}, userId={}, email={}",
                             accountId,
-                            finalUserId
+                            finalUserId,
+                            finalEmail
                     );
                 } catch (Exception e) {
                     log.error(
-                            "❌ Falha ao garantir identidade de login (best-effort) | email={} accountId={} userId={}",
-                            finalEmail,
+                            "Falha ao garantir identidade de login após completion (best-effort). accountId={}, userId={}, email={}",
                             accountId,
                             finalUserId,
+                            finalEmail,
                             e
                     );
                 }
             });
         }
 
-        log.info("✅ createTenantUser FINALIZADO COM SUCESSO | email={} accountId={}", saved.getEmail(), accountId);
+        log.info(
+                "Criação de usuário tenant finalizada com sucesso. accountId={}, tenantSchema={}, userId={}, email={}",
+                accountId,
+                normalizedTenantSchema,
+                saved.getId(),
+                saved.getEmail()
+        );
+
         return saved;
     }
 
+    /**
+     * Valida parâmetros obrigatórios para criação de usuário.
+     *
+     * @param accountId id da conta
+     * @param tenantSchema schema tenant
+     * @param name nome
+     * @param email email
+     * @param rawPassword senha
+     * @param role papel
+     */
     private void validateCreateInputs(
             Long accountId,
             String tenantSchema,
@@ -424,14 +471,14 @@ public class TenantUserCommandService {
                     try {
                         loginIdentityService.ensureTenantIdentity(userEmail, accountId);
                         log.info(
-                                "✅ ensureTenantIdentity executado após reativação | email={} accountId={} byAdmin={}",
+                                "ensureTenantIdentity executado após reativação. email={} accountId={} byAdmin={}",
                                 userEmail,
                                 accountId,
                                 byAdmin
                         );
                     } catch (Exception e) {
                         log.error(
-                                "❌ Falha ao garantir identidade após reativação (best-effort) | email={} accountId={}",
+                                "Falha ao garantir identidade após reativação (best-effort). email={} accountId={}",
                                 userEmail,
                                 accountId,
                                 e
@@ -442,6 +489,14 @@ public class TenantUserCommandService {
         }
     }
 
+    /**
+     * Restaura usuário previamente deletado e reabilita identidade pública.
+     *
+     * @param userId id do usuário
+     * @param accountId id da conta
+     * @param tenantSchema schema tenant
+     * @return usuário restaurado
+     */
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
         log.info("restore INICIANDO | userId={} accountId={}", userId, accountId);
 
@@ -489,21 +544,22 @@ public class TenantUserCommandService {
                 try {
                     loginIdentityService.ensureTenantIdentity(restoredEmail.get(), accountId);
                     log.info(
-                            "✅ ensureTenantIdentity executado após restore | email={} accountId={}",
+                            "ensureTenantIdentity executado após restore. email={} accountId={}",
                             restoredEmail.get(),
                             accountId
                     );
                 } catch (Exception e) {
                     log.error(
-                            "❌ Falha ao garantir identidade após restore (best-effort) | email={} accountId={}",
+                            "Falha ao garantir identidade após restore (best-effort). email={} accountId={}",
                             restoredEmail.get(),
                             accountId,
                             e
-                        );
-                    }
-                });
+                    );
+                }
+            });
         }
 
+        log.info("restore FINALIZADO COM SUCESSO | userId={} accountId={}", userId, accountId);
         return saved;
     }
 
@@ -571,13 +627,13 @@ public class TenantUserCommandService {
                 try {
                     loginIdentityService.deleteTenantIdentity(deletedEmail.get(), accountId);
                     log.info(
-                            "✅ deleteTenantIdentity executado após softDelete | email={} accountId={}",
+                            "deleteTenantIdentity executado após softDelete. email={} accountId={}",
                             deletedEmail.get(),
                             accountId
                     );
                 } catch (Exception e) {
                     log.error(
-                            "❌ Falha ao remover identidade após softDelete (best-effort) | email={} accountId={}",
+                            "Falha ao remover identidade após softDelete (best-effort). email={} accountId={}",
                             deletedEmail.get(),
                             accountId,
                             e
@@ -607,8 +663,24 @@ public class TenantUserCommandService {
         // Implementacao existente
     }
 
+    /**
+     * Persiste explicitamente um usuário no schema tenant informado.
+     *
+     * @param tenantSchema schema tenant
+     * @param user entidade a persistir
+     * @return entidade persistida
+     */
     public TenantUser save(String tenantSchema, TenantUser user) {
-        return user;
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
+        }
+        if (user == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "user é obrigatorio", 400);
+        }
+
+        log.info("Salvando usuário explicitamente. tenantSchema={}, userId={}, email={}", tenantSchema, user.getId(), user.getEmail());
+
+        return tenantSchemaUnitOfWork.tx(tenantSchema.trim(), () -> tenantUserRepository.save(user));
     }
 
     public void transferTenantOwnerRole(Long accountId, String tenantSchema, Long fromUserId, Long toUserId) {
@@ -669,8 +741,8 @@ public class TenantUserCommandService {
         try {
             T result = block.call();
 
-            Object sd = (successDetails != null ? successDetails : attemptDetails);
-            recordAudit(actionType, AuditOutcome.SUCCESS, actor, targetEmail, targetUserId, accountId, tenantSchema, sd);
+            Object detailsToPersist = successDetails != null ? successDetails : attemptDetails;
+            recordAudit(actionType, AuditOutcome.SUCCESS, actor, targetEmail, targetUserId, accountId, tenantSchema, detailsToPersist);
 
             return result;
         } catch (ApiException ex) {
@@ -765,8 +837,8 @@ public class TenantUserCommandService {
         if (ex == null) {
             return AuditOutcome.FAILURE;
         }
-        int s = ex.getStatus();
-        return (s == 401 || s == 403) ? AuditOutcome.DENIED : AuditOutcome.FAILURE;
+        int status = ex.getStatus();
+        return (status == 401 || status == 403) ? AuditOutcome.DENIED : AuditOutcome.FAILURE;
     }
 
     private static Map<String, Object> failureDetails(String scope, ApiException ex) {
@@ -794,18 +866,18 @@ public class TenantUserCommandService {
     }
 
     private static Map<String, Object> m(Object... kv) {
-        Map<String, Object> m = new LinkedHashMap<>();
+        Map<String, Object> map = new LinkedHashMap<>();
         if (kv == null) {
-            return m;
+            return map;
         }
         for (int i = 0; i + 1 < kv.length; i += 2) {
-            Object k = kv[i];
-            Object v = kv[i + 1];
-            if (k != null) {
-                m.put(String.valueOf(k), v);
+            Object key = kv[i];
+            Object value = kv[i + 1];
+            if (key != null) {
+                map.put(String.valueOf(key), value);
             }
         }
-        return m;
+        return map;
     }
 
     private record Actor(Long userId, String email) {

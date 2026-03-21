@@ -1,40 +1,34 @@
-# TESTE V30 - HARD LIMITS ENFORCEMENT
+# V30 HARD LIMITS ENFORCEMENT - PATCHED
 
-## Objetivo
-A V30 evolui a V29 e adiciona validação real de hard limits de subscription:
+Pacote gerado com ajuste pronto para copiar/colar no seu padrão de projeto E2E.
 
-- bloqueio real de criação de usuário acima do limite
-- bloqueio real de criação de produto acima do limite
-- coerência de `remainingUsers` e `remainingProducts`
-- downgrade bloqueado por uso real
-- validação pós-erro sem 5xx e sem corrupção de estado
+## O que foi ajustado
 
-## Estrutura
-- `multitenancy001.postman_collection.v30.hard-limits-enforcement.json`
-- `multitenancy001.local.postman_environment.v30.hard-limits-enforcement.json`
-- `run-teste-v30-strict.sh`
-- `run-teste-v30-ultra.sh`
+1. Substituição de `postman.setNextRequest(...)` por `pm.execution.setNextRequest(...)` nos fluxos da collection.
+2. Hardening do loop de produtos:
+   - `216.07 create product until hard limit`
+   - `216.08 reread limits after product creation`
+   - `216.09 verify products exhausted before overflow`
+   - `216.10 create product above hard limit`
+3. Hardening defensivo do loop de usuários:
+   - `216.02 create tenant user until hard limit`
+   - `216.03 reread limits after user creation`
+4. Ajuste do retry de login em `00.03 tenant login` para remover dependência do `postman.setNextRequest(...)`.
+
+## Efeito esperado
+
+- O bloco 216 não deve mais entrar em loop infinito quando `remainingProducts` chegar a `0` ou ficar negativo.
+- O fluxo deve parar corretamente e seguir para validação de overflow controlado.
+- A collection fica compatível com o formato recomendado pelo Postman/Newman atual.
+
+## Arquivos incluídos
+
+- collection V30 patchada
+- environment V30
+- scripts `run-teste-v30-strict.sh` e `run-teste-v30-ultra.sh`
 - `cleanup.sh`
-- `chaos-race-worker-sale.sh`
-- `chaos-race-aggregate.py`
-- `chaos-node-launch.sh`
-- `chaos-ledger-rebuild.py`
-- `logs/`
-- `mvnw`
+- scripts auxiliares de chaos já presentes no pacote base
 
-## Execução (Git Bash)
-```bash
-chmod +x *.sh mvnw
-./run-teste-v30-strict.sh
-```
+## Observação
 
-Para ultra:
-```bash
-chmod +x *.sh mvnw
-./run-teste-v30-ultra.sh
-```
-
-## Observações
-- A V30 foi gerada como: **V29 + novas requisições**
-- O bloco novo é: `🧩 216 - V30 HARD LIMITS ENFORCEMENT`
-- Mantém toda a base da V29 e adiciona enforcement real para users/products
+Este pacote preserva o nome dos arquivos principais para facilitar sobrescrita direta no diretório da suíte.

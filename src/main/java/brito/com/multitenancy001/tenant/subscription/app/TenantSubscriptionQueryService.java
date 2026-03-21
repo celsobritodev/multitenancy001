@@ -27,19 +27,21 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Serviço de consulta de subscription no contexto tenant.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
  *   <li>Resolver a conta atual do tenant autenticado.</li>
  *   <li>Calcular uso e limites do plano corrente.</li>
  *   <li>Executar preview de mudança de plano.</li>
- *   <li>Expor visão consolidada de upgrades e downgrades elegíveis/bloqueados.</li>
+ *   <li>Expor visão consolidada de upgrades e downgrades elegíveis ou bloqueados.</li>
+ *   <li>Garantir que capacidade restante nunca seja retornada negativa.</li>
  * </ul>
  *
- * <p>Diretriz arquitetural:</p>
+ * <p><b>Diretriz arquitetural:</b></p>
  * <ul>
- *   <li>Este service não executa mais crossing TENANT -&gt; PUBLIC diretamente.</li>
+ *   <li>Este service não executa crossing TENANT -&gt; PUBLIC diretamente.</li>
  *   <li>A resolução da conta atual fica centralizada em {@link TenantSubscriptionAccountResolver}.</li>
- *   <li>Reduz boundary leak e simplifica manutenção futura.</li>
+ *   <li>O cálculo de uso fica centralizado em {@link AccountPlanUsageService}.</li>
+ *   <li>O clamp de remaining é responsabilidade deste service ao montar a resposta tenant.</li>
  * </ul>
  */
 @Service
@@ -60,7 +62,11 @@ public class TenantSubscriptionQueryService {
     public TenantPlanLimitsResponse getMyLimits() {
         Account account = tenantSubscriptionAccountResolver.resolveCurrentAccount();
 
-        log.info("Consultando limites da assinatura do tenant autenticado. accountId={}", account.getId());
+        log.info(
+                "Consultando limites da assinatura do tenant autenticado. accountId={}, currentPlan={}",
+                account.getId(),
+                account.getSubscriptionPlan()
+        );
 
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
         PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
@@ -133,12 +139,15 @@ public class TenantSubscriptionQueryService {
         );
 
         log.info(
-                "Limites da assinatura carregados com sucesso. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
+                "Limites da assinatura carregados com sucesso. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
                 usage.currentUsers(),
                 usage.currentProducts(),
-                usage.currentStorageMb()
+                usage.currentStorageMb(),
+                remainingUsers,
+                remainingProducts,
+                remainingStorageMb
         );
 
         return response;
@@ -179,12 +188,13 @@ public class TenantSubscriptionQueryService {
         TenantPlanChangePreviewResponse response = toPreviewResponse(result);
 
         log.info(
-                "Preview de mudança de plano calculado com sucesso. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
+                "Preview de mudança de plano calculado com sucesso. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}, violations={}",
                 account.getId(),
                 result.currentPlan(),
                 result.targetPlan(),
                 result.changeType(),
-                result.eligible()
+                result.eligible(),
+                result.violations().size()
         );
 
         return response;
@@ -236,6 +246,9 @@ public class TenantSubscriptionQueryService {
     /**
      * Calcula capacidade restante de um recurso.
      *
+     * <p>Para planos ilimitados, retorna {@link Long#MAX_VALUE}. Para planos limitados,
+     * o valor é clampado em zero, nunca retornando negativo.</p>
+     *
      * @param currentValue uso atual
      * @param maxValue valor máximo permitido
      * @param unlimited indica se o plano é ilimitado
@@ -246,7 +259,19 @@ public class TenantSubscriptionQueryService {
             return Long.MAX_VALUE;
         }
 
-        return Math.max(0L, (long) maxValue - currentValue);
+        long rawRemaining = (long) maxValue - currentValue;
+        long clampedRemaining = Math.max(0L, rawRemaining);
+
+        if (rawRemaining < 0L) {
+            log.warn(
+                    "Remaining negativo detectado e clampado para zero. currentValue={}, maxValue={}, rawRemaining={}",
+                    currentValue,
+                    maxValue,
+                    rawRemaining
+            );
+        }
+
+        return clampedRemaining;
     }
 
     /**

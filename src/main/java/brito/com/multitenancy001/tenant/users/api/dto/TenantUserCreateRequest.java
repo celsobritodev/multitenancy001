@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.tenant.users.api.dto;
 
+import java.util.LinkedHashSet;
+
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.validation.ValidationPatterns;
 import brito.com.multitenancy001.tenant.security.TenantPermission;
@@ -11,17 +13,25 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
-import java.util.LinkedHashSet;
-
 /**
- * Request para criação de usuário no Tenant.
+ * DTO de request para criação de usuário no contexto tenant.
  *
- * Login é por EMAIL
+ * <p><b>Responsabilidades:</b></p>
+ * <ul>
+ *   <li>Representar o payload HTTP de criação de usuário.</li>
+ *   <li>Aplicar validações sintáticas básicas de entrada.</li>
+ *   <li>Normalizar campos textuais simples ainda no boundary HTTP.</li>
+ *   <li>Garantir que a coleção de permissões nunca seja nula.</li>
+ * </ul>
  *
- * Observações:
- * - locale/timezone são opcionais (defaults são aplicados no service).
- * - mustChangePassword é opcional (default false).
- * - ✅ permissions agora são TIPADAS (enum TenantPermission).
+ * <p><b>Observações:</b></p>
+ * <ul>
+ *   <li>O login do usuário tenant é por e-mail.</li>
+ *   <li>{@code locale} e {@code timezone} são opcionais; defaults finais
+ *       continuam sendo responsabilidade do service.</li>
+ *   <li>{@code mustChangePassword} é opcional.</li>
+ *   <li>{@code permissions} permanece tipado com {@link TenantPermission}.</li>
+ * </ul>
  */
 @Builder
 public record TenantUserCreateRequest(
@@ -45,10 +55,12 @@ public record TenantUserCreateRequest(
         @NotNull(message = "Role é obrigatória")
         TenantRole role,
 
-        // ✅ TIPADO
         LinkedHashSet<@NotNull(message = "Permission não pode ser null") TenantPermission> permissions,
 
-        @Pattern(regexp = ValidationPatterns.PHONE_PATTERN, message = "Telefone inválido")
+        @Pattern(
+                regexp = ValidationPatterns.PHONE_PATTERN,
+                message = "Telefone inválido"
+        )
         @Size(max = 20, message = "Telefone não pode exceder 20 caracteres")
         String phone,
 
@@ -66,13 +78,38 @@ public record TenantUserCreateRequest(
         EntityOrigin origin
 
 ) {
+
+    /**
+     * Construtor canônico do record com normalizações leves.
+     *
+     * <p><b>Regras:</b></p>
+     * <ul>
+     *   <li>Campos textuais são trimados quando informados.</li>
+     *   <li>{@code permissions} nunca fica nulo.</li>
+     * </ul>
+     */
     public TenantUserCreateRequest {
-        if (name != null) name = name.trim();
-        if (email != null) email = email.trim();
-        if (phone != null) phone = phone.trim();
-        if (avatarUrl != null) avatarUrl = avatarUrl.trim();
-        if (locale != null) locale = locale.trim();
-        if (timezone != null) timezone = timezone.trim();
-        if (permissions == null) permissions = new LinkedHashSet<>();
+        name = trimToNull(name);
+        email = trimToNull(email);
+        phone = trimToNull(phone);
+        avatarUrl = trimToNull(avatarUrl);
+        locale = trimToNull(locale);
+        timezone = trimToNull(timezone);
+        permissions = permissions == null ? new LinkedHashSet<>() : new LinkedHashSet<>(permissions);
+    }
+
+    /**
+     * Normaliza string para {@code null} quando vazia após trim.
+     *
+     * @param value valor bruto
+     * @return valor normalizado
+     */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

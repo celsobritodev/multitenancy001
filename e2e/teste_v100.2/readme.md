@@ -1,47 +1,22 @@
-# V100 Heavy Data Population Grid
+# V100 Heavy Data Population Grid - PATCHED
 
-Suite de populacao massiva do banco via requisicoes HTTP reais.
+Ajuste aplicado nesta versão:
 
-O que a V100 popula:
-- multiplas contas / tenants
-- usuarios de control plane com roles variadas e permissions explicitas
-- multiplos billings
-- usuarios tenant com roles e permissions variadas
-- categorias e subcategorias
-- suppliers
-- customers
-- products
-- inventory inbound por produto
-- sales com quantidade variavel de itens por venda
+- Correção do grid `controlplane/users` para usar os valores reais do enum `ControlPlaneRole`.
+- `controlplane_roles_json` atualizado para:
+  - `CONTROLPLANE_BILLING_MANAGER`
+  - `CONTROLPLANE_SUPPORT`
+  - `CONTROLPLANE_OPERATOR`
+- Mantido o restante da suíte no mesmo padrão operacional.
 
 ## Arquivos
+
 - `multitenancy001.postman_collection.v100.heavy-data-population-grid.json`
 - `multitenancy001.local.postman_environment.v100.heavy-data-population-grid.json`
 - `run-teste-v100-heavy-data-population-grid-strict.sh`
 - `run-teste-v100-heavy-data-population-grid-ultra.sh`
+- `cleanup.sh`
 
-## Como rodar
-```bash
-./run-teste-v100-heavy-data-population-grid-strict.sh
-```
+## Observação
 
-ou
-
-```bash
-./run-teste-v100-heavy-data-population-grid-ultra.sh
-```
-
-## Ajuste de volume
-Edite o environment e altere os valores:
-- tenant_count
-- controlplane_user_count
-- billing_count
-- tenant_user_count
-- category_count
-- subcategory_count
-- supplier_count
-- customer_count
-- product_count
-- sales_count
-- max_items_per_sale
-- inventory_seed_qty
+Este patch corrige especificamente o `400 Bad Request` do grid de usuários do control plane causado por payload fora do contrato do enum.

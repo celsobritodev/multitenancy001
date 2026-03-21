@@ -27,8 +27,8 @@ LOG_DIR="${SCRIPT_DIR}/logs"
 APP_LOG="${LOG_DIR}/app_strict_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_strict_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v100.heavy-data-population-grid.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v100.heavy-data-population-grid.json"
+COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v100.4.enterprise-many-tenants.json"
+ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v100.4.enterprise-many-tenants.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.strict.json"
 APP_PID=""
@@ -40,7 +40,7 @@ cleanup(){
 }
 trap cleanup EXIT
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V100 HEAVY DATA POPULATION GRID - STRICT SUITE"
+echo "🔷 TESTE V100.4 ENTERPRISE MANY TENANTS - STRICT SUITE"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: ${SCRIPT_DIR}"
 echo "────────────────────────────────────────────────────"
@@ -80,7 +80,7 @@ curl -fsS "${BASE_URL}/actuator/health" >/dev/null
 ok "Health check OK"; hr
 title "Executando suíte de população V100"
 newman run "${COLLECTION}" -e "${TEMP_ENV}" --export-environment "${TEMP_ENV}" --reporters cli,json --reporter-json-export "${TEMP_NEWMAN}"
-ok "Suíte V100 concluída"; hr
+ok "Suíte V100.4 concluída"; hr
 title "Relatório final"
 step "Collection: ${COLLECTION}"
 step "Environment efetivo: ${TEMP_ENV}"

@@ -1,5 +1,11 @@
 package brito.com.multitenancy001.controlplane.accounts.app.subscription;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanChangePreviewResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanViolationResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountSubscriptionAdminResponse;
@@ -11,28 +17,25 @@ import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
 
 /**
- * Query service do Control Plane para assinatura/plano/limites de contas.
+ * Query service do Control Plane para assinatura, plano e limites de contas.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
  *   <li>Consultar plano atual e status da conta.</li>
  *   <li>Consultar uso real e limites atuais.</li>
  *   <li>Executar preview de mudança de plano por accountId.</li>
+ *   <li>Garantir resposta administrativa consistente com os cálculos do tenant.</li>
  * </ul>
  *
- * <p>Regra arquitetural crítica:</p>
+ * <p><b>Regras arquiteturais críticas:</b></p>
  * <ul>
- *   <li>Leitura da conta ocorre no PUBLIC schema.</li>
- *   <li>Cálculo de uso não pode ocorrer dentro do mesmo bloco do PUBLIC UoW,
+ *   <li>A leitura da conta ocorre no PUBLIC schema.</li>
+ *   <li>O cálculo de uso não pode ocorrer dentro do mesmo bloco do PUBLIC UoW,
  *       pois o cálculo de usage entra no tenant schema.</li>
  *   <li>Evitar bind de tenant dentro de transação PUBLIC já ativa.</li>
+ *   <li>O remaining deve ser clampado para nunca retornar valor negativo.</li>
  * </ul>
  */
 @Service
@@ -100,7 +103,10 @@ public class ControlPlaneAccountSubscriptionQueryService {
 
             if (changeType == PlanChangeType.UPGRADE) {
                 availableUpgrades.add(candidate.name());
-            } else if (changeType == PlanChangeType.DOWNGRADE) {
+                continue;
+            }
+
+            if (changeType == PlanChangeType.DOWNGRADE) {
                 if (preview.eligible()) {
                     eligibleDowngrades.add(candidate.name());
                 } else {
@@ -129,12 +135,15 @@ public class ControlPlaneAccountSubscriptionQueryService {
         );
 
         log.info(
-                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
+                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
                 usage.currentUsers(),
                 usage.currentProducts(),
-                usage.currentStorageMb()
+                usage.currentStorageMb(),
+                remainingUsers,
+                remainingProducts,
+                remainingStorageMb
         );
 
         return response;
@@ -181,30 +190,25 @@ public class ControlPlaneAccountSubscriptionQueryService {
                 result.targetLimits().maxStorageMb(),
                 result.targetLimits().unlimited(),
                 result.violations().stream()
-                        .map(v -> new AccountPlanViolationResponse(
-                                v.type().name(),
-                                v.resource(),
-                                v.currentValue(),
-                                v.allowedValue(),
-                                v.message()
-                        ))
+                        .map(this::toViolationResponse)
                         .toList()
         );
 
         log.info(
-                "Preview de mudança de plano calculado com sucesso no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}",
+                "Preview de mudança de plano calculado com sucesso no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}, violations={}",
                 accountId,
                 result.currentPlan(),
                 result.targetPlan(),
                 result.changeType(),
-                result.eligible()
+                result.eligible(),
+                result.violations().size()
         );
 
         return response;
     }
 
     /**
-     * Carrega a conta ativa/não deletada.
+     * Carrega a conta ativa e não deletada.
      *
      * @param accountId id da conta
      * @return conta encontrada
@@ -219,18 +223,54 @@ public class ControlPlaneAccountSubscriptionQueryService {
     }
 
     /**
-     * Calcula saldo restante para um recurso.
+     * Converte violação de elegibilidade em DTO administrativo.
      *
-     * @param currentValue uso atual
-     * @param maxValue limite
-     * @param unlimited indica se o plano é ilimitado
-     * @return saldo restante
+     * @param violation violação do domínio
+     * @return DTO de violação
      */
-    private long calculateRemaining(long currentValue, int maxValue, boolean unlimited) {
+    private AccountPlanViolationResponse toViolationResponse(PlanEligibilityViolation violation) {
+        return new AccountPlanViolationResponse(
+                violation.type().name(),
+                violation.resource(),
+                violation.currentValue(),
+                violation.allowedValue(),
+                violation.message()
+        );
+    }
+
+    /**
+     * Calcula o saldo remanescente de um recurso do plano.
+     *
+     * <p><b>Regras:</b></p>
+     * <ul>
+     *   <li>Se o plano for ilimitado, retorna {@link Long#MAX_VALUE}.</li>
+     *   <li>Se o plano for limitado, nunca retorna valor negativo.</li>
+     *   <li>Quando o uso real atinge ou ultrapassa o limite, o retorno é 0.</li>
+     * </ul>
+     *
+     * @param currentUsage uso atual real
+     * @param maxAllowed limite máximo do plano
+     * @param unlimited indica se o plano é ilimitado
+     * @return saldo remanescente normalizado
+     */
+    private long calculateRemaining(long currentUsage, long maxAllowed, boolean unlimited) {
         if (unlimited) {
             return Long.MAX_VALUE;
         }
-        return Math.max(0L, (long) maxValue - currentValue);
+
+        long rawRemaining = maxAllowed - currentUsage;
+        long clampedRemaining = Math.max(0L, rawRemaining);
+
+        if (rawRemaining < 0L) {
+            log.warn(
+                    "Remaining negativo detectado e clampado para zero no control plane. currentUsage={}, maxAllowed={}, rawRemaining={}",
+                    currentUsage,
+                    maxAllowed,
+                    rawRemaining
+            );
+        }
+
+        return clampedRemaining;
     }
 
     /**

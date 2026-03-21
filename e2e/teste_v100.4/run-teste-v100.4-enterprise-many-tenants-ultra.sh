@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export tenant_count="${tenant_count:-6}"
+export tenant_count="${tenant_count:-20}"
 export users_per_tenant="${users_per_tenant:-10}"
 export categories_per_tenant="${categories_per_tenant:-8}"
 export subcategories_per_tenant="${subcategories_per_tenant:-12}"
@@ -11,4 +11,4 @@ export products_per_tenant="${products_per_tenant:-24}"
 export sales_per_tenant="${sales_per_tenant:-40}"
 export billings_per_account="${billings_per_account:-4}"
 export max_sale_items="${max_sale_items:-5}"
-bash "${SCRIPT_DIR}/run-teste-v100-heavy-data-population-grid-strict.sh"
+bash "${SCRIPT_DIR}/run-teste-v100.4-enterprise-many-tenants-strict.sh"

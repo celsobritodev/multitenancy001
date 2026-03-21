@@ -10,39 +10,33 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.infrastructure.persistence.tx.TenantReadOnlyTx;
-import brito.com.multitenancy001.infrastructure.persistence.tx.TenantTx;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.tenant.categories.domain.Category;
-import brito.com.multitenancy001.tenant.categories.domain.Subcategory;
-import brito.com.multitenancy001.tenant.categories.persistence.TenantCategoryRepository;
-import brito.com.multitenancy001.tenant.categories.persistence.TenantSubcategoryRepository;
 import brito.com.multitenancy001.tenant.products.app.command.CreateProductCommand;
 import brito.com.multitenancy001.tenant.products.app.command.UpdateProductCommand;
 import brito.com.multitenancy001.tenant.products.app.dto.SupplierProductCountData;
 import brito.com.multitenancy001.tenant.products.domain.Product;
 import brito.com.multitenancy001.tenant.products.persistence.TenantProductRepository;
 import brito.com.multitenancy001.tenant.subscription.app.TenantQuotaEnforcementService;
-import brito.com.multitenancy001.tenant.suppliers.domain.Supplier;
-import brito.com.multitenancy001.tenant.suppliers.persistence.TenantSupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Application Service (Tenant): Products.
+ * Application Service do módulo de produtos no contexto tenant.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
- *   <li>Executar operações de leitura/escrita de produtos no schema tenant.</li>
- *   <li>Validar payload, relações e coerência de domínio.</li>
- *   <li>Executar enforcement de quota antes da criação de produto.</li>
+ *   <li>Executar operações de leitura no schema tenant.</li>
+ *   <li>Orquestrar validações prévias antes do write-path.</li>
+ *   <li>Executar enforcement de quota antes da criação.</li>
+ *   <li>Delegar escritas transacionais para {@link TenantProductWriteService}.</li>
  * </ul>
  *
- * <p>Regras arquiteturais:</p>
+ * <p><b>Diretrizes arquiteturais:</b></p>
  * <ul>
- *   <li>Métodos com {@code @TenantTx}/{@code @TenantReadOnlyTx} já executam em transação tenant.</li>
- *   <li>Não abrir {@code TenantSchemaUnitOfWork} manualmente dentro destes métodos.</li>
- *   <li>O enforcement de quota precisa ocorrer fora da transação tenant de escrita.</li>
+ *   <li>Este service não deve depender de self-invocation para aplicar TX.</li>
+ *   <li>O pre-check de quota ocorre fora da transação tenant de escrita.</li>
+ *   <li>O save efetivo ocorre em bean separado com boundary transacional explícito.</li>
  * </ul>
  */
 @Service
@@ -51,14 +45,8 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantSupplierRepository tenantSupplierRepository;
-    private final TenantCategoryRepository tenantCategoryRepository;
-    private final TenantSubcategoryRepository tenantSubcategoryRepository;
     private final TenantQuotaEnforcementService tenantQuotaEnforcementService;
-
-    // =========================================================
-    // READ
-    // =========================================================
+    private final TenantProductWriteService tenantProductWriteService;
 
     /**
      * Lista produtos paginados.
@@ -68,7 +56,22 @@ public class TenantProductService {
      */
     @TenantReadOnlyTx
     public Page<Product> findAll(Pageable pageable) {
-        return tenantProductRepository.findAll(pageable);
+        log.info(
+                "Listando produtos paginados no tenant. pageNumber={}, pageSize={}",
+                pageable == null ? null : pageable.getPageNumber(),
+                pageable == null ? null : pageable.getPageSize()
+        );
+
+        Page<Product> page = tenantProductRepository.findAll(pageable);
+
+        log.info(
+                "Listagem paginada concluída. pageNumber={}, pageSize={}, returnedElements={}",
+                pageable == null ? null : pageable.getPageNumber(),
+                pageable == null ? null : pageable.getPageSize(),
+                page.getNumberOfElements()
+        );
+
+        return page;
     }
 
     /**
@@ -83,26 +86,28 @@ public class TenantProductService {
             throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
         }
 
-        return tenantProductRepository.findWithRelationsById(id)
+        log.info("Buscando produto por id no tenant. productId={}", id);
+
+        Product product = tenantProductRepository.findWithRelationsById(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
                         "Produto não encontrado com ID: " + id,
                         404
                 ));
+
+        log.info("Produto encontrado com sucesso. productId={}, sku={}", product.getId(), product.getSku());
+        return product;
     }
 
-    // =========================================================
-    // CREATE
-    // =========================================================
-
     /**
-     * Cria um novo produto com validação completa e enforcement de quota.
+     * Cria um novo produto com validação prévia e enforcement de quota.
      *
-     * <p>Importante:</p>
-     * <ul>
-     *   <li>A validação de quota ocorre fora da transação tenant de escrita.</li>
-     *   <li>Isso evita crossing PUBLIC dentro de {@code @TenantTx}.</li>
-     * </ul>
+     * <p><b>Fluxo:</b></p>
+     * <ol>
+     *   <li>Valida payload e contexto.</li>
+     *   <li>Executa quota enforcement fora da transação tenant de escrita.</li>
+     *   <li>Delega o save para {@link TenantProductWriteService}.</li>
+     * </ol>
      *
      * @param createProductCommand payload de criação
      * @param tenantSchema schema do tenant
@@ -121,144 +126,56 @@ public class TenantProductService {
             throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         }
 
+        String normalizedTenantSchema = tenantSchema.trim();
+
         log.info(
-                "Iniciando criação de produto (PRE-QUOTA). accountId={}, tenantSchema={}, sku={}, name={}",
+                "Iniciando criação de produto (ORQUESTRAÇÃO). accountId={}, tenantSchema={}, sku={}, name={}",
                 createProductCommand.accountId(),
-                tenantSchema,
+                normalizedTenantSchema,
                 createProductCommand.sku(),
                 createProductCommand.name()
         );
 
         tenantQuotaEnforcementService.assertCanCreateProduct(
                 createProductCommand.accountId(),
-                tenantSchema
+                normalizedTenantSchema
         );
 
-        return createInternal(createProductCommand);
-    }
-
-    /**
-     * Executa a criação efetiva do produto dentro de transação tenant.
-     *
-     * @param createProductCommand payload de criação
-     * @return produto criado
-     */
-    @TenantTx
-    protected Product createInternal(CreateProductCommand createProductCommand) {
-        log.info(
-                "Iniciando criação de produto (TX). accountId={}, sku={}, name={}",
-                createProductCommand.accountId(),
-                createProductCommand.sku(),
-                createProductCommand.name()
-        );
-
-        Product product = fromCreateCommand(createProductCommand);
-        validateProductForCreate(product);
-
-        resolveCategoryAndSubcategory(product);
-        resolveSupplier(product);
-        validateSubcategoryBelongsToCategory(product);
-
-        Product saved = tenantProductRepository.save(product);
+        Product savedProduct = tenantProductWriteService.create(createProductCommand);
 
         log.info(
-                "Produto criado com sucesso. accountId={}, productId={}, sku={}",
+                "Criação de produto concluída com sucesso. accountId={}, tenantSchema={}, productId={}, sku={}",
                 createProductCommand.accountId(),
-                saved.getId(),
-                saved.getSku()
+                normalizedTenantSchema,
+                savedProduct.getId(),
+                savedProduct.getSku()
         );
 
-        return tenantProductRepository.findWithRelationsById(saved.getId())
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado após criação (ID: " + saved.getId() + ")",
-                        500
-                ));
+        return savedProduct;
     }
-
-    // =========================================================
-    // UPDATE
-    // =========================================================
 
     /**
      * Atualiza produto existente.
      *
      * @param id id do produto
      * @param updateProductCommand payload de update
-     * @return produto atualizado com relações carregadas
+     * @return produto atualizado
      */
-    @TenantTx
     public Product update(UUID id, UpdateProductCommand updateProductCommand) {
-        if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
-        }
-        if (updateProductCommand == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
-        }
-
-        log.info("Atualizando produto. id={}", id);
-
-        validateUpdateCommand(updateProductCommand);
-
-        Product existing = tenantProductRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
-                ));
-
-        applyUpdates(existing, updateProductCommand);
-        tenantProductRepository.save(existing);
-
-        log.info("Produto atualizado com sucesso. id={}", id);
-
-        return tenantProductRepository.findWithRelationsById(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado após update (ID: " + id + ")",
-                        500
-                ));
+        log.info("Delegando atualização de produto para write service. productId={}", id);
+        return tenantProductWriteService.update(id, updateProductCommand);
     }
 
-    // =========================================================
-    // TOGGLE ACTIVE
-    // =========================================================
-
     /**
-     * Alterna o status ativo/inativo do produto.
+     * Alterna status ativo/inativo do produto.
      *
      * @param id id do produto
      * @return produto atualizado
      */
-    @TenantTx
     public Product toggleActive(UUID id) {
-        if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
-        }
-
-        Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
-                ));
-
-        product.setActive(!Boolean.TRUE.equals(product.getActive()));
-        tenantProductRepository.save(product);
-
-        log.info("Status de ativo do produto alterado com sucesso. id={}, active={}", id, product.getActive());
-
-        return tenantProductRepository.findWithRelationsById(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado após toggleActive (ID: " + id + ")",
-                        500
-                ));
+        log.info("Delegando toggleActive de produto para write service. productId={}", id);
+        return tenantProductWriteService.toggleActive(id);
     }
-
-    // =========================================================
-    // COST PRICE
-    // =========================================================
 
     /**
      * Atualiza o custo do produto.
@@ -267,43 +184,10 @@ public class TenantProductService {
      * @param costPrice novo custo
      * @return produto atualizado
      */
-    @TenantTx
     public Product updateCostPrice(UUID id, BigDecimal costPrice) {
-        if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
-        }
-
-        if (costPrice == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "costPrice é obrigatório", 400);
-        }
-
-        if (costPrice.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo", 400);
-        }
-
-        Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
-                ));
-
-        product.updateCostPrice(costPrice);
-        tenantProductRepository.save(product);
-
-        log.info("Custo do produto atualizado com sucesso. id={}, costPrice={}", id, costPrice);
-
-        return tenantProductRepository.findWithRelationsById(id)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado após updateCostPrice (ID: " + id + ")",
-                        500
-                ));
+        log.info("Delegando updateCostPrice de produto para write service. productId={}, costPrice={}", id, costPrice);
+        return tenantProductWriteService.updateCostPrice(id, costPrice);
     }
-
-    // =========================================================
-    // READ endpoints da API
-    // =========================================================
 
     /**
      * Conta produtos agrupados por fornecedor.
@@ -312,7 +196,10 @@ public class TenantProductService {
      */
     @TenantReadOnlyTx
     public List<SupplierProductCountData> countProductsBySupplier() {
-        return tenantProductRepository.countProductsBySupplier();
+        log.info("Contando produtos por fornecedor.");
+        List<SupplierProductCountData> result = tenantProductRepository.countProductsBySupplier();
+        log.info("Contagem por fornecedor concluída. returnedElements={}", result.size());
+        return result;
     }
 
     /**
@@ -326,7 +213,11 @@ public class TenantProductService {
         if (categoryId == null) {
             throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
         }
-        return tenantProductRepository.findByCategoryId(categoryId);
+
+        log.info("Buscando produtos por categoria. categoryId={}", categoryId);
+        List<Product> result = tenantProductRepository.findByCategoryId(categoryId);
+        log.info("Busca por categoria concluída. categoryId={}, returnedElements={}", categoryId, result.size());
+        return result;
     }
 
     /**
@@ -340,7 +231,11 @@ public class TenantProductService {
         if (subcategoryId == null) {
             throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório", 400);
         }
-        return tenantProductRepository.findBySubcategoryId(subcategoryId);
+
+        log.info("Buscando produtos por subcategoria. subcategoryId={}", subcategoryId);
+        List<Product> result = tenantProductRepository.findBySubcategoryId(subcategoryId);
+        log.info("Busca por subcategoria concluída. subcategoryId={}, returnedElements={}", subcategoryId, result.size());
+        return result;
     }
 
     /**
@@ -354,7 +249,11 @@ public class TenantProductService {
         if (supplierId == null) {
             throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "supplierId é obrigatório", 400);
         }
-        return tenantProductRepository.findBySupplierId(supplierId);
+
+        log.info("Buscando produtos por fornecedor. supplierId={}", supplierId);
+        List<Product> result = tenantProductRepository.findBySupplierId(supplierId);
+        log.info("Busca por fornecedor concluída. supplierId={}, returnedElements={}", supplierId, result.size());
+        return result;
     }
 
     /**
@@ -368,7 +267,11 @@ public class TenantProductService {
         if (categoryId == null) {
             throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
         }
-        return tenantProductRepository.findAnyByCategoryId(categoryId);
+
+        log.info("Buscando produtos any por categoria. categoryId={}", categoryId);
+        List<Product> result = tenantProductRepository.findAnyByCategoryId(categoryId);
+        log.info("Busca any por categoria concluída. categoryId={}, returnedElements={}", categoryId, result.size());
+        return result;
     }
 
     /**
@@ -382,7 +285,11 @@ public class TenantProductService {
         if (subcategoryId == null) {
             throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório", 400);
         }
-        return tenantProductRepository.findAnyBySubcategoryId(subcategoryId);
+
+        log.info("Buscando produtos any por subcategoria. subcategoryId={}", subcategoryId);
+        List<Product> result = tenantProductRepository.findAnyBySubcategoryId(subcategoryId);
+        log.info("Busca any por subcategoria concluída. subcategoryId={}, returnedElements={}", subcategoryId, result.size());
+        return result;
     }
 
     /**
@@ -396,7 +303,13 @@ public class TenantProductService {
         if (!StringUtils.hasText(brand)) {
             throw new ApiException(ApiErrorCode.BRAND_REQUIRED, "brand é obrigatório", 400);
         }
-        return tenantProductRepository.findAnyByBrandIgnoreCase(brand.trim());
+
+        String normalizedBrand = brand.trim();
+
+        log.info("Buscando produtos any por marca. brand={}", normalizedBrand);
+        List<Product> result = tenantProductRepository.findAnyByBrandIgnoreCase(normalizedBrand);
+        log.info("Busca any por marca concluída. brand={}, returnedElements={}", normalizedBrand, result.size());
+        return result;
     }
 
     /**
@@ -406,7 +319,10 @@ public class TenantProductService {
      */
     @TenantReadOnlyTx
     public BigDecimal calculateTotalInventoryValue() {
-        return tenantProductRepository.calculateTotalInventoryValue();
+        log.info("Calculando valor total do inventário.");
+        BigDecimal result = tenantProductRepository.calculateTotalInventoryValue();
+        log.info("Valor total do inventário calculado. inventoryValue={}", result);
+        return result;
     }
 
     /**
@@ -417,7 +333,10 @@ public class TenantProductService {
      */
     @TenantReadOnlyTx
     public Long countLowStockProducts(Integer threshold) {
-        return tenantProductRepository.countLowStockProducts(threshold);
+        log.info("Contando produtos com estoque baixo. threshold={}", threshold);
+        Long result = tenantProductRepository.countLowStockProducts(threshold);
+        log.info("Contagem de low stock concluída. threshold={}, count={}", threshold, result);
+        return result;
     }
 
     /**
@@ -431,328 +350,25 @@ public class TenantProductService {
      * @return lista de produtos
      */
     @TenantReadOnlyTx
-    public List<Product> searchProducts(String name, BigDecimal minPrice, BigDecimal maxPrice, Integer minStock, Integer maxStock) {
-        return tenantProductRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
-    }
+    public List<Product> searchProducts(
+            String name,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            Integer minStock,
+            Integer maxStock
+    ) {
+        log.info(
+                "Executando busca de produtos por filtros. name={}, minPrice={}, maxPrice={}, minStock={}, maxStock={}",
+                name,
+                minPrice,
+                maxPrice,
+                minStock,
+                maxStock
+        );
 
-    // =========================================================
-    // Helpers
-    // =========================================================
+        List<Product> result = tenantProductRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
 
-    /**
-     * Aplica alterações no produto existente.
-     *
-     * @param existing entidade existente
-     * @param cmd command de update
-     */
-    private void applyUpdates(Product existing, UpdateProductCommand cmd) {
-        if (cmd.name() != null) {
-            String name = cmd.name().trim();
-            if (!name.isEmpty()) {
-                existing.setName(name);
-            }
-        }
-
-        if (cmd.description() != null) {
-            existing.setDescription(cmd.description());
-        }
-
-        if (cmd.sku() != null) {
-            String sku = cmd.sku().trim();
-            if (!sku.isEmpty()) {
-                if (tenantProductRepository.existsSkuNotDeletedExcludingId(sku, existing.getId())) {
-                    throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + sku, 409);
-                }
-                existing.setSku(sku);
-            }
-        }
-
-        if (cmd.price() != null) {
-            validatePrice(cmd.price());
-            existing.updatePrice(cmd.price());
-        }
-
-        if (cmd.stockQuantity() != null) {
-            existing.setStockQuantity(cmd.stockQuantity());
-        }
-        if (cmd.minStock() != null) {
-            existing.setMinStock(cmd.minStock());
-        }
-        if (cmd.maxStock() != null) {
-            existing.setMaxStock(cmd.maxStock());
-        }
-        if (cmd.costPrice() != null) {
-            existing.updateCostPrice(cmd.costPrice());
-        }
-        if (cmd.brand() != null) {
-            existing.setBrand(cmd.brand());
-        }
-        if (cmd.weightKg() != null) {
-            existing.setWeightKg(cmd.weightKg());
-        }
-        if (cmd.dimensions() != null) {
-            existing.setDimensions(cmd.dimensions());
-        }
-        if (cmd.barcode() != null) {
-            existing.setBarcode(cmd.barcode());
-        }
-        if (cmd.active() != null) {
-            existing.setActive(cmd.active());
-        }
-
-        if (cmd.categoryId() != null) {
-            Category category = tenantCategoryRepository.findById(cmd.categoryId())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada", 404));
-            existing.setCategory(category);
-        }
-
-        if (cmd.clearSubcategory()) {
-            existing.setSubcategory(null);
-        } else if (cmd.subcategoryId() != null) {
-            Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(cmd.subcategoryId())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada", 404));
-            existing.setSubcategory(sub);
-        }
-
-        if (cmd.supplierId() != null) {
-            Supplier supplier = tenantSupplierRepository.findById(cmd.supplierId())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.SUPPLIER_NOT_FOUND, "Fornecedor não encontrado", 404));
-            existing.setSupplier(supplier);
-        }
-
-        validateSubcategoryBelongsToCategory(existing);
-    }
-
-    /**
-     * Resolve fornecedor completo do produto.
-     *
-     * @param product produto
-     */
-    private void resolveSupplier(Product product) {
-        if (product.getSupplier() != null && product.getSupplier().getId() != null) {
-            UUID supplierId = product.getSupplier().getId();
-            Supplier supplier = tenantSupplierRepository.findById(supplierId)
-                    .orElseThrow(() -> new ApiException(
-                            ApiErrorCode.SUPPLIER_NOT_FOUND,
-                            "Fornecedor não encontrado com ID: " + supplierId,
-                            404
-                    ));
-            product.setSupplier(supplier);
-        }
-    }
-
-    /**
-     * Resolve categoria e subcategoria completas do produto.
-     *
-     * @param product produto
-     */
-    private void resolveCategoryAndSubcategory(Product product) {
-        if (product.getCategory() == null || product.getCategory().getId() == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória", 400);
-        }
-
-        Category category = tenantCategoryRepository.findById(product.getCategory().getId())
-                .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada", 404));
-        product.setCategory(category);
-
-        if (product.getSubcategory() != null && product.getSubcategory().getId() != null) {
-            Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(product.getSubcategory().getId())
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada", 404));
-            product.setSubcategory(sub);
-        } else {
-            product.setSubcategory(null);
-        }
-    }
-
-    /**
-     * Valida se a subcategoria pertence à categoria informada.
-     *
-     * @param product produto
-     */
-    private void validateSubcategoryBelongsToCategory(Product product) {
-        if (product.getSubcategory() == null) {
-            return;
-        }
-
-        if (product.getCategory() == null || product.getCategory().getId() == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória", 400);
-        }
-
-        if (product.getSubcategory().getCategory() == null || product.getSubcategory().getCategory().getId() == null) {
-            throw new ApiException(
-                    ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Subcategoria sem categoria associada (cadastro inconsistente)",
-                    409
-            );
-        }
-
-        Long subCatCategoryId = product.getSubcategory().getCategory().getId();
-        Long productCategoryId = product.getCategory().getId();
-
-        if (!subCatCategoryId.equals(productCategoryId)) {
-            throw new ApiException(
-                    ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Subcategoria não pertence à categoria informada",
-                    409
-            );
-        }
-    }
-
-    /**
-     * Valida integridade do produto antes da criação.
-     *
-     * @param product produto a validar
-     */
-    private void validateProductForCreate(Product product) {
-        if (product == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
-        }
-
-        if (!StringUtils.hasText(product.getName())) {
-            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório", 400);
-        }
-
-        if (!StringUtils.hasText(product.getSku())) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório", 400);
-        }
-
-        if (product.getPrice() == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório", 400);
-        }
-
-        validatePrice(product.getPrice());
-
-        String sku = product.getSku().trim();
-        if (sku.isEmpty()) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório", 400);
-        }
-
-        if (tenantProductRepository.existsBySkuAndDeletedFalse(sku)) {
-            throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + sku, 409);
-        }
-
-        product.setName(product.getName().trim());
-        product.setSku(sku);
-
-        if (product.getStockQuantity() == null) {
-            product.setStockQuantity(0);
-        }
-        if (product.getActive() == null) {
-            product.setActive(true);
-        }
-        if (product.getDeleted() == null) {
-            product.setDeleted(false);
-        }
-    }
-
-    /**
-     * Valida preço.
-     *
-     * @param price preço a validar
-     */
-    private void validatePrice(BigDecimal price) {
-        if (price == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório", 400);
-        }
-        if (price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_PRICE, "price não pode ser negativo", 400);
-        }
-    }
-
-    /**
-     * Valida o command de update.
-     *
-     * @param updateProductCommand command de update
-     */
-    private void validateUpdateCommand(UpdateProductCommand updateProductCommand) {
-        if (updateProductCommand.clearSubcategory() && updateProductCommand.subcategoryId() != null) {
-            throw new ApiException(
-                    ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo",
-                    400
-            );
-        }
-
-        if (updateProductCommand.sku() != null && updateProductCommand.sku().trim().isEmpty()) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku não pode ser vazio", 400);
-        }
-
-        if (updateProductCommand.name() != null && updateProductCommand.name().trim().isEmpty()) {
-            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name não pode ser vazio", 400);
-        }
-
-        if (updateProductCommand.price() != null) {
-            validatePrice(updateProductCommand.price());
-        }
-
-        if (updateProductCommand.costPrice() != null && updateProductCommand.costPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo", 400);
-        }
-
-        if (updateProductCommand.stockQuantity() != null && updateProductCommand.stockQuantity() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "stockQuantity não pode ser negativo", 400);
-        }
-
-        if (updateProductCommand.minStock() != null && updateProductCommand.minStock() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "minStock não pode ser negativo", 400);
-        }
-
-        if (updateProductCommand.maxStock() != null && updateProductCommand.maxStock() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "maxStock não pode ser negativo", 400);
-        }
-    }
-
-    /**
-     * Constrói entidade produto a partir do command de criação.
-     *
-     * @param createProductCommand command de criação
-     * @return entidade de produto
-     */
-    private Product fromCreateCommand(CreateProductCommand createProductCommand) {
-        Product product = new Product();
-        product.setName(createProductCommand.name());
-        product.setDescription(createProductCommand.description());
-        product.setSku(createProductCommand.sku());
-        product.setPrice(createProductCommand.price());
-        product.setStockQuantity(createProductCommand.stockQuantity());
-        product.setMinStock(createProductCommand.minStock());
-        product.setMaxStock(createProductCommand.maxStock());
-        product.setCostPrice(createProductCommand.costPrice());
-        product.setBrand(createProductCommand.brand());
-        product.setWeightKg(createProductCommand.weightKg());
-        product.setDimensions(createProductCommand.dimensions());
-        product.setBarcode(createProductCommand.barcode());
-        product.setActive(createProductCommand.active());
-
-        Category category = new Category();
-        category.setId(createProductCommand.categoryId());
-        product.setCategory(category);
-
-        if (createProductCommand.subcategoryId() != null) {
-            Subcategory sub = new Subcategory();
-            sub.setId(createProductCommand.subcategoryId());
-            product.setSubcategory(sub);
-        } else {
-            product.setSubcategory(null);
-        }
-
-        if (createProductCommand.supplierId() != null) {
-            Supplier supplier = new Supplier();
-            supplier.setId(createProductCommand.supplierId());
-            product.setSupplier(supplier);
-        } else {
-            product.setSupplier(null);
-        }
-
-        product.setDeleted(false);
-
-        if (product.getStockQuantity() == null) {
-            product.setStockQuantity(0);
-        }
-        if (product.getActive() == null) {
-            product.setActive(true);
-        }
-
-        return product;
+        log.info("Busca de produtos por filtros concluída. returnedElements={}", result.size());
+        return result;
     }
 }
