@@ -235,6 +235,12 @@ public class AccountPlanUsageService {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem tenant schema", 409);
         }
 
-        return tenantSchema.trim();
+        String normalizedTenantSchema = tenantSchema.trim();
+
+        if (!StringUtils.hasText(normalizedTenantSchema)) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem tenant schema", 409);
+        }
+
+        return normalizedTenantSchema;
     }
 }

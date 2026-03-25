@@ -36,8 +36,8 @@ APP_LOG="${LOG_DIR}/app_strict_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_strict_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v30.hard-limits-enforcement.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v30.hard-limits-enforcement.json"
+COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v31.subscription-lifecycle.json"
+ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v31.subscription-lifecycle.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.strict.json"
 APP_PID=""
@@ -60,7 +60,7 @@ read_env_value() {
 }
 
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V30 HARD LIMITS ENFORCEMENT - STRICT SUITE"
+echo "🔷 TESTE V31 SUBSCRIPTION LIFECYCLE - STRICT SUITE"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: ${SCRIPT_DIR}"
 echo "────────────────────────────────────────────────────"
@@ -107,18 +107,23 @@ title "Preparando environment"
 V30_STRICT_SHORT_USERS_CAP="${V30_STRICT_SHORT_USERS_CAP:-15}"
 V30_STRICT_SHORT_PRODUCTS_CAP="${V30_STRICT_SHORT_PRODUCTS_CAP:-30}"
 cp "${ENV_FILE}" "${TEMP_ENV}"
-jq --arg MODE "STRICT" --arg UCAP "${V30_STRICT_SHORT_USERS_CAP}" --arg PCAP "${V30_STRICT_SHORT_PRODUCTS_CAP}" '
+jq --arg V30MODE "STRICT" --arg UCAP "${V30_STRICT_SHORT_USERS_CAP}" --arg PCAP "${V30_STRICT_SHORT_PRODUCTS_CAP}" --arg V31MODE "STRICT" --arg V31CYCLES "1" '
   .values = (
-    [.values[] | if .key=="v30_limit_mode" then .value=$MODE
+    [.values[] | if .key=="v30_limit_mode" then .value=$V30MODE
                  elif .key=="v30_strict_users_cap" then .value=$UCAP
                  elif .key=="v30_strict_products_cap" then .value=$PCAP
+                 elif .key=="v31_lifecycle_mode" then .value=$V31MODE
+                 elif .key=="v31_ultra_cycles" then .value=$V31CYCLES
                  else . end] +
-    (if ([.values[] | select(.key=="v30_limit_mode")] | length)==0 then [{"key":"v30_limit_mode","value":$MODE,"enabled":true}] else [] end) +
+    (if ([.values[] | select(.key=="v30_limit_mode")] | length)==0 then [{"key":"v30_limit_mode","value":$V30MODE,"enabled":true}] else [] end) +
     (if ([.values[] | select(.key=="v30_strict_users_cap")] | length)==0 then [{"key":"v30_strict_users_cap","value":$UCAP,"enabled":true}] else [] end) +
-    (if ([.values[] | select(.key=="v30_strict_products_cap")] | length)==0 then [{"key":"v30_strict_products_cap","value":$PCAP,"enabled":true}] else [] end)
+    (if ([.values[] | select(.key=="v30_strict_products_cap")] | length)==0 then [{"key":"v30_strict_products_cap","value":$PCAP,"enabled":true}] else [] end) +
+    (if ([.values[] | select(.key=="v31_lifecycle_mode")] | length)==0 then [{"key":"v31_lifecycle_mode","value":$V31MODE,"enabled":true}] else [] end) +
+    (if ([.values[] | select(.key=="v31_ultra_cycles")] | length)==0 then [{"key":"v31_ultra_cycles","value":$V31CYCLES,"enabled":true}] else [] end)
   )' "${TEMP_ENV}" > "${TEMP_ENV}.tmp" && mv "${TEMP_ENV}.tmp" "${TEMP_ENV}"
-step "Modo: STRICT | users cap=${V30_STRICT_SHORT_USERS_CAP} | products cap=${V30_STRICT_SHORT_PRODUCTS_CAP}"
+step "Modo: STRICT | users cap=${V30_STRICT_SHORT_USERS_CAP} | products cap=${V30_STRICT_SHORT_PRODUCTS_CAP} | lifecycle cycles=1"
 ok "Environment pronto"
+
 
 hr
 

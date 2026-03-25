@@ -129,11 +129,11 @@ public class TenantUserCommandService {
 
         validateCreateInputs(accountId, tenantSchema, name, email, rawPassword, role);
 
-        String normalizedTenantSchema = tenantSchema.trim();
-        String normalizedName = name.trim();
-        String normEmail = EmailNormalizer.normalizeOrNull(email);
+        final String normalizedTenantSchema = tenantSchema.trim();
+        final String normalizedName = name.trim();
+        final String normalizedEmail = EmailNormalizer.normalizeOrNull(email);
 
-        if (!StringUtils.hasText(normEmail) || !normEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
+        if (!StringUtils.hasText(normalizedEmail) || !normalizedEmail.matches(ValidationPatterns.EMAIL_PATTERN)) {
             throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email invalido", 400);
         }
 
@@ -141,7 +141,21 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.WEAK_PASSWORD, "Senha fraca", 400);
         }
 
+        log.info(
+                "Executando enforcement de quota antes da TX de criação de usuário. accountId={}, tenantSchema={}, email={}",
+                accountId,
+                normalizedTenantSchema,
+                normalizedEmail
+        );
+
         tenantQuotaEnforcementService.assertCanCreateUser(accountId, normalizedTenantSchema);
+
+        log.info(
+                "Enforcement de quota aprovado para criação de usuário. accountId={}, tenantSchema={}, email={}",
+                accountId,
+                normalizedTenantSchema,
+                normalizedEmail
+        );
 
         AtomicReference<String> savedEmail = new AtomicReference<>();
         AtomicReference<Long> savedUserId = new AtomicReference<>();
@@ -151,7 +165,7 @@ public class TenantUserCommandService {
                     "Criando usuário dentro da transação tenant. accountId={}, tenantSchema={}, email={}, threadId={}, threadName={}",
                     accountId,
                     normalizedTenantSchema,
-                    normEmail,
+                    normalizedEmail,
                     Thread.currentThread().threadId(),
                     Thread.currentThread().getName()
             );
@@ -163,7 +177,7 @@ public class TenantUserCommandService {
                     SecurityAuditActionType.USER_CREATED,
                     AuditOutcome.ATTEMPT,
                     actor,
-                    normEmail,
+                    normalizedEmail,
                     null,
                     accountId,
                     normalizedTenantSchema,
@@ -176,7 +190,7 @@ public class TenantUserCommandService {
             );
 
             try {
-                boolean exists = tenantUserRepository.existsByEmailAndAccountId(normEmail, accountId);
+                boolean exists = tenantUserRepository.existsByEmailAndAccountId(normalizedEmail, accountId);
                 if (exists) {
                     throw new ApiException(ApiErrorCode.EMAIL_ALREADY_REGISTERED_IN_ACCOUNT);
                 }
@@ -184,7 +198,7 @@ public class TenantUserCommandService {
                 TenantUser user = new TenantUser();
                 user.setAccountId(accountId);
                 user.rename(normalizedName);
-                user.changeEmail(normEmail);
+                user.changeEmail(normalizedEmail);
                 user.setPassword(passwordEncoder.encode(rawPassword));
                 user.setRole(role);
                 user.setOrigin(origin == null ? EntityOrigin.ADMIN : origin);
@@ -193,10 +207,10 @@ public class TenantUserCommandService {
                 Instant now = appClock.instant();
                 user.setPasswordChangedAt(user.isMustChangePassword() ? null : now);
 
-                user.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
-                user.setAvatarUrl(StringUtils.hasText(avatarUrl) ? avatarUrl.trim() : null);
-                user.setLocale(StringUtils.hasText(locale) ? locale.trim() : "pt_BR");
-                user.setTimezone(StringUtils.hasText(timezone) ? timezone.trim() : "America/Sao_Paulo");
+                user.setPhone(normalizeOptional(phone));
+                user.setAvatarUrl(normalizeOptional(avatarUrl));
+                user.setLocale(defaultIfBlank(locale, "pt_BR"));
+                user.setTimezone(defaultIfBlank(timezone, "America/Sao_Paulo"));
 
                 user.setSuspendedByAccount(false);
                 user.setSuspendedByAdmin(false);
@@ -267,7 +281,7 @@ public class TenantUserCommandService {
                         "Falha de negócio ao criar usuário tenant. accountId={}, tenantSchema={}, email={}, status={}, error={}, msg={}",
                         accountId,
                         normalizedTenantSchema,
-                        normEmail,
+                        normalizedEmail,
                         ex.getStatus(),
                         ex.getError(),
                         ex.getMessage()
@@ -277,7 +291,7 @@ public class TenantUserCommandService {
                         SecurityAuditActionType.USER_CREATED,
                         outcomeFrom(ex),
                         actor,
-                        normEmail,
+                        normalizedEmail,
                         null,
                         accountId,
                         normalizedTenantSchema,
@@ -289,7 +303,7 @@ public class TenantUserCommandService {
                         "Falha inesperada ao criar usuário tenant. accountId={}, tenantSchema={}, email={}",
                         accountId,
                         normalizedTenantSchema,
-                        normEmail,
+                        normalizedEmail,
                         ex
                 );
 
@@ -297,7 +311,7 @@ public class TenantUserCommandService {
                         SecurityAuditActionType.USER_CREATED,
                         AuditOutcome.FAILURE,
                         actor,
-                        normEmail,
+                        normalizedEmail,
                         null,
                         accountId,
                         normalizedTenantSchema,
@@ -367,7 +381,7 @@ public class TenantUserCommandService {
         if (!StringUtils.hasText(tenantSchema)) {
             throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatorio", 400);
         }
-        if (!StringUtils.hasText(name)) {
+        if (!StringUtils.hasText(name) || !StringUtils.hasText(name.trim())) {
             throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatorio", 400);
         }
         if (!StringUtils.hasText(email)) {
@@ -402,7 +416,9 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatorio", 400);
         }
 
-        TenantUser userBefore = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
+        final String normalizedTenantSchema = tenantSchema.trim();
+
+        TenantUser userBefore = tenantSchemaUnitOfWork.readOnly(normalizedTenantSchema, () ->
                 tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                         .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuario não encontrado", 404))
         );
@@ -410,8 +426,8 @@ public class TenantUserCommandService {
         final String userEmail = userBefore.getEmail();
         final boolean wasSuspended = byAdmin ? userBefore.isSuspendedByAdmin() : userBefore.isSuspendedByAccount();
 
-        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
-            Actor actor = resolveActorOrNull(accountId, tenantSchema);
+        tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, normalizedTenantSchema);
 
             TenantUser user = tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuario não encontrado", 404));
@@ -443,7 +459,7 @@ public class TenantUserCommandService {
                     user.getEmail(),
                     user.getId(),
                     accountId,
-                    tenantSchema,
+                    normalizedTenantSchema,
                     details,
                     null,
                     () -> {
@@ -462,7 +478,7 @@ public class TenantUserCommandService {
         });
 
         if (!suspended && wasSuspended) {
-            TenantUser userAfter = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
+            TenantUser userAfter = tenantSchemaUnitOfWork.readOnly(normalizedTenantSchema, () ->
                     tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId).orElse(null)
             );
 
@@ -510,10 +526,11 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatorio", 400);
         }
 
+        final String normalizedTenantSchema = tenantSchema.trim();
         AtomicReference<String> restoredEmail = new AtomicReference<>();
 
-        TenantUser saved = tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
-            Actor actor = resolveActorOrNull(accountId, tenantSchema);
+        TenantUser saved = tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, normalizedTenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuario não encontrado", 404));
@@ -526,7 +543,7 @@ public class TenantUserCommandService {
                     user.getEmail(),
                     user.getId(),
                     accountId,
-                    tenantSchema,
+                    normalizedTenantSchema,
                     details,
                     null,
                     () -> {
@@ -576,10 +593,11 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatorio", 400);
         }
 
+        final String normalizedTenantSchema = tenantSchema.trim();
         AtomicReference<String> deletedEmail = new AtomicReference<>();
 
-        tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
-            Actor actor = resolveActorOrNull(accountId, tenantSchema);
+        tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
+            Actor actor = resolveActorOrNull(accountId, normalizedTenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuario não encontrado", 404));
@@ -608,7 +626,7 @@ public class TenantUserCommandService {
                     user.getEmail(),
                     user.getId(),
                     accountId,
-                    tenantSchema,
+                    normalizedTenantSchema,
                     details,
                     null,
                     () -> {
@@ -678,9 +696,11 @@ public class TenantUserCommandService {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "user é obrigatorio", 400);
         }
 
-        log.info("Salvando usuário explicitamente. tenantSchema={}, userId={}, email={}", tenantSchema, user.getId(), user.getEmail());
+        String normalizedTenantSchema = tenantSchema.trim();
 
-        return tenantSchemaUnitOfWork.tx(tenantSchema.trim(), () -> tenantUserRepository.save(user));
+        log.info("Salvando usuário explicitamente. tenantSchema={}, userId={}, email={}", normalizedTenantSchema, user.getId(), user.getEmail());
+
+        return tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> tenantUserRepository.save(user));
     }
 
     public void transferTenantOwnerRole(Long accountId, String tenantSchema, Long fromUserId, Long toUserId) {
@@ -714,6 +734,22 @@ public class TenantUserCommandService {
         if (owners <= 1) {
             throw new ApiException(ApiErrorCode.TENANT_OWNER_REQUIRED, message, 409);
         }
+    }
+
+    private String normalizeOptional(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String defaultIfBlank(String value, String defaultValue) {
+        if (!StringUtils.hasText(value)) {
+            return defaultValue;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? defaultValue : normalized;
     }
 
     private static int sizeOrZero(Set<?> s) {
@@ -821,7 +857,9 @@ public class TenantUserCommandService {
                 return new Actor(actorUserId, null);
             }
 
-            String actorEmail = tenantSchemaUnitOfWork.readOnly(tenantSchema, () ->
+            String normalizedTenantSchema = tenantSchema.trim();
+
+            String actorEmail = tenantSchemaUnitOfWork.readOnly(normalizedTenantSchema, () ->
                     tenantUserRepository.findByIdAndAccountIdAndDeletedFalse(actorUserId, accountId)
                             .map(TenantUser::getEmail)
                             .orElse(null)

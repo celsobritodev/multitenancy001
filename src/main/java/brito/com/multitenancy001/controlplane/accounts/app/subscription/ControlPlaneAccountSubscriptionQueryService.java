@@ -36,12 +36,15 @@ import lombok.extern.slf4j.Slf4j;
  *       pois o cálculo de usage entra no tenant schema.</li>
  *   <li>Evitar bind de tenant dentro de transação PUBLIC já ativa.</li>
  *   <li>O remaining deve ser clampado para nunca retornar valor negativo.</li>
+ *   <li>Para plano ilimitado, a convenção da API V30 é retornar {@code -1}.</li>
  * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ControlPlaneAccountSubscriptionQueryService {
+
+    private static final long UNLIMITED_REMAINING = -1L;
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
@@ -135,9 +138,10 @@ public class ControlPlaneAccountSubscriptionQueryService {
         );
 
         log.info(
-                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
+                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, unlimited={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
+                limits.unlimited(),
                 usage.currentUsers(),
                 usage.currentProducts(),
                 usage.currentStorageMb(),
@@ -241,11 +245,11 @@ public class ControlPlaneAccountSubscriptionQueryService {
     /**
      * Calcula o saldo remanescente de um recurso do plano.
      *
-     * <p><b>Regras:</b></p>
+     * <p><b>Regras V30:</b></p>
      * <ul>
-     *   <li>Se o plano for ilimitado, retorna {@link Long#MAX_VALUE}.</li>
+     *   <li>Se o plano for ilimitado, retorna {@code -1}.</li>
      *   <li>Se o plano for limitado, nunca retorna valor negativo.</li>
-     *   <li>Quando o uso real atinge ou ultrapassa o limite, o retorno é 0.</li>
+     *   <li>Quando o uso real atinge ou ultrapassa o limite, o retorno é {@code 0}.</li>
      * </ul>
      *
      * @param currentUsage uso atual real
@@ -255,7 +259,7 @@ public class ControlPlaneAccountSubscriptionQueryService {
      */
     private long calculateRemaining(long currentUsage, long maxAllowed, boolean unlimited) {
         if (unlimited) {
-            return Long.MAX_VALUE;
+            return UNLIMITED_REMAINING;
         }
 
         long rawRemaining = maxAllowed - currentUsage;

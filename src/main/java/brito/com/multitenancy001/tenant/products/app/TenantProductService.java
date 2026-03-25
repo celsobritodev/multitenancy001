@@ -128,6 +128,10 @@ public class TenantProductService {
 
         String normalizedTenantSchema = tenantSchema.trim();
 
+        if (!StringUtils.hasText(normalizedTenantSchema)) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
+        }
+
         log.info(
                 "Iniciando criação de produto (ORQUESTRAÇÃO). accountId={}, tenantSchema={}, sku={}, name={}",
                 createProductCommand.accountId(),
@@ -139,6 +143,13 @@ public class TenantProductService {
         tenantQuotaEnforcementService.assertCanCreateProduct(
                 createProductCommand.accountId(),
                 normalizedTenantSchema
+        );
+
+        log.info(
+                "Pre-check de quota concluído com sucesso para criação de produto. accountId={}, tenantSchema={}, sku={}",
+                createProductCommand.accountId(),
+                normalizedTenantSchema,
+                createProductCommand.sku()
         );
 
         Product savedProduct = tenantProductWriteService.create(createProductCommand);

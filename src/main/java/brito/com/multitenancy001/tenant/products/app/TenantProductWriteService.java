@@ -440,17 +440,42 @@ public class TenantProductWriteService {
 
         validatePrice(product.getPrice());
 
-        String sku = product.getSku().trim();
-        if (sku.isEmpty()) {
+        String normalizedName = product.getName().trim();
+        String normalizedSku = product.getSku().trim();
+
+        if (normalizedName.isEmpty()) {
+            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório", 400);
+        }
+
+        if (normalizedSku.isEmpty()) {
             throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório", 400);
         }
 
-        if (tenantProductRepository.existsBySkuAndDeletedFalse(sku)) {
-            throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + sku, 409);
+        if (tenantProductRepository.existsBySkuAndDeletedFalse(normalizedSku)) {
+            throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + normalizedSku, 409);
         }
 
-        product.setName(product.getName().trim());
-        product.setSku(sku);
+        product.setName(normalizedName);
+        product.setSku(normalizedSku);
+
+        if (product.getDescription() != null) {
+            product.setDescription(product.getDescription().trim());
+        }
+
+        if (product.getBrand() != null) {
+            String normalizedBrand = product.getBrand().trim();
+            product.setBrand(normalizedBrand.isEmpty() ? null : normalizedBrand);
+        }
+
+        if (product.getBarcode() != null) {
+            String normalizedBarcode = product.getBarcode().trim();
+            product.setBarcode(normalizedBarcode.isEmpty() ? null : normalizedBarcode);
+        }
+
+        if (product.getDimensions() != null) {
+            String normalizedDimensions = product.getDimensions().trim();
+            product.setDimensions(normalizedDimensions.isEmpty() ? null : normalizedDimensions);
+        }
 
         if (product.getStockQuantity() == null) {
             product.setStockQuantity(0);

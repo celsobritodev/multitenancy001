@@ -1,34 +1,36 @@
-# V30 HARD LIMITS ENFORCEMENT - PATCHED
+# V30 HARD LIMITS ENFORCEMENT
 
-Pacote gerado com ajuste pronto para copiar/colar no seu padrão de projeto E2E.
+V30 gerada corretamente no padrão incremental:
 
-## O que foi ajustado
+- V30 = V29 + novo bloco 216
+- nenhum bloco anterior foi removido
+- STRICT = suíte anterior inteira + bloco 216 com cap curto
+- ULTRA = suíte anterior inteira + bloco 216 até hard limit real
 
-1. Substituição de `postman.setNextRequest(...)` por `pm.execution.setNextRequest(...)` nos fluxos da collection.
-2. Hardening do loop de produtos:
-   - `216.07 create product until hard limit`
-   - `216.08 reread limits after product creation`
-   - `216.09 verify products exhausted before overflow`
-   - `216.10 create product above hard limit`
-3. Hardening defensivo do loop de usuários:
-   - `216.02 create tenant user until hard limit`
-   - `216.03 reread limits after user creation`
-4. Ajuste do retry de login em `00.03 tenant login` para remover dependência do `postman.setNextRequest(...)`.
+## Estrutura
+- chaos-ledger-rebuild.py
+- chaos-node-launch.sh
+- chaos-race-aggregate.py
+- chaos-race-worker-sale.sh
+- cleanup.sh
+- logs/
+- multitenancy001.local.postman_environment.v30.hard-limits-enforcement.json
+- multitenancy001.postman_collection.v30.hard-limits-enforcement.json
+- mvnw
+- readme.md
+- run-teste-v30-strict.sh
+- run-teste-v30-ultra.sh
 
-## Efeito esperado
+## STRICT
+Padrão:
+- users cap = 15
+- products cap = 30
 
-- O bloco 216 não deve mais entrar em loop infinito quando `remainingProducts` chegar a `0` ou ficar negativo.
-- O fluxo deve parar corretamente e seguir para validação de overflow controlado.
-- A collection fica compatível com o formato recomendado pelo Postman/Newman atual.
+Customização:
+export V30_STRICT_SHORT_USERS_CAP=20
+export V30_STRICT_SHORT_PRODUCTS_CAP=40
+./run-teste-v30-strict.sh
 
-## Arquivos incluídos
-
-- collection V30 patchada
-- environment V30
-- scripts `run-teste-v30-strict.sh` e `run-teste-v30-ultra.sh`
-- `cleanup.sh`
-- scripts auxiliares de chaos já presentes no pacote base
-
-## Observação
-
-Este pacote preserva o nome dos arquivos principais para facilitar sobrescrita direta no diretório da suíte.
+## ULTRA
+Executa a suíte completa e, no bloco 216, vai até o hard limit real.
+./run-teste-v30-ultra.sh

@@ -36,8 +36,8 @@ APP_LOG="${LOG_DIR}/app_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v30.hard-limits-enforcement.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v30.hard-limits-enforcement.json"
+COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v31.subscription-lifecycle.json"
+ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v31.subscription-lifecycle.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.json"
 CHAOS_RACE_REPORT="${SCRIPT_DIR}/.chaos-race-report.txt"
@@ -246,14 +246,21 @@ ok "Link criado"
 hr
 
 title "Preparando environment"
+V31_ULTRA_CYCLES="${V31_ULTRA_CYCLES:-3}"
 cp "${ENV_FILE}" "${TEMP_ENV}"
-jq --arg MODE "ULTRA" '
+jq --arg V30MODE "ULTRA" --arg V31MODE "ULTRA" --arg V31CYCLES "${V31_ULTRA_CYCLES}" '
   .values = (
-    [.values[] | if .key=="v30_limit_mode" then .value=$MODE else . end] +
-    (if ([.values[] | select(.key=="v30_limit_mode")] | length)==0 then [{"key":"v30_limit_mode","value":$MODE,"enabled":true}] else [] end)
+    [.values[] | if .key=="v30_limit_mode" then .value=$V30MODE
+                 elif .key=="v31_lifecycle_mode" then .value=$V31MODE
+                 elif .key=="v31_ultra_cycles" then .value=$V31CYCLES
+                 else . end] +
+    (if ([.values[] | select(.key=="v30_limit_mode")] | length)==0 then [{"key":"v30_limit_mode","value":$V30MODE,"enabled":true}] else [] end) +
+    (if ([.values[] | select(.key=="v31_lifecycle_mode")] | length)==0 then [{"key":"v31_lifecycle_mode","value":$V31MODE,"enabled":true}] else [] end) +
+    (if ([.values[] | select(.key=="v31_ultra_cycles")] | length)==0 then [{"key":"v31_ultra_cycles","value":$V31CYCLES,"enabled":true}] else [] end)
   )' "${TEMP_ENV}" > "${TEMP_ENV}.tmp" && mv "${TEMP_ENV}.tmp" "${TEMP_ENV}"
-step "Modo: ULTRA | hard limit real"
+step "Modo: ULTRA | hard limit real | lifecycle cycles=${V31_ULTRA_CYCLES}"
 ok "Environment pronto"
+
 
 hr
 

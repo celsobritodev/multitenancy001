@@ -57,21 +57,32 @@ public class TenantQuotaEnforcementService {
 
         String normalizedTenantSchema = normalizeTenantSchema(tenantSchema);
 
+        log.info(
+                "Iniciando enforcement de quota para criação de usuário. accountId={}, tenantSchema={}",
+                accountId,
+                normalizedTenantSchema
+        );
+
         long currentUsers = tenantSchemaUnitOfWork.readOnly(
                 normalizedTenantSchema,
                 () -> tenantUserRepository.countEnabledUsersByAccount(accountId)
         );
 
         log.info(
-                "Validando quota para criação de usuário. accountId={}, tenantSchema={}, currentUsers={}",
+                "Uso real de usuários medido para enforcement. accountId={}, tenantSchema={}, currentUsers={}",
                 accountId,
                 normalizedTenantSchema,
                 currentUsers
         );
 
-        tenantToPublicBridgeExecutor.run(() ->
-                accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers)
-        );
+        tenantToPublicBridgeExecutor.run(() -> {
+            log.info(
+                    "Executando validação PUBLIC de quota de usuários. accountId={}, currentUsers={}",
+                    accountId,
+                    currentUsers
+            );
+            accountEntitlementsGuard.assertCanCreateUser(accountId, currentUsers);
+        });
 
         log.info(
                 "Quota de usuários validada com sucesso. accountId={}, tenantSchema={}, currentUsers={}",
@@ -95,21 +106,32 @@ public class TenantQuotaEnforcementService {
 
         String normalizedTenantSchema = normalizeTenantSchema(tenantSchema);
 
+        log.info(
+                "Iniciando enforcement de quota para criação de produto. accountId={}, tenantSchema={}",
+                accountId,
+                normalizedTenantSchema
+        );
+
         long currentProducts = tenantSchemaUnitOfWork.readOnly(
                 normalizedTenantSchema,
                 tenantProductRepository::countByDeletedFalse
         );
 
         log.info(
-                "Validando quota para criação de produto. accountId={}, tenantSchema={}, currentProducts={}",
+                "Uso real de produtos medido para enforcement. accountId={}, tenantSchema={}, currentProducts={}",
                 accountId,
                 normalizedTenantSchema,
                 currentProducts
         );
 
-        tenantToPublicBridgeExecutor.run(() ->
-                accountEntitlementsGuard.assertCanCreateProduct(accountId, currentProducts)
-        );
+        tenantToPublicBridgeExecutor.run(() -> {
+            log.info(
+                    "Executando validação PUBLIC de quota de produtos. accountId={}, currentProducts={}",
+                    accountId,
+                    currentProducts
+            );
+            accountEntitlementsGuard.assertCanCreateProduct(accountId, currentProducts);
+        });
 
         log.info(
                 "Quota de produtos validada com sucesso. accountId={}, tenantSchema={}, currentProducts={}",
@@ -120,7 +142,7 @@ public class TenantQuotaEnforcementService {
     }
 
     /**
-     * Valida parâmetros obrigatórios.
+     * Valida parâmetros obrigatórios do fluxo de enforcement.
      *
      * @param accountId id da conta
      * @param tenantSchema schema do tenant
@@ -146,6 +168,12 @@ public class TenantQuotaEnforcementService {
             throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         }
 
-        return tenantSchema.trim();
+        String normalizedTenantSchema = tenantSchema.trim();
+
+        if (!StringUtils.hasText(normalizedTenantSchema)) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
+        }
+
+        return normalizedTenantSchema;
     }
 }

@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Calcular uso e limites do plano corrente.</li>
  *   <li>Executar preview de mudança de plano.</li>
  *   <li>Expor visão consolidada de upgrades e downgrades elegíveis ou bloqueados.</li>
- *   <li>Garantir que capacidade restante nunca seja retornada negativa.</li>
+ *   <li>Garantir resposta coerente com a semântica esperada pela API e pelos testes E2E.</li>
  * </ul>
  *
  * <p><b>Diretriz arquitetural:</b></p>
@@ -42,12 +42,15 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>A resolução da conta atual fica centralizada em {@link TenantSubscriptionAccountResolver}.</li>
  *   <li>O cálculo de uso fica centralizado em {@link AccountPlanUsageService}.</li>
  *   <li>O clamp de remaining é responsabilidade deste service ao montar a resposta tenant.</li>
+ *   <li>Para plano ilimitado, a convenção da API V30 é retornar {@code -1}.</li>
  * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TenantSubscriptionQueryService {
+
+    private static final long UNLIMITED_REMAINING = -1L;
 
     private final TenantSubscriptionAccountResolver tenantSubscriptionAccountResolver;
     private final AccountPlanUsageService accountPlanUsageService;
@@ -74,19 +77,22 @@ public class TenantSubscriptionQueryService {
         long remainingUsers = calculateRemaining(
                 usage.currentUsers(),
                 limits.maxUsers(),
-                limits.unlimited()
+                limits.unlimited(),
+                "users"
         );
 
         long remainingProducts = calculateRemaining(
                 usage.currentProducts(),
                 limits.maxProducts(),
-                limits.unlimited()
+                limits.unlimited(),
+                "products"
         );
 
         long remainingStorageMb = calculateRemaining(
                 usage.currentStorageMb(),
                 limits.maxStorageMb(),
-                limits.unlimited()
+                limits.unlimited(),
+                "storageMb"
         );
 
         List<String> eligibleDowngrades = new ArrayList<>();
@@ -107,14 +113,33 @@ public class TenantSubscriptionQueryService {
 
             if (changeType == PlanChangeType.UPGRADE) {
                 availableUpgrades.add(candidate.name());
+                log.debug(
+                        "Upgrade disponível identificado. accountId={}, currentPlan={}, candidatePlan={}",
+                        account.getId(),
+                        account.getSubscriptionPlan(),
+                        candidate
+                );
                 continue;
             }
 
             if (changeType == PlanChangeType.DOWNGRADE) {
                 if (preview.eligible()) {
                     eligibleDowngrades.add(candidate.name());
+                    log.debug(
+                            "Downgrade elegível identificado. accountId={}, currentPlan={}, candidatePlan={}",
+                            account.getId(),
+                            account.getSubscriptionPlan(),
+                            candidate
+                    );
                 } else {
                     blockedDowngrades.add(candidate.name());
+                    log.debug(
+                            "Downgrade bloqueado identificado. accountId={}, currentPlan={}, candidatePlan={}, violations={}",
+                            account.getId(),
+                            account.getSubscriptionPlan(),
+                            candidate,
+                            preview.violations().size()
+                    );
                 }
             }
         }
@@ -139,9 +164,10 @@ public class TenantSubscriptionQueryService {
         );
 
         log.info(
-                "Limites da assinatura carregados com sucesso. accountId={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
+                "Limites da assinatura carregados com sucesso. accountId={}, currentPlan={}, unlimited={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
+                limits.unlimited(),
                 usage.currentUsers(),
                 usage.currentProducts(),
                 usage.currentStorageMb(),
@@ -246,17 +272,30 @@ public class TenantSubscriptionQueryService {
     /**
      * Calcula capacidade restante de um recurso.
      *
-     * <p>Para planos ilimitados, retorna {@link Long#MAX_VALUE}. Para planos limitados,
-     * o valor é clampado em zero, nunca retornando negativo.</p>
+     * <p><b>Regras V30:</b></p>
+     * <ul>
+     *   <li>Para planos ilimitados, retorna {@code -1}.</li>
+     *   <li>Para limites negativos, retorna {@code -1} por segurança semântica.</li>
+     *   <li>Para planos limitados, nunca retorna valor negativo.</li>
+     *   <li>Quando o uso real ultrapassa o limite, o retorno é clampado para {@code 0}.</li>
+     * </ul>
      *
      * @param currentValue uso atual
      * @param maxValue valor máximo permitido
      * @param unlimited indica se o plano é ilimitado
-     * @return restante disponível
+     * @param resourceName nome lógico do recurso para logging
+     * @return restante disponível conforme semântica da API
      */
-    private long calculateRemaining(long currentValue, int maxValue, boolean unlimited) {
-        if (unlimited) {
-            return Long.MAX_VALUE;
+    private long calculateRemaining(long currentValue, int maxValue, boolean unlimited, String resourceName) {
+        if (unlimited || maxValue < 0) {
+            log.debug(
+                    "Remaining ilimitado identificado. resource={}, currentValue={}, maxValue={}, unlimited={}",
+                    resourceName,
+                    currentValue,
+                    maxValue,
+                    unlimited
+            );
+            return UNLIMITED_REMAINING;
         }
 
         long rawRemaining = (long) maxValue - currentValue;
@@ -264,7 +303,8 @@ public class TenantSubscriptionQueryService {
 
         if (rawRemaining < 0L) {
             log.warn(
-                    "Remaining negativo detectado e clampado para zero. currentValue={}, maxValue={}, rawRemaining={}",
+                    "Remaining negativo detectado e clampado para zero no tenant. resource={}, currentValue={}, maxValue={}, rawRemaining={}",
+                    resourceName,
                     currentValue,
                     maxValue,
                     rawRemaining

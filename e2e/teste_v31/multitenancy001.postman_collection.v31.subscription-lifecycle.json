@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "v30-hard-limits-enforcement",
-    "name": "multitenancy001-e2e (v30 HARD LIMITS ENFORCEMENT SUITE)",
-    "description": "v30 - EVOLUI A V29 SUBSCRIPTION / BILLING BINDING\n- hard limits de plano\n- enforcement de quota no write-path\n- coerencia entre usage / limits / bloqueio\n- STRICT = suíte anterior inteira + bloco novo com cap curto\n- ULTRA = suíte anterior inteira + bloco novo até hard limit real\n\nBASEADA NA V29 (MANTÉM TODOS OS TESTES EXISTENTES E ADICIONA NOVO BLOCO 216)\n\nv29 - EVOLUI A V28 CANCEL / RETURN / REVERSAL GRID\n- tenant subscription limits\n- plan change preview\n- tenant self-service upgrade via billing binding\n- control plane subscription admin flows\n- downgrade eligible / blocked validation\n- payment metadata / binding validation\n\nBASEADA NA V28 (MANTÉM TODOS OS TESTES EXISTENTES E ADICIONA NOVOS BLOCOS)",
+    "_postman_id": "v31-subscription-lifecycle",
+    "name": "multitenancy001-e2e (v31 SUBSCRIPTION LIFECYCLE SUITE)",
+    "description": "v31 - EVOLUI A V30 HARD LIMITS ENFORCEMENT\n- subscription lifecycle\n- preview downgrade / re-upgrade\n- command + reread de limits\n- downgrade bloqueado controlado\n- STRICT = suíte anterior inteira + bloco 220 lifecycle curto\n- ULTRA = suíte anterior inteira + bloco 220 com múltiplos ciclos\n\nBASEADA NA V30 (MANTÉM TODOS OS TESTES EXISTENTES E ADICIONA NOVO BLOCO 220)\n\nv30 - EVOLUI A V29 SUBSCRIPTION / BILLING BINDING\n- hard limits de plano\n- enforcement de quota no write-path\n- coerencia entre usage / limits / bloqueio\n- STRICT = suíte anterior inteira + bloco novo com cap curto\n- ULTRA = suíte anterior inteira + bloco novo até hard limit real\n\nBASEADA NA V29 (MANTÉM TODOS OS TESTES EXISTENTES E ADICIONA NOVO BLOCO 216)\n\nv29 - EVOLUI A V28 CANCEL / RETURN / REVERSAL GRID\n- tenant subscription limits\n- plan change preview\n- tenant self-service upgrade via billing binding\n- control plane subscription admin flows\n- downgrade eligible / blocked validation\n- payment metadata / binding validation\n\nBASEADA NA V28 (MANTÉM TODOS OS TESTES EXISTENTES E ADICIONA NOVOS BLOCOS)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "22901965"
   },
@@ -14581,6 +14581,592 @@
               {
                 "key": "X-Tenant",
                 "value": "{{tenant2_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "limits"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧩 220 - V31 SUBSCRIPTION LIFECYCLE",
+      "item": [
+        {
+          "name": "220.00 v31 init lifecycle vars",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const mode = (pm.environment.get('v31_lifecycle_mode') || 'STRICT').toUpperCase();",
+                  "pm.environment.set('v31_lifecycle_mode', mode);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('V31 init lifecycle vars OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const mode = (pm.environment.get('v31_lifecycle_mode') || 'STRICT').toUpperCase();",
+                  "const targetCycles = mode === 'ULTRA'",
+                  "  ? Math.max(parseInt(pm.environment.get('v31_ultra_cycles') || '3', 10), 1)",
+                  "  : 1;",
+                  "pm.environment.set('v31_cycle_current', '0');",
+                  "pm.environment.set('v31_cycle_target', String(targetCycles));",
+                  "console.log('🔷 [220.00] mode=', mode, 'targetCycles=', targetCycles);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.01 tenant limits before lifecycle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant limits before lifecycle OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('currentPlan presente', function () {",
+                  "  pm.expect(String(json.currentPlan || '')).to.not.eql('');",
+                  "});",
+                  "pm.test('remainingUsers numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingUsers))).to.eql(true);",
+                  "});",
+                  "pm.test('remainingProducts numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingProducts))).to.eql(true);",
+                  "});",
+                  "pm.environment.set('v31_plan_before_cycle', String(json.currentPlan || ''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.02 tenant preview downgrade to PRO",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({",
+                  "  targetPlan: pm.environment.get('v31_safe_downgrade_target') || 'PRO',",
+                  "  reason: pm.environment.get('v31_reason_tenant_downgrade_safe') || 'Tenant lifecycle safe downgrade via V31'",
+                  "}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant preview downgrade to PRO OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('eligible boolean', function () {",
+                  "  pm.expect(typeof json.eligible === 'boolean').to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/change-plan-preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "change-plan-preview"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.03 tenant change-plan downgrade to PRO",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({",
+                  "  targetPlan: pm.environment.get('v31_safe_downgrade_target') || 'PRO',",
+                  "  billingCycle: pm.environment.get('subscription_billing_cycle') || 'MONTHLY',",
+                  "  paymentMethod: pm.environment.get('subscription_payment_method') || 'PIX',",
+                  "  paymentGateway: pm.environment.get('subscription_payment_gateway') || 'MANUAL',",
+                  "  amount: Number(pm.environment.get('subscription_amount_pro') || '199.90'),",
+                  "  planPriceSnapshot: Number(pm.environment.get('subscription_price_pro') || '199.90'),",
+                  "  currencyCode: pm.environment.get('subscription_currency_code') || 'BRL',",
+                  "  reason: pm.environment.get('v31_reason_tenant_downgrade_safe') || 'Tenant lifecycle safe downgrade via V31'",
+                  "}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant change-plan downgrade to PRO OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/change-plan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "change-plan"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.04 tenant limits after downgrade to PRO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant limits after downgrade to PRO OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('remainingUsers numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingUsers))).to.eql(true);",
+                  "});",
+                  "pm.test('remainingProducts numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingProducts))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.05 tenant preview re-upgrade to ENTERPRISE",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({",
+                  "  targetPlan: pm.environment.get('v31_reupgrade_target') || 'ENTERPRISE',",
+                  "  reason: pm.environment.get('v31_reason_tenant_reupgrade') || 'Tenant lifecycle re-upgrade via V31'",
+                  "}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant preview re-upgrade OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('eligible boolean', function () {",
+                  "  pm.expect(typeof json.eligible === 'boolean').to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/change-plan-preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "change-plan-preview"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.06 tenant change-plan re-upgrade to ENTERPRISE",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({",
+                  "  targetPlan: pm.environment.get('v31_reupgrade_target') || 'ENTERPRISE',",
+                  "  billingCycle: pm.environment.get('subscription_billing_cycle') || 'MONTHLY',",
+                  "  paymentMethod: pm.environment.get('subscription_payment_method') || 'PIX',",
+                  "  paymentGateway: pm.environment.get('subscription_payment_gateway') || 'MANUAL',",
+                  "  amount: Number(pm.environment.get('subscription_amount_enterprise') || '999.90'),",
+                  "  planPriceSnapshot: Number(pm.environment.get('subscription_price_enterprise') || '999.90'),",
+                  "  currencyCode: pm.environment.get('subscription_currency_code') || 'BRL',",
+                  "  reason: pm.environment.get('v31_reason_tenant_reupgrade') || 'Tenant lifecycle re-upgrade via V31'",
+                  "}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant change-plan re-upgrade to ENTERPRISE OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/change-plan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "change-plan"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.07 tenant limits after re-upgrade",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant limits after re-upgrade OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/subscription/me/limits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subscription",
+                "me",
+                "limits"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.08 lifecycle cycle decision",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Lifecycle cycle decision OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "let current = parseInt(pm.environment.get('v31_cycle_current') || '0', 10);",
+                  "const target = parseInt(pm.environment.get('v31_cycle_target') || '1', 10);",
+                  "current += 1;",
+                  "pm.environment.set('v31_cycle_current', String(current));",
+                  "console.log('🔷 [220.08] cycleCurrent=', current, 'cycleTarget=', target);",
+                  "if (current < target) {",
+                  "  pm.execution.setNextRequest('220.02 tenant preview downgrade to PRO');",
+                  "} else {",
+                  "  pm.execution.setNextRequest('220.09 final tenant lifecycle consistency');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "220.09 final tenant lifecycle consistency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final tenant lifecycle consistency OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('currentPlan final presente', function () {",
+                  "  pm.expect(String(json.currentPlan || '')).to.not.eql('');",
+                  "});",
+                  "pm.test('remainingUsers final numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingUsers))).to.eql(true);",
+                  "});",
+                  "pm.test('remainingProducts final numérico', function () {",
+                  "  pm.expect(Number.isFinite(Number(json.remainingProducts))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
               }
             ],
             "url": {

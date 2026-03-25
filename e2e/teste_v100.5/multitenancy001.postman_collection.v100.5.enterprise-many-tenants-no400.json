@@ -1,0 +1,1226 @@
+{
+  "info": {
+    "name": "multitenancy001-e2e (v100.5 ENTERPRISE MANY TENANTS NO-400)",
+    "_postman_id": "fb278f0d-7462-47f6-909e-f27c706d2bc5",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "\ud83d\udce6 00 - BOOTSTRAP",
+      "item": [
+        {
+          "name": "00.01 bootstrap init",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bootstrap init OK',()=>pm.response.to.have.status(200));",
+                  "pm.execution.setNextRequest('00.02 controlplane login superadmin');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "00.02 controlplane login superadmin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Control plane login OK',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json(); pm.collectionVariables.set('cpToken', j.accessToken||j.token||j.jwt||'');",
+                  "pm.execution.setNextRequest('01.01 signup tenant account grid');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{cpAdminEmail}}\",\"password\":\"{{cpAdminPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 01 - ACCOUNTS / TENANTS GRID",
+      "item": [
+        {
+          "name": "01.01 signup tenant account grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('signupIdx')||'0',10);",
+                  "let s=String(idx+1).padStart(2,'0');",
+                  "pm.request.body.update(JSON.stringify({",
+                  "  companyName:`Tenant Empresa ${s}`,",
+                  "  workspaceName:`tenant-${s}`,",
+                  "  adminName:`Tenant Admin ${s}`,",
+                  "  adminEmail:`tenant${s}@example.com`,",
+                  "  adminPassword:'Admin@123456'",
+                  "}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Signup tenant grid OK',()=>pm.response.to.have.status(201));",
+                  "let idx=parseInt(pm.collectionVariables.get('signupIdx')||'0',10)+1;",
+                  "pm.collectionVariables.set('signupIdx',String(idx));",
+                  "pm.execution.setNextRequest(idx < parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) ? '01.01 signup tenant account grid' : '01.02 controlplane list accounts and capture tenant ids');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "01.02 controlplane list accounts and capture tenant ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Control plane list accounts OK',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json();",
+                  "const arr=Array.isArray(j)?j:(j.content||j.items||[]);",
+                  "const grid=arr.filter(a => !a.controlPlane && !a.isControlPlane).slice(-parseInt(pm.collectionVariables.get('tenantTarget')||'20',10)).map((a,i)=>({",
+                  "  accountId:a.id, tenantSchema:a.schemaName||a.tenantSchema||a.schema||'', adminEmail:a.adminEmail||`tenant${String(i+1).padStart(2,'0')}@example.com`, adminPassword:'Admin@123456'",
+                  "}));",
+                  "pm.collectionVariables.set('tenantGrid',JSON.stringify(grid));",
+                  "pm.collectionVariables.set('tenantIdx','0');",
+                  "pm.execution.setNextRequest('02.01 create control plane user grid');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cpToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 02 - CONTROL PLANE USERS GRID",
+      "item": [
+        {
+          "name": "02.01 create control plane user grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('cpUserIdx')||'0',10);",
+                  "const roles=['CONTROLPLANE_ADMIN','CONTROLPLANE_SUPPORT','CONTROLPLANE_VIEWER','CONTROLPLANE_OPERATOR','CONTROLPLANE_BILLING_MANAGER','CONTROLPLANE_SUPPORT'];",
+                  "const perms={",
+                  "CONTROLPLANE_ADMIN:['CP_USER_READ','CP_USER_WRITE','CP_BILLING_READ','CP_BILLING_WRITE','CP_TENANT_READ','CP_ME_READ'],",
+                  "CONTROLPLANE_SUPPORT:['CP_USER_READ','CP_TENANT_READ','CP_ME_READ'],",
+                  "CONTROLPLANE_VIEWER:['CP_USER_READ','CP_BILLING_READ','CP_TENANT_READ','CP_ME_READ'],",
+                  "CONTROLPLANE_OPERATOR:['CP_USER_READ','CP_TENANT_READ','CP_ME_READ'],",
+                  "CONTROLPLANE_BILLING_MANAGER:['CP_BILLING_READ','CP_BILLING_WRITE','CP_ME_READ']",
+                  "};",
+                  "const role=roles[idx%roles.length], s=String(idx+1).padStart(2,'0');",
+                  "pm.request.body.update(JSON.stringify({name:`CP User ${s}`,email:`cp.user.${s}@example.com`,password:'Admin@123456',role:role,permissions:perms[role]}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Control plane user grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "let idx=parseInt(pm.collectionVariables.get('cpUserIdx')||'0',10)+1;",
+                  "pm.collectionVariables.set('cpUserIdx',String(idx));",
+                  "pm.execution.setNextRequest(idx < parseInt(pm.collectionVariables.get('cpUserTarget')||'6',10) ? '02.01 create control plane user grid' : '03.01 create billing grid');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cpToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 03 - BILLING GRID",
+      "item": [
+        {
+          "name": "03.01 create billing grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const grid=JSON.parse(pm.collectionVariables.get('tenantGrid')||'[]');",
+                  "let idx=parseInt(pm.collectionVariables.get('billingIdx')||'0',10);",
+                  "const tenant=grid[idx%grid.length], slot=Math.floor(idx/grid.length)+1;",
+                  "pm.request.body.update(JSON.stringify({accountId:tenant.accountId,externalReference:`PAY-${tenant.accountId}-${slot}`,amount:100+slot,description:`Seed payment ${slot}`,status:'CONFIRMED'}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billing grid request accepted',()=>pm.expect([200,201,409]).to.include(pm.response.code));",
+                  "let idx=parseInt(pm.collectionVariables.get('billingIdx')||'0',10)+1;",
+                  "pm.collectionVariables.set('billingIdx',String(idx));",
+                  "pm.execution.setNextRequest(idx < parseInt(pm.collectionVariables.get('billingTarget')||'60',10) ? '03.01 create billing grid' : '04.00 init current tenant context');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cpToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/billing/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "billing",
+                "payments"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 04 - TENANT POPULATION GRID",
+      "item": [
+        {
+          "name": "04.00 init current tenant context",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant loop init OK',()=>pm.response.to.have.status(200));",
+                  "const grid=JSON.parse(pm.collectionVariables.get('tenantGrid')||'[]');",
+                  "let tenantIdx=parseInt(pm.collectionVariables.get('tenantIdx')||'0',10);",
+                  "if (tenantIdx >= grid.length) { pm.execution.setNextRequest('99.01 controlplane final accounts smoke'); }",
+                  "else {",
+                  "  const t=grid[tenantIdx];",
+                  "  pm.collectionVariables.set('currentTenantSchema',t.tenantSchema);",
+                  "  pm.collectionVariables.set('currentTenantAdminEmail',t.adminEmail);",
+                  "  pm.collectionVariables.set('currentTenantAdminPassword',t.adminPassword);",
+                  "  pm.collectionVariables.set('currentTenantCategories','[]');",
+                  "  pm.collectionVariables.set('currentTenantSubPairs','[]');",
+                  "  pm.collectionVariables.set('currentTenantSuppliers','[]');",
+                  "  pm.collectionVariables.set('currentTenantCustomers','[]');",
+                  "  pm.collectionVariables.set('currentTenantProducts','[]');",
+                  "  pm.execution.setNextRequest('04.01 tenant login current admin');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.01 tenant login current admin",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({email:pm.collectionVariables.get('currentTenantAdminEmail'),password:pm.collectionVariables.get('currentTenantAdminPassword')}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant admin login OK',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json(); pm.collectionVariables.set('tenantToken',j.accessToken||j.token||j.jwt||'');",
+                  "pm.execution.setNextRequest('04.02 create tenant user grid');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.02 create tenant user grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('tenantUserIdx')||'0',10);",
+                  "const roles=['TENANT_ADMIN','TENANT_MANAGER','TENANT_OPERATOR','TENANT_VIEWER','TENANT_OPERATOR','TENANT_VIEWER'];",
+                  "const role=roles[idx%roles.length], schema=(pm.collectionVariables.get('currentTenantSchema')||'tenant').replace(/[^a-zA-Z0-9]/g,''), s=String(idx+1).padStart(2,'0');",
+                  "pm.request.body.update(JSON.stringify({name:`Tenant User ${schema} ${s}`,email:`${schema}.user.${s}@example.com`,password:'Admin@123456',role:role,permissions:[]}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant user grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "let idx=parseInt(pm.collectionVariables.get('tenantUserIdx')||'0',10)+1; pm.collectionVariables.set('tenantUserIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('tenantUserPerTenant')||'6',10)) pm.execution.setNextRequest('04.02 create tenant user grid'); else { pm.collectionVariables.set('tenantUserIdx','0'); pm.execution.setNextRequest('04.03 create category grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.03 create category grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('categoryIdx')||'0',10);",
+                  "pm.request.body.update(JSON.stringify({name:`Categoria ${String(idx+1).padStart(2,'0')}`}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Category grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "if(pm.response.code===201){const j=pm.response.json(); let arr=JSON.parse(pm.collectionVariables.get('currentTenantCategories')||'[]'); arr.push({id:j.id,name:j.name}); pm.collectionVariables.set('currentTenantCategories',JSON.stringify(arr));}",
+                  "let idx=parseInt(pm.collectionVariables.get('categoryIdx')||'0',10)+1; pm.collectionVariables.set('categoryIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('categoryPerTenant')||'6',10)) pm.execution.setNextRequest('04.03 create category grid'); else { pm.collectionVariables.set('categoryIdx','0'); pm.execution.setNextRequest('04.04 create subcategory grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.04 create subcategory grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('subcategoryIdx')||'0',10); const cats=JSON.parse(pm.collectionVariables.get('currentTenantCategories')||'[]'); const cat=cats[idx%cats.length];",
+                  "pm.collectionVariables.set('currentSubcategoryCategoryId',String(cat.id));",
+                  "pm.request.body.update(JSON.stringify({name:`Subcategoria ${String(idx+1).padStart(2,'0')}`}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Subcategory grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "if(pm.response.code===201){const j=pm.response.json(); let arr=JSON.parse(pm.collectionVariables.get('currentTenantSubPairs')||'[]'); arr.push({id:j.id,categoryId:parseInt(pm.collectionVariables.get('currentSubcategoryCategoryId'),10)}); pm.collectionVariables.set('currentTenantSubPairs',JSON.stringify(arr));}",
+                  "let idx=parseInt(pm.collectionVariables.get('subcategoryIdx')||'0',10)+1; pm.collectionVariables.set('subcategoryIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('subcategoryPerTenant')||'8',10)) pm.execution.setNextRequest('04.04 create subcategory grid'); else { pm.collectionVariables.set('subcategoryIdx','0'); pm.execution.setNextRequest('04.05 create supplier grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/subcategories/category/{{currentSubcategoryCategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "subcategories",
+                "category",
+                "{{currentSubcategoryCategoryId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.05 create supplier grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('supplierIdx')||'0',10), s=String(idx+1).padStart(2,'0');",
+                  "pm.request.body.update(JSON.stringify({name:`Fornecedor ${s}`,email:`supplier${s}@example.com`,phone:`1199999${String(1000+idx).slice(-4)}`,documentNumber:`12345678000${String(idx).padStart(2,'0')}`}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Supplier grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "if(pm.response.code===201){const j=pm.response.json(); let arr=JSON.parse(pm.collectionVariables.get('currentTenantSuppliers')||'[]'); arr.push({id:j.id}); pm.collectionVariables.set('currentTenantSuppliers',JSON.stringify(arr));}",
+                  "let idx=parseInt(pm.collectionVariables.get('supplierIdx')||'0',10)+1; pm.collectionVariables.set('supplierIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('supplierPerTenant')||'5',10)) pm.execution.setNextRequest('04.05 create supplier grid'); else { pm.collectionVariables.set('supplierIdx','0'); pm.execution.setNextRequest('04.06 create customer grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/suppliers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "suppliers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.06 create customer grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('customerIdx')||'0',10), s=String(idx+1).padStart(2,'0');",
+                  "pm.request.body.update(JSON.stringify({name:`Cliente ${s}`,email:`customer${s}@example.com`,phone:`1188888${String(1000+idx).slice(-4)}`,documentNumber:`98765432000${String(idx).padStart(2,'0')}`}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Customer grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "if(pm.response.code===201){const j=pm.response.json(); let arr=JSON.parse(pm.collectionVariables.get('currentTenantCustomers')||'[]'); arr.push({id:j.id}); pm.collectionVariables.set('currentTenantCustomers',JSON.stringify(arr));}",
+                  "let idx=parseInt(pm.collectionVariables.get('customerIdx')||'0',10)+1; pm.collectionVariables.set('customerIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('customerPerTenant')||'10',10)) pm.execution.setNextRequest('04.06 create customer grid'); else { pm.collectionVariables.set('customerIdx','0'); pm.execution.setNextRequest('04.07 create product grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "customers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.07 create product grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('productIdx')||'0',10);",
+                  "const cats=JSON.parse(pm.collectionVariables.get('currentTenantCategories')||'[]');",
+                  "const pairs=JSON.parse(pm.collectionVariables.get('currentTenantSubPairs')||'[]');",
+                  "const suppliers=JSON.parse(pm.collectionVariables.get('currentTenantSuppliers')||'[]');",
+                  "const cat=cats[idx%cats.length], valid=pairs.filter(p=>p.categoryId===cat.id), sub=valid.length?valid[idx%valid.length]:null, sup=suppliers.length?suppliers[idx%suppliers.length]:null;",
+                  "const schema=(pm.collectionVariables.get('currentTenantSchema')||'tenant').replace(/[^a-zA-Z0-9]/g,'').slice(-8);",
+                  "pm.request.body.update(JSON.stringify({name:`Produto ${String(idx+1).padStart(2,'0')}`,sku:`SKU-${schema}-${String(idx+1).padStart(3,'0')}`,categoryId:cat.id,subcategoryId:sub?sub.id:null,supplierId:sup?sup.id:null,costPrice:10+idx,salePrice:20+idx,stockQuantity:0,minimumStock:1}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product grid request accepted',()=>pm.expect([201,409]).to.include(pm.response.code));",
+                  "if(pm.response.code===201){const j=pm.response.json(); let arr=JSON.parse(pm.collectionVariables.get('currentTenantProducts')||'[]'); arr.push({id:j.id}); pm.collectionVariables.set('currentTenantProducts',JSON.stringify(arr));}",
+                  "let idx=parseInt(pm.collectionVariables.get('productIdx')||'0',10)+1; pm.collectionVariables.set('productIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('productPerTenant')||'8',10)) pm.execution.setNextRequest('04.07 create product grid'); else { pm.collectionVariables.set('productIdx','0'); pm.execution.setNextRequest('04.08 inventory inbound grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/products/detailed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products",
+                "detailed"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.08 inventory inbound grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('inventoryIdx')||'0',10); const prods=JSON.parse(pm.collectionVariables.get('currentTenantProducts')||'[]'); const p=prods[idx%prods.length];",
+                  "pm.request.body.update(JSON.stringify({productId:p.id,adjustmentType:'IN',quantity:10+(idx%5),reason:`Seed inventory ${idx+1}`}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inventory inbound grid request accepted',()=>pm.expect([200,201]).to.include(pm.response.code));",
+                  "let idx=parseInt(pm.collectionVariables.get('inventoryIdx')||'0',10)+1; pm.collectionVariables.set('inventoryIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('inventoryPerTenant')||'12',10)) pm.execution.setNextRequest('04.08 inventory inbound grid'); else { pm.collectionVariables.set('inventoryIdx','0'); pm.execution.setNextRequest('04.09 create sales grid');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/inventory/adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "inventory",
+                "adjustments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.09 create sales grid",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let idx=parseInt(pm.collectionVariables.get('saleIdx')||'0',10); const customers=JSON.parse(pm.collectionVariables.get('currentTenantCustomers')||'[]'); const prods=JSON.parse(pm.collectionVariables.get('currentTenantProducts')||'[]'); const c=customers[idx%customers.length]; const count=(idx%4)+1; let items=[];",
+                  "for(let i=0;i<count;i++){ const p=prods[(idx+i)%prods.length]; items.push({productId:p.id,quantity:1,unitPrice:20+((idx+i)%10)}); }",
+                  "pm.request.body.update(JSON.stringify({customerId:c.id,items}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sales grid request accepted',()=>pm.expect([200,201,409]).to.include(pm.response.code));",
+                  "if([200,201].includes(pm.response.code)){const j=pm.response.json(); pm.collectionVariables.set('lastSaleId', String(j.id||j.saleId||pm.collectionVariables.get('lastSaleId')||''));}",
+                  "let idx=parseInt(pm.collectionVariables.get('saleIdx')||'0',10)+1; pm.collectionVariables.set('saleIdx',String(idx));",
+                  "if(idx < parseInt(pm.collectionVariables.get('salesPerTenant')||'20',10)) pm.execution.setNextRequest('04.09 create sales grid'); else { pm.collectionVariables.set('saleIdx','0'); pm.execution.setNextRequest('04.10 read tenant sale sample');}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "sales"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.10 read tenant sale sample",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Read tenant sale sample accepted',()=>pm.expect([200,404]).to.include(pm.response.code));",
+                  "pm.execution.setNextRequest('04.11 advance to next tenant');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/sales/{{lastSaleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "sales",
+                "{{lastSaleId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "04.11 advance to next tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Advance tenant loop OK',()=>pm.response.to.have.status(200));",
+                  "let idx=parseInt(pm.collectionVariables.get('tenantIdx')||'0',10)+1; pm.collectionVariables.set('tenantIdx',String(idx));",
+                  "pm.execution.setNextRequest('04.00 init current tenant context');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 99 - FINAL CONSISTENCY SMOKE",
+      "item": [
+        {
+          "name": "99.01 controlplane final accounts smoke",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final control plane accounts smoke OK',()=>pm.response.to.have.status(200)); pm.execution.setNextRequest('99.02 tenant login first admin');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cpToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/controlplane/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "controlplane",
+                "accounts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "99.02 tenant login first admin",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const g=JSON.parse(pm.collectionVariables.get('tenantGrid')||'[]')[0];",
+                  "pm.collectionVariables.set('currentTenantSchema',g.tenantSchema);",
+                  "pm.request.body.update(JSON.stringify({email:g.adminEmail,password:g.adminPassword}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final first tenant login OK',()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json(); pm.collectionVariables.set('tenantToken',j.accessToken||j.token||j.jwt||'');",
+                  "pm.execution.setNextRequest('99.03 tenant me smoke');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "99.03 tenant me smoke",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tenant me smoke OK',()=>pm.response.to.have.status(200)); pm.execution.setNextRequest('99.04 products smoke');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "99.04 products smoke",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Products smoke OK',()=>pm.response.to.have.status(200)); pm.execution.setNextRequest('99.05 customers smoke');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/products?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "99.05 customers smoke",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Customers smoke OK',()=>pm.response.to.have.status(200)); pm.execution.setNextRequest('99.06 final summary');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{currentTenantSchema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "customers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "99.06 final summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final summary OK',()=>pm.response.to.have.status(200));",
+                  "console.log('V100.5 SUMMARY');",
+                  "console.log('tenants=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10));",
+                  "console.log('controlplaneUsers=', parseInt(pm.collectionVariables.get('cpUserTarget')||'6',10));",
+                  "console.log('billings=', parseInt(pm.collectionVariables.get('billingTarget')||'60',10));",
+                  "console.log('tenantUsers=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('tenantUserPerTenant')||'6',10));",
+                  "console.log('categories=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('categoryPerTenant')||'6',10));",
+                  "console.log('subcategories=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('subcategoryPerTenant')||'8',10));",
+                  "console.log('suppliers=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('supplierPerTenant')||'5',10));",
+                  "console.log('customers=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('customerPerTenant')||'10',10));",
+                  "console.log('products=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('productPerTenant')||'8',10));",
+                  "console.log('sales=', parseInt(pm.collectionVariables.get('tenantTarget')||'20',10) * parseInt(pm.collectionVariables.get('salesPerTenant')||'20',10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
