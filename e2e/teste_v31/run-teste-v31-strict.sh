@@ -33,6 +33,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_DIR="${SCRIPT_DIR}/logs"
 APP_LOG="${LOG_DIR}/app_strict_${TIMESTAMP}.log"
+SUITE_LOG="${LOG_DIR}/suite_strict_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_strict_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
@@ -42,13 +43,31 @@ TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.strict.json"
 APP_PID=""
 
+stop_app() {
+  if [[ -n "${APP_PID:-}" ]] && kill -0 "${APP_PID}" >/dev/null 2>&1; then
+    step "Parando aplicação (PID: ${APP_PID})"
+    kill "${APP_PID}" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 10); do
+      if ! kill -0 "${APP_PID}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+
+    if kill -0 "${APP_PID}" >/dev/null 2>&1; then
+      warn "Aplicação não encerrou com SIGTERM, forçando parada..."
+      kill -9 "${APP_PID}" >/dev/null 2>&1 || true
+    fi
+
+    wait "${APP_PID}" >/dev/null 2>&1 || true
+  fi
+}
+
 cleanup() {
   title "Limpando recursos"
-  if [[ -n "${APP_PID:-}" ]]; then
-    step "Parando aplicação (PID: $APP_PID)"
-    kill "$APP_PID" >/dev/null 2>&1 || true
-    wait "$APP_PID" >/dev/null 2>&1 || true
-  fi
+  stop_app
+  rm -f "${TEMP_ENV}" >/dev/null 2>&1 || true
   rm -f "${TEMP_NEWMAN}" >/dev/null 2>&1 || true
   [[ -L "${SCRIPT_DIR}/mvnw" ]] && rm -f "${SCRIPT_DIR}/mvnw"
 }
@@ -123,15 +142,13 @@ jq --arg V30MODE "STRICT" --arg UCAP "${V30_STRICT_SHORT_USERS_CAP}" --arg PCAP 
   )' "${TEMP_ENV}" > "${TEMP_ENV}.tmp" && mv "${TEMP_ENV}.tmp" "${TEMP_ENV}"
 step "Modo: STRICT | users cap=${V30_STRICT_SHORT_USERS_CAP} | products cap=${V30_STRICT_SHORT_PRODUCTS_CAP} | lifecycle cycles=1"
 ok "Environment pronto"
-
-
 hr
 
 title "Iniciando aplicação"
 : > "${APP_LOG}"
 (cd "${PROJECT_ROOT}" && ./mvnw spring-boot:run) > "${APP_LOG}" 2>&1 &
 APP_PID=$!
-step "PID: $APP_PID"
+step "PID: ${APP_PID}"
 info "Aguardando aplicação (timeout: ${APP_START_TIMEOUT}s)"
 for i in $(seq 1 "${APP_START_TIMEOUT}"); do
   if grep -Eq "Started .*Application|Started .* in .* seconds" "${APP_LOG}" 2>/dev/null; then
@@ -148,11 +165,20 @@ ok "Health check OK"
 hr
 
 title "Executando suíte strict completa"
+set +e
 newman run "${COLLECTION}" \
   -e "${TEMP_ENV}" \
   --export-environment "${TEMP_ENV}" \
   --reporters cli,json \
-  --reporter-json-export "${TEMP_NEWMAN}"
+  --reporter-json-export "${TEMP_NEWMAN}" | tee "${SUITE_LOG}"
+NEWMAN_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [[ ${NEWMAN_EXIT} -ne 0 ]]; then
+  err "Suíte strict falhou (exit=${NEWMAN_EXIT})"
+  exit "${NEWMAN_EXIT}"
+fi
+
 ok "Suíte strict executada"
 hr
 
@@ -198,13 +224,18 @@ curl -fsS \
 ok "Inventory smoke pós-suite OK"
 hr
 
-title "Artefatos"
+title "Arquivando artefatos"
+cp -f "${TEMP_ENV}" "${REPORT_DIR}/environment.final.json"
+cp -f "${TEMP_NEWMAN}" "${REPORT_DIR}/newman-report.strict.json"
+cp -f "${SUITE_LOG}" "${REPORT_DIR}/suite.strict.log"
 step "App log: ${APP_LOG}"
+step "Suite log: ${SUITE_LOG}"
 step "Newman JSON: ${TEMP_NEWMAN}"
 step "Report dir: ${REPORT_DIR}"
 hr
 
-ok "TESTE V29 DETERMINISTIC CHAOS ENGINE PATCHED FINALIZADO"
-title "V29 - Observação"
-detail "A V29 mantém integralmente a V28 e adiciona os blocos finais do chaos grid, preservando o modelo operacional da V28: porta limpa, reset de banco, boot limpo e execução determinística."
-detail "Além da base anterior, esta linha adiciona probes de cancel / return, ledger reversal validation e inventory reconciliation extended, com patch de compatibilidade para respostas paginadas."
+ok "TESTE V31 SUBSCRIPTION LIFECYCLE - STRICT FINALIZADO"
+title "V31 - Observação"
+detail "A V31 mantém integralmente a V30 e adiciona o bloco de lifecycle de subscription."
+detail "O app_strict_*.log é log da aplicação. O log da suíte Newman fica em suite_strict_*.log."
+detail "Encerramento do Spring Boot durante cleanup é esperado e não deve ser interpretado sozinho como falha da suíte."

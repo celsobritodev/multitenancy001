@@ -32,27 +32,47 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_DIR="${SCRIPT_DIR}/logs"
-APP_LOG="${LOG_DIR}/app_${TIMESTAMP}.log"
-REPORT_DIR="${LOG_DIR}/reports_${TIMESTAMP}"
+APP_LOG="${LOG_DIR}/app_ultra_${TIMESTAMP}.log"
+SUITE_LOG="${LOG_DIR}/suite_ultra_${TIMESTAMP}.log"
+REPORT_DIR="${LOG_DIR}/reports_ultra_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
 
 COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v31.subscription-lifecycle.json"
 ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v31.subscription-lifecycle.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
-TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.json"
+TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.ultra.json"
 CHAOS_RACE_REPORT="${SCRIPT_DIR}/.chaos-race-report.txt"
 WORKER_SCRIPT="${SCRIPT_DIR}/chaos-race-worker-sale.sh"
 AGGREGATOR_SCRIPT="${SCRIPT_DIR}/chaos-race-aggregate.py"
 APP_PID=""
 
+stop_app() {
+  if [[ -n "${APP_PID:-}" ]] && kill -0 "${APP_PID}" >/dev/null 2>&1; then
+    step "Parando aplicação (PID: ${APP_PID})"
+    kill "${APP_PID}" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 10); do
+      if ! kill -0 "${APP_PID}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+
+    if kill -0 "${APP_PID}" >/dev/null 2>&1; then
+      warn "Aplicação não encerrou com SIGTERM, forçando parada..."
+      kill -9 "${APP_PID}" >/dev/null 2>&1 || true
+    fi
+
+    wait "${APP_PID}" >/dev/null 2>&1 || true
+  fi
+}
+
 cleanup() {
   title "Limpando recursos"
-  if [[ -n "${APP_PID:-}" ]]; then
-    step "Parando aplicação (PID: $APP_PID)"
-    kill "$APP_PID" >/dev/null 2>&1 || true
-    wait "$APP_PID" >/dev/null 2>&1 || true
-  fi
+  stop_app
   rm -f "${TEMP_NEWMAN}" >/dev/null 2>&1 || true
+  rm -f "${TEMP_ENV}" >/dev/null 2>&1 || true
+  rm -f "${CHAOS_RACE_REPORT}" >/dev/null 2>&1 || true
   [[ -L "${SCRIPT_DIR}/mvnw" ]] && rm -f "${SCRIPT_DIR}/mvnw"
 }
 trap cleanup EXIT
@@ -204,7 +224,7 @@ PY
 }
 
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V29 SUBSCRIPTION / BILLING BINDING (ULTRA SUITE)"
+echo "🔷 TESTE V31 SUBSCRIPTION LIFECYCLE - ULTRA SUITE"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: $SCRIPT_DIR"
 echo "────────────────────────────────────────────────────"
@@ -260,8 +280,6 @@ jq --arg V30MODE "ULTRA" --arg V31MODE "ULTRA" --arg V31CYCLES "${V31_ULTRA_CYCL
   )' "${TEMP_ENV}" > "${TEMP_ENV}.tmp" && mv "${TEMP_ENV}.tmp" "${TEMP_ENV}"
 step "Modo: ULTRA | hard limit real | lifecycle cycles=${V31_ULTRA_CYCLES}"
 ok "Environment pronto"
-
-
 hr
 
 title "Iniciando aplicação"
@@ -284,8 +302,20 @@ curl -fsS "${BASE_URL}/actuator/health" >/dev/null
 ok "Health check OK"
 hr
 
-title "Executando suíte base V29"
-newman run "${COLLECTION}" -e "${TEMP_ENV}" --export-environment "${TEMP_ENV}" --reporters cli,json --reporter-json-export "${TEMP_NEWMAN}"
+title "Executando suíte base V31"
+set +e
+newman run "${COLLECTION}" \
+  -e "${TEMP_ENV}" \
+  --export-environment "${TEMP_ENV}" \
+  --reporters cli,json \
+  --reporter-json-export "${TEMP_NEWMAN}" | tee "${SUITE_LOG}"
+NEWMAN_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [[ ${NEWMAN_EXIT} -ne 0 ]]; then
+  err "Suíte base falhou (exit=${NEWMAN_EXIT})"
+  exit "${NEWMAN_EXIT}"
+fi
 ok "Suíte base executada"
 hr
 
@@ -346,7 +376,7 @@ statuses_file="${REPORT_DIR}/chaos-race-statuses.tsv"
 chaos_elapsed_file="${REPORT_DIR}/chaos-elapsed-ms.txt"
 worker_log_dir="${REPORT_DIR}/workers"
 agg_json="${REPORT_DIR}/chaos-aggregate.json"
-chaos_run_id="v29-$(date +%s)-$$"
+chaos_run_id="v31-$(date +%s)-$$"
 mkdir -p "$worker_log_dir"
 : > "$statuses_file"
 : > "$chaos_elapsed_file"
@@ -371,7 +401,11 @@ done
 for pid in "${pids[@]}"; do wait "$pid" || true; done
 
 title "Consolidando resultados do chaos race"
-python "${AGGREGATOR_SCRIPT}"   --statuses "${statuses_file}"   --worker-dir "${worker_log_dir}"   --output-json "${agg_json}"   --elapsed-out "${chaos_elapsed_file}"
+python "${AGGREGATOR_SCRIPT}" \
+  --statuses "${statuses_file}" \
+  --worker-dir "${worker_log_dir}" \
+  --output-json "${agg_json}" \
+  --elapsed-out "${chaos_elapsed_file}"
 ok "Agregação consolidada gerada"
 
 success_count="$(jq -r '.success_count // 0' "${agg_json}")"
@@ -414,6 +448,7 @@ attempt_lat_max="$(jq -r '.attempt_latency_metrics_ms.max // 0' "${agg_json}")"
 retry_used_avg="$(jq -r '.retry_used_metrics.avg // 0' "${agg_json}")"
 retry_used_p95="$(jq -r '.retry_used_metrics.p95 // 0' "${agg_json}")"
 retry_used_max="$(jq -r '.retry_used_metrics.max // 0' "${agg_json}")"
+
 update_env_value chaos_aggregate_source "${agg_source}"
 update_env_value chaos_worker_rows_count "${agg_worker_rows}"
 update_env_value chaos_status_rows_count "${agg_status_rows}"
@@ -453,7 +488,20 @@ step "Parser version=${agg_parser_version} monotonicValid=${agg_monotonic_valid}
 hr
 
 title "Verificando inventory e movements após chaos race"
-newman run "${COLLECTION}" -e "${TEMP_ENV}" --export-environment "${TEMP_ENV}" --folder "📦 92 - CHAOS RACE VERIFY" --reporters cli,json --reporter-json-export "${REPORT_DIR}/chaos-race-verify.json"
+set +e
+newman run "${COLLECTION}" \
+  -e "${TEMP_ENV}" \
+  --export-environment "${TEMP_ENV}" \
+  --folder "📦 92 - CHAOS RACE VERIFY" \
+  --reporters cli,json \
+  --reporter-json-export "${REPORT_DIR}/chaos-race-verify.json" | tee -a "${SUITE_LOG}"
+VERIFY_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [[ ${VERIFY_EXIT} -ne 0 ]]; then
+  err "Verificação pós-chaos falhou (exit=${VERIFY_EXIT})"
+  exit "${VERIFY_EXIT}"
+fi
 ok "Verificação pós-chaos race concluída"
 
 actual_inventory_after="$(read_env_value inventory_after_chaos_race)"
@@ -556,7 +604,20 @@ step "Chaos AVG/P95/MAX (ms): ${chaos_avg}/${chaos_p95}/${chaos_max}"
 hr
 
 title "Executando rollback probe"
-newman run "${COLLECTION}" -e "${TEMP_ENV}" --export-environment "${TEMP_ENV}" --folder "📦 93 - CHAOS ROLLBACK PROBE" --reporters cli,json --reporter-json-export "${REPORT_DIR}/chaos-rollback-probe.json"
+set +e
+newman run "${COLLECTION}" \
+  -e "${TEMP_ENV}" \
+  --export-environment "${TEMP_ENV}" \
+  --folder "📦 93 - CHAOS ROLLBACK PROBE" \
+  --reporters cli,json \
+  --reporter-json-export "${REPORT_DIR}/chaos-rollback-probe.json" | tee -a "${SUITE_LOG}"
+ROLLBACK_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [[ ${ROLLBACK_EXIT} -ne 0 ]]; then
+  err "Rollback probe falhou (exit=${ROLLBACK_EXIT})"
+  exit "${ROLLBACK_EXIT}"
+fi
 ok "Rollback probe concluído"
 hr
 
@@ -574,12 +635,29 @@ step "Inventory AVG/P95/MAX: ${inv_avg}/${inv_p95}/${inv_max} ms"
 step "Movements AVG/P95/MAX: ${mov_avg}/${mov_p95}/${mov_max} ms"
 step "Login AVG/P95/MAX: ${log_avg}/${log_p95}/${log_max} ms"
 step "Thresholds AVG/P95/MAX: ${PERF_AVG_LIMIT_MS}/${PERF_P95_LIMIT_MS}/${PERF_MAX_LIMIT_MS} ms"
+
 perf_fail=0
-for metric in "$inv_avg:$PERF_AVG_LIMIT_MS:Inventory AVG" "$inv_p95:$PERF_P95_LIMIT_MS:Inventory P95" "$mov_avg:$PERF_AVG_LIMIT_MS:Movements AVG" "$mov_p95:$PERF_P95_LIMIT_MS:Movements P95" "$log_avg:$PERF_AVG_LIMIT_MS:Login AVG" "$log_p95:$PERF_P95_LIMIT_MS:Login P95"; do
+for metric in \
+  "$inv_avg:$PERF_AVG_LIMIT_MS:Inventory AVG" \
+  "$inv_p95:$PERF_P95_LIMIT_MS:Inventory P95" \
+  "$mov_avg:$PERF_AVG_LIMIT_MS:Movements AVG" \
+  "$mov_p95:$PERF_P95_LIMIT_MS:Movements P95" \
+  "$log_avg:$PERF_AVG_LIMIT_MS:Login AVG" \
+  "$log_p95:$PERF_P95_LIMIT_MS:Login P95"; do
   IFS=: read -r value limit label <<< "$metric"
-  if (( value > limit )); then err "$label acima do threshold (${value}ms > ${limit}ms)"; perf_fail=1; fi
+  if (( value > limit )); then
+    err "$label acima do threshold (${value}ms > ${limit}ms)"
+    perf_fail=1
+  fi
 done
-(( perf_fail != 0 )) && { update_env_value perf_result FAILED_THRESHOLDS; update_env_value final_suite_result FAILED_PERF_THRESHOLDS; err "Performance thresholds falharam"; exit 1; }
+
+(( perf_fail != 0 )) && {
+  update_env_value perf_result FAILED_THRESHOLDS
+  update_env_value final_suite_result FAILED_PERF_THRESHOLDS
+  err "Performance thresholds falharam"
+  exit 1
+}
+
 update_env_value perf_result PASSED
 update_env_value final_suite_result PASSED
 hr
@@ -644,10 +722,21 @@ title "Resumo do chaos race test"
 cat "$CHAOS_RACE_REPORT"
 hr
 
+title "Arquivando artefatos"
+cp -f "${TEMP_ENV}" "${REPORT_DIR}/environment.final.json"
+cp -f "${TEMP_NEWMAN}" "${REPORT_DIR}/newman-report.ultra.json"
+cp -f "${SUITE_LOG}" "${REPORT_DIR}/suite.ultra.log"
+cp -f "${CHAOS_RACE_REPORT}" "${REPORT_DIR}/chaos-race-report.txt"
+step "App log: ${APP_LOG}"
+step "Suite log: ${SUITE_LOG}"
+step "Newman JSON: ${TEMP_NEWMAN}"
+step "Report dir: ${REPORT_DIR}"
+hr
+
 update_env_value final_suite_result PASSED
 update_env_value ledger_race_result PASSED
-ok "STATUS FINAL: PASS com reconciliação consistente"
-hr
-title "V29 - Observação"
-detail "A V29 evolui a V28 e amplia o Distributed Chaos com multi-product contention, cross-node chaos, transaction abort, replay, ledger rebuild e snapshot drift detector."
+ok "TESTE V31 SUBSCRIPTION LIFECYCLE - ULTRA FINALIZADO"
+title "V31 - Observação"
+detail "A V31 mantém integralmente a V30 e adiciona lifecycle de subscription."
 detail "Runner ultra alinhado ao parser correto, usando worker logs como source of truth e métricas determinísticas por tentativa."
+detail "O app_ultra_*.log é log da aplicação. O log da suíte Newman fica em suite_ultra_*.log."

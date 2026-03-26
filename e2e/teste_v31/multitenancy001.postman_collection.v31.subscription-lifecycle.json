@@ -5581,7 +5581,8 @@
                   "});",
                   "pm.test('Inventory reconciliation não deve gerar quantidade negativa', () => {",
                   "  pm.expect(Number(json.quantityAvailable || 0)).to.be.at.least(0);",
-                  "});"
+                  "});",
+				  "pm.execution.setNextRequest('220.00 v31 init lifecycle vars');"
                 ]
               }
             }
