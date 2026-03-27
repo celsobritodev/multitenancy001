@@ -11,4 +11,8 @@ export products_per_tenant="${products_per_tenant:-24}"
 export sales_per_tenant="${sales_per_tenant:-40}"
 export billings_per_account="${billings_per_account:-4}"
 export max_sale_items="${max_sale_items:-5}"
-bash "${SCRIPT_DIR}/run-teste-v100-heavy-data-population-grid-strict.sh"
+if [[ -f "${SCRIPT_DIR}/run-teste-v100.9.1-query-hardened-patched-strict.sh" ]]; then
+  bash "${SCRIPT_DIR}/run-teste-v100.9.1-query-hardened-patched-strict.sh"
+else
+  bash "${SCRIPT_DIR}/run-teste-v100.9.1-query-hardened-patched-strict.sh"
+fi

@@ -27,8 +27,8 @@ LOG_DIR="${SCRIPT_DIR}/logs"
 APP_LOG="${LOG_DIR}/app_strict_${TIMESTAMP}.log"
 REPORT_DIR="${LOG_DIR}/reports_strict_${TIMESTAMP}"
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}"
-COLLECTION="${SCRIPT_DIR}/multitenancy001.postman_collection.v100.heavy-data-population-grid.json"
-ENV_FILE="${SCRIPT_DIR}/multitenancy001.local.postman_environment.v100.heavy-data-population-grid.json"
+COLLECTION="${SCRIPT_DIR}/collection.v100.9.1.json"
+ENV_FILE="${SCRIPT_DIR}/environment.v100.9.1.json"
 TEMP_ENV="${SCRIPT_DIR}/.env.effective.json"
 TEMP_NEWMAN="${SCRIPT_DIR}/.newman-report.strict.json"
 APP_PID=""
@@ -40,14 +40,14 @@ cleanup(){
 }
 trap cleanup EXIT
 echo "────────────────────────────────────────────────────"
-echo "🔷 TESTE V100 HEAVY DATA POPULATION GRID - STRICT SUITE"
+echo "🔷 TESTE V100.9.1 HEAVY DATA POPULATION GRID QUERY HARDENING PATCHED - STRICT SUITE"
 echo "   Iniciando execução em: $(date)"
 echo "   Path do script: ${SCRIPT_DIR}"
 echo "────────────────────────────────────────────────────"
 title "Verificando requisitos"
-[[ -f "${COLLECTION}" ]] || { err "Collection não encontrada"; exit 1; }
-[[ -f "${ENV_FILE}" ]] || { err "Environment não encontrado"; exit 1; }
-[[ -f "${PROJECT_ROOT}/mvnw" ]] || { err "mvnw não encontrado na raiz"; exit 1; }
+[[ -f "${COLLECTION}" ]] || { err "Collection não encontrada: ${COLLECTION}"; exit 1; }
+[[ -f "${ENV_FILE}" ]] || { err "Environment não encontrado: ${ENV_FILE}"; exit 1; }
+[[ -f "${PROJECT_ROOT}/mvnw" ]] || { err "mvnw não encontrado na raiz do projeto (${PROJECT_ROOT})"; exit 1; }
 command -v jq >/dev/null 2>&1 || { err "jq não instalado"; exit 1; }
 command -v curl >/dev/null 2>&1 || { err "curl não instalado"; exit 1; }
 command -v newman >/dev/null 2>&1 || { err "newman não instalado"; exit 1; }
@@ -55,6 +55,7 @@ ok "Requisitos OK"; hr
 bash "${SCRIPT_DIR}/cleanup.sh" >/dev/null 2>&1 || true
 cp "${ENV_FILE}" "${TEMP_ENV}"
 ln -sf "${PROJECT_ROOT}/mvnw" "${SCRIPT_DIR}/mvnw"
+[[ -d "${PROJECT_ROOT}/.mvn" && ! -e "${SCRIPT_DIR}/.mvn" ]] && cp -R "${PROJECT_ROOT}/.mvn" "${SCRIPT_DIR}/.mvn"
 title "Verificando porta ${APP_PORT}"
 if command -v netstat >/dev/null 2>&1 && netstat -ano 2>/dev/null | grep -q ":${APP_PORT}.*LISTENING"; then warn "Porta ${APP_PORT} em uso, liberando..."; pids=$(netstat -ano | grep ":${APP_PORT}" | grep LISTENING | awk '{print $5}'); for pid in $pids; do taskkill //PID "$pid" //F >/dev/null 2>&1 || true; done; sleep 2; fi
 ok "Porta ${APP_PORT} OK"; hr

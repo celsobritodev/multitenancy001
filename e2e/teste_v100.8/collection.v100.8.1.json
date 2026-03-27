@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "v100-enterprise-data-grid",
-    "name": "multitenancy001-e2e (v100 ENTERPRISE DATA POPULATION GRID)",
+    "name": "multitenancy001-e2e (v100.8.1 ENTERPRISE DATA POPULATION GRID QUERY STRESS PATCHED)",
     "description": "V100 - População enterprise do banco com múltiplas accounts/tenants, control plane users, tenant users, billings, categories, subcategories, suppliers, customers, products, inventory e sales com quantidade variável de itens.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -650,6 +650,10 @@
                   "      pm.environment.set(\"inventory_index\", \"0\");",
                   "      pm.environment.set(\"sale_index\", \"0\");",
                   "      pm.environment.set(\"sale_sample_id\", \"\");",
+                  "      const tenantIdxKey = String(tenantIdx);",
+                  "      const subMap = envJson(\"subcategories_by_category_by_tenant\", {});",
+                  "      if (!subMap[tenantIdxKey] || typeof subMap[tenantIdxKey] !== \"object\") subMap[tenantIdxKey] = {};",
+                  "      setEnvJson(\"subcategories_by_category_by_tenant\", subMap);",
                   "      pm.execution.setNextRequest(\"04.01 tenant login current admin\");",
                   "    }"
                 ]
@@ -737,43 +741,26 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "function envJson(key, fallback){",
-                  "  try {",
-                  "    const raw = pm.environment.get(key);",
-                  "    if (!raw) return fallback;",
-                  "    return JSON.parse(raw);",
-                  "  } catch (e) { return fallback; }",
-                  "}",
-                  "function setEnvJson(key, value){",
-                  "  pm.environment.set(key, JSON.stringify(value));",
-                  "}",
-                  "function extractArray(data){",
-                  "  if (Array.isArray(data)) return data;",
-                  "  if (data && Array.isArray(data.content)) return data.content;",
-                  "  if (data && Array.isArray(data.items)) return data.items;",
-                  "  if (data && Array.isArray(data.data)) return data.data;",
-                  "  if (data && Array.isArray(data.results)) return data.results;",
-                  "  return [];",
-                  "}",
-                  "function parseJsonSafe(){",
-                  "  try { return pm.response.json(); } catch (e) { return null; }",
-                  "}",
-                  "function maybeId(obj){",
-                  "  return obj && (obj.id ?? obj.accountId ?? obj.userId ?? obj.productId ?? obj.customerId ?? obj.saleId ?? obj.paymentId ?? null);",
-                  "}",
-                  "",
-                  "    pm.test(\"Tenant admin login OK\", function(){ pm.expect([200]).to.include(pm.response.code); });",
-                  "    const grid = envJson(\"tenant_grid\", []);",
-                  "    const tenantIdx = Number(pm.environment.get(\"tenant_loop_index\") || \"0\");",
-                  "    const current = grid[tenantIdx] || {};",
-                  "    const json = parseJsonSafe() || {};",
-                  "    pm.environment.set(\"tenant_access_token\", json.accessToken || json.token || \"\");",
-                  "    const schema = json.tenantSchema || json.schemaName || json.schema || current.tenantSchema || pm.environment.get(\"tenant_schema\");",
-                  "    pm.environment.set(\"tenant_schema\", schema || \"\");",
-                  "    current.tenantSchema = schema || current.tenantSchema || null;",
-                  "    grid[tenantIdx] = current;",
-                  "    setEnvJson(\"tenant_grid\", grid);",
-                  "    pm.execution.setNextRequest(\"04.02 create tenant user grid\");"
+                  "function envJson(key, fallback){ try { const raw = pm.environment.get(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } }",
+                  "function setEnvJson(key, value){ pm.environment.set(key, JSON.stringify(value)); }",
+                  "function parseJsonSafe(){ try { return pm.response.json(); } catch (e) { return null; } }",
+                  "pm.test(\"Tenant admin login OK\", function(){ pm.expect(pm.response.code).to.eql(200); });",
+                  "const grid = envJson(\"tenant_grid\", []);",
+                  "const tenantIdx = Number(pm.environment.get(\"tenant_loop_index\") || \"0\");",
+                  "const current = grid[tenantIdx] || {};",
+                  "const json = parseJsonSafe() || {};",
+                  "const token = json.accessToken || json.token || \"\";",
+                  "const schema = json.tenantSchema || json.schemaName || json.schema || current.tenantSchema || pm.environment.get(\"tenant_schema\") || \"\";",
+                  "pm.environment.set(\"tenant_access_token\", token);",
+                  "pm.collectionVariables.set(\"tenant_access_token\", token);",
+                  "pm.environment.set(\"tenant_schema\", schema);",
+                  "pm.collectionVariables.set(\"tenant_schema\", schema);",
+                  "current.tenantSchema = schema || current.tenantSchema || null;",
+                  "grid[tenantIdx] = current;",
+                  "setEnvJson(\"tenant_grid\", grid);",
+                  "console.log(\"TENANT LOGIN TOKEN:\", token ? \"present\" : \"missing\");",
+                  "console.log(\"TENANT LOGIN SCHEMA:\", schema || \"missing\");",
+                  "pm.execution.setNextRequest(\"04.02 create tenant user grid\");"
                 ]
               }
             }
@@ -1124,14 +1111,6 @@
                   "function setEnvJson(key, value){",
                   "  pm.environment.set(key, JSON.stringify(value));",
                   "}",
-                  "function extractArray(data){",
-                  "  if (Array.isArray(data)) return data;",
-                  "  if (data && Array.isArray(data.content)) return data.content;",
-                  "  if (data && Array.isArray(data.items)) return data.items;",
-                  "  if (data && Array.isArray(data.data)) return data.data;",
-                  "  if (data && Array.isArray(data.results)) return data.results;",
-                  "  return [];",
-                  "}",
                   "function parseJsonSafe(){",
                   "  try { return pm.response.json(); } catch (e) { return null; }",
                   "}",
@@ -1139,22 +1118,32 @@
                   "  return obj && (obj.id ?? obj.accountId ?? obj.userId ?? obj.productId ?? obj.customerId ?? obj.saleId ?? obj.paymentId ?? null);",
                   "}",
                   "",
-                  "    pm.test(\"Subcategory grid request accepted\", function(){ pm.expect([200,201,409,400]).to.include(pm.response.code); });",
-                  "    const tenantIdx = Number(pm.environment.get(\"tenant_loop_index\") || \"0\");",
-                  "    const idx = Number(pm.environment.get(\"subcategory_index\") || \"0\");",
-                  "    const total = Number(pm.environment.get(\"subcategories_per_tenant\") || \"8\");",
-                  "    const obj = envJson(\"subcategories_by_tenant\", {});",
-                  "    const key = String(tenantIdx);",
-                  "    if (!Array.isArray(obj[key])) obj[key] = [];",
-                  "    const json = parseJsonSafe() || {};",
-                  "    if (maybeId(json)) obj[key].push(maybeId(json));",
-                  "    setEnvJson(\"subcategories_by_tenant\", obj);",
-                  "    if (idx + 1 < total) {",
-                  "      pm.environment.set(\"subcategory_index\", String(idx + 1));",
-                  "      pm.execution.setNextRequest(\"04.04 create subcategory grid\");",
-                  "    } else {",
-                  "      pm.execution.setNextRequest(\"04.05 create supplier grid\");",
-                  "    }"
+                  "pm.test('Subcategory grid request accepted', function(){ pm.expect([200,201]).to.include(pm.response.code); });",
+                  "const tenantIdx = Number(pm.environment.get('tenant_loop_index') || '0');",
+                  "const idx = Number(pm.environment.get('subcategory_index') || '0');",
+                  "const total = Number(pm.environment.get('subcategories_per_tenant') || '8');",
+                  "const key = String(tenantIdx);",
+                  "const json = parseJsonSafe() || {};",
+                  "const subId = maybeId(json);",
+                  "const parentId = String(pm.environment.get('tmp_parent_category_id') || '');",
+                  "",
+                  "const allByTenant = envJson('subcategories_by_tenant', {});",
+                  "if (!Array.isArray(allByTenant[key])) allByTenant[key] = [];",
+                  "if (subId) allByTenant[key].push(subId);",
+                  "setEnvJson('subcategories_by_tenant', allByTenant);",
+                  "",
+                  "const mapByTenant = envJson('subcategories_by_category_by_tenant', {});",
+                  "if (!mapByTenant[key] || typeof mapByTenant[key] !== 'object') mapByTenant[key] = {};",
+                  "if (!Array.isArray(mapByTenant[key][parentId])) mapByTenant[key][parentId] = [];",
+                  "if (subId) mapByTenant[key][parentId].push(subId);",
+                  "setEnvJson('subcategories_by_category_by_tenant', mapByTenant);",
+                  "",
+                  "if (idx + 1 < total) {",
+                  "  pm.environment.set('subcategory_index', String(idx + 1));",
+                  "  pm.execution.setNextRequest('04.04 create subcategory grid');",
+                  "} else {",
+                  "  pm.execution.setNextRequest('04.05 create supplier grid');",
+                  "}"
                 ]
               }
             }
@@ -1427,19 +1416,26 @@
                   "function envJson(key, fallback){ try { const raw = pm.environment.get(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } }",
                   "const tenantIdx = Number(pm.environment.get('tenant_loop_index') || '0');",
                   "const idx = Number(pm.environment.get('product_index') || '0');",
-                  "const cats = envJson('categories_by_tenant', {})[String(tenantIdx)] || [];",
-                  "const subs = envJson('subcategories_by_tenant', {})[String(tenantIdx)] || [];",
+                  "const tenantKey = String(tenantIdx);",
+                  "const cats = envJson('categories_by_tenant', {})[tenantKey] || [];",
+                  "const subMap = envJson('subcategories_by_category_by_tenant', {})[tenantKey] || {};",
                   "const suffix = pm.environment.get('seed_suffix');",
+                  "",
+                  "const categoryId = cats[idx % Math.max(cats.length, 1)] || null;",
+                  "const categorySubIds = categoryId ? (subMap[String(categoryId)] || []) : [];",
+                  "const subcategoryId = categorySubIds.length ? categorySubIds[idx % categorySubIds.length] : null;",
+                  "",
                   "const body = {",
                   "  name: `V100 T${tenantIdx+1} Product ${idx+1} ${suffix}`,",
                   "  sku: `V100-T${tenantIdx+1}-SKU-${idx+1}-${suffix}`.slice(0,60),",
                   "  price: Number((90 + (idx * 7) + (tenantIdx * 11)).toFixed(2)),",
-                  "  categoryId: cats[idx % Math.max(cats.length,1)] || null,",
-                  "  subcategoryId: subs.length ? subs[idx % subs.length] : null,",
+                  "  categoryId: categoryId,",
+                  "  subcategoryId: subcategoryId,",
                   "  stockQuantity: 0,",
                   "  brand: 'V100'",
                   "};",
-                  "pm.environment.set('tmp_product_body', JSON.stringify(body, null, 2));"
+                  "pm.environment.set('tmp_product_body', JSON.stringify(body, null, 2));",
+                  "pm.request.body.raw = pm.environment.get('tmp_product_body');"
                 ]
               }
             },
@@ -1458,14 +1454,6 @@
                   "function setEnvJson(key, value){",
                   "  pm.environment.set(key, JSON.stringify(value));",
                   "}",
-                  "function extractArray(data){",
-                  "  if (Array.isArray(data)) return data;",
-                  "  if (data && Array.isArray(data.content)) return data.content;",
-                  "  if (data && Array.isArray(data.items)) return data.items;",
-                  "  if (data && Array.isArray(data.data)) return data.data;",
-                  "  if (data && Array.isArray(data.results)) return data.results;",
-                  "  return [];",
-                  "}",
                   "function parseJsonSafe(){",
                   "  try { return pm.response.json(); } catch (e) { return null; }",
                   "}",
@@ -1473,22 +1461,23 @@
                   "  return obj && (obj.id ?? obj.accountId ?? obj.userId ?? obj.productId ?? obj.customerId ?? obj.saleId ?? obj.paymentId ?? null);",
                   "}",
                   "",
-                  "    pm.test(\"Product grid request accepted\", function(){ pm.expect([200,201,409,400]).to.include(pm.response.code); });",
-                  "    const tenantIdx = Number(pm.environment.get(\"tenant_loop_index\") || \"0\");",
-                  "    const idx = Number(pm.environment.get(\"product_index\") || \"0\");",
-                  "    const total = Number(pm.environment.get(\"products_per_tenant\") || \"12\");",
-                  "    const obj = envJson(\"products_by_tenant\", {});",
-                  "    const key = String(tenantIdx);",
-                  "    if (!Array.isArray(obj[key])) obj[key] = [];",
-                  "    const json = parseJsonSafe() || {};",
-                  "    if (maybeId(json)) obj[key].push(maybeId(json));",
-                  "    setEnvJson(\"products_by_tenant\", obj);",
-                  "    if (idx + 1 < total) {",
-                  "      pm.environment.set(\"product_index\", String(idx + 1));",
-                  "      pm.execution.setNextRequest(\"04.07 create product grid\");",
-                  "    } else {",
-                  "      pm.execution.setNextRequest(\"04.08 inventory inbound grid\");",
-                  "    }"
+                  "pm.test('Product grid request accepted (NO-400)', function(){ pm.expect([200,201]).to.include(pm.response.code); });",
+                  "const tenantIdx = Number(pm.environment.get('tenant_loop_index') || '0');",
+                  "const idx = Number(pm.environment.get('product_index') || '0');",
+                  "const total = Number(pm.environment.get('products_per_tenant') || '12');",
+                  "const obj = envJson('products_by_tenant', {});",
+                  "const key = String(tenantIdx);",
+                  "if (!Array.isArray(obj[key])) obj[key] = [];",
+                  "const json = parseJsonSafe() || {};",
+                  "const productId = maybeId(json);",
+                  "if (productId) obj[key].push(productId);",
+                  "setEnvJson('products_by_tenant', obj);",
+                  "if (idx + 1 < total) {",
+                  "  pm.environment.set('product_index', String(idx + 1));",
+                  "  pm.execution.setNextRequest('04.07 create product grid');",
+                  "} else {",
+                  "  pm.execution.setNextRequest('04.08 inventory inbound grid');",
+                  "}"
                 ]
               }
             }
@@ -1758,6 +1747,212 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Read tenant sale sample accepted\", function(){ pm.expect([200,404]).to.include(pm.response.code); });",
+                  "pm.execution.setNextRequest(\"04.10A query products page 0\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.10A query products page 0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products?page=0&size={{query_page_size}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "{{query_page_size}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function upsertHeader(key, value) { pm.request.headers.upsert({ key: key, value: value }); }",
+                  "const token = pm.environment.get(\"tenant_access_token\") || pm.collectionVariables.get(\"tenant_access_token\") || \"\";",
+                  "const tenant = pm.environment.get(\"tenant_schema\") || pm.collectionVariables.get(\"tenant_schema\") || \"\";",
+                  "if (!pm.environment.get(\"base_url\")) { pm.environment.set(\"base_url\", \"http://localhost:8080\"); }",
+                  "if (!pm.collectionVariables.get(\"base_url\") && pm.environment.get(\"base_url\")) { pm.collectionVariables.set(\"base_url\", pm.environment.get(\"base_url\")); }",
+                  "if (token) { upsertHeader(\"Authorization\", \"Bearer \" + token); }",
+                  "if (tenant) { upsertHeader(\"X-Tenant\", tenant); }",
+                  "console.log(\"QUERY AUTH TOKEN:\", token ? \"present\" : \"missing\");",
+                  "console.log(\"QUERY TENANT:\", tenant ? tenant : \"missing\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function extractArray(data){ if (Array.isArray(data)) return data; if (data && Array.isArray(data.content)) return data.content; if (data && Array.isArray(data.items)) return data.items; if (data && Array.isArray(data.data)) return data.data; if (data && Array.isArray(data.results)) return data.results; return []; }",
+                  "function parseJsonSafe(){ try { return pm.response.json(); } catch (e) { return null; } }",
+                  "pm.test(\"Products page 0 query accepted\", function(){ pm.expect(pm.response.code).to.eql(200); });",
+                  "const body = parseJsonSafe();",
+                  "const rows = extractArray(body);",
+                  "pm.test(\"Products page 0 must return rows\", function(){ pm.expect(rows.length).to.be.greaterThan(0); });",
+                  "pm.environment.set(\"last_products_page0_count\", String(rows.length));",
+                  "pm.execution.setNextRequest(\"04.10B query products page 1\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.10B query products page 1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/products?page=1&size={{query_page_size}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "{{query_page_size}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function upsertHeader(key, value) { pm.request.headers.upsert({ key: key, value: value }); }",
+                  "const token = pm.environment.get(\"tenant_access_token\") || pm.collectionVariables.get(\"tenant_access_token\") || \"\";",
+                  "const tenant = pm.environment.get(\"tenant_schema\") || pm.collectionVariables.get(\"tenant_schema\") || \"\";",
+                  "if (!pm.environment.get(\"base_url\")) { pm.environment.set(\"base_url\", \"http://localhost:8080\"); }",
+                  "if (!pm.collectionVariables.get(\"base_url\") && pm.environment.get(\"base_url\")) { pm.collectionVariables.set(\"base_url\", pm.environment.get(\"base_url\")); }",
+                  "if (token) { upsertHeader(\"Authorization\", \"Bearer \" + token); }",
+                  "if (tenant) { upsertHeader(\"X-Tenant\", tenant); }",
+                  "console.log(\"QUERY AUTH TOKEN:\", token ? \"present\" : \"missing\");",
+                  "console.log(\"QUERY TENANT:\", tenant ? tenant : \"missing\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function extractArray(data){ if (Array.isArray(data)) return data; if (data && Array.isArray(data.content)) return data.content; if (data && Array.isArray(data.items)) return data.items; if (data && Array.isArray(data.data)) return data.data; if (data && Array.isArray(data.results)) return data.results; return []; }",
+                  "function parseJsonSafe(){ try { return pm.response.json(); } catch (e) { return null; } }",
+                  "pm.test(\"Products page 1 query accepted\", function(){ pm.expect(pm.response.code).to.eql(200); });",
+                  "const body = parseJsonSafe();",
+                  "const rows = extractArray(body);",
+                  "pm.test(\"Products page 1 must return rows\", function(){ pm.expect(rows.length).to.be.greaterThan(0); });",
+                  "pm.environment.set(\"last_products_page1_count\", String(rows.length));",
+                  "pm.execution.setNextRequest(\"04.10C query customers list\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.10C query customers list",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenant_access_token}}"
+              },
+              {
+                "key": "X-Tenant",
+                "value": "{{tenant_schema}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenant/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "customers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function upsertHeader(key, value) { pm.request.headers.upsert({ key: key, value: value }); }",
+                  "const token = pm.environment.get(\"tenant_access_token\") || pm.collectionVariables.get(\"tenant_access_token\") || \"\";",
+                  "const tenant = pm.environment.get(\"tenant_schema\") || pm.collectionVariables.get(\"tenant_schema\") || \"\";",
+                  "if (!pm.environment.get(\"base_url\")) { pm.environment.set(\"base_url\", \"http://localhost:8080\"); }",
+                  "if (!pm.collectionVariables.get(\"base_url\") && pm.environment.get(\"base_url\")) { pm.collectionVariables.set(\"base_url\", pm.environment.get(\"base_url\")); }",
+                  "if (token) { upsertHeader(\"Authorization\", \"Bearer \" + token); }",
+                  "if (tenant) { upsertHeader(\"X-Tenant\", tenant); }",
+                  "console.log(\"QUERY AUTH TOKEN:\", token ? \"present\" : \"missing\");",
+                  "console.log(\"QUERY TENANT:\", tenant ? tenant : \"missing\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function extractArray(data){ if (Array.isArray(data)) return data; if (data && Array.isArray(data.content)) return data.content; if (data && Array.isArray(data.items)) return data.items; if (data && Array.isArray(data.data)) return data.data; if (data && Array.isArray(data.results)) return data.results; return []; }",
+                  "function parseJsonSafe(){ try { return pm.response.json(); } catch (e) { return null; } }",
+                  "pm.test(\"Customers query accepted\", function(){ pm.expect(pm.response.code).to.eql(200); });",
+                  "const body = parseJsonSafe();",
+                  "const rows = extractArray(body);",
+                  "pm.test(\"Customers query must return rows\", function(){ pm.expect(rows.length).to.be.greaterThan(0); });",
+                  "pm.environment.set(\"last_customers_query_count\", String(rows.length));",
                   "pm.execution.setNextRequest(\"04.11 advance to next tenant\");"
                 ]
               }
