@@ -1,7 +1,7 @@
 -- V15__create_table_account_job_schedules.sql
 SET search_path TO public;
 
-CREATE TABLE IF NOT EXISTS account_job_schedules (
+CREATE TABLE IF NOT EXISTS public.account_job_schedules (
     id BIGSERIAL PRIMARY KEY,
 
     account_id BIGINT NOT NULL,
@@ -9,10 +9,11 @@ CREATE TABLE IF NOT EXISTS account_job_schedules (
 
     -- horário civil
     local_time TIME NOT NULL,
+
     -- timezone IANA (ex: America/Sao_Paulo)
     zone_id VARCHAR(60) NOT NULL,
 
-    enabled BOOLEAN NOT NULL DEFAULT true,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
 
     -- rastreabilidade e controle
     last_run_at TIMESTAMPTZ,
@@ -24,8 +25,9 @@ CREATE TABLE IF NOT EXISTS account_job_schedules (
     CONSTRAINT fk_account_job_schedules_account
         FOREIGN KEY (account_id) REFERENCES public.accounts(id),
 
-    CONSTRAINT uq_account_job_schedules UNIQUE (account_id, job_key)
+    CONSTRAINT uq_account_job_schedules
+        UNIQUE (account_id, job_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_account_job_schedules_next_run
-    ON account_job_schedules (enabled, next_run_at);
+    ON public.account_job_schedules (enabled, next_run_at);

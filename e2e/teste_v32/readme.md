@@ -1,17 +1,17 @@
-# V32.1 HARDENING REAL STABILIZED
+# teste_v32.9.1 FINAL
 
-Patch de estabilização da V32.
+Evolui a V32.8 CLEAN sem perder cobertura.
 
-## O que foi corrigido
-- customers agora usam variáveis determinísticas por execução
-- customer 1 e customer 2 deixaram de depender de valores fixos no corpo dos requests
-- criação de customer aceita 201/409 de forma controlada
-- duplicate user probe do bloco 230 usa `shared_email` real do fluxo de ambiguidade
-- runner STRICT agora grava `suite_strict_*.log`
-- runner ULTRA agora grava `suite_ultra_*.log`
-- ambos os runners capturam o exit code real do Newman
+## Ajustes principais
+- customer1_id_locked vira a fonte de verdade do fluxo de customers
+- 14.04 usa o id locked e valida ID exato
+- 14.05 vira verificação auxiliar e não derruba o fluxo principal
+- 14.06 sincroniza sem sobrescrever indevidamente o customer locked
+- STRICT + ULTRA preservados no padrão Newman + Git Bash
 
 ## Execução
+```bash
 chmod +x *.sh
-./run-teste-v32.1-strict.sh
-./run-teste-v32.1-ultra.sh
+./run-teste-v32.9.1-strict.sh
+./run-teste-v32.9.1-ultra.sh
+```
