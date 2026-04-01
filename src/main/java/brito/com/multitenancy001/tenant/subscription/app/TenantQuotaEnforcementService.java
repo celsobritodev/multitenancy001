@@ -8,28 +8,28 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.TenantToPublicBridgeExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsGuard;
-import brito.com.multitenancy001.tenant.products.persistence.TenantProductRepository;
-import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
+import brito.com.multitenancy001.tenant.subscription.app.dto.TenantUsageMeasurement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Serviço centralizado de enforcement de quotas no contexto tenant.
+ * Serviço centralizado de enforcement de quotas no contexto Tenant.
  *
- * <p><b>Responsabilidades:</b></p>
+ * <p>Responsabilidades:</p>
  * <ul>
- *   <li>Medir uso real no schema tenant.</li>
- *   <li>Executar validação de entitlements no PUBLIC de forma explícita.</li>
- *   <li>Evitar crossing PUBLIC dentro da transação tenant de escrita.</li>
- *   <li>Garantir coerência entre medição de uso e cálculo exposto em endpoints de limits.</li>
+ *   <li>Medir o uso real no schema tenant.</li>
+ *   <li>Executar validação de entitlements no Public Schema de forma explícita.</li>
+ *   <li>Evitar crossing Public dentro da mesma transação tenant de escrita.</li>
+ *   <li>Garantir coerência entre medição de uso, limits e enforcement.</li>
  * </ul>
  *
- * <p><b>Regras arquiteturais:</b></p>
+ * <p>Regras arquiteturais:</p>
  * <ul>
  *   <li>O uso tenant é medido em {@code readOnly} no schema tenant.</li>
- *   <li>A validação PUBLIC é executada fora da transação tenant de escrita.</li>
- *   <li>Este service deve ser chamado antes do bloco principal de save em write-paths críticos.</li>
- *   <li>As métricas de uso devem permanecer alinhadas com {@code AccountPlanUsageService}.</li>
+ *   <li>A validação Public é executada fora da transação tenant de escrita.</li>
+ *   <li>Este service deve ser chamado antes do save principal em write-paths críticos.</li>
+ *   <li>As métricas de uso permanecem alinhadas com
+ *       {@link TenantUsageMeasurementService}.</li>
  * </ul>
  */
 @Service
@@ -38,16 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantQuotaEnforcementService {
 
     private final TenantSchemaUnitOfWork tenantSchemaUnitOfWork;
-    private final TenantUserRepository tenantUserRepository;
-    private final TenantProductRepository tenantProductRepository;
+    private final TenantUsageMeasurementService tenantUsageMeasurementService;
     private final AccountEntitlementsGuard accountEntitlementsGuard;
     private final TenantToPublicBridgeExecutor tenantToPublicBridgeExecutor;
 
     /**
-     * Mede o uso atual de usuários habilitados no tenant e valida a quota correspondente no PUBLIC.
-     *
-     * <p>Este método usa a mesma semântica de contagem do snapshot de uso do plano,
-     * evitando divergência entre enforcement e endpoint de limits.</p>
+     * Mede o uso atual de usuários habilitados no tenant
+     * e valida a quota correspondente no Public Schema.
      *
      * @param accountId id da conta
      * @param tenantSchema schema do tenant
@@ -65,7 +62,7 @@ public class TenantQuotaEnforcementService {
 
         long currentUsers = tenantSchemaUnitOfWork.readOnly(
                 normalizedTenantSchema,
-                () -> tenantUserRepository.countEnabledUsersByAccount(accountId)
+                () -> tenantUsageMeasurementService.measureCurrentUsers(accountId)
         );
 
         log.info(
@@ -77,7 +74,7 @@ public class TenantQuotaEnforcementService {
 
         tenantToPublicBridgeExecutor.run(() -> {
             log.info(
-                    "Executando validação PUBLIC de quota de usuários. accountId={}, currentUsers={}",
+                    "Executando validação Public de quota de usuários. accountId={}, currentUsers={}",
                     accountId,
                     currentUsers
             );
@@ -93,10 +90,8 @@ public class TenantQuotaEnforcementService {
     }
 
     /**
-     * Mede o uso atual de produtos não deletados no tenant e valida a quota correspondente no PUBLIC.
-     *
-     * <p>Este método usa a mesma semântica de contagem do snapshot de uso do plano,
-     * evitando divergência entre enforcement e endpoint de limits.</p>
+     * Mede o uso atual de produtos não deletados no tenant
+     * e valida a quota correspondente no Public Schema.
      *
      * @param accountId id da conta
      * @param tenantSchema schema do tenant
@@ -114,7 +109,7 @@ public class TenantQuotaEnforcementService {
 
         long currentProducts = tenantSchemaUnitOfWork.readOnly(
                 normalizedTenantSchema,
-                tenantProductRepository::countByDeletedFalse
+                tenantUsageMeasurementService::measureCurrentProducts
         );
 
         log.info(
@@ -126,7 +121,7 @@ public class TenantQuotaEnforcementService {
 
         tenantToPublicBridgeExecutor.run(() -> {
             log.info(
-                    "Executando validação PUBLIC de quota de produtos. accountId={}, currentProducts={}",
+                    "Executando validação Public de quota de produtos. accountId={}, currentProducts={}",
                     accountId,
                     currentProducts
             );
@@ -139,6 +134,40 @@ public class TenantQuotaEnforcementService {
                 normalizedTenantSchema,
                 currentProducts
         );
+    }
+
+    /**
+     * Mede o uso atual completo do tenant dentro do schema informado.
+     *
+     * @param accountId id da conta
+     * @param tenantSchema schema do tenant
+     * @return snapshot de uso atual
+     */
+    public TenantUsageMeasurement measureUsage(Long accountId, String tenantSchema) {
+        validateInputs(accountId, tenantSchema);
+
+        String normalizedTenantSchema = normalizeTenantSchema(tenantSchema);
+
+        log.info(
+                "Medição completa de uso solicitada para enforcement. accountId={}, tenantSchema={}",
+                accountId,
+                normalizedTenantSchema
+        );
+
+        TenantUsageMeasurement measurement = tenantSchemaUnitOfWork.readOnly(
+                normalizedTenantSchema,
+                () -> tenantUsageMeasurementService.measureUsage(accountId)
+        );
+
+        log.info(
+                "Medição completa de uso concluída. accountId={}, tenantSchema={}, currentUsers={}, currentProducts={}",
+                accountId,
+                normalizedTenantSchema,
+                measurement.currentUsers(),
+                measurement.currentProducts()
+        );
+
+        return measurement;
     }
 
     /**

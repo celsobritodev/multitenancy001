@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS payments (
     effective_from      TIMESTAMPTZ,
     coverage_end_date   TIMESTAMPTZ,
 
+    idempotency_key VARCHAR(160),
+
     payment_date TIMESTAMPTZ NOT NULL,
     valid_until  TIMESTAMPTZ,
     refunded_at  TIMESTAMPTZ,
@@ -47,11 +49,37 @@ CREATE TABLE IF NOT EXISTS payments (
     deleted_by_email CITEXT,
 
     deleted    BOOLEAN NOT NULL DEFAULT false,
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+
+    CONSTRAINT uq_payments_idempotency_key UNIQUE (idempotency_key),
+
+    CONSTRAINT chk_payments_amount_positive
+        CHECK (amount > 0),
+
+    CONSTRAINT chk_payments_currency_len
+        CHECK (char_length(currency) = 3),
+
+    CONSTRAINT chk_payments_idempotency_key_not_blank
+        CHECK (
+            idempotency_key IS NULL
+            OR char_length(trim(idempotency_key)) > 0
+        )
 );
 
-CREATE INDEX IF NOT EXISTS idx_payments_account_id      ON payments (account_id);
-CREATE INDEX IF NOT EXISTS idx_payments_status          ON payments (status);
-CREATE INDEX IF NOT EXISTS idx_payments_payment_date    ON payments (payment_date);
-CREATE INDEX IF NOT EXISTS idx_payments_target_plan     ON payments (target_plan);
-CREATE INDEX IF NOT EXISTS idx_payments_payment_purpose ON payments (payment_purpose);
+CREATE INDEX IF NOT EXISTS idx_payments_account_id
+    ON payments (account_id);
+
+CREATE INDEX IF NOT EXISTS idx_payments_status
+    ON payments (status);
+
+CREATE INDEX IF NOT EXISTS idx_payments_payment_date
+    ON payments (payment_date);
+
+CREATE INDEX IF NOT EXISTS idx_payments_target_plan
+    ON payments (target_plan);
+
+CREATE INDEX IF NOT EXISTS idx_payments_payment_purpose
+    ON payments (payment_purpose);
+
+CREATE INDEX IF NOT EXISTS idx_payments_idempotency_key
+    ON payments (idempotency_key);

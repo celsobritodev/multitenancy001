@@ -1,5 +1,10 @@
 package brito.com.multitenancy001.controlplane.billing.persistence;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,13 +12,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.controlplane.billing.domain.Payment;
+import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
+import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
@@ -54,18 +57,35 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
     }
 
     Optional<Payment> findByIdAndAccount_Id(Long id, Long accountId);
+
     boolean existsByIdAndAccount_Id(Long id, Long accountId);
 
     List<Payment> findByAccount_Id(Long accountId);
+
     Page<Payment> findByAccount_Id(Long accountId, Pageable pageable);
+
     List<Payment> findByAccount_IdAndStatus(Long accountId, PaymentStatus status);
+
     List<Payment> findByAccount_IdOrderByAudit_CreatedAtDesc(Long accountId);
 
     Optional<Payment> findByTransactionId(String transactionId);
+
     boolean existsByTransactionId(String transactionId);
 
+    Optional<Payment> findByIdempotencyKey(String idempotencyKey);
+
+    @Query("""
+        select p
+          from Payment p
+          join fetch p.account
+         where p.idempotencyKey = :idempotencyKey
+    """)
+    Optional<Payment> findByIdempotencyKeyWithAccount(@Param("idempotencyKey") String idempotencyKey);
+
     List<Payment> findByStatus(PaymentStatus status);
+
     List<Payment> findByStatusAndAudit_CreatedAtBefore(PaymentStatus status, Instant date);
+
     List<Payment> findByValidUntilBeforeAndStatus(Instant date, PaymentStatus status);
 
     @Query("""
@@ -129,4 +149,24 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
            and p.validUntil >= :now
     """)
     boolean existsActivePayment(@Param("accountId") Long accountId, @Param("now") Instant now);
+
+    @Query("""
+        select p
+          from Payment p
+         where p.account.id = :accountId
+           and p.paymentPurpose = :purpose
+           and p.targetPlan = :targetPlan
+           and p.billingCycle = :billingCycle
+           and p.amount = :amount
+           and p.status in :statuses
+         order by p.audit.createdAt desc
+    """)
+    List<Payment> findEquivalentUpgradeCandidates(
+            @Param("accountId") Long accountId,
+            @Param("purpose") PaymentPurpose purpose,
+            @Param("targetPlan") SubscriptionPlan targetPlan,
+            @Param("billingCycle") BillingCycle billingCycle,
+            @Param("amount") BigDecimal amount,
+            @Param("statuses") List<PaymentStatus> statuses
+    );
 }

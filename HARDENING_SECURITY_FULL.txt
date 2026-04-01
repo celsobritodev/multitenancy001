@@ -1,0 +1,1916 @@
+===== TenantContextMonitor.java =====
+package brito.com.multitenancy001.infrastructure.multitenancy.observability;
+
+import brito.com.multitenancy001.shared.api.error.ApiErrorCategory;
+import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Component;
+
+/**
+ * Observabilidade do TenantContext em execução de Services.
+ *
+ * Responsabilidades:
+ * - Logar tenant bound/effective
+ * - Classificar falhas (AUTH, VALIDATION, BUSINESS, INTERNAL, TENANT_CONTEXT)
+ * - Evitar stacktrace para fluxo esperado
+ *
+ * Não altera fluxo de exceções — apenas observa.
+ */
+@Aspect
+@Component
+@Slf4j
+public class TenantContextMonitor {
+
+    @Around("@within(org.springframework.stereotype.Service)")
+    public Object monitorServiceMethods(ProceedingJoinPoint joinPoint) throws Throwable {
+        String methodName = joinPoint.getSignature().toShortString();
+        String boundTenant = TenantContext.getOrNull();
+        String effectiveTenant = TenantContext.getOrDefaultPublic();
+        
+        long startTime = System.currentTimeMillis();
+
+        log.debug("🏁 INÍCIO {} | tenant(bound={}, effective={})",
+                methodName, boundTenant, effectiveTenant);
+
+        try {
+            Object result = joinPoint.proceed();
+            long duration = System.currentTimeMillis() - startTime;
+
+            log.debug("✅ FIM {} ({}ms) | tenant(bound={}, effective={})",
+                    methodName, duration,
+                    TenantContext.getOrNull(),
+                    TenantContext.getOrDefaultPublic());
+
+            return result;
+
+        } catch (Throwable e) {
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // Tratamento especial para erro de contexto de tenant
+            if (isTenantContextError(e)) {
+                log.warn("🏷️ CONTEXTO_TENANT {} ({}ms) | tenant(bound={}, effective={}) | detalhe: {}",
+                        methodName, duration, boundTenant, effectiveTenant, getTenantContextErrorMessage(e));
+                throw e;
+            }
+
+            // AUTH inválida = fluxo normal
+            if (isInvalidLogin(e)) {
+                log.info("🔐 AUTENTICACAO {} ({}ms) | tenant(bound={}, effective={}) | motivo: {}",
+                        methodName, duration, boundTenant, effectiveTenant, safeMsg(e));
+                throw e;
+            }
+
+            ApiException apiEx = findApiException(e);
+            if (apiEx != null) {
+                logApiException(apiEx, methodName, duration, boundTenant, effectiveTenant, e);
+                throw e;
+            }
+
+            // Erro inesperado
+            log.error("❌ ERRO_INESPERADO {} ({}ms) | tenant(bound={}, effective={}) | tipo={} | motivo: {}",
+                    methodName, duration, boundTenant, effectiveTenant,
+                    e.getClass().getSimpleName(), safeMsg(e), e);
+            throw e;
+        }
+    }
+
+    private boolean isTenantContextError(Throwable e) {
+        if (e == null) return false;
+        
+        if (e instanceof IllegalStateException) {
+            String msg = e.getMessage();
+            return msg != null && msg.contains("TenantContext.bindTenantSchema");
+        }
+        
+        return false;
+    }
+
+    private String getTenantContextErrorMessage(Throwable e) {
+        if (e == null) return "Erro desconhecido";
+        
+        String msg = e.getMessage();
+        if (msg != null && msg.contains("TenantContext.bindTenantSchema")) {
+            return "Não é possível mudar para o schema do tenant dentro de uma transação existente. " +
+                   "A operação no schema public foi concluída, mas a operação no tenant foi ignorada.";
+        }
+        
+        return safeMsg(e);
+    }
+
+    private void logApiException(
+            ApiException ex,
+            String method,
+            long duration,
+            String boundTenant,
+            String effectiveTenant,
+            Throwable original
+    ) {
+        ApiErrorCategory category = ex.getCategory();
+        int status = ex.getStatus();
+
+        String baseLog = "{} {} ({}ms) | tenant(bound={}, effective={}) | status={} código={} | {}";
+
+        // INTERNAL = erro real (mostra stacktrace)
+        if (category == ApiErrorCategory.INTERNAL || status >= 500) {
+            log.error(baseLog, "❌ INTERNO", method, duration, 
+                    boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex), original);
+            return;
+        }
+
+        // AUTH / SECURITY
+        if (category == ApiErrorCategory.AUTH || category == ApiErrorCategory.SECURITY) {
+            log.info(baseLog, "🔐 SEGURANCA", method, duration,
+                    boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
+            return;
+        }
+
+        // VALIDATION / REQUEST
+        if (category == ApiErrorCategory.VALIDATION || category == ApiErrorCategory.REQUEST) {
+            log.warn(baseLog, "⚠️ VALIDACAO", method, duration,
+                    boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
+            return;
+        }
+
+        // CONFLICT
+        if (category == ApiErrorCategory.CONFLICT) {
+            log.warn(baseLog, "⚡ CONFLITO", method, duration,
+                    boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
+            return;
+        }
+
+        // Regra de negócio
+        log.warn(baseLog, "📋 NEGOCIO", method, duration,
+                boundTenant, effectiveTenant, status, ex.getCode().name(), 
+                String.format("[%s] %s", category.name(), safeMsg(ex)));
+    }
+
+    private ApiException findApiException(Throwable ex) {
+        if (ex == null) return null;
+        if (ex instanceof ApiException api) return api;
+        if (ex.getCause() != null && ex.getCause() != ex) {
+            return findApiException(ex.getCause());
+        }
+        return null;
+    }
+
+    private boolean isInvalidLogin(Throwable ex) {
+        if (ex == null) return false;
+
+        if (ex instanceof BadCredentialsException) return true;
+        if (ex instanceof UsernameNotFoundException) return true;
+
+        if (ex.getCause() != null && ex.getCause() != ex) {
+            return isInvalidLogin(ex.getCause());
+        }
+
+        return false;
+    }
+
+    private String safeMsg(Throwable ex) {
+        if (ex == null) return "Exceção nula";
+        String msg = ex.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        // Limitar tamanho da mensagem
+        if (msg.length() > 150) {
+            msg = msg.substring(0, 147) + "...";
+        }
+        return msg;
+    }
+}
+===== SecurityConfig.java =====
+package brito.com.multitenancy001.infrastructure.security.config;
+
+import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticationFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.RequestMetaContextFilter;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.List;
+
+/**
+ * Configuração de segurança (JWT stateless).
+ *
+ * Ordem de filtros:
+ * 1) RequestMetaContextFilter (correlation id / ip / user-agent)
+ * 2) JwtAuthenticationFilter (autenticação JWT)
+ * 3) MustChangePasswordFilter (política 428)
+ * 4) RequestLoggingFilter (log final)
+ *
+ * Ajuste:
+ * - libera /api/tenant/auth/logout e /api/controlplane/auth/logout como public endpoints
+ *   (logout é baseado em refreshToken no body, e não depende do access token).
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtTokenProvider jwtTokenProvider;
+
+    /**
+     * Mantido para CONTROLPLANE (e outros contextos que você use).
+     */
+    private final MultiContextUserDetailsService multiContextUserDetailsService;
+
+    /**
+     * NOVO: usado pelo JwtAuthenticationFilter para TENANT (carregar user via repository).
+     */
+    private final TenantUserRepository tenantUserRepository;
+    private final AppClock appClock;
+
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(
+                jwtTokenProvider,
+                multiContextUserDetailsService,
+                tenantUserRepository,
+                appClock,
+                restAuthenticationEntryPoint,
+                restAccessDeniedHandler
+        );
+    }
+
+    @Bean
+    public MustChangePasswordFilter mustChangePasswordFilter() {
+        return new MustChangePasswordFilter();
+    }
+
+    @Bean
+    public RequestMetaContextFilter requestMetaContextFilter() {
+        return new RequestMetaContextFilter();
+    }
+
+    @Bean
+    public RequestLoggingFilter requestLoggingFilter() {
+        return new RequestLoggingFilter();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+        return authConfig.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+
+            // ✅ CORS (opcional, mas recomendado) + X-Request-Id
+            .cors(cors -> cors.configurationSource(request -> {
+                CorsConfiguration config = new CorsConfiguration();
+
+                config.setAllowedOriginPatterns(List.of(
+                        "http://localhost:*",
+                        "http://127.0.0.1:*"
+                ));
+
+                config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+                config.setAllowedHeaders(List.of(
+                        "Authorization",
+                        "Content-Type",
+                        "Accept",
+                        "X-Request-Id",
+                        "X-Tenant"
+                ));
+
+                config.setExposedHeaders(List.of(
+                        "Authorization",
+                        "X-Request-Id"
+                ));
+
+                config.setAllowCredentials(true);
+                config.setMaxAge(3600L);
+                return config;
+            }))
+
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                    .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
+                    .accessDeniedHandler(restAccessDeniedHandler)           // 403
+            )
+            .authorizeHttpRequests(authz -> authz
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/actuator/health",
+
+                    // ✅ CONTROL PLANE AUTH
+                    "/api/controlplane/auth/login",
+                    "/api/controlplane/auth/refresh",
+                    "/api/controlplane/auth/logout",
+
+                    // ✅ TENANT AUTH
+                    "/api/tenant/auth/login",
+                    "/api/tenant/auth/login/confirm",
+                    "/api/tenant/auth/refresh",
+                    "/api/tenant/auth/logout",
+
+                    // ✅ TENANT: troca de senha (JWT, mas precisa passar pelo filtro 428)
+                    // OBS: Security precisa deixar chegar no controller; o MustChangePasswordFilter decide 428 vs allow.
+                    "/api/tenant/me/password",
+
+                    // ✅ reset por token (público)
+                    "/api/tenant/password/forgot",
+                    "/api/tenant/password/reset",
+
+                    "/api/accounts/auth/checkuser",
+                    "/api/signup"
+                ).permitAll()
+
+                // rotas autenticadas
+                .requestMatchers("/api/admin/me/password").authenticated()
+                .requestMatchers("/api/me/**").authenticated()
+
+                .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/controlplane/**").authenticated()
+                .requestMatchers("/api/tenant/**").authenticated()
+
+                .anyRequest().denyAll()
+            );
+
+        // ✅ 1) meta primeiro
+        http.addFilterBefore(requestMetaContextFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ 2) JWT cedo
+        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        // ✅ 3) política de senha
+        http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
+
+        // ✅ 4) log final do request
+        http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
+
+        return http.build();
+    }
+}
+===== JwtAuthenticationFilter.java =====
+package brito.com.multitenancy001.infrastructure.security.filter;
+
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.SecurityConstants;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
+import brito.com.multitenancy001.shared.context.TenantContext;
+import brito.com.multitenancy001.shared.db.Schemas;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * Filtro JWT.
+ *
+ * Regras:
+ * - Endpoints publicos: bypass explicito (nao tenta validar token)
+ * - Sem Bearer: passa
+ * - Token invalido: 401 via entryPoint (apenas para rotas protegidas)
+ * - Mismatch dominio (tenant token em controlplane ou vice-versa): 403 via AccessDeniedHandler
+ * - TENANT:
+ *   - valida tenantSchema + accountId + X-Tenant
+ *   - bind TenantContext.scope(schema)
+ *   - carrega usuario via TenantUserRepository dentro do schema do tenant
+ * - CONTROLPLANE: usa MultiContextUserDetailsService
+ */
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String TENANT_HEADER = "X-Tenant";
+
+    private final JwtTokenProvider jwtTokenProvider;
+    private final MultiContextUserDetailsService multiContextUserDetailsService;
+    private final TenantUserRepository tenantUserRepository;
+    private final AppClock appClock;
+
+    private final AuthenticationEntryPoint authenticationEntryPoint; // 401
+    private final AccessDeniedHandler accessDeniedHandler;           // 403
+
+    @Override
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest req,
+            @NonNull HttpServletResponse res,
+            @NonNull FilterChain chain
+    ) throws ServletException, IOException {
+
+        // 0) BYPASS explicito de rotas publicas (Padrão B)
+        //    Importante: login/signup nao pode depender de Bearer.
+        if (isPublicEndpoint(req)) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        final String authHeader = req.getHeader("Authorization");
+
+        // 1) Sem Bearer: deixa seguir anonimo; AuthorizationFilter decide depois
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        final String jwt = authHeader.substring(7).trim();
+
+        // 2) Bearer sem token -> trata como "sem token" (nao derruba aqui)
+        if (!StringUtils.hasText(jwt)) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        // 3) Token invalido/adulterado/expirado => 401 (somente em rotas protegidas)
+        //    Aqui ja sabemos que nao e rota publica.
+        if (!jwtTokenProvider.validateToken(jwt)) {
+            // token inválido -> apenas limpa contexto
+            // AuthorizationFilter decidirá se rota exige auth
+            SecurityContextHolder.clearContext();
+            chain.doFilter(req, res);
+            return;
+        }
+
+        final AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(jwt);
+        final String email = normalizeLower(jwtTokenProvider.getEmailFromToken(jwt));
+
+        if (!StringUtils.hasText(email)) {
+            SecurityContextHolder.clearContext();
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (email)"));
+            return;
+        }
+
+        // Se ja tem auth no contexto, segue
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        // authDomain ausente => token ruim => 401
+        if (authDomain == null) {
+            SecurityContextHolder.clearContext();
+            authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (authDomain)"));
+            return;
+        }
+
+        // ======================
+        // Regras de dominio por rota
+        // ======================
+        boolean needsControlPlane = requiresControlPlane(req);
+        boolean needsTenant = requiresTenant(req);
+
+        if (needsControlPlane && authDomain == AuthDomain.TENANT) {
+            accessDeniedHandler.handle(req, res,
+                    new org.springframework.security.access.AccessDeniedException("Tenant token cannot access control plane routes"));
+            return;
+        }
+
+        if (needsTenant && authDomain == AuthDomain.CONTROLPLANE) {
+            accessDeniedHandler.handle(req, res,
+                    new org.springframework.security.access.AccessDeniedException("Control plane token cannot access tenant routes"));
+            return;
+        }
+
+        // ======================
+        // TENANT
+        // ======================
+        if (authDomain == AuthDomain.TENANT) {
+
+            final String tenantSchema = normalize(jwtTokenProvider.getTenantSchemaFromToken(jwt));
+            if (!StringUtils.hasText(tenantSchema)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (tenantSchema)"));
+                return;
+            }
+            if (Schemas.CONTROL_PLANE.equalsIgnoreCase(tenantSchema)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid tenant schema"));
+                return;
+            }
+            if (!tenantSchema.matches("^[a-zA-Z0-9_]+$")) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid tenant schema format"));
+                return;
+            }
+
+            Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+            if (accountId == null) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (accountId)"));
+                return;
+            }
+
+            // mismatch do header => 403
+            final String headerTenant = normalize(req.getHeader(TENANT_HEADER));
+            if (StringUtils.hasText(headerTenant) && !headerTenant.equalsIgnoreCase(tenantSchema)) {
+                accessDeniedHandler.handle(req, res,
+                        new org.springframework.security.access.AccessDeniedException("X-Tenant header does not match token tenant"));
+                return;
+            }
+
+            try (TenantContext.Scope ignored = TenantContext.scope(tenantSchema)) {
+
+                TenantUser user = tenantUserRepository
+                        .findByEmailAndAccountIdAndDeletedFalse(email, accountId)
+                        .orElse(null);
+
+                if (user == null) {
+                    SecurityContextHolder.clearContext();
+                    authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authentication context"));
+                    return;
+                }
+
+                if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+                    SecurityContextHolder.clearContext();
+                    accessDeniedHandler.handle(req, res,
+                            new org.springframework.security.access.AccessDeniedException("User is inactive"));
+                    return;
+                }
+
+                var authorities = AuthoritiesFactory.forTenant(user);
+
+                AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                        user,
+                        tenantSchema,
+                        appClock.instant(),
+                        authorities
+                );
+
+                setAuth(req, principal, authorities);
+
+                chain.doFilter(req, res);
+                return;
+
+            } catch (org.springframework.security.access.AccessDeniedException e) {
+                SecurityContextHolder.clearContext();
+                accessDeniedHandler.handle(req, res, e);
+                return;
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authentication context"));
+                return;
+            }
+        }
+
+        // ======================
+        // CONTROLPLANE
+        // ======================
+        if (authDomain == AuthDomain.CONTROLPLANE) {
+
+            String context = normalize(jwtTokenProvider.getContextFromToken(jwt));
+            if (StringUtils.hasText(context) && !Schemas.CONTROL_PLANE.equalsIgnoreCase(context)) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (context)"));
+                return;
+            }
+
+            Long accountId = jwtTokenProvider.getAccountIdFromToken(jwt);
+            if (accountId == null) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid JWT claims (accountId)"));
+                return;
+            }
+
+            try {
+                UserDetails userDetails = multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
+                setAuth(req, userDetails);
+                chain.doFilter(req, res);
+                return;
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authentication context"));
+                return;
+            }
+        }
+
+        SecurityContextHolder.clearContext();
+        authenticationEntryPoint.commence(req, res, new BadCredentialsException("Invalid authDomain"));
+    }
+
+    /**
+     * Endpoints que devem ser PUBLICOS e nunca depender de Bearer.
+     */
+    private boolean isPublicEndpoint(HttpServletRequest req) {
+        String path = req.getRequestURI();
+
+        if (path == null) {
+            return false;
+        }
+
+        // signup
+        if ("/api/signup".equals(path)) return true;
+
+        // auth endpoints (tenant/controlplane)
+        if (path.startsWith("/api/tenant/auth/")) return true;
+        if (path.startsWith("/api/controlplane/auth/")) return true;
+
+        // password reset public
+        if (path.startsWith("/api/tenant/password/")) return true;
+
+        // health + swagger
+        if ("/actuator/health".equals(path)) return true;
+        if (path.startsWith("/v3/api-docs/")) return true;
+        if (path.startsWith("/swagger-ui")) return true;
+        if ("/swagger-ui.html".equals(path)) return true;
+
+        return false;
+    }
+
+    private void setAuth(HttpServletRequest request, UserDetails userDetails) {
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private void setAuth(
+            HttpServletRequest request,
+            AuthenticatedUserContext principal,
+            java.util.Collection<? extends org.springframework.security.core.GrantedAuthority> authorities
+    ) {
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(principal, null, authorities);
+        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private boolean requiresControlPlane(HttpServletRequest req) {
+        String path = req.getRequestURI();
+        return path.startsWith(SecurityConstants.ApiPaths.ADMIN_PREFIX)
+                || path.startsWith(SecurityConstants.ApiPaths.CONTROLPLANE_PREFIX);
+    }
+
+    private boolean requiresTenant(HttpServletRequest req) {
+        String path = req.getRequestURI();
+        boolean isMe = SecurityConstants.ApiPaths.ME.equals(path)
+                || path.startsWith(SecurityConstants.ApiPaths.ME_PREFIX);
+        return path.startsWith(SecurityConstants.ApiPaths.TENANT_PREFIX) || isMe;
+    }
+
+    private String normalize(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private String normalizeLower(String s) {
+        String t = normalize(s);
+        return (t == null) ? null : t.toLowerCase();
+    }
+}
+===== RequestMetaContextFilter.java =====
+package brito.com.multitenancy001.infrastructure.security.filter;
+
+import brito.com.multitenancy001.shared.context.RequestMeta;
+import brito.com.multitenancy001.shared.context.RequestMetaContext;
+import brito.com.multitenancy001.shared.context.TenantContext;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.UUID;
+
+public class RequestMetaContextFilter extends OncePerRequestFilter {
+
+    public static final String REQUEST_ID_HEADER = "X-Request-Id";
+    public static final String FORWARDED_FOR_HEADER = "X-Forwarded-For";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+
+        RequestMeta meta = new RequestMeta(
+                resolveRequestId(req),
+                req.getMethod(),
+                req.getRequestURI(),
+                resolveClientIp(req),
+                resolveUserAgent(req)
+        );
+
+        RequestMetaContext.set(meta);
+
+        if (meta.requestId() != null) {
+            res.setHeader(REQUEST_ID_HEADER, meta.requestId().toString());
+        }
+
+        try {
+            chain.doFilter(req, res);
+        } finally {
+            // ✅ limpeza centralizada
+            try { TenantContext.clear(); } catch (Exception ignore) {}
+            RequestMetaContext.clear();
+        }
+    }
+
+    private UUID resolveRequestId(HttpServletRequest req) {
+        String raw = req.getHeader(REQUEST_ID_HEADER);
+        if (StringUtils.hasText(raw)) {
+            try { return UUID.fromString(raw.trim()); } catch (Exception ignore) {}
+        }
+        return UUID.randomUUID();
+    }
+
+    private String resolveClientIp(HttpServletRequest req) {
+        String xff = req.getHeader(FORWARDED_FOR_HEADER);
+        if (StringUtils.hasText(xff)) {
+            String first = xff.split(",")[0].trim();
+            if (StringUtils.hasText(first)) return first;
+        }
+        return req.getRemoteAddr();
+    }
+
+    private String resolveUserAgent(HttpServletRequest req) {
+        String ua = req.getHeader("User-Agent");
+        return StringUtils.hasText(ua) ? ua.trim() : null;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/actuator")
+                || path.startsWith("/swagger")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/favicon.ico");
+    }
+}
+
+
+===== TenantHeaderTenantContextFilter.java =====
+package brito.com.multitenancy001.infrastructure.security.filter;
+
+import brito.com.multitenancy001.shared.context.TenantContext;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Slf4j
+public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
+
+    public static final String TENANT_HEADER = "X-Tenant";
+
+  @Override
+protected void doFilterInternal(HttpServletRequest request,
+                                HttpServletResponse response,
+                                FilterChain filterChain) throws ServletException, IOException {
+
+    final long threadId = Thread.currentThread().threadId();
+    final String method = request.getMethod();
+    final String uri = request.getRequestURI();
+
+    // ✅ Padrão B: auth/signup SEMPRE rodam em PUBLIC (não binda tenant por header)
+    if (isPublicOnlyPath(uri)) {
+        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+            log.info("🌐 [REQ] {} {} | PUBLIC-ONLY | thread={}", method, uri, threadId);
+            filterChain.doFilter(request, response);
+        }
+        return;
+    }
+
+    final String rawHeader = request.getHeader(TENANT_HEADER);
+    final String tenantHeader = (rawHeader == null ? null : rawHeader.trim());
+    final String tenantSchemaFromHeader = StringUtils.hasText(tenantHeader) ? tenantHeader : null;
+    final String tenantForLog = (tenantSchemaFromHeader != null ? tenantSchemaFromHeader : "PUBLIC");
+
+    // ✅ Se tem Bearer, não binda por header (token manda)
+    final String authHeader = request.getHeader("Authorization");
+    if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+        log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | bearer=yes | thread={}",
+                method, uri, tenantForLog, threadId);
+        filterChain.doFilter(request, response);
+        return;
+    }
+
+    // ✅ Sem Bearer -> binda por header (exceto rotas public-only)
+    try (TenantContext.Scope ignored = TenantContext.scope(tenantSchemaFromHeader)) {
+        log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | bearer=no | thread={}",
+                method, uri, tenantForLog, threadId);
+        filterChain.doFilter(request, response);
+    }
+}
+
+private static boolean isPublicOnlyPath(String uri) {
+    // auth de tenant e control-plane + signup devem rodar em PUBLIC
+    return uri.startsWith("/api/tenant/auth/")
+            || uri.startsWith("/api/controlplane/auth/")
+            || uri.startsWith("/api/signup");
+}
+
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/actuator")
+                || path.startsWith("/swagger")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/favicon.ico");
+    }
+}
+
+===== MultiContextUserDetailsService.java =====
+package brito.com.multitenancy001.infrastructure.security.userdetails;
+
+import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.TypedQuery;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * UserDetailsService multi-contexto (Tenant + Control Plane).
+ *
+ * <p>Objetivo:</p>
+ * <ul>
+ *   <li>Resolver o "tipo de sujeito" (Tenant vs Control Plane) via tabela <code>public.login_identities</code>.</li>
+ *   <li>No caso Control Plane (LOGIN com AuthenticationManager/DaoAuthenticationProvider):
+ *       retornar um <code>org.springframework.security.core.userdetails.User</code> com password hash.</li>
+ *   <li>No caso JWT/refresh/filtros: disponibilizar loaders que retornam <code>AuthenticatedUserContext</code>.</li>
+ * </ul>
+ *
+ * <p>Importante:</p>
+ * <ul>
+ *   <li>Control Plane login exige password hash em <code>UserDetails</code> (senão ocorre "Empty encoded password").</li>
+ *   <li>Tenant login normalmente não passa por AuthenticationManager (por causa de schema-per-tenant e resolução de tenant),
+ *       então <code>loadUserByUsername</code> é focado em suportar o Control Plane com segurança.</li>
+ * </ul>
+ */
+@Service
+@RequiredArgsConstructor
+public class MultiContextUserDetailsService implements UserDetailsService {
+
+    private static final String SUBJECT_TYPE_CONTROLPLANE_USER = "CONTROLPLANE_USER";
+    private static final String SUBJECT_TYPE_TENANT_USER = "TENANT_USER";
+
+    /**
+     * EMF do PUBLIC (Control Plane).
+     */
+    private final @Qualifier("publicEntityManagerFactory") EntityManagerFactory publicEmf;
+
+    /**
+     * EMF do TENANT (schema-per-tenant).
+     */
+    private final @Qualifier("tenantEntityManagerFactory") EntityManagerFactory tenantEmf;
+
+    private final AppClock appClock;
+
+    /**
+     * Método padrão do Spring Security para resolver o usuário por "username".
+     * Aqui, o username é o email.
+     *
+     * <p>Regra crítica:</p>
+     * <ul>
+     *   <li>Se for CONTROLPLANE_USER: retorna <code>User</code> (com password hash) para o AuthenticationManager.</li>
+     *   <li>Se for TENANT_USER: mantém fallback para carregar algo (evita quebrar chamadas antigas),
+     *       mas não é o caminho ideal para login de tenant.</li>
+     * </ul>
+     *
+     * @param username email (username) recebido pelo Spring Security.
+     * @return UserDetails apropriado.
+     * @throws UsernameNotFoundException se não encontrado/ inválido.
+     */
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+
+        /** comentário: valida e normaliza o username/email para resolver subject_type e carregar o UserDetails correto */
+        if (username == null || username.isBlank()) {
+            throw new UsernameNotFoundException("Email é obrigatório");
+        }
+
+        String normalized = username.trim().toLowerCase(Locale.ROOT);
+
+        try {
+            String subjectType = resolveSubjectTypeByEmail(normalized);
+
+            // ✅ caminho correto para LOGIN do Control Plane (AuthenticationManager precisa de password hash)
+            if (SUBJECT_TYPE_CONTROLPLANE_USER.equals(subjectType)) {
+                return loadControlPlaneUserForLoginByEmail(normalized);
+            }
+
+            // Tenant: fallback para compatibilidade (não é recomendado como caminho de login em schema-per-tenant)
+            if (SUBJECT_TYPE_TENANT_USER.equals(subjectType)) {
+                return loadTenantUserByEmail(normalized, null);
+            }
+
+            // fallback final: tenta tenant para não quebrar fluxos antigos
+            return loadTenantUserByEmail(normalized, null);
+
+        } catch (ApiException e) {
+            throw new UsernameNotFoundException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Resolve o tipo de sujeito (subject_type) a partir do email, consultando a tabela public.login_identities.
+     *
+     * @param normalizedEmail Email normalizado.
+     * @return subject_type (ou null se não encontrado).
+     */
+    private String resolveSubjectTypeByEmail(String normalizedEmail) {
+
+        /** comentário: consulta public.login_identities para descobrir se o email pertence a CONTROLPLANE_USER ou TENANT_USER */
+        return withPublicEntityManager(em -> {
+            try {
+                String sql = """
+                    SELECT li.subject_type
+                    FROM public.login_identities li
+                    WHERE li.email = :email
+                """;
+
+                @SuppressWarnings("unchecked")
+                List<Object> results = em.createNativeQuery(sql)
+                        .setParameter("email", normalizedEmail)
+                        .setMaxResults(1)
+                        .getResultList();
+
+                if (results.isEmpty()) {
+                    return null;
+                }
+
+                Object result = results.get(0);
+                return result != null ? result.toString() : null;
+
+            } catch (Exception ignored) {
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Carrega um usuário do Tenant pelo email e accountId.
+     *
+     * @param email     Email.
+     * @param accountId accountId opcional.
+     * @return UserDetails (AuthenticatedUserContext) do tenant.
+     */
+    public UserDetails loadTenantUserByEmail(String email, Long accountId) {
+
+        /** comentário: carrega TenantUser do schema tenant (depende de tenant schema já resolvido no contexto da app) */
+        if (email == null || email.isBlank()) {
+            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+        }
+
+        Instant now = appClock.instant();
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+
+        TenantUser user = withTenantEntityManager(em -> {
+            TypedQuery<TenantUser> query;
+
+            if (accountId == null) {
+                query = em.createQuery(
+                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                        TenantUser.class
+                );
+            } else {
+                query = em.createQuery(
+                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.accountId = :accountId AND u.deleted = false",
+                        TenantUser.class
+                );
+                query.setParameter("accountId", accountId);
+            }
+
+            query.setParameter("email", normalized);
+            query.setMaxResults(1);
+
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
+        });
+
+        String tenantSchema = null; // preenchido pelo JwtAuthenticationFilter
+        var authorities = AuthoritiesFactory.forTenant(user);
+
+        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
+    }
+
+    /**
+     * Carrega um usuário do Control Plane como "contexto autenticado" (AuthenticatedUserContext).
+     * Use este método para JWT/refresh/filtros, não para login via AuthenticationManager.
+     *
+     * @param email  Email.
+     * @param userId userId opcional (mantido por compat).
+     * @return AuthenticatedUserContext (como UserDetails).
+     */
+    public UserDetails loadControlPlaneUserByEmail(String email, Long userId) {
+
+        /** comentário: carrega ControlPlaneUser no schema public e monta AuthenticatedUserContext (sem password) */
+        if (email == null || email.isBlank()) {
+            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+        }
+
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery(
+                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                    ControlPlaneUser.class
+            );
+            query.setParameter("email", normalized);
+            query.setMaxResults(1);
+
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
+        });
+
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+
+        return AuthenticatedUserContext.fromControlPlaneClaims(
+                user.getId(),
+                user.getEmail(),
+                user.getRole() != null ? user.getRole().name() : null,
+                user.getRole() != null ? user.getRole().asAuthority() : null,
+                authorities
+        );
+    }
+
+    /**
+     * Carrega um usuário do Control Plane para LOGIN (AuthenticationManager).
+     * Retorna UserDetails do Spring com password hash do banco.
+     *
+     * @param normalizedEmail email já normalizado.
+     * @return UserDetails com password hash.
+     */
+    public UserDetails loadControlPlaneUserForLoginByEmail(String normalizedEmail) {
+
+        /** comentário: carrega ControlPlaneUser e devolve org.springframework.security.core.userdetails.User com password hash */
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+        }
+
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery(
+                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
+                    ControlPlaneUser.class
+            );
+            query.setParameter("email", normalizedEmail);
+            query.setMaxResults(1);
+
+            try {
+                return query.getSingleResult();
+            } catch (NoResultException e) {
+                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+            }
+        });
+
+        String passwordHash = user.getPassword();
+        if (passwordHash == null || passwordHash.isBlank()) {
+            throw new ApiException(ApiErrorCode.INVALID_USER, "Usuário sem password hash cadastrado");
+        }
+
+        var authorities = AuthoritiesFactory.forControlPlane(user);
+
+        return User.withUsername(user.getEmail())
+                .password(passwordHash)
+                .authorities(authorities)
+                .accountExpired(false)
+                .accountLocked(false)
+                .credentialsExpired(false)
+                .disabled(false)
+                .build();
+    }
+
+    /**
+     * Executa callback com EntityManager do schema PUBLIC (Control Plane), garantindo fechamento.
+     *
+     * @param cb callback.
+     * @return resultado.
+     * @param <T> tipo.
+     */
+    private <T> T withPublicEntityManager(EntityManagerCallback<T> cb) {
+
+        /** comentário: cria/fecha EntityManager do publicEmf para execução segura de queries */
+        EntityManager em = publicEmf.createEntityManager();
+        try {
+            return cb.apply(em);
+        } finally {
+            try {
+                em.close();
+            } catch (Exception ignored) {
+                // no-op
+            }
+        }
+    }
+
+    /**
+     * Executa callback com EntityManager do TENANT, garantindo fechamento.
+     *
+     * @param cb callback.
+     * @return resultado.
+     * @param <T> tipo.
+     */
+    private <T> T withTenantEntityManager(EntityManagerCallback<T> cb) {
+
+        /** comentário: cria/fecha EntityManager do tenantEmf para execução segura de queries */
+        EntityManager em = tenantEmf.createEntityManager();
+        try {
+            return cb.apply(em);
+        } finally {
+            try {
+                em.close();
+            } catch (Exception ignored) {
+                // no-op
+            }
+        }
+    }
+
+    /**
+     * Callback funcional para operações com EntityManager.
+     *
+     * @param <T> tipo do retorno.
+     */
+    @FunctionalInterface
+    private interface EntityManagerCallback<T> {
+        T apply(EntityManager em);
+    }
+}
+===== TenantUserPrincipal.java =====
+// src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/TenantUserPrincipal.java
+package brito.com.multitenancy001.infrastructure.security.userdetails;
+
+import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.security.TenantPermission;
+import brito.com.multitenancy001.tenant.security.TenantRole;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Principal de segurança do Tenant (infra).
+ *
+ * Regras:
+ * - Implementa UserDetails FORA do domínio (DDD limpo).
+ * - Usa AppClock como fonte única de tempo (proíbe Instant.now()).
+ * - Authorities calculadas aqui (role + permissions).
+ */
+public final class TenantUserPrincipal implements UserDetails, AuthenticatedPrincipal {
+
+    private static final long serialVersionUID = 1L;
+
+    private final TenantUser user;
+    private final AppClock appClock;
+    private final Set<GrantedAuthority> authorities;
+
+    public TenantUserPrincipal(TenantUser user, AppClock appClock) {
+        /* Constrói o principal do tenant com authorities e clock. */
+        this.user = Objects.requireNonNull(user, "user");
+        this.appClock = Objects.requireNonNull(appClock, "appClock");
+        this.authorities = buildAuthorities(user);
+    }
+
+    private static Set<GrantedAuthority> buildAuthorities(TenantUser user) {
+        /* Constrói authorities: role + permissions explícitas tipadas. */
+        Set<GrantedAuthority> out = new LinkedHashSet<>();
+
+        TenantRole role = user.getRole();
+        if (role != null) out.add(new SimpleGrantedAuthority(role.asAuthority()));
+
+        for (TenantPermission p : user.getPermissions()) {
+            if (p == null) continue;
+            out.add(new SimpleGrantedAuthority(p.asAuthority()));
+        }
+
+        return out;
+    }
+
+    public TenantUser getUser() {
+        return user;
+    }
+
+    public Long getAccountId() {
+        return user.getAccountId();
+    }
+
+    public String getName() {
+        return user.getName();
+    }
+
+    @Override
+    public Long getUserId() {
+        return user.getId();
+    }
+
+    @Override
+    public String getEmail() {
+        return user.getEmail();
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        /* Authorities do tenant: role + permissions (fail-fast). */
+        return authorities;
+    }
+
+    @Override
+    public String getPassword() {
+        /* Campo real da entidade: password (hash). */
+        return user.getPassword();
+    }
+
+    @Override
+    public String getUsername() {
+        /* Username = email. */
+        return user.getEmail();
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        /* Sem expiração por enquanto. */
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        /* Sem expiração por enquanto. */
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        /* Avalia lock usando AppClock (fonte única do tempo). */
+        Instant now = appClock.instant();
+        return user.isAccountNonLockedAt(now);
+    }
+
+    @Override
+    public boolean isEnabled() {
+        /* Enabled de negócio (sem lock). */
+        return user.isEnabledDomain();
+    }
+}
+===== TenantUserPrincipalFactory.java =====
+// src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/TenantUserPrincipalFactory.java
+package brito.com.multitenancy001.infrastructure.security.userdetails;
+
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+/**
+ * Factory para construir TenantUserPrincipal.
+ *
+ * Regras:
+ * - Centraliza criação do principal.
+ * - Garante AppClock como dependência única de tempo.
+ */
+@Component
+@RequiredArgsConstructor
+public class TenantUserPrincipalFactory {
+
+    private final AppClock appClock;
+
+    public TenantUserPrincipal create(TenantUser user) {
+        /* Cria principal do tenant com AppClock. */
+        return new TenantUserPrincipal(user, appClock);
+    }
+}
+===== TenantAuthMechanicsSpringSecurity.java =====
+package brito.com.multitenancy001.infrastructure.tenant.auth;
+
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
+import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
+import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
+import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
+import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.security.SystemRoleName;
+import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantRefreshIdentity;
+import brito.com.multitenancy001.tenant.security.TenantRoleMapper;
+import brito.com.multitenancy001.tenant.users.domain.TenantUser;
+import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+/**
+ * Implementação do TenantAuthMechanics usando Repository + PasswordEncoder + JWT.
+ *
+ * Motivação (Rota 1):
+ * - Em schema-per-tenant, o caminho AuthenticationManager -> UserDetailsService pode cair em um EntityManager
+ *   sem mapeamento de TenantUser e falhar com UnknownEntityException (convertendo em 401 indevido).
+ * - Para destravar E2E de forma robusta, validamos credenciais via repository no schema do tenant
+ *   e usamos passwordEncoder.matches(raw, encoded).
+ *
+ * Ajustes:
+ * - resolveRefreshIdentity(refreshToken) NÃO faz query (somente parse/validação JWT)
+ * - refreshTenantJwt(refreshToken) faz 1 query e emite NOVO refresh token (rotação)
+ */
+@Component
+@RequiredArgsConstructor
+public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
+
+    private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
+
+    private final TenantExecutor tenantExecutor;
+    private final TenantUserRepository tenantUserRepository;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final PasswordEncoder passwordEncoder;
+    private final AppClock appClock;
+
+    @Override
+    public boolean verifyPasswordInTenant(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+        /** comentário: valida senha dentro do schema do tenant */
+        if (account == null || account.id() == null) return false;
+
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) return false;
+
+        tenantSchema = tenantSchema.trim();
+
+        if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
+
+        String finalTenantSchema = tenantSchema;
+
+        try {
+            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+
+                TenantUser user = tenantUserRepository
+                        .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
+                        .orElse(null);
+
+                if (user == null) return false;
+
+                // Opcional: não vaza motivo, só retorna false
+                if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) return false;
+
+                String encoded = user.getPassword(); // ajuste se seu entity usar outro nome
+                if (!StringUtils.hasText(encoded)) return false;
+
+                return passwordEncoder.matches(rawPassword, encoded);
+            });
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+        /** comentário: autentica com senha e emite access+refresh (sem AuthenticationManager) */
+        if (account == null || account.id() == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
+        }
+
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", 409);
+        }
+
+        tenantSchema = tenantSchema.trim();
+
+        if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email e senha são obrigatórios", 400);
+        }
+
+        String finalTenantSchema = tenantSchema;
+
+        try {
+            return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+
+                TenantUser user = tenantUserRepository
+                        .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
+                        .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_USER, INVALID_CREDENTIALS_MSG, 401));
+
+                ensureUserActive(user);
+
+                String encoded = user.getPassword(); // ajuste se seu entity usar outro nome
+                if (!StringUtils.hasText(encoded) || !passwordEncoder.matches(rawPassword, encoded)) {
+                    throw new ApiException(ApiErrorCode.INVALID_USER, INVALID_CREDENTIALS_MSG, 401);
+                }
+
+                tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+
+                var authorities = AuthoritiesFactory.forTenant(user);
+
+                AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                        user,
+                        finalTenantSchema,
+                        appClock.instant(),
+                        authorities
+                );
+
+                var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        authorities
+                );
+
+                String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), finalTenantSchema);
+
+                String refreshToken = jwtTokenProvider.generateRefreshToken(
+                        user.getEmail(),
+                        finalTenantSchema,
+                        account.id()
+                );
+
+                SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
+
+                return new JwtResult(
+                        accessToken,
+                        refreshToken,
+                        user.getId(),
+                        user.getEmail(),
+                        role,
+                        account.id(),
+                        finalTenantSchema
+                );
+            });
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException(ApiErrorCode.AUTH_ERROR, "Falha ao autenticar", 500);
+        }
+    }
+
+    @Override
+    public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
+        /** comentário: emite tokens sem senha (confirm) */
+        if (account == null || account.id() == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
+        }
+
+        String tenantSchema = account.tenantSchema();
+        if (!StringUtils.hasText(tenantSchema)) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_READY, "Conta sem schema", 409);
+        }
+
+        tenantSchema = tenantSchema.trim();
+
+        if (!StringUtils.hasText(normalizedEmail)) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
+        }
+
+        String finalTenantSchema = tenantSchema;
+
+        return tenantExecutor.runInTenantSchema(finalTenantSchema, () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndAccountIdAndDeletedFalse(normalizedEmail, account.id())
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_LOGIN, "Usuário não encontrado", 401));
+
+            ensureUserActive(user);
+
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    finalTenantSchema,
+                    appClock.instant(),
+                    authorities
+            );
+
+            var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
+
+            String accessToken = jwtTokenProvider.generateTenantToken(authentication, account.id(), finalTenantSchema);
+
+            String refreshToken = jwtTokenProvider.generateRefreshToken(
+                    user.getEmail(),
+                    finalTenantSchema,
+                    account.id()
+            );
+
+            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
+
+            return new JwtResult(
+                    accessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    role,
+                    account.id(),
+                    finalTenantSchema
+            );
+        });
+    }
+
+    @Override
+    public TenantRefreshIdentity resolveRefreshIdentity(String refreshToken) {
+        /** comentário: valida refresh e resolve identidade mínima (sem query) */
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
+        }
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
+        }
+
+        AuthDomain authDomain = jwtTokenProvider.getAuthDomainEnum(refreshToken);
+        if (authDomain != AuthDomain.REFRESH) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
+        }
+
+        final String tenantSchemaRaw = jwtTokenProvider.getTenantSchemaFromToken(refreshToken);
+        if (!StringUtils.hasText(tenantSchemaRaw)) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
+        }
+        final String tenantSchema = tenantSchemaRaw.trim();
+
+        final String email = jwtTokenProvider.getEmailFromToken(refreshToken);
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (email ausente)", 401);
+        }
+
+        final Long accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+        if (accountId == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido (accountId ausente)", 401);
+        }
+
+        return new TenantRefreshIdentity(email.trim(), accountId, tenantSchema);
+    }
+
+    @Override
+    public JwtResult refreshTenantJwt(String refreshToken) {
+        /** comentário: refresh do tenant com rotação (novo refresh token) */
+        TenantRefreshIdentity id = resolveRefreshIdentity(refreshToken);
+
+        return tenantExecutor.runInTenantSchema(id.tenantSchema(), () -> {
+
+            TenantUser user = tenantUserRepository
+                    .findByEmailAndAccountIdAndDeletedFalse(id.email(), id.accountId())
+                    .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401));
+
+            ensureUserActive(user);
+
+            tenantUserRepository.updateLastLogin(user.getId(), appClock.instant());
+
+            var authorities = AuthoritiesFactory.forTenant(user);
+
+            AuthenticatedUserContext principal = AuthenticatedUserContext.fromTenantUser(
+                    user,
+                    id.tenantSchema(),
+                    appClock.instant(),
+                    authorities
+            );
+
+            var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    authorities
+            );
+
+            String newAccessToken = jwtTokenProvider.generateTenantToken(authentication, id.accountId(), id.tenantSchema());
+
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(
+                    user.getEmail(),
+                    id.tenantSchema(),
+                    id.accountId()
+            );
+
+            SystemRoleName role = TenantRoleMapper.toSystemRoleOrNull(user.getRole());
+
+            return new JwtResult(
+                    newAccessToken,
+                    newRefreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    role,
+                    id.accountId(),
+                    id.tenantSchema()
+            );
+        });
+    }
+
+    private static void ensureUserActive(TenantUser user) {
+        /** comentário: bloqueia usuário suspenso/inativo/deletado */
+        if (user.isSuspendedByAccount() || user.isSuspendedByAdmin() || user.isDeleted()) {
+            throw new ApiException(ApiErrorCode.USER_INACTIVE, "Usuário inativo", 403);
+        }
+    }
+}
+===== TenantSchemaUnitOfWork.java =====
+package brito.com.multitenancy001.infrastructure.tenant;
+
+import java.util.Map;
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Unidade de trabalho explícita para operações no Tenant Schema.
+ *
+ * <p><b>Responsabilidades:</b></p>
+ * <ul>
+ *   <li>Executar um bloco garantindo que o {@code TenantContext} esteja bindado para o schema correto.</li>
+ *   <li>Centralizar fronteiras transacionais TENANT (write / read-only / requires-new).</li>
+ *   <li>Evitar {@code @Transactional} espalhado e reduzir chances de wiring incorreto.</li>
+ * </ul>
+ *
+ * <p><b>Observabilidade:</b> loga quando um tenant TX é iniciado com transação já ativa no thread,
+ * o que pode indicar nesting indesejado e ajudar a diagnosticar "Pre-bound JDBC Connection found!".</p>
+ */
+@Component
+@RequiredArgsConstructor
+public class TenantSchemaUnitOfWork {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantSchemaUnitOfWork.class);
+
+    private final TenantExecutor tenantExecutor;
+    private final TxExecutor transactionExecutor;
+
+    // REQUIRED
+    public <T> T tx(String tenantSchema, Supplier<T> fn) {
+        warnIfActiveTx("tx(REQUIRED)", tenantSchema);
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantTx(fn));
+    }
+
+    public void tx(String tenantSchema, Runnable fn) {
+        warnIfActiveTx("tx(REQUIRED)", tenantSchema);
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantTx(fn));
+    }
+
+    // READ ONLY
+    public <T> T readOnly(String tenantSchema, Supplier<T> fn) {
+        warnIfActiveTx("readOnly(REQUIRED, readOnly=true)", tenantSchema);
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantReadOnlyTx(fn));
+    }
+
+    public void readOnly(String tenantSchema, Runnable fn) {
+        warnIfActiveTx("readOnly(REQUIRED, readOnly=true)", tenantSchema);
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantReadOnlyTx(fn));
+    }
+
+    // REQUIRES_NEW
+    public <T> T requiresNew(String tenantSchema, Supplier<T> fn) {
+        warnIfActiveTx("requiresNew(REQUIRES_NEW)", tenantSchema);
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNew(fn));
+    }
+
+    public void requiresNew(String tenantSchema, Runnable fn) {
+        warnIfActiveTx("requiresNew(REQUIRES_NEW)", tenantSchema);
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNew(fn));
+    }
+
+    // REQUIRES_NEW READ ONLY
+    public <T> T requiresNewReadOnly(String tenantSchema, Supplier<T> fn) {
+        warnIfActiveTx("requiresNewReadOnly(REQUIRES_NEW, readOnly=true)", tenantSchema);
+        return tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
+    }
+
+    public void requiresNewReadOnly(String tenantSchema, Runnable fn) {
+        warnIfActiveTx("requiresNewReadOnly(REQUIRES_NEW, readOnly=true)", tenantSchema);
+        tenantExecutor.runInTenantSchema(tenantSchema, () -> transactionExecutor.inTenantRequiresNewReadOnly(fn));
+    }
+
+    private static void warnIfActiveTx(String op, String tenantSchema) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) return;
+
+        Map<Object, Object> resources = TransactionSynchronizationManager.getResourceMap();
+        log.warn("⚠️ TENANT UoW chamado com transação já ativa no thread | op={} | tenantSchema={} | resources={}",
+                op, tenantSchema, summarizeResources(resources));
+    }
+
+    private static String summarizeResources(Map<Object, Object> resources) {
+        if (resources == null || resources.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (var e : resources.entrySet()) {
+            if (!first) sb.append(", ");
+            first = false;
+            Object k = e.getKey();
+            Object v = e.getValue();
+            sb.append(k == null ? "null" : k.getClass().getName())
+              .append("->")
+              .append(v == null ? "null" : v.getClass().getName());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+}
+===== TenantContext.java =====
+package brito.com.multitenancy001.shared.context;
+
+import brito.com.multitenancy001.shared.db.Schemas;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
+
+@Slf4j
+public class TenantContext {
+
+    /**
+     * Observação semântica:
+     * - PUBLIC = sem tenantSchema (null)
+     */
+    public static final String PUBLIC_SCHEMA = Schemas.CONTROL_PLANE;
+
+    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
+
+    /**
+     * ✅ Retorna o tenantSchema REALMENTE bindado (ou null).
+     * public = null
+     */
+    public static String getOrNull() {
+        String tenantSchema = TENANT_THREAD_LOCAL.get();
+        return StringUtils.hasText(tenantSchema) ? tenantSchema : null;
+    }
+
+    /**
+     * ✅ Quando você quer um fallback explícito para public.
+     */
+    public static String getOrDefaultPublic() {
+        String tenantSchema = getOrNull();
+        return (tenantSchema != null ? tenantSchema : PUBLIC_SCHEMA);
+    }
+
+    public static boolean isPublic() {
+        return getOrNull() == null;
+    }
+
+    /**
+     * ✅ Regra:
+     * - NÃO pode mudar tenantSchema dentro de transação.
+     * - MAS pode chamar bindTenantSchema() de forma idempotente (sem mudança) dentro de transação.
+     *
+     * Entrada aqui é "tenantSchema" (já no sentido de execução / contexto).
+     * Para "entrada crua" (tenantSchema), isso deve ser tratado antes (provisioning / validação).
+     */
+    public static void bindTenantSchema(String tenantSchema) {
+
+        String normalizedTenantSchema = (tenantSchema != null ? tenantSchema.trim() : null);
+        String targetTenantSchema = StringUtils.hasText(normalizedTenantSchema) ? normalizedTenantSchema : null; // public = null
+        String previousTenantSchema = getOrNull(); // já normalizado (public = null)
+
+        // ✅ Sem mudança: não re-binda e evita log repetido
+        if ((previousTenantSchema == null && targetTenantSchema == null)
+                || (previousTenantSchema != null && previousTenantSchema.equals(targetTenantSchema))) {
+
+            if (log.isDebugEnabled()) {
+                log.debug("🔄 TenantContext.bindTenantSchema sem mudança | thread={} | tenantSchema={}",
+                        Thread.currentThread().threadId(),
+                        (targetTenantSchema != null ? targetTenantSchema : "PUBLIC(null)"));
+            }
+            return;
+        }
+
+        // 🚫 Mudança REAL -> não permitir dentro de transação
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "🔥 TenantContext.bindTenantSchema chamado DENTRO de transação! tenantSchema=" + tenantSchema
+            );
+        }
+
+        // aplica mudança
+        if (targetTenantSchema == null) {
+            TENANT_THREAD_LOCAL.remove();
+            log.info("🔄 Tenant bindado para PUBLIC (null) | anterior={} | thread={}",
+                    previousTenantSchema, Thread.currentThread().threadId());
+        } else {
+            TENANT_THREAD_LOCAL.set(targetTenantSchema);
+            log.info("🔄 Tenant bindado | thread={} | {} -> {}",
+                    Thread.currentThread().threadId(), previousTenantSchema, targetTenantSchema);
+        }
+    }
+
+    /**
+     * Remove qualquer tenantSchema (equivalente a PUBLIC).
+     * Prefira usar publicScope()/scope() com try-with-resources.
+     */
+    public static void clear() {
+        String previousTenantSchema = getOrNull();
+        if (previousTenantSchema == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("🧹 TenantContext.clear sem mudança (já estava PUBLIC) | thread={}",
+                        Thread.currentThread().threadId());
+            }
+            return;
+        }
+
+        TENANT_THREAD_LOCAL.remove();
+        log.info("🧹 Tenant desbindado | thread={} | anterior={}",
+                Thread.currentThread().threadId(), previousTenantSchema);
+    }
+
+    // ✅ escopo seguro (restaura o tenantSchema anterior ao sair)
+    public static Scope scope(String tenantSchema) {
+        String previousTenantSchema = getOrNull();
+        bindTenantSchema(tenantSchema);
+        return new Scope(previousTenantSchema);
+    }
+
+    // ✅ escopo PUBLIC explícito (restaura o tenantSchema anterior ao sair)
+    public static Scope publicScope() {
+        String previousTenantSchema = getOrNull();
+        bindTenantSchema(null); // explícito: public = sem tenantSchema
+        return new Scope(previousTenantSchema);
+    }
+
+    public static final class Scope implements AutoCloseable {
+        private final String previousTenantSchema;
+        private boolean closed = false;
+
+        private Scope(String previousTenantSchema) {
+            this.previousTenantSchema = previousTenantSchema;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                TenantContext.bindTenantSchema(previousTenantSchema); // restaura exatamente o anterior
+                closed = true;
+            }
+        }
+    }
+}

@@ -1,5 +1,20 @@
 package brito.com.multitenancy001.controlplane.billing.app;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import brito.com.multitenancy001.controlplane.accounts.app.AccountStatusService;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.AccountPlanChangeService;
@@ -25,17 +40,6 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Serviço de aplicação responsável pelo ciclo de vida de pagamentos do Control Plane.
@@ -46,6 +50,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *   <li>Completar, expirar e falhar pagamentos.</li>
  *   <li>Ativar/suspender contas por eventos de billing.</li>
  *   <li>Enfileirar e processar upgrades de plano de forma assíncrona.</li>
+ *   <li>Aplicar hardening defensivo contra retry duplicado e dupla aplicação de upgrade.</li>
+ *   <li>Usar idempotencyKey persistida quando informada.</li>
  * </ul>
  *
  * <p>Observação arquitetural crítica:</p>
@@ -56,35 +62,45 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *       pelos serviços de subscription/query apropriados.</li>
  *   <li>Aqui, o billing binding faz apenas validações públicas e estruturais.</li>
  * </ul>
+ *
+ * <p>Observação sobre idempotência:</p>
+ * <ul>
+ *   <li>Quando houver idempotencyKey, ela é a fonte primária de deduplicação.</li>
+ *   <li>Quando não houver idempotencyKey, permanece o fallback defensivo por equivalência recente.</li>
+ *   <li>Isso reduz retry duplicado, dupla cobrança e dupla aplicação de upgrade.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-
 public class ControlPlanePaymentService {
 
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
+    /**
+     * Janela de reaproveitamento de pagamento equivalente para retry seguro.
+     *
+     * <p>Dentro desta janela, um retry do mesmo upgrade retorna o pagamento já criado/
+     * aprovado em vez de gerar nova cobrança.</p>
+     */
+    private static final long IDEMPOTENT_UPGRADE_WINDOW_MINUTES = 15L;
 
+    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
     private final ControlPlaneRequestIdentityService requestIdentity;
     private final AppClock appClock;
     private final AccountStatusService accountStatusService;
     private final AccountPlanChangeService accountPlanChangeService;
-
     private final ControlPlaneBillingSecurityAuditRecorder billingAudit;
 
     /**
      * Fila em memória para processamento assíncrono de upgrades aprovados.
-     *
-     * <p>Fluxo:</p>
-     * <ul>
-     *   <li>Pagamento de upgrade é criado e completado em PUBLIC.</li>
-     *   <li>Após conclusão, o paymentId entra na fila.</li>
-     *   <li>O scheduler processa o binding do plano em transação isolada.</li>
-     * </ul>
      */
     private final ConcurrentLinkedQueue<Long> pendingUpgrades = new ConcurrentLinkedQueue<>();
+
+    /**
+     * Conjunto auxiliar para deduplicação da fila de upgrades pendentes.
+     */
+    private final Set<Long> pendingUpgradeIds = ConcurrentHashMap.newKeySet();
 
     // =========================================================
     // Scheduled
@@ -95,7 +111,7 @@ public class ControlPlanePaymentService {
      */
     @Scheduled(cron = "${app.payment.check-cron:0 0 0 * * *}")
     public void checkPayments() {
-        log.info("Iniciando verificação de pagamentos...");
+        log.info("Iniciando verificação de pagamentos.");
         Instant now = appClock.instant();
 
         List<Long> expiredTrialIds = publicSchemaUnitOfWork.readOnly(() ->
@@ -138,6 +154,8 @@ public class ControlPlanePaymentService {
                 processUpgradeInIsolatedTransaction(paymentId);
             } catch (Exception e) {
                 log.error("Erro ao processar upgrade pendente. paymentId={}", paymentId, e);
+            } finally {
+                pendingUpgradeIds.remove(paymentId);
             }
         }
 
@@ -196,9 +214,18 @@ public class ControlPlanePaymentService {
                 billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_STATUS_CHANGED, accountId, accountEmail, details);
 
                 try {
-                    log.info("Expirando pagamento pendente. paymentId={}, accountId={}", payment.getId(), accountId);
-                    payment.setStatus(PaymentStatus.EXPIRED);
-                    controlPlanePaymentRepository.save(payment);
+                    if (payment.getStatus() == PaymentStatus.PENDING) {
+                        log.info("Expirando pagamento pendente. paymentId={}, accountId={}", payment.getId(), accountId);
+                        payment.setStatus(PaymentStatus.EXPIRED);
+                        controlPlanePaymentRepository.save(payment);
+                    } else {
+                        log.info(
+                                "Pagamento não está mais PENDING; ignorando expiração. paymentId={}, status={}",
+                                payment.getId(),
+                                payment.getStatus()
+                        );
+                    }
+
                     billingAudit.recordSuccess(SecurityAuditActionType.PAYMENT_STATUS_CHANGED, accountId, accountEmail, details);
                 } catch (Exception ex) {
                     details.put("exception", ex.getClass().getSimpleName());
@@ -217,6 +244,9 @@ public class ControlPlanePaymentService {
     /**
      * Processa pagamento administrativo para uma conta específica.
      *
+     * <p>Se o request representar retry do mesmo upgrade, o service tenta:
+     * primeiro idempotencyKey persistida; depois, fallback por equivalência recente.</p>
+     *
      * @param adminPaymentRequest request administrativo
      * @return resposta final do pagamento
      */
@@ -228,15 +258,42 @@ public class ControlPlanePaymentService {
         }
 
         log.info(
-                "processPaymentForAccount request: accountId={}, amount={}, purpose={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}",
+                "processPaymentForAccount request: accountId={}, amount={}, purpose={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}, idempotencyKey={}",
                 adminPaymentRequest.accountId(),
                 adminPaymentRequest.amount(),
                 adminPaymentRequest.purpose(),
                 adminPaymentRequest.targetPlan(),
                 adminPaymentRequest.billingCycle(),
                 adminPaymentRequest.paymentMethod(),
-                adminPaymentRequest.paymentGateway()
+                adminPaymentRequest.paymentGateway(),
+                normalize(adminPaymentRequest.idempotencyKey())
         );
+
+        PaymentResponse reusable = findReusableByIdempotencyKey(normalize(adminPaymentRequest.idempotencyKey()));
+        if (reusable == null) {
+            reusable = findReusableUpgradeResponse(
+                    adminPaymentRequest.accountId(),
+                    adminPaymentRequest.amount(),
+                    adminPaymentRequest.targetPlan(),
+                    adminPaymentRequest.billingCycle(),
+                    adminPaymentRequest.purpose()
+            );
+        }
+
+        if (reusable != null) {
+            log.warn(
+                    "Retry detectado em pagamento administrativo. Reutilizando pagamento existente. accountId={}, paymentId={}, targetPlan={}, billingCycle={}, amount={}",
+                    adminPaymentRequest.accountId(),
+                    reusable.id(),
+                    reusable.targetPlan(),
+                    reusable.billingCycle(),
+                    reusable.amount()
+            );
+            if (reusable.purpose() == PaymentPurpose.PLAN_UPGRADE && reusable.paymentStatus() == PaymentStatus.COMPLETED) {
+                enqueuePendingUpgrade(reusable.id());
+            }
+            return reusable;
+        }
 
         Instant now = appClock.instant();
 
@@ -248,6 +305,7 @@ public class ControlPlanePaymentService {
         createDetails.put("targetPlan", adminPaymentRequest.targetPlan());
         createDetails.put("billingCycle", adminPaymentRequest.billingCycle());
         createDetails.put("purpose", adminPaymentRequest.purpose());
+        createDetails.put("idempotencyKey", normalize(adminPaymentRequest.idempotencyKey()));
 
         billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_CREATED, adminPaymentRequest.accountId(), null, createDetails);
 
@@ -285,10 +343,16 @@ public class ControlPlanePaymentService {
                         .effectiveFrom(adminPaymentRequest.effectiveFrom())
                         .coverageEndDate(adminPaymentRequest.coverageEndDate())
                         .validUntil(adminPaymentRequest.coverageEndDate())
+                        .idempotencyKey(normalize(adminPaymentRequest.idempotencyKey()))
                         .build();
 
                 Payment saved = controlPlanePaymentRepository.save(payment);
-                log.info("TX1 PUBLIC: pagamento administrativo criado com sucesso. paymentId={}, accountId={}", saved.getId(), account.getId());
+                log.info(
+                        "TX1 PUBLIC: pagamento administrativo criado com sucesso. paymentId={}, accountId={}, idempotencyKey={}",
+                        saved.getId(),
+                        account.getId(),
+                        saved.getIdempotencyKey()
+                );
                 return new PaymentCreatedSnapshot(saved.getId(), account.getLoginEmail());
             });
 
@@ -327,7 +391,8 @@ public class ControlPlanePaymentService {
                         adminPaymentRequest.planPriceSnapshot(),
                         adminPaymentRequest.currencyCode(),
                         adminPaymentRequest.effectiveFrom(),
-                        adminPaymentRequest.coverageEndDate()
+                        adminPaymentRequest.coverageEndDate(),
+                        adminPaymentRequest.idempotencyKey()
                 )
         );
 
@@ -352,8 +417,7 @@ public class ControlPlanePaymentService {
                 });
 
                 if (payment.getPaymentPurpose() == PaymentPurpose.PLAN_UPGRADE) {
-                    log.info("Pagamento requer binding de plano. Adicionando à fila assíncrona. paymentId={}", paymentId);
-                    pendingUpgrades.offer(paymentId);
+                    enqueuePendingUpgrade(paymentId);
                 }
 
                 Payment finalPayment = publicSchemaUnitOfWork.readOnly(() ->
@@ -423,6 +487,9 @@ public class ControlPlanePaymentService {
     /**
      * Processa pagamento self-service para a conta autenticada.
      *
+     * <p>Se o request representar retry do mesmo upgrade, o service tenta:
+     * primeiro idempotencyKey persistida; depois, fallback por equivalência recente.</p>
+     *
      * @param paymentRequest request self-service
      * @return resposta final do pagamento
      */
@@ -434,13 +501,14 @@ public class ControlPlanePaymentService {
         }
 
         log.info(
-                "processPaymentForMyAccount request: amount={}, purpose={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}",
+                "processPaymentForMyAccount request: amount={}, purpose={}, targetPlan={}, billingCycle={}, paymentMethod={}, paymentGateway={}, idempotencyKey={}",
                 paymentRequest.amount(),
                 paymentRequest.purpose(),
                 paymentRequest.targetPlan(),
                 paymentRequest.billingCycle(),
                 paymentRequest.paymentMethod(),
-                paymentRequest.paymentGateway()
+                paymentRequest.paymentGateway(),
+                normalize(paymentRequest.idempotencyKey())
         );
 
         Long accountId = requestIdentity.getCurrentAccountId();
@@ -449,6 +517,32 @@ public class ControlPlanePaymentService {
         }
 
         log.info("Conta autenticada para pagamento self-service. accountId={}", accountId);
+
+        PaymentResponse reusable = findReusableByIdempotencyKey(normalize(paymentRequest.idempotencyKey()));
+        if (reusable == null) {
+            reusable = findReusableUpgradeResponse(
+                    accountId,
+                    paymentRequest.amount(),
+                    paymentRequest.targetPlan(),
+                    paymentRequest.billingCycle(),
+                    paymentRequest.purpose()
+            );
+        }
+
+        if (reusable != null) {
+            log.warn(
+                    "Retry detectado em pagamento self-service. Reutilizando pagamento existente. accountId={}, paymentId={}, targetPlan={}, billingCycle={}, amount={}",
+                    accountId,
+                    reusable.id(),
+                    reusable.targetPlan(),
+                    reusable.billingCycle(),
+                    reusable.amount()
+            );
+            if (reusable.purpose() == PaymentPurpose.PLAN_UPGRADE && reusable.paymentStatus() == PaymentStatus.COMPLETED) {
+                enqueuePendingUpgrade(reusable.id());
+            }
+            return reusable;
+        }
 
         Instant now = appClock.instant();
 
@@ -460,6 +554,7 @@ public class ControlPlanePaymentService {
         createDetails.put("targetPlan", paymentRequest.targetPlan());
         createDetails.put("billingCycle", paymentRequest.billingCycle());
         createDetails.put("purpose", paymentRequest.purpose());
+        createDetails.put("idempotencyKey", normalize(paymentRequest.idempotencyKey()));
 
         billingAudit.recordAttempt(SecurityAuditActionType.PAYMENT_CREATED, accountId, null, createDetails);
 
@@ -497,10 +592,16 @@ public class ControlPlanePaymentService {
                         .effectiveFrom(paymentRequest.effectiveFrom())
                         .coverageEndDate(paymentRequest.coverageEndDate())
                         .validUntil(paymentRequest.coverageEndDate())
+                        .idempotencyKey(normalize(paymentRequest.idempotencyKey()))
                         .build();
 
                 Payment saved = controlPlanePaymentRepository.save(payment);
-                log.info("TX1 PUBLIC: pagamento self-service criado com sucesso. paymentId={}, accountId={}", saved.getId(), account.getId());
+                log.info(
+                        "TX1 PUBLIC: pagamento self-service criado com sucesso. paymentId={}, accountId={}, idempotencyKey={}",
+                        saved.getId(),
+                        account.getId(),
+                        saved.getIdempotencyKey()
+                );
                 return new PaymentCreatedSnapshot(saved.getId(), account.getLoginEmail());
             });
 
@@ -547,8 +648,7 @@ public class ControlPlanePaymentService {
                 });
 
                 if (payment.getPaymentPurpose() == PaymentPurpose.PLAN_UPGRADE) {
-                    log.info("Pagamento requer binding de plano. Adicionando à fila assíncrona. paymentId={}", paymentId);
-                    pendingUpgrades.offer(paymentId);
+                    enqueuePendingUpgrade(paymentId);
                 }
 
                 Payment finalPayment = publicSchemaUnitOfWork.readOnly(() ->
@@ -635,6 +735,12 @@ public class ControlPlanePaymentService {
                 return;
             }
 
+            if (payment.getStatus() != PaymentStatus.COMPLETED) {
+                log.info("Pagamento ainda não está COMPLETED; binding ignorado. paymentId={}, status={}",
+                        paymentId, payment.getStatus());
+                return;
+            }
+
             publicSchemaUnitOfWork.requiresNew(() -> {
                 log.info("TX ISOLADA 2: aplicando upgrade de plano. paymentId={}", paymentId);
                 applyApprovedPlanUpgrade(payment);
@@ -652,6 +758,9 @@ public class ControlPlanePaymentService {
 
     /**
      * Completa um pagamento e ativa a conta no contexto PUBLIC.
+     *
+     * <p>Este método é tolerante a retry: se o pagamento já estiver COMPLETED,
+     * apenas retorna o estado atual.</p>
      *
      * @param paymentId id do pagamento
      * @param now instante atual
@@ -674,6 +783,18 @@ public class ControlPlanePaymentService {
                     "Conta não encontrada para o pagamento",
                     404
             );
+        }
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.info("Pagamento já estava COMPLETED. Retornando sem reaplicar. paymentId={}, accountId={}",
+                    paymentId, account.getId());
+            return payment;
+        }
+
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            log.warn("Pagamento não pode ser completado a partir do status atual. paymentId={}, status={}",
+                    paymentId, payment.getStatus());
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento não está pendente para conclusão", 409);
         }
 
         log.info(
@@ -714,6 +835,9 @@ public class ControlPlanePaymentService {
     /**
      * Aplica o upgrade de plano após o pagamento aprovado.
      *
+     * <p>Este método evita dupla aplicação: se a conta já estiver no plano alvo,
+     * apenas registra e retorna.</p>
+     *
      * @param payment pagamento concluído
      */
     private void applyApprovedPlanUpgrade(Payment payment) {
@@ -735,18 +859,35 @@ public class ControlPlanePaymentService {
             );
         }
 
+        Account currentAccount = accountRepository.findById(payment.getAccount().getId())
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.ACCOUNT_NOT_FOUND,
+                        "Conta não encontrada antes da aplicação do upgrade",
+                        404
+                ));
+
+        if (currentAccount.getSubscriptionPlan() == payment.getTargetPlan()) {
+            log.info(
+                    "Upgrade já havia sido aplicado anteriormente. paymentId={}, accountId={}, currentPlan={}",
+                    payment.getId(),
+                    currentAccount.getId(),
+                    currentAccount.getSubscriptionPlan()
+            );
+            return;
+        }
+
         log.info(
                 "Aplicando upgrade aprovado. paymentId={}, accountId={}, currentPlan={}, targetPlan={}",
                 payment.getId(),
-                payment.getAccount().getId(),
-                payment.getAccount().getSubscriptionPlan(),
+                currentAccount.getId(),
+                currentAccount.getSubscriptionPlan(),
                 payment.getTargetPlan()
         );
 
         try {
             accountPlanChangeService.applyApprovedUpgrade(
                     new ChangeAccountPlanCommand(
-                            payment.getAccount().getId(),
+                            currentAccount.getId(),
                             payment.getTargetPlan(),
                             "billing_payment_completed",
                             "billing_system",
@@ -776,14 +917,6 @@ public class ControlPlanePaymentService {
 
     /**
      * Valida o binding mínimo de billing sem recalcular preview tenant-aware.
-     *
-     * <p>Importante:</p>
-     * <ul>
-     *   <li>Este método pode ser chamado dentro de transação PUBLIC.</li>
-     *   <li>Por isso, ele NÃO pode chamar serviços que entrem no schema TENANT.</li>
-     *   <li>O preview completo de elegibilidade deve ter sido executado antes,
-     *       fora da transação PUBLIC, pelos services de subscription.</li>
-     * </ul>
      *
      * @param account conta alvo
      * @param targetPlan plano alvo informado
@@ -817,6 +950,20 @@ public class ControlPlanePaymentService {
                 log.warn("Billing binding inválido: upgrade sem billingCycle. accountId={}, targetPlan={}",
                         account != null ? account.getId() : null, targetPlan);
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento de upgrade exige billingCycle", 400);
+            }
+
+            if (billingCycle == BillingCycle.ONE_TIME) {
+                log.warn(
+                        "Billing binding inválido: upgrade com billingCycle ONE_TIME. accountId={}, currentPlan={}, targetPlan={}",
+                        account != null ? account.getId() : null,
+                        account != null ? account.getSubscriptionPlan() : null,
+                        targetPlan
+                );
+                throw new ApiException(
+                        ApiErrorCode.INVALID_REQUEST,
+                        "Pagamento de upgrade exige billingCycle recorrente (MONTHLY ou YEARLY)",
+                        400
+                );
             }
 
             if (account == null) {
@@ -937,65 +1084,166 @@ public class ControlPlanePaymentService {
      * Marca um pagamento como falho.
      *
      * @param paymentId id do pagamento
-     * @param reason motivo
+     * @param reason motivo da falha
      */
     private void failPaymentById(Long paymentId, String reason) {
-        log.info("failPaymentById INICIO: paymentId={}, reason={}", paymentId, reason);
+        log.info(">>> failPaymentById. paymentId={}, reason={}", paymentId, reason);
 
-        Payment payment = controlPlanePaymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
+        Payment payment = controlPlanePaymentRepository.findByIdWithAccount(paymentId)
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.PAYMENT_NOT_FOUND,
+                        "Pagamento não encontrado",
+                        404
+                ));
+
+        if (payment.getStatus() == PaymentStatus.FAILED) {
+            log.info("Pagamento já estava FAILED. paymentId={}", paymentId);
+            return;
+        }
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.warn("Tentativa de falhar pagamento já COMPLETED. paymentId={}", paymentId);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Pagamento já concluído não pode ser marcado como falho", 409);
+        }
 
         payment.markAsFailed(reason);
         controlPlanePaymentRepository.save(payment);
 
-        log.info("failPaymentById concluído. paymentId={}, newStatus={}", paymentId, payment.getStatus());
+        log.info("<<< failPaymentById concluído. paymentId={}, newStatus={}", paymentId, payment.getStatus());
+    }
+
+    // =========================================================
+    // Retry-safe / Idempotência
+    // =========================================================
+
+    /**
+     * Busca pagamento reaproveitável por idempotencyKey persistida.
+     *
+     * @param idempotencyKey chave
+     * @return response existente ou null
+     */
+    private PaymentResponse findReusableByIdempotencyKey(String idempotencyKey) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            return null;
+        }
+
+        return publicSchemaUnitOfWork.readOnly(() ->
+                controlPlanePaymentRepository.findByIdempotencyKeyWithAccount(idempotencyKey)
+                        .map(payment -> {
+                            log.warn(
+                                    "IDEMPOTENCY HIT por chave persistida. key={}, paymentId={}, status={}",
+                                    idempotencyKey,
+                                    payment.getId(),
+                                    payment.getStatus()
+                            );
+                            return mapToResponse(payment);
+                        })
+                        .orElse(null)
+        );
     }
 
     /**
-     * Mapeia a entidade Payment para DTO de resposta.
+     * Procura pagamento de upgrade equivalente recente para reutilização em retry.
      *
-     * @param payment entidade
-     * @return dto
+     * @param accountId conta
+     * @param amount valor
+     * @param targetPlan plano alvo
+     * @param billingCycle ciclo
+     * @param purpose propósito
+     * @return resposta do pagamento existente ou null
      */
-    private PaymentResponse mapToResponse(Payment payment) {
-        Payment paymentToUse = payment;
+    private PaymentResponse findReusableUpgradeResponse(
+            Long accountId,
+            BigDecimal amount,
+            SubscriptionPlan targetPlan,
+            BillingCycle billingCycle,
+            PaymentPurpose purpose
+    ) {
+        PaymentPurpose resolvedPurpose = resolvePurpose(purpose);
 
-        if (paymentToUse.getAccount() == null || paymentToUse.getAccount().getLoginEmail() == null) {
-            log.info("Payment sem account hidratada. Recarregando com join. paymentId={}", payment.getId());
-            paymentToUse = controlPlanePaymentRepository.findByIdWithAccount(payment.getId())
-                    .orElse(payment);
+        if (resolvedPurpose != PaymentPurpose.PLAN_UPGRADE) {
+            return null;
         }
 
+        if (accountId == null || amount == null || targetPlan == null || billingCycle == null) {
+            return null;
+        }
+
+        return publicSchemaUnitOfWork.readOnly(() -> controlPlanePaymentRepository
+                .findEquivalentUpgradeCandidates(
+                        accountId,
+                        PaymentPurpose.PLAN_UPGRADE,
+                        targetPlan,
+                        billingCycle,
+                        amount,
+                        List.of(PaymentStatus.PENDING, PaymentStatus.COMPLETED)
+                )
+                .stream()
+                .filter(this::isPaymentStillRecent)
+                .findFirst()
+                .map(payment -> {
+                    log.warn(
+                            "Pagamento equivalente recente encontrado para retry-safe. accountId={}, paymentId={}, status={}, targetPlan={}, billingCycle={}, amount={}",
+                            accountId,
+                            payment.getId(),
+                            payment.getStatus(),
+                            payment.getTargetPlan(),
+                            payment.getBillingCycle(),
+                            payment.getAmount()
+                    );
+                    return mapToResponse(payment);
+                })
+                .orElse(null));
+    }
+
+    /**
+     * Determina se o pagamento está dentro da janela de reaproveitamento.
+     *
+     * @param payment pagamento
+     * @return true quando recente
+     */
+    private boolean isPaymentStillRecent(Payment payment) {
+        Instant now = appClock.instant();
+        Instant reference = payment.getAudit() != null && payment.getAudit().getCreatedAt() != null
+                ? payment.getAudit().getCreatedAt()
+                : payment.getPaymentDate();
+
+        if (reference == null) {
+            return false;
+        }
+
+        long minutes = ChronoUnit.MINUTES.between(reference, now);
+        boolean recent = minutes <= IDEMPOTENT_UPGRADE_WINDOW_MINUTES;
+
         log.info(
-                "Mapeando PaymentResponse. paymentId={}, accountId={}, status={}, targetPlan={}, purpose={}",
-                paymentToUse.getId(),
-                paymentToUse.getAccount() != null ? paymentToUse.getAccount().getId() : null,
-                paymentToUse.getStatus(),
-                paymentToUse.getTargetPlan(),
-                paymentToUse.getPaymentPurpose()
+                "Janela de idempotência avaliada. paymentId={}, reference={}, now={}, minutes={}, recent={}",
+                payment.getId(),
+                reference,
+                now,
+                minutes,
+                recent
         );
 
-        return new PaymentResponse(
-                paymentToUse.getId(),
-                paymentToUse.getAccount().getId(),
-                paymentToUse.getAmount(),
-                paymentToUse.getPaymentMethod(),
-                paymentToUse.getPaymentGateway(),
-                paymentToUse.getStatus(),
-                paymentToUse.getDescription(),
-                paymentToUse.getTargetPlan(),
-                paymentToUse.getBillingCycle(),
-                paymentToUse.getPaymentPurpose(),
-                paymentToUse.getPlanPriceSnapshot(),
-                paymentToUse.getCurrency(),
-                paymentToUse.getEffectiveFrom(),
-                paymentToUse.getCoverageEndDate(),
-                paymentToUse.getPaymentDate(),
-                paymentToUse.getValidUntil(),
-                paymentToUse.getRefundedAt(),
-                paymentToUse.getAudit() != null ? paymentToUse.getAudit().getCreatedAt() : null,
-                paymentToUse.getAudit() != null ? paymentToUse.getAudit().getUpdatedAt() : null
-        );
+        return recent;
+    }
+
+    /**
+     * Enfileira upgrade pendente com deduplicação.
+     *
+     * @param paymentId id do pagamento
+     */
+    private void enqueuePendingUpgrade(Long paymentId) {
+        if (paymentId == null) {
+            return;
+        }
+
+        boolean added = pendingUpgradeIds.add(paymentId);
+        if (added) {
+            pendingUpgrades.offer(paymentId);
+            log.info("PaymentId adicionado à fila de upgrades pendentes. paymentId={}, queueSize={}", paymentId, pendingUpgrades.size());
+        } else {
+            log.info("PaymentId já estava na fila de upgrades pendentes. Ignorando duplicidade. paymentId={}", paymentId);
+        }
     }
 
     // =========================================================
@@ -1037,13 +1285,14 @@ public class ControlPlanePaymentService {
      */
     private boolean processWithPaymentGateway(Long paymentId, PaymentRequest paymentRequest) {
         log.info(
-                "Processando pagamento no gateway. paymentId={}, amount={}, paymentMethod={}, paymentGateway={}, targetPlan={}, purpose={}",
+                "Processando pagamento no gateway. paymentId={}, amount={}, paymentMethod={}, paymentGateway={}, targetPlan={}, purpose={}, idempotencyKey={}",
                 paymentId,
                 paymentRequest != null ? paymentRequest.amount() : null,
                 paymentRequest != null ? paymentRequest.paymentMethod() : null,
                 paymentRequest != null ? paymentRequest.paymentGateway() : null,
                 paymentRequest != null ? paymentRequest.targetPlan() : null,
-                paymentRequest != null ? paymentRequest.purpose() : null
+                paymentRequest != null ? paymentRequest.purpose() : null,
+                paymentRequest != null ? normalize(paymentRequest.idempotencyKey()) : null
         );
 
         try {
@@ -1141,6 +1390,38 @@ public class ControlPlanePaymentService {
      */
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /**
+     * Mapeia Payment -> PaymentResponse com billing binding.
+     *
+     * @param payment entidade
+     * @return response completo
+     */
+    private PaymentResponse mapToResponse(Payment payment) {
+        Payment paymentToUse = payment;
+
+        return new PaymentResponse(
+                paymentToUse.getId(),
+                paymentToUse.getAccount().getId(),
+                paymentToUse.getAmount(),
+                paymentToUse.getPaymentMethod(),
+                paymentToUse.getPaymentGateway(),
+                paymentToUse.getStatus(),
+                paymentToUse.getDescription(),
+                paymentToUse.getTargetPlan(),
+                paymentToUse.getBillingCycle(),
+                paymentToUse.getPaymentPurpose(),
+                paymentToUse.getPlanPriceSnapshot(),
+                paymentToUse.getCurrency(),
+                paymentToUse.getEffectiveFrom(),
+                paymentToUse.getCoverageEndDate(),
+                paymentToUse.getPaymentDate(),
+                paymentToUse.getValidUntil(),
+                paymentToUse.getRefundedAt(),
+                paymentToUse.getAudit() != null ? paymentToUse.getAudit().getCreatedAt() : null,
+                paymentToUse.getAudit() != null ? paymentToUse.getAudit().getUpdatedAt() : null
+        );
     }
 
     /**

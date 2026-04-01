@@ -1,5 +1,8 @@
 package brito.com.multitenancy001.shared.api.dto.billing;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
@@ -9,11 +12,11 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-
 /**
  * Request de pagamento para a própria conta.
+ *
+ * <p>Este request suporta billing binding com subscription e chave opcional
+ * de idempotência para retry-safe.</p>
  *
  * @param amount valor efetivo
  * @param paymentMethod método
@@ -26,6 +29,7 @@ import java.time.Instant;
  * @param currencyCode moeda
  * @param effectiveFrom início efetivo
  * @param coverageEndDate fim da cobertura
+ * @param idempotencyKey chave opcional de idempotência
  */
 public record PaymentRequest(
         @NotNull
@@ -50,6 +54,9 @@ public record PaymentRequest(
         String currencyCode,
 
         Instant effectiveFrom,
-        Instant coverageEndDate
+        Instant coverageEndDate,
+
+        @Size(max = 160, message = "idempotencyKey deve ter no máximo 160 caracteres")
+        String idempotencyKey
 ) {
 }

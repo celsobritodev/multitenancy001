@@ -1,5 +1,10 @@
 package brito.com.multitenancy001.controlplane.billing.domain;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.shared.domain.audit.AuditInfo;
@@ -10,19 +15,36 @@ import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
 import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
 import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
-import jakarta.persistence.*;
-import lombok.*;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Entidade de pagamento do Control Plane.
  *
  * <p>Esta entidade representa cobranças/pagamentos vinculados a uma conta,
  * incluindo metadados comerciais de assinatura/plano quando aplicável.</p>
+ *
+ * <p>Também suporta chave de idempotência persistida para permitir retry-safe
+ * na criação/processamento de pagamentos equivalentes.</p>
  */
 @Entity
 @Table(name = "payments", indexes = {
@@ -30,7 +52,8 @@ import java.util.UUID;
         @Index(name = "idx_payment_status", columnList = "status"),
         @Index(name = "idx_payment_date", columnList = "payment_date"),
         @Index(name = "idx_payment_target_plan", columnList = "target_plan"),
-        @Index(name = "idx_payment_purpose", columnList = "payment_purpose")
+        @Index(name = "idx_payment_purpose", columnList = "payment_purpose"),
+        @Index(name = "idx_payment_idempotency_key", columnList = "idempotency_key")
 })
 @EntityListeners(AuditEntityListener.class)
 @Getter
@@ -38,6 +61,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Slf4j
 public class Payment implements Auditable {
 
     @Id
@@ -169,6 +193,14 @@ public class Payment implements Auditable {
     private Instant coverageEndDate;
 
     /**
+     * Chave opcional de idempotência.
+     *
+     * <p>Usada para impedir duplicação de cobrança em retries equivalentes.</p>
+     */
+    @Column(name = "idempotency_key", unique = true, length = 160)
+    private String idempotencyKey;
+
+    /**
      * Auditoria padrão.
      */
     @Embedded
@@ -229,6 +261,10 @@ public class Payment implements Auditable {
         if (this.coverageEndDate != null && this.validUntil == null) {
             this.validUntil = this.coverageEndDate;
         }
+
+        if (this.idempotencyKey != null && this.idempotencyKey.isBlank()) {
+            this.idempotencyKey = null;
+        }
     }
 
     /**
@@ -286,9 +322,15 @@ public class Payment implements Auditable {
      * @return true se pode
      */
     public boolean canBeRefunded(Instant now) {
-        if (this.status != PaymentStatus.COMPLETED) return false;
-        if (this.refundedAt != null) return false;
-        if (this.paymentDate == null) return false;
+        if (this.status != PaymentStatus.COMPLETED) {
+            return false;
+        }
+        if (this.refundedAt != null) {
+            return false;
+        }
+        if (this.paymentDate == null) {
+            return false;
+        }
 
         Instant limit = now.minus(90, ChronoUnit.DAYS);
         return this.paymentDate.isAfter(limit);
