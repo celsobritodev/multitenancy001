@@ -51,7 +51,11 @@ CREATE TABLE IF NOT EXISTS payments (
     deleted    BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMPTZ,
 
-    CONSTRAINT uq_payments_idempotency_key UNIQUE (idempotency_key),
+    CONSTRAINT uq_payments_transaction_id
+        UNIQUE (transaction_id),
+
+    CONSTRAINT uq_payments_idempotency_key
+        UNIQUE (idempotency_key),
 
     CONSTRAINT chk_payments_amount_positive
         CHECK (amount > 0),
@@ -63,6 +67,47 @@ CREATE TABLE IF NOT EXISTS payments (
         CHECK (
             idempotency_key IS NULL
             OR char_length(trim(idempotency_key)) > 0
+        ),
+
+    CONSTRAINT chk_payments_status_valid
+        CHECK (
+            status IN ('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'EXPIRED')
+        ),
+
+    CONSTRAINT chk_payments_purpose_valid
+        CHECK (
+            payment_purpose IN ('OTHER', 'PLAN_UPGRADE')
+        ),
+
+    CONSTRAINT chk_payments_billing_cycle_valid
+        CHECK (
+            billing_cycle IS NULL
+            OR billing_cycle IN ('MONTHLY', 'YEARLY', 'ONE_TIME')
+        ),
+
+    CONSTRAINT chk_payments_refund_amount_non_negative
+        CHECK (
+            refund_amount IS NULL
+            OR refund_amount >= 0
+        ),
+
+    CONSTRAINT chk_payments_refund_amount_not_greater_than_amount
+        CHECK (
+            refund_amount IS NULL
+            OR refund_amount <= amount
+        ),
+
+    CONSTRAINT chk_payments_valid_until_consistency
+        CHECK (
+            valid_until IS NULL
+            OR payment_date <= valid_until
+        ),
+
+    CONSTRAINT chk_payments_coverage_end_date_consistency
+        CHECK (
+            coverage_end_date IS NULL
+            OR effective_from IS NULL
+            OR effective_from <= coverage_end_date
         )
 );
 
@@ -83,3 +128,9 @@ CREATE INDEX IF NOT EXISTS idx_payments_payment_purpose
 
 CREATE INDEX IF NOT EXISTS idx_payments_idempotency_key
     ON payments (idempotency_key);
+
+CREATE INDEX IF NOT EXISTS idx_payments_valid_until
+    ON payments (valid_until);
+
+CREATE INDEX IF NOT EXISTS idx_payments_account_status
+    ON payments (account_id, status);

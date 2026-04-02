@@ -40,11 +40,23 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Entidade de pagamento do Control Plane.
  *
- * <p>Esta entidade representa cobranças/pagamentos vinculados a uma conta,
- * incluindo metadados comerciais de assinatura/plano quando aplicável.</p>
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Representar a cobrança/pagamento vinculada a uma conta.</li>
+ *   <li>Manter metadados de billing binding quando o pagamento envolver plano.</li>
+ *   <li>Aplicar invariantes de transição de estado.</li>
+ *   <li>Persistir chave de idempotência para retry-safe real.</li>
+ * </ul>
  *
- * <p>Também suporta chave de idempotência persistida para permitir retry-safe
- * na criação/processamento de pagamentos equivalentes.</p>
+ * <p>Regras importantes:</p>
+ * <ul>
+ *   <li>{@code PENDING -> COMPLETED} é permitido.</li>
+ *   <li>{@code PENDING -> FAILED} é permitido.</li>
+ *   <li>{@code COMPLETED -> COMPLETED} é idempotente.</li>
+ *   <li>{@code FAILED -> FAILED} é idempotente.</li>
+ *   <li>Não é permitido concluir pagamento FAILED.</li>
+ *   <li>Não é permitido falhar pagamento COMPLETED.</li>
+ * </ul>
  */
 @Entity
 @Table(name = "payments", indexes = {
@@ -83,6 +95,8 @@ public class Payment implements Auditable {
 
     /**
      * Data/hora do pagamento/cobrança.
+     *
+     * <p>Este campo é usado no projeto como o timestamp principal do pagamento.</p>
      */
     @Column(name = "payment_date", nullable = false, columnDefinition = "timestamptz")
     private Instant paymentDate;
@@ -236,18 +250,15 @@ public class Payment implements Auditable {
     @PrePersist
     protected void onCreate() {
         if (this.transactionId == null) {
-            this.transactionId = "PAY_" + UUID.randomUUID().toString()
+            this.transactionId = "PAY_" + UUID.randomUUID()
+                    .toString()
                     .replace("-", "")
                     .substring(0, 16)
                     .toUpperCase();
         }
 
         if (this.paymentDate == null) {
-            throw new IllegalStateException("paymentDate deve ser definido pela aplicação (Clock/AppClock).");
-        }
-
-        if (this.status == PaymentStatus.COMPLETED && this.validUntil == null) {
-            this.validUntil = calculateDefaultValidUntil(this.paymentDate);
+            throw new IllegalStateException("paymentDate deve ser definido pela aplicação");
         }
 
         if (this.paymentPurpose == null) {
@@ -268,21 +279,63 @@ public class Payment implements Auditable {
     }
 
     /**
-     * Calcula validade default.
+     * Indica se este pagamento exige binding com subscription.
      *
-     * @param baseDate data base
-     * @return validade default
+     * @return true se exige binding
      */
-    private Instant calculateDefaultValidUntil(Instant baseDate) {
-        return baseDate.plus(30, ChronoUnit.DAYS);
+    public boolean requiresPlanBinding() {
+        return this.paymentPurpose == PaymentPurpose.PLAN_UPGRADE;
+    }
+
+    /**
+     * Indica se o pagamento já foi finalizado com sucesso.
+     *
+     * @return true quando status for COMPLETED
+     */
+    public boolean isCompleted() {
+        return this.status == PaymentStatus.COMPLETED;
+    }
+
+    /**
+     * Indica se o pagamento falhou.
+     *
+     * @return true quando status for FAILED
+     */
+    public boolean isFailed() {
+        return this.status == PaymentStatus.FAILED;
+    }
+
+    /**
+     * Indica se o pagamento ainda está pendente.
+     *
+     * @return true quando status for PENDING
+     */
+    public boolean isPending() {
+        return this.status == PaymentStatus.PENDING;
     }
 
     /**
      * Marca pagamento como concluído.
      *
+     * <p>Transições permitidas:</p>
+     * <ul>
+     *   <li>PENDING -> COMPLETED</li>
+     *   <li>COMPLETED -> COMPLETED (idempotente)</li>
+     * </ul>
+     *
      * @param now instante atual
      */
     public void markAsCompleted(Instant now) {
+        if (this.status == PaymentStatus.COMPLETED) {
+            return;
+        }
+
+        if (this.status != PaymentStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Pagamento não pode ser concluído a partir do status " + this.status
+            );
+        }
+
         this.status = PaymentStatus.COMPLETED;
 
         if (this.paymentDate == null) {
@@ -301,18 +354,41 @@ public class Payment implements Auditable {
         } else if (this.coverageEndDate == null) {
             this.coverageEndDate = this.validUntil;
         }
+
+        log.info("Pagamento marcado como COMPLETED. paymentId={}, transactionId={}",
+                this.id, this.transactionId);
     }
 
     /**
      * Marca pagamento como falho.
      *
+     * <p>Transições permitidas:</p>
+     * <ul>
+     *   <li>PENDING -> FAILED</li>
+     *   <li>FAILED -> FAILED (idempotente)</li>
+     * </ul>
+     *
      * @param reason motivo
      */
     public void markAsFailed(String reason) {
+        if (this.status == PaymentStatus.FAILED) {
+            return;
+        }
+
+        if (this.status != PaymentStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Pagamento não pode falhar a partir do status " + this.status
+            );
+        }
+
         this.status = PaymentStatus.FAILED;
+
         if (this.metadataJson == null) {
             this.metadataJson = "{\"failure_reason\":\"" + reason + "\"}";
         }
+
+        log.warn("Pagamento marcado como FAILED. paymentId={}, transactionId={}, reason={}",
+                this.id, this.transactionId, reason);
     }
 
     /**
@@ -375,11 +451,12 @@ public class Payment implements Auditable {
     }
 
     /**
-     * Indica se este pagamento exige binding com subscription.
+     * Calcula validade default.
      *
-     * @return true se exige binding
+     * @param baseDate data base
+     * @return validade default
      */
-    public boolean requiresPlanBinding() {
-        return this.paymentPurpose == PaymentPurpose.PLAN_UPGRADE;
+    private Instant calculateDefaultValidUntil(Instant baseDate) {
+        return baseDate.plus(30, ChronoUnit.DAYS);
     }
 }

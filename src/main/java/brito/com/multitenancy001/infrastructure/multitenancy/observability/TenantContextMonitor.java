@@ -12,14 +12,14 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 
 /**
- * Observabilidade do TenantContext em execução de Services.
+ * Monitor de observabilidade do TenantContext em services.
  *
- * Responsabilidades:
- * - Logar tenant bound/effective
- * - Classificar falhas (AUTH, VALIDATION, BUSINESS, INTERNAL, TENANT_CONTEXT)
- * - Evitar stacktrace para fluxo esperado
- *
- * Não altera fluxo de exceções — apenas observa.
+ * <p>Objetivos:</p>
+ * <ul>
+ *   <li>Logar tenant bound/effective antes e depois da execução.</li>
+ *   <li>Classificar falhas esperadas e inesperadas.</li>
+ *   <li>Dar mensagem clara para erro clássico de bind indevido de tenant.</li>
+ * </ul>
  */
 @Aspect
 @Component
@@ -31,7 +31,7 @@ public class TenantContextMonitor {
         String methodName = joinPoint.getSignature().toShortString();
         String boundTenant = TenantContext.getOrNull();
         String effectiveTenant = TenantContext.getOrDefaultPublic();
-        
+
         long startTime = System.currentTimeMillis();
 
         log.debug("🏁 INÍCIO {} | tenant(bound={}, effective={})",
@@ -42,23 +42,19 @@ public class TenantContextMonitor {
             long duration = System.currentTimeMillis() - startTime;
 
             log.debug("✅ FIM {} ({}ms) | tenant(bound={}, effective={})",
-                    methodName, duration,
-                    TenantContext.getOrNull(),
-                    TenantContext.getOrDefaultPublic());
+                    methodName, duration, TenantContext.getOrNull(), TenantContext.getOrDefaultPublic());
 
             return result;
 
         } catch (Throwable e) {
             long duration = System.currentTimeMillis() - startTime;
-            
-            // Tratamento especial para erro de contexto de tenant
+
             if (isTenantContextError(e)) {
                 log.warn("🏷️ CONTEXTO_TENANT {} ({}ms) | tenant(bound={}, effective={}) | detalhe: {}",
                         methodName, duration, boundTenant, effectiveTenant, getTenantContextErrorMessage(e));
                 throw e;
             }
 
-            // AUTH inválida = fluxo normal
             if (isInvalidLogin(e)) {
                 log.info("🔐 AUTENTICACAO {} ({}ms) | tenant(bound={}, effective={}) | motivo: {}",
                         methodName, duration, boundTenant, effectiveTenant, safeMsg(e));
@@ -71,7 +67,6 @@ public class TenantContextMonitor {
                 throw e;
             }
 
-            // Erro inesperado
             log.error("❌ ERRO_INESPERADO {} ({}ms) | tenant(bound={}, effective={}) | tipo={} | motivo: {}",
                     methodName, duration, boundTenant, effectiveTenant,
                     e.getClass().getSimpleName(), safeMsg(e), e);
@@ -81,24 +76,28 @@ public class TenantContextMonitor {
 
     private boolean isTenantContextError(Throwable e) {
         if (e == null) return false;
-        
+
         if (e instanceof IllegalStateException) {
             String msg = e.getMessage();
             return msg != null && msg.contains("TenantContext.bindTenantSchema");
         }
-        
+
+        if (e.getCause() != null && e.getCause() != e) {
+            return isTenantContextError(e.getCause());
+        }
+
         return false;
     }
 
     private String getTenantContextErrorMessage(Throwable e) {
         if (e == null) return "Erro desconhecido";
-        
+
         String msg = e.getMessage();
         if (msg != null && msg.contains("TenantContext.bindTenantSchema")) {
-            return "Não é possível mudar para o schema do tenant dentro de uma transação existente. " +
-                   "A operação no schema public foi concluída, mas a operação no tenant foi ignorada.";
+            return "Não é possível mudar o TenantContext dentro do mesmo fluxo já bindado. "
+                    + "Revise a cadeia de filtros e evite rebind de tenant diferente no mesmo thread.";
         }
-        
+
         return safeMsg(e);
     }
 
@@ -115,37 +114,32 @@ public class TenantContextMonitor {
 
         String baseLog = "{} {} ({}ms) | tenant(bound={}, effective={}) | status={} código={} | {}";
 
-        // INTERNAL = erro real (mostra stacktrace)
         if (category == ApiErrorCategory.INTERNAL || status >= 500) {
-            log.error(baseLog, "❌ INTERNO", method, duration, 
+            log.error(baseLog, "❌ INTERNO", method, duration,
                     boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex), original);
             return;
         }
 
-        // AUTH / SECURITY
         if (category == ApiErrorCategory.AUTH || category == ApiErrorCategory.SECURITY) {
             log.info(baseLog, "🔐 SEGURANCA", method, duration,
                     boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
             return;
         }
 
-        // VALIDATION / REQUEST
         if (category == ApiErrorCategory.VALIDATION || category == ApiErrorCategory.REQUEST) {
             log.warn(baseLog, "⚠️ VALIDACAO", method, duration,
                     boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
             return;
         }
 
-        // CONFLICT
         if (category == ApiErrorCategory.CONFLICT) {
             log.warn(baseLog, "⚡ CONFLITO", method, duration,
                     boundTenant, effectiveTenant, status, ex.getCode().name(), safeMsg(ex));
             return;
         }
 
-        // Regra de negócio
         log.warn(baseLog, "📋 NEGOCIO", method, duration,
-                boundTenant, effectiveTenant, status, ex.getCode().name(), 
+                boundTenant, effectiveTenant, status, ex.getCode().name(),
                 String.format("[%s] %s", category.name(), safeMsg(ex)));
     }
 
@@ -177,7 +171,6 @@ public class TenantContextMonitor {
         if (msg == null || msg.isBlank()) {
             return ex.getClass().getSimpleName();
         }
-        // Limitar tamanho da mensagem
         if (msg.length() > 150) {
             msg = msg.substring(0, 147) + "...";
         }

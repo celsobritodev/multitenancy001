@@ -1,295 +1,333 @@
 package brito.com.multitenancy001.infrastructure.security.userdetails;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
 import brito.com.multitenancy001.infrastructure.security.authorities.AuthoritiesFactory;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-
 /**
- * UserDetailsService multi-contexto (Tenant + Control Plane).
+ * UserDetailsService multi-contexto.
  *
- * <p>Objetivo:</p>
+ * <p>Responsabilidades:</p>
  * <ul>
- *   <li>Resolver o "tipo de sujeito" (Tenant vs Control Plane) via tabela <code>public.login_identities</code>.</li>
- *   <li>No caso Control Plane (LOGIN com AuthenticationManager/DaoAuthenticationProvider):
- *       retornar um <code>org.springframework.security.core.userdetails.User</code> com password hash.</li>
- *   <li>No caso JWT/refresh/filtros: disponibilizar loaders que retornam <code>AuthenticatedUserContext</code>.</li>
+ *   <li>Resolver o tipo de sujeito via tabela public.login_identities.</li>
+ *   <li>Suportar login do control plane com password hash.</li>
+ *   <li>Suportar reconstrução do principal do tenant/control plane para fluxos JWT.</li>
  * </ul>
  *
- * <p>Importante:</p>
+ * <p>Observações importantes:</p>
  * <ul>
- *   <li>Control Plane login exige password hash em <code>UserDetails</code> (senão ocorre "Empty encoded password").</li>
- *   <li>Tenant login normalmente não passa por AuthenticationManager (por causa de schema-per-tenant e resolução de tenant),
- *       então <code>loadUserByUsername</code> é focado em suportar o Control Plane com segurança.</li>
+ *   <li>Os métodos JWT retornam principal de segurança pronto para o filtro.</li>
+ *   <li>Os métodos de tenant assumem {@link TenantContext} já bindado.</li>
+ *   <li>Esta implementação usa somente métodos que realmente existem no domínio atual.</li>
  * </ul>
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MultiContextUserDetailsService implements UserDetailsService {
 
     private static final String SUBJECT_TYPE_CONTROLPLANE_USER = "CONTROLPLANE_USER";
     private static final String SUBJECT_TYPE_TENANT_USER = "TENANT_USER";
 
-    /**
-     * EMF do PUBLIC (Control Plane).
-     */
     private final @Qualifier("publicEntityManagerFactory") EntityManagerFactory publicEmf;
-
-    /**
-     * EMF do TENANT (schema-per-tenant).
-     */
     private final @Qualifier("tenantEntityManagerFactory") EntityManagerFactory tenantEmf;
-
     private final AppClock appClock;
 
-    /**
-     * Método padrão do Spring Security para resolver o usuário por "username".
-     * Aqui, o username é o email.
-     *
-     * <p>Regra crítica:</p>
-     * <ul>
-     *   <li>Se for CONTROLPLANE_USER: retorna <code>User</code> (com password hash) para o AuthenticationManager.</li>
-     *   <li>Se for TENANT_USER: mantém fallback para carregar algo (evita quebrar chamadas antigas),
-     *       mas não é o caminho ideal para login de tenant.</li>
-     * </ul>
-     *
-     * @param username email (username) recebido pelo Spring Security.
-     * @return UserDetails apropriado.
-     * @throws UsernameNotFoundException se não encontrado/ inválido.
-     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-
-        /** comentário: valida e normaliza o username/email para resolver subject_type e carregar o UserDetails correto */
         if (username == null || username.isBlank()) {
             throw new UsernameNotFoundException("Email é obrigatório");
         }
 
         String normalized = username.trim().toLowerCase(Locale.ROOT);
+        String subjectType = resolveSubjectTypeByEmail(normalized);
 
-        try {
-            String subjectType = resolveSubjectTypeByEmail(normalized);
-
-            // ✅ caminho correto para LOGIN do Control Plane (AuthenticationManager precisa de password hash)
-            if (SUBJECT_TYPE_CONTROLPLANE_USER.equals(subjectType)) {
-                return loadControlPlaneUserForLoginByEmail(normalized);
-            }
-
-            // Tenant: fallback para compatibilidade (não é recomendado como caminho de login em schema-per-tenant)
-            if (SUBJECT_TYPE_TENANT_USER.equals(subjectType)) {
-                return loadTenantUserByEmail(normalized, null);
-            }
-
-            // fallback final: tenta tenant para não quebrar fluxos antigos
-            return loadTenantUserByEmail(normalized, null);
-
-        } catch (ApiException e) {
-            throw new UsernameNotFoundException(e.getMessage(), e);
+        if (SUBJECT_TYPE_CONTROLPLANE_USER.equals(subjectType)) {
+            return loadControlPlaneUserForLoginByEmail(normalized);
         }
+
+        if (SUBJECT_TYPE_TENANT_USER.equals(subjectType)) {
+            return loadTenantPrincipalByEmail(normalized, null);
+        }
+
+        throw new UsernameNotFoundException("Usuário não encontrado");
     }
 
     /**
-     * Resolve o tipo de sujeito (subject_type) a partir do email, consultando a tabela public.login_identities.
+     * Loader para JWT/control plane.
      *
-     * @param normalizedEmail Email normalizado.
-     * @return subject_type (ou null se não encontrado).
+     * @param email email normalizado
+     * @param accountId id da conta
+     * @return principal autenticado do control plane
      */
-    private String resolveSubjectTypeByEmail(String normalizedEmail) {
+    public UserDetails loadControlPlaneUserByEmail(String email, Long accountId) {
+        ControlPlaneUser user = findControlPlaneUserOrThrow(email, accountId);
 
-        /** comentário: consulta public.login_identities para descobrir se o email pertence a CONTROLPLANE_USER ou TENANT_USER */
-        return withPublicEntityManager(em -> {
-            try {
-                String sql = """
-                    SELECT li.subject_type
-                    FROM public.login_identities li
-                    WHERE li.email = :email
-                """;
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>(AuthoritiesFactory.forControlPlane(user));
 
-                @SuppressWarnings("unchecked")
-                List<Object> results = em.createNativeQuery(sql)
-                        .setParameter("email", normalizedEmail)
-                        .setMaxResults(1)
-                        .getResultList();
+        String roleName = user.getRole() != null ? user.getRole().name() : null;
+        String roleAuthority = user.getRole() != null ? user.getRole().asAuthority() : null;
 
-                if (results.isEmpty()) {
-                    return null;
-                }
-
-                Object result = results.get(0);
-                return result != null ? result.toString() : null;
-
-            } catch (Exception ignored) {
-                return null;
-            }
-        });
-    }
-
-    /**
-     * Carrega um usuário do Tenant pelo email e accountId.
-     *
-     * @param email     Email.
-     * @param accountId accountId opcional.
-     * @return UserDetails (AuthenticatedUserContext) do tenant.
-     */
-    public UserDetails loadTenantUserByEmail(String email, Long accountId) {
-
-        /** comentário: carrega TenantUser do schema tenant (depende de tenant schema já resolvido no contexto da app) */
-        if (email == null || email.isBlank()) {
-            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+        Long userId = user.getId();
+        if (userId == null) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário do control plane inválido", 401);
         }
-
-        Instant now = appClock.instant();
-        String normalized = email.trim().toLowerCase(Locale.ROOT);
-
-        TenantUser user = withTenantEntityManager(em -> {
-            TypedQuery<TenantUser> query;
-
-            if (accountId == null) {
-                query = em.createQuery(
-                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
-                        TenantUser.class
-                );
-            } else {
-                query = em.createQuery(
-                        "SELECT u FROM TenantUser u WHERE LOWER(u.email) = :email AND u.accountId = :accountId AND u.deleted = false",
-                        TenantUser.class
-                );
-                query.setParameter("accountId", accountId);
-            }
-
-            query.setParameter("email", normalized);
-            query.setMaxResults(1);
-
-            try {
-                return query.getSingleResult();
-            } catch (NoResultException e) {
-                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
-            }
-        });
-
-        String tenantSchema = null; // preenchido pelo JwtAuthenticationFilter
-        var authorities = AuthoritiesFactory.forTenant(user);
-
-        return AuthenticatedUserContext.fromTenantUser(user, tenantSchema, now, authorities);
-    }
-
-    /**
-     * Carrega um usuário do Control Plane como "contexto autenticado" (AuthenticatedUserContext).
-     * Use este método para JWT/refresh/filtros, não para login via AuthenticationManager.
-     *
-     * @param email  Email.
-     * @param userId userId opcional (mantido por compat).
-     * @return AuthenticatedUserContext (como UserDetails).
-     */
-    public UserDetails loadControlPlaneUserByEmail(String email, Long userId) {
-
-        /** comentário: carrega ControlPlaneUser no schema public e monta AuthenticatedUserContext (sem password) */
-        if (email == null || email.isBlank()) {
-            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
-        }
-
-        String normalized = email.trim().toLowerCase(Locale.ROOT);
-
-        ControlPlaneUser user = withPublicEntityManager(em -> {
-            TypedQuery<ControlPlaneUser> query = em.createQuery(
-                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
-                    ControlPlaneUser.class
-            );
-            query.setParameter("email", normalized);
-            query.setMaxResults(1);
-
-            try {
-                return query.getSingleResult();
-            } catch (NoResultException e) {
-                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
-            }
-        });
-
-        var authorities = AuthoritiesFactory.forControlPlane(user);
 
         return AuthenticatedUserContext.fromControlPlaneClaims(
-                user.getId(),
+                userId,
                 user.getEmail(),
-                user.getRole() != null ? user.getRole().name() : null,
-                user.getRole() != null ? user.getRole().asAuthority() : null,
+                roleName,
+                roleAuthority,
                 authorities
         );
     }
 
     /**
-     * Carrega um usuário do Control Plane para LOGIN (AuthenticationManager).
-     * Retorna UserDetails do Spring com password hash do banco.
+     * Loader para JWT/tenant.
      *
-     * @param normalizedEmail email já normalizado.
-     * @return UserDetails com password hash.
+     * @param email email normalizado
+     * @param accountId id da conta
+     * @param tenantSchema schema esperado
+     * @return principal autenticado do tenant
      */
-    public UserDetails loadControlPlaneUserForLoginByEmail(String normalizedEmail) {
-
-        /** comentário: carrega ControlPlaneUser e devolve org.springframework.security.core.userdetails.User com password hash */
-        if (normalizedEmail == null || normalizedEmail.isBlank()) {
-            throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Email é obrigatório");
+    public AuthenticatedUserContext loadTenantAuthenticatedUserByEmail(
+            String email,
+            Long accountId,
+            String tenantSchema
+    ) {
+        if (tenantSchema == null || tenantSchema.isBlank()) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "tenantSchema é obrigatório", 401);
         }
 
-        ControlPlaneUser user = withPublicEntityManager(em -> {
-            TypedQuery<ControlPlaneUser> query = em.createQuery(
-                    "SELECT u FROM ControlPlaneUser u WHERE LOWER(u.email) = :email AND u.deleted = false",
-                    ControlPlaneUser.class
+        String boundTenant = TenantContext.requireTenant();
+        if (!tenantSchema.equalsIgnoreCase(boundTenant)) {
+            throw new ApiException(
+                    ApiErrorCode.UNAUTHENTICATED,
+                    "TenantContext incompatível com o tenant esperado",
+                    401
             );
-            query.setParameter("email", normalizedEmail);
-            query.setMaxResults(1);
+        }
 
-            try {
-                return query.getSingleResult();
-            } catch (NoResultException e) {
-                throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário não encontrado");
+        TenantUser user = findTenantUserOrThrow(email, accountId);
+        ensureTenantUserActive(user);
+
+        return AuthenticatedUserContext.fromTenantUser(
+                user,
+                tenantSchema,
+                appClock.instant(),
+                AuthoritiesFactory.forTenant(user)
+        );
+    }
+
+    /**
+     * Loader auxiliar que retorna principal Spring do tenant.
+     *
+     * @param email email normalizado
+     * @param accountId id da conta opcional
+     * @return principal Spring do tenant
+     */
+    public UserDetails loadTenantPrincipalByEmail(String email, Long accountId) {
+        TenantUser user = findTenantUserOrThrow(email, accountId);
+        ensureTenantUserActive(user);
+        return new TenantUserPrincipal(user, appClock);
+    }
+
+    /**
+     * Resolve o subject type via public.login_identities.
+     *
+     * @param normalizedEmail email normalizado
+     * @return subject type ou null
+     */
+    private String resolveSubjectTypeByEmail(String normalizedEmail) {
+        return withPublicEntityManager(em -> {
+            @SuppressWarnings("unchecked")
+            List<Object> rows = em.createNativeQuery("""
+                    SELECT li.subject_type
+                    FROM public.login_identities li
+                    WHERE li.email = :email
+                    """)
+                    .setParameter("email", normalizedEmail)
+                    .setMaxResults(1)
+                    .getResultList();
+
+            if (rows == null || rows.isEmpty() || rows.get(0) == null) {
+                return null;
             }
+
+            return rows.get(0).toString();
         });
+    }
+
+    /**
+     * Carrega usuário do control plane para fluxo de login tradicional.
+     *
+     * @param email email normalizado
+     * @return UserDetails com hash de senha
+     */
+    private UserDetails loadControlPlaneUserForLoginByEmail(String email) {
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery("""
+                    select u
+                    from ControlPlaneUser u
+                    where lower(u.email) = :email
+                    """, ControlPlaneUser.class);
+            query.setParameter("email", email);
+            return query.getResultStream().findFirst().orElse(null);
+        });
+
+        if (user == null) {
+            throw new UsernameNotFoundException("Usuário do control plane não encontrado");
+        }
 
         String passwordHash = user.getPassword();
         if (passwordHash == null || passwordHash.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_USER, "Usuário sem password hash cadastrado");
+            throw new UsernameNotFoundException("Usuário do control plane sem password hash");
         }
 
-        var authorities = AuthoritiesFactory.forControlPlane(user);
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>(AuthoritiesFactory.forControlPlane(user));
 
         return User.withUsername(user.getEmail())
                 .password(passwordHash)
                 .authorities(authorities)
-                .accountExpired(false)
-                .accountLocked(false)
-                .credentialsExpired(false)
-                .disabled(false)
+                .accountLocked(!isControlPlaneUserNonLocked(user))
+                .disabled(!isControlPlaneUserEnabled(user))
                 .build();
     }
 
     /**
-     * Executa callback com EntityManager do schema PUBLIC (Control Plane), garantindo fechamento.
+     * Busca usuário do control plane e valida se está apto para autenticação.
      *
-     * @param cb callback.
-     * @return resultado.
-     * @param <T> tipo.
+     * @param email email normalizado
+     * @param accountId id da conta
+     * @return usuário do control plane
+     */
+    private ControlPlaneUser findControlPlaneUserOrThrow(String email, Long accountId) {
+        ControlPlaneUser user = withPublicEntityManager(em -> {
+            TypedQuery<ControlPlaneUser> query = em.createQuery("""
+                    select u
+                    from ControlPlaneUser u
+                    where lower(u.email) = :email
+                      and (:accountId is null or u.account.id = :accountId)
+                    """, ControlPlaneUser.class);
+            query.setParameter("email", email);
+            query.setParameter("accountId", accountId);
+            return query.getResultStream().findFirst().orElse(null);
+        });
+
+        if (user == null) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário do control plane não encontrado", 401);
+        }
+
+        if (!isControlPlaneUserEnabled(user) || !isControlPlaneUserNonLocked(user)) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário do control plane inativo", 401);
+        }
+
+        return user;
+    }
+
+    /**
+     * Busca usuário do tenant no schema já bindado.
+     *
+     * @param email email normalizado
+     * @param accountId id da conta
+     * @return usuário do tenant
+     */
+    private TenantUser findTenantUserOrThrow(String email, Long accountId) {
+        TenantUser user = withTenantEntityManager(em -> {
+            TypedQuery<TenantUser> query = em.createQuery("""
+                    select u
+                    from TenantUser u
+                    where lower(u.email) = :email
+                      and (:accountId is null or u.accountId = :accountId)
+                      and u.deleted = false
+                    """, TenantUser.class);
+            query.setParameter("email", email);
+            query.setParameter("accountId", accountId);
+            return query.getResultStream().findFirst().orElse(null);
+        });
+
+        if (user == null) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário do tenant não encontrado", 401);
+        }
+
+        return user;
+    }
+
+    /**
+     * Valida se o usuário tenant está ativo.
+     *
+     * @param user usuário tenant
+     */
+    private void ensureTenantUserActive(TenantUser user) {
+        if (user.isDeleted() || user.isSuspendedByAccount() || user.isSuspendedByAdmin()) {
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, "Usuário do tenant inativo", 401);
+        }
+    }
+
+    /**
+     * Verifica se usuário do control plane está habilitado.
+     *
+     * @param user usuário do control plane
+     * @return true quando habilitado
+     */
+    private boolean isControlPlaneUserEnabled(ControlPlaneUser user) {
+        try {
+            return user.isEnabled();
+        } catch (Exception e) {
+            log.warn("Falha ao avaliar isEnabled do control plane user id={} motivo={}",
+                    user != null ? user.getId() : null,
+                    e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Verifica se usuário do control plane não está bloqueado.
+     *
+     * @param user usuário do control plane
+     * @return true quando não bloqueado
+     */
+    private boolean isControlPlaneUserNonLocked(ControlPlaneUser user) {
+        try {
+            return user.isAccountNonLocked(appClock.instant());
+        } catch (Exception e) {
+            log.warn("Falha ao avaliar lock do control plane user id={} motivo={}",
+                    user != null ? user.getId() : null,
+                    e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Executa callback com EntityManager do public schema.
+     *
+     * @param cb callback
+     * @return resultado
+     * @param <T> tipo de retorno
      */
     private <T> T withPublicEntityManager(EntityManagerCallback<T> cb) {
-
-        /** comentário: cria/fecha EntityManager do publicEmf para execução segura de queries */
         EntityManager em = publicEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -303,15 +341,13 @@ public class MultiContextUserDetailsService implements UserDetailsService {
     }
 
     /**
-     * Executa callback com EntityManager do TENANT, garantindo fechamento.
+     * Executa callback com EntityManager tenant.
      *
-     * @param cb callback.
-     * @return resultado.
-     * @param <T> tipo.
+     * @param cb callback
+     * @return resultado
+     * @param <T> tipo de retorno
      */
     private <T> T withTenantEntityManager(EntityManagerCallback<T> cb) {
-
-        /** comentário: cria/fecha EntityManager do tenantEmf para execução segura de queries */
         EntityManager em = tenantEmf.createEntityManager();
         try {
             return cb.apply(em);
@@ -324,11 +360,6 @@ public class MultiContextUserDetailsService implements UserDetailsService {
         }
     }
 
-    /**
-     * Callback funcional para operações com EntityManager.
-     *
-     * @param <T> tipo do retorno.
-     */
     @FunctionalInterface
     private interface EntityManagerCallback<T> {
         T apply(EntityManager em);

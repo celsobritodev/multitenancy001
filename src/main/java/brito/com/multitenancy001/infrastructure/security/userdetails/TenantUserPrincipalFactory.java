@@ -1,4 +1,3 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/TenantUserPrincipalFactory.java
 package brito.com.multitenancy001.infrastructure.security.userdetails;
 
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -7,11 +6,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Factory para construir TenantUserPrincipal.
+ * Factory para construção de {@link TenantUserPrincipal}.
  *
- * Regras:
- * - Centraliza criação do principal.
- * - Garante AppClock como dependência única de tempo.
+ * <p>Responsabilidade:</p>
+ * <ul>
+ *   <li>Centralizar a criação do principal do tenant.</li>
+ *   <li>Garantir uso consistente do {@link AppClock}.</li>
+ * </ul>
  */
 @Component
 @RequiredArgsConstructor
@@ -20,7 +21,6 @@ public class TenantUserPrincipalFactory {
     private final AppClock appClock;
 
     public TenantUserPrincipal create(TenantUser user) {
-        /* Cria principal do tenant com AppClock. */
         return new TenantUserPrincipal(user, appClock);
     }
 }

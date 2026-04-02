@@ -4,10 +4,9 @@ import brito.com.multitenancy001.infrastructure.security.filter.JwtAuthenticatio
 import brito.com.multitenancy001.infrastructure.security.filter.MustChangePasswordFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.RequestLoggingFilter;
 import brito.com.multitenancy001.infrastructure.security.filter.RequestMetaContextFilter;
+import brito.com.multitenancy001.infrastructure.security.filter.TenantHeaderTenantContextFilter;
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
-import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,17 +25,24 @@ import org.springframework.web.cors.CorsConfiguration;
 import java.util.List;
 
 /**
- * Configuração de segurança (JWT stateless).
+ * Configuração central de segurança da aplicação.
  *
- * Ordem de filtros:
- * 1) RequestMetaContextFilter (correlation id / ip / user-agent)
- * 2) JwtAuthenticationFilter (autenticação JWT)
- * 3) MustChangePasswordFilter (política 428)
- * 4) RequestLoggingFilter (log final)
+ * <p>Diretrizes desta versão endurecida:</p>
+ * <ul>
+ *   <li>Fluxo 100% stateless com JWT.</li>
+ *   <li>Contexto de request e contexto de tenant separados por filtro dedicado.</li>
+ *   <li>JwtAuthenticationFilter não acessa repository tenant diretamente.</li>
+ *   <li>Validação do principal tenant ocorre via MultiContextUserDetailsService já com TenantContext bindado.</li>
+ * </ul>
  *
- * Ajuste:
- * - libera /api/tenant/auth/logout e /api/controlplane/auth/logout como public endpoints
- *   (logout é baseado em refreshToken no body, e não depende do access token).
+ * <p>Ordem de filtros:</p>
+ * <ol>
+ *   <li>RequestMetaContextFilter</li>
+ *   <li>TenantHeaderTenantContextFilter</li>
+ *   <li>JwtAuthenticationFilter</li>
+ *   <li>MustChangePasswordFilter</li>
+ *   <li>RequestLoggingFilter</li>
+ * </ol>
  */
 @Configuration
 @EnableWebSecurity
@@ -45,148 +51,162 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
-
-    /**
-     * Mantido para CONTROLPLANE (e outros contextos que você use).
-     */
     private final MultiContextUserDetailsService multiContextUserDetailsService;
-
-    /**
-     * NOVO: usado pelo JwtAuthenticationFilter para TENANT (carregar user via repository).
-     */
-    private final TenantUserRepository tenantUserRepository;
-    private final AppClock appClock;
-
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
     private final RestAccessDeniedHandler restAccessDeniedHandler;
 
+    /**
+     * Filtro JWT principal.
+     *
+     * @return bean do filtro JWT
+     */
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(
                 jwtTokenProvider,
                 multiContextUserDetailsService,
-                tenantUserRepository,
-                appClock,
                 restAuthenticationEntryPoint,
                 restAccessDeniedHandler
         );
     }
 
-    @Bean
-    public MustChangePasswordFilter mustChangePasswordFilter() {
-        return new MustChangePasswordFilter();
-    }
-
+    /**
+     * Filtro responsável por propagar dados do request para contexto local.
+     *
+     * @return bean do filtro
+     */
     @Bean
     public RequestMetaContextFilter requestMetaContextFilter() {
         return new RequestMetaContextFilter();
     }
 
+    /**
+     * Filtro responsável por binding do tenant antes do JWT.
+     *
+     * @return bean do filtro
+     */
+    @Bean
+    public TenantHeaderTenantContextFilter tenantHeaderTenantContextFilter() {
+        return new TenantHeaderTenantContextFilter();
+    }
+
+    /**
+     * Filtro da política de troca obrigatória de senha.
+     *
+     * @return bean do filtro
+     */
+    @Bean
+    public MustChangePasswordFilter mustChangePasswordFilter() {
+        return new MustChangePasswordFilter();
+    }
+
+    /**
+     * Filtro de logging final da request.
+     *
+     * @return bean do filtro
+     */
     @Bean
     public RequestLoggingFilter requestLoggingFilter() {
         return new RequestLoggingFilter();
     }
 
+    /**
+     * Encoder padrão.
+     *
+     * @return PasswordEncoder BCrypt
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * AuthenticationManager padrão do Spring Security.
+     *
+     * @param authConfig configuração
+     * @return manager
+     * @throws Exception erro de wiring
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
 
+    /**
+     * Cadeia principal de filtros HTTP.
+     *
+     * @param http builder
+     * @return security filter chain
+     * @throws Exception erro de configuração
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(request -> {
+                    CorsConfiguration config = new CorsConfiguration();
+                    config.setAllowedOriginPatterns(List.of(
+                            "http://localhost:*",
+                            "http://127.0.0.1:*"
+                    ));
+                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                    config.setAllowedHeaders(List.of(
+                            "Authorization",
+                            "Content-Type",
+                            "Accept",
+                            "X-Request-Id",
+                            "X-Tenant"
+                    ));
+                    config.setExposedHeaders(List.of(
+                            "Authorization",
+                            "X-Request-Id"
+                    ));
+                    config.setAllowCredentials(true);
+                    config.setMaxAge(3600L);
+                    return config;
+                }))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler)
+                )
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/actuator/health",
 
-            // ✅ CORS (opcional, mas recomendado) + X-Request-Id
-            .cors(cors -> cors.configurationSource(request -> {
-                CorsConfiguration config = new CorsConfiguration();
+                                "/api/controlplane/auth/login",
+                                "/api/controlplane/auth/refresh",
+                                "/api/controlplane/auth/logout",
 
-                config.setAllowedOriginPatterns(List.of(
-                        "http://localhost:*",
-                        "http://127.0.0.1:*"
-                ));
+                                "/api/tenant/auth/login",
+                                "/api/tenant/auth/login/confirm",
+                                "/api/tenant/auth/refresh",
+                                "/api/tenant/auth/logout",
 
-                config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                                "/api/tenant/me/password",
+                                "/api/tenant/password/forgot",
+                                "/api/tenant/password/reset",
 
-                config.setAllowedHeaders(List.of(
-                        "Authorization",
-                        "Content-Type",
-                        "Accept",
-                        "X-Request-Id",
-                        "X-Tenant"
-                ));
+                                "/api/accounts/auth/checkuser",
+                                "/api/signup"
+                        ).permitAll()
 
-                config.setExposedHeaders(List.of(
-                        "Authorization",
-                        "X-Request-Id"
-                ));
+                        .requestMatchers("/api/admin/me/password").authenticated()
+                        .requestMatchers("/api/me/**").authenticated()
+                        .requestMatchers("/api/admin/**").authenticated()
+                        .requestMatchers("/api/controlplane/**").authenticated()
+                        .requestMatchers("/api/tenant/**").authenticated()
 
-                config.setAllowCredentials(true);
-                config.setMaxAge(3600L);
-                return config;
-            }))
+                        .anyRequest().denyAll()
+                );
 
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .exceptionHandling(ex -> ex
-                    .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
-                    .accessDeniedHandler(restAccessDeniedHandler)           // 403
-            )
-            .authorizeHttpRequests(authz -> authz
-                .requestMatchers(
-                    "/v3/api-docs/**",
-                    "/swagger-ui.html",
-                    "/swagger-ui/**",
-                    "/actuator/health",
-
-                    // ✅ CONTROL PLANE AUTH
-                    "/api/controlplane/auth/login",
-                    "/api/controlplane/auth/refresh",
-                    "/api/controlplane/auth/logout",
-
-                    // ✅ TENANT AUTH
-                    "/api/tenant/auth/login",
-                    "/api/tenant/auth/login/confirm",
-                    "/api/tenant/auth/refresh",
-                    "/api/tenant/auth/logout",
-
-                    // ✅ TENANT: troca de senha (JWT, mas precisa passar pelo filtro 428)
-                    // OBS: Security precisa deixar chegar no controller; o MustChangePasswordFilter decide 428 vs allow.
-                    "/api/tenant/me/password",
-
-                    // ✅ reset por token (público)
-                    "/api/tenant/password/forgot",
-                    "/api/tenant/password/reset",
-
-                    "/api/accounts/auth/checkuser",
-                    "/api/signup"
-                ).permitAll()
-
-                // rotas autenticadas
-                .requestMatchers("/api/admin/me/password").authenticated()
-                .requestMatchers("/api/me/**").authenticated()
-
-                .requestMatchers("/api/admin/**").authenticated()
-                .requestMatchers("/api/controlplane/**").authenticated()
-                .requestMatchers("/api/tenant/**").authenticated()
-
-                .anyRequest().denyAll()
-            );
-
-        // ✅ 1) meta primeiro
         http.addFilterBefore(requestMetaContextFilter(), UsernamePasswordAuthenticationFilter.class);
-
-        // ✅ 2) JWT cedo
-        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-
-        // ✅ 3) política de senha
+        http.addFilterAfter(tenantHeaderTenantContextFilter(), RequestMetaContextFilter.class);
+        http.addFilterAfter(jwtAuthenticationFilter(), TenantHeaderTenantContextFilter.class);
         http.addFilterAfter(mustChangePasswordFilter(), JwtAuthenticationFilter.class);
-
-        // ✅ 4) log final do request
         http.addFilterAfter(requestLoggingFilter(), MustChangePasswordFilter.class);
 
         return http.build();

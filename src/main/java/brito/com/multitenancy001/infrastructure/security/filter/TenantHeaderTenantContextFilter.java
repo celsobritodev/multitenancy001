@@ -11,58 +11,106 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Filtro responsável por aplicar binding de tenant via header em fluxos sem Bearer
+ * e por forçar PUBLIC em rotas que precisam necessariamente rodar fora de tenant.
+ *
+ * <p>Regra desta versão endurecida:</p>
+ * <ul>
+ *   <li>Rotas public-only sempre executam em {@code PUBLIC}.</li>
+ *   <li>Requests com Bearer não fazem bind por header neste filtro.</li>
+ *   <li>Requests sem Bearer podem usar {@code X-Tenant} para bind antecipado.</li>
+ * </ul>
+ *
+ * <p>Essa separação evita competição de contexto entre filtro de header e filtro JWT.</p>
+ */
 @Slf4j
 public class TenantHeaderTenantContextFilter extends OncePerRequestFilter {
 
     public static final String TENANT_HEADER = "X-Tenant";
 
-  @Override
-protected void doFilterInternal(HttpServletRequest request,
-                                HttpServletResponse response,
-                                FilterChain filterChain) throws ServletException, IOException {
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
-    final long threadId = Thread.currentThread().threadId();
-    final String method = request.getMethod();
-    final String uri = request.getRequestURI();
+        final long threadId = Thread.currentThread().threadId();
+        final String method = request.getMethod();
+        final String uri = request.getRequestURI();
 
-    // ✅ Padrão B: auth/signup SEMPRE rodam em PUBLIC (não binda tenant por header)
-    if (isPublicOnlyPath(uri)) {
-        try (TenantContext.Scope ignored = TenantContext.publicScope()) {
-            log.info("🌐 [REQ] {} {} | PUBLIC-ONLY | thread={}", method, uri, threadId);
+        if (isPublicOnlyPath(uri)) {
+            try (TenantContext.Scope ignored = TenantContext.publicScope()) {
+                log.info("🌐 [REQ] {} {} | context=PUBLIC_ONLY | thread={}", method, uri, threadId);
+                filterChain.doFilter(request, response);
+            }
+            return;
+        }
+
+        final String rawHeader = request.getHeader(TENANT_HEADER);
+        final String tenantHeader = normalize(rawHeader);
+        final String tenantForLog = tenantHeader != null ? tenantHeader : "PUBLIC";
+
+        final String authHeader = request.getHeader("Authorization");
+        final boolean hasBearer = StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");
+
+        if (hasBearer) {
+            if (tenantHeader != null && !isValidTenantSchema(tenantHeader)) {
+                log.warn("🚫 X-Tenant inválido recebido com Bearer | uri={} | xTenant={}", uri, tenantHeader);
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid X-Tenant header");
+                return;
+            }
+
+            log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | bearer=yes | sem bind por header | thread={}",
+                    method, uri, tenantForLog, threadId);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (tenantHeader != null && !isValidTenantSchema(tenantHeader)) {
+            log.warn("🚫 X-Tenant inválido sem Bearer | uri={} | xTenant={}", uri, tenantHeader);
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid X-Tenant header");
+            return;
+        }
+
+        try (TenantContext.Scope ignored = TenantContext.scope(tenantHeader)) {
+            log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | bearer=no | thread={}",
+                    method, uri, tenantForLog, threadId);
             filterChain.doFilter(request, response);
         }
-        return;
     }
 
-    final String rawHeader = request.getHeader(TENANT_HEADER);
-    final String tenantHeader = (rawHeader == null ? null : rawHeader.trim());
-    final String tenantSchemaFromHeader = StringUtils.hasText(tenantHeader) ? tenantHeader : null;
-    final String tenantForLog = (tenantSchemaFromHeader != null ? tenantSchemaFromHeader : "PUBLIC");
-
-    // ✅ Se tem Bearer, não binda por header (token manda)
-    final String authHeader = request.getHeader("Authorization");
-    if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
-        log.info("🌐 [REQ] {} {} | X-Tenant(header)={} | bearer=yes | thread={}",
-                method, uri, tenantForLog, threadId);
-        filterChain.doFilter(request, response);
-        return;
+    /**
+     * Define rotas que obrigatoriamente devem executar em PUBLIC.
+     *
+     * @param uri URI da request
+     * @return true se a rota for public-only
+     */
+    private static boolean isPublicOnlyPath(String uri) {
+        return uri.startsWith("/api/tenant/auth/")
+                || uri.startsWith("/api/controlplane/auth/")
+                || uri.startsWith("/api/tenant/password/")
+                || uri.startsWith("/api/signup");
     }
 
-    // ✅ Sem Bearer -> binda por header (exceto rotas public-only)
-    try (TenantContext.Scope ignored = TenantContext.scope(tenantSchemaFromHeader)) {
-        log.info("🌐 [REQ] {} {} | X-Tenant(bound)={} | bearer=no | thread={}",
-                method, uri, tenantForLog, threadId);
-        filterChain.doFilter(request, response);
+    /**
+     * Valida formato do tenant schema recebido em header.
+     *
+     * @param tenantSchema tenant schema
+     * @return true se o formato for aceitável
+     */
+    private boolean isValidTenantSchema(String tenantSchema) {
+        return StringUtils.hasText(tenantSchema) && tenantSchema.matches("^[a-zA-Z0-9_]+$");
     }
-}
 
-private static boolean isPublicOnlyPath(String uri) {
-    // auth de tenant e control-plane + signup devem rodar em PUBLIC
-    return uri.startsWith("/api/tenant/auth/")
-            || uri.startsWith("/api/controlplane/auth/")
-            || uri.startsWith("/api/signup");
-}
-
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

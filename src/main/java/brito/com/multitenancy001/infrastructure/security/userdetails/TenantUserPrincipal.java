@@ -1,5 +1,10 @@
-// src/main/java/brito/com/multitenancy001/infrastructure/security/userdetails/TenantUserPrincipal.java
 package brito.com.multitenancy001.infrastructure.security.userdetails;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
 
 import brito.com.multitenancy001.shared.security.AuthenticatedPrincipal;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -10,19 +15,16 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.time.Instant;
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Objects;
-import java.util.Set;
-
 /**
- * Principal de segurança do Tenant (infra).
+ * Principal de segurança do tenant.
  *
- * Regras:
- * - Implementa UserDetails FORA do domínio (DDD limpo).
- * - Usa AppClock como fonte única de tempo (proíbe Instant.now()).
- * - Authorities calculadas aqui (role + permissions).
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Implementa {@link UserDetails} fora do domínio.</li>
+ *   <li>Implementa {@link AuthenticatedPrincipal} para compatibilidade com o contrato de autenticação do projeto.</li>
+ *   <li>Usa {@link AppClock} como fonte única de tempo.</li>
+ *   <li>Calcula authorities a partir de role + permissions.</li>
+ * </ul>
  */
 public final class TenantUserPrincipal implements UserDetails, AuthenticatedPrincipal {
 
@@ -33,89 +35,135 @@ public final class TenantUserPrincipal implements UserDetails, AuthenticatedPrin
     private final Set<GrantedAuthority> authorities;
 
     public TenantUserPrincipal(TenantUser user, AppClock appClock) {
-        /* Constrói o principal do tenant com authorities e clock. */
         this.user = Objects.requireNonNull(user, "user");
         this.appClock = Objects.requireNonNull(appClock, "appClock");
         this.authorities = buildAuthorities(user);
     }
 
-    private static Set<GrantedAuthority> buildAuthorities(TenantUser user) {
-        /* Constrói authorities: role + permissions explícitas tipadas. */
-        Set<GrantedAuthority> out = new LinkedHashSet<>();
-
-        TenantRole role = user.getRole();
-        if (role != null) out.add(new SimpleGrantedAuthority(role.asAuthority()));
-
-        for (TenantPermission p : user.getPermissions()) {
-            if (p == null) continue;
-            out.add(new SimpleGrantedAuthority(p.asAuthority()));
-        }
-
-        return out;
-    }
-
-    public TenantUser getUser() {
+    /**
+     * Retorna a entidade de domínio subjacente.
+     *
+     * @return usuário tenant de domínio
+     */
+    public TenantUser domainUser() {
         return user;
     }
 
-    public Long getAccountId() {
-        return user.getAccountId();
+    /**
+     * Retorna o id interno do usuário tenant.
+     *
+     * @return id do usuário
+     */
+    public Long getId() {
+        return user.getId();
     }
 
-    public String getName() {
-        return user.getName();
-    }
-
+    /**
+     * Implementação do contrato de AuthenticatedPrincipal.
+     *
+     * @return id do usuário autenticado
+     */
     @Override
     public Long getUserId() {
         return user.getId();
     }
 
+    /**
+     * Retorna o id da conta do usuário.
+     *
+     * @return account id
+     */
+    public Long getAccountId() {
+        return user.getAccountId();
+    }
+
+    /**
+     * Retorna o email do tenant.
+     *
+     * @return email do usuário
+     */
+    public String getTenantEmail() {
+        return user.getEmail();
+    }
+
+    /**
+     * Implementação do contrato de AuthenticatedPrincipal.
+     *
+     * @return email do usuário autenticado
+     */
     @Override
     public String getEmail() {
         return user.getEmail();
     }
 
+    /**
+     * Retorna role tenant.
+     *
+     * @return role do tenant
+     */
+    public TenantRole getTenantRole() {
+        return user.getRole();
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        /* Authorities do tenant: role + permissions (fail-fast). */
         return authorities;
     }
 
     @Override
     public String getPassword() {
-        /* Campo real da entidade: password (hash). */
         return user.getPassword();
     }
 
     @Override
     public String getUsername() {
-        /* Username = email. */
         return user.getEmail();
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        /* Sem expiração por enquanto. */
         return true;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        /* Sem expiração por enquanto. */
         return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        /* Avalia lock usando AppClock (fonte única do tempo). */
         Instant now = appClock.instant();
         return user.isAccountNonLockedAt(now);
     }
 
     @Override
     public boolean isEnabled() {
-        /* Enabled de negócio (sem lock). */
         return user.isEnabledDomain();
+    }
+
+    /**
+     * Monta authorities a partir da role e permissões explícitas.
+     *
+     * @param user usuário tenant
+     * @return conjunto de authorities
+     */
+    private static Set<GrantedAuthority> buildAuthorities(TenantUser user) {
+        Set<GrantedAuthority> auth = new LinkedHashSet<>();
+
+        TenantRole role = user.getRole();
+        if (role != null) {
+            auth.add(new SimpleGrantedAuthority(role.asAuthority()));
+        }
+
+        if (user.getPermissions() != null) {
+            for (TenantPermission permission : user.getPermissions()) {
+                if (permission == null) {
+                    continue;
+                }
+                auth.add(new SimpleGrantedAuthority(permission.asAuthority()));
+            }
+        }
+
+        return auth;
     }
 }

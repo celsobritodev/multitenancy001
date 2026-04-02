@@ -1,133 +1,192 @@
 package brito.com.multitenancy001.shared.context;
 
+import java.util.Objects;
+
 import brito.com.multitenancy001.shared.db.Schemas;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.util.StringUtils;
 
-@Slf4j
-public class TenantContext {
+/**
+ * Contexto de tenant por thread.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Manter o schema efetivo durante o processamento da request.</li>
+ *   <li>Fornecer escopo seguro via try-with-resources.</li>
+ *   <li>Bloquear rebind indevido de tenant diferente no mesmo thread.</li>
+ * </ul>
+ *
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>PUBLIC é representado por ausência de tenant bindado.</li>
+ *   <li>Bind do mesmo tenant é idempotente.</li>
+ *   <li>Troca de tenant no mesmo thread gera fail-fast.</li>
+ * </ul>
+ */
+public final class TenantContext {
+
+    private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
+
+    private TenantContext() {
+        // utility class
+    }
 
     /**
-     * Observação semântica:
-     * - PUBLIC = sem tenantSchema (null)
-     */
-    public static final String PUBLIC_SCHEMA = Schemas.CONTROL_PLANE;
-
-    private static final ThreadLocal<String> TENANT_THREAD_LOCAL = new ThreadLocal<>();
-
-    /**
-     * ✅ Retorna o tenantSchema REALMENTE bindado (ou null).
-     * public = null
+     * Retorna o tenant atual ou null.
+     *
+     * @return tenant atual ou null
      */
     public static String getOrNull() {
-        String tenantSchema = TENANT_THREAD_LOCAL.get();
-        return StringUtils.hasText(tenantSchema) ? tenantSchema : null;
+        return CURRENT.get();
     }
 
     /**
-     * ✅ Quando você quer um fallback explícito para public.
+     * Retorna tenant atual ou PUBLIC quando não houver bind.
+     *
+     * @return tenant atual ou schema public
      */
     public static String getOrDefaultPublic() {
-        String tenantSchema = getOrNull();
-        return (tenantSchema != null ? tenantSchema : PUBLIC_SCHEMA);
-    }
-
-    public static boolean isPublic() {
-        return getOrNull() == null;
+        String current = CURRENT.get();
+        return current != null ? current : Schemas.CONTROL_PLANE;
     }
 
     /**
-     * ✅ Regra:
-     * - NÃO pode mudar tenantSchema dentro de transação.
-     * - MAS pode chamar bindTenantSchema() de forma idempotente (sem mudança) dentro de transação.
+     * Indica se há tenant bindado.
      *
-     * Entrada aqui é "tenantSchema" (já no sentido de execução / contexto).
-     * Para "entrada crua" (tenantSchema), isso deve ser tratado antes (provisioning / validação).
+     * @return true quando houver tenant
      */
-    public static void bindTenantSchema(String tenantSchema) {
+    public static boolean isBound() {
+        return CURRENT.get() != null;
+    }
 
-        String normalizedTenantSchema = (tenantSchema != null ? tenantSchema.trim() : null);
-        String targetTenantSchema = StringUtils.hasText(normalizedTenantSchema) ? normalizedTenantSchema : null; // public = null
-        String previousTenantSchema = getOrNull(); // já normalizado (public = null)
+    /**
+     * Exige tenant bindado no thread atual.
+     *
+     * @return tenant atual
+     */
+    public static String requireTenant() {
+        String current = CURRENT.get();
+        if (current == null) {
+            throw new IllegalStateException("TenantContext ausente no thread atual");
+        }
+        return current;
+    }
 
-        // ✅ Sem mudança: não re-binda e evita log repetido
-        if ((previousTenantSchema == null && targetTenantSchema == null)
-                || (previousTenantSchema != null && previousTenantSchema.equals(targetTenantSchema))) {
+    /**
+     * Abre escopo do tenant.
+     *
+     * @param tenantSchema schema do tenant
+     * @return scope autocloseable
+     */
+    public static Scope scope(String tenantSchema) {
+        String normalized = normalize(tenantSchema);
 
-            if (log.isDebugEnabled()) {
-                log.debug("🔄 TenantContext.bindTenantSchema sem mudança | thread={} | tenantSchema={}",
-                        Thread.currentThread().threadId(),
-                        (targetTenantSchema != null ? targetTenantSchema : "PUBLIC(null)"));
-            }
-            return;
+        if (normalized == null) {
+            return publicScope();
         }
 
-        // 🚫 Mudança REAL -> não permitir dentro de transação
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+        String current = CURRENT.get();
+        if (current == null) {
+            bindTenantSchema(normalized);
+            return new Scope(normalized, true);
+        }
+
+        if (current.equalsIgnoreCase(normalized)) {
+            return new Scope(normalized, false);
+        }
+
+        throw new IllegalStateException(
+                "TenantContext.bindTenantSchema: já existe TenantContext ativo. atual="
+                        + current + " | novo=" + normalized
+        );
+    }
+
+    /**
+     * Escopo explícito em PUBLIC.
+     *
+     * @return scope autocloseable
+     */
+    public static Scope publicScope() {
+        String current = CURRENT.get();
+        if (current != null) {
             throw new IllegalStateException(
-                    "🔥 TenantContext.bindTenantSchema chamado DENTRO de transação! tenantSchema=" + tenantSchema
+                    "TenantContext.bindTenantSchema: não é possível voltar para PUBLIC com TenantContext ativo. atual="
+                            + current
             );
         }
-
-        // aplica mudança
-        if (targetTenantSchema == null) {
-            TENANT_THREAD_LOCAL.remove();
-            log.info("🔄 Tenant bindado para PUBLIC (null) | anterior={} | thread={}",
-                    previousTenantSchema, Thread.currentThread().threadId());
-        } else {
-            TENANT_THREAD_LOCAL.set(targetTenantSchema);
-            log.info("🔄 Tenant bindado | thread={} | {} -> {}",
-                    Thread.currentThread().threadId(), previousTenantSchema, targetTenantSchema);
-        }
+        return new Scope(null, false);
     }
 
     /**
-     * Remove qualquer tenantSchema (equivalente a PUBLIC).
-     * Prefira usar publicScope()/scope() com try-with-resources.
+     * Limpa o contexto atual.
      */
     public static void clear() {
-        String previousTenantSchema = getOrNull();
-        if (previousTenantSchema == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("🧹 TenantContext.clear sem mudança (já estava PUBLIC) | thread={}",
-                        Thread.currentThread().threadId());
-            }
-            return;
+        CURRENT.remove();
+    }
+
+    /**
+     * Faz bind interno do tenant.
+     *
+     * @param tenantSchema schema do tenant
+     */
+    private static void bindTenantSchema(String tenantSchema) {
+        Objects.requireNonNull(tenantSchema, "tenantSchema");
+        CURRENT.set(tenantSchema);
+    }
+
+    /**
+     * Normaliza valor do tenant.
+     *
+     * @param tenantSchema schema bruto
+     * @return schema normalizado ou null
+     */
+    private static String normalize(String tenantSchema) {
+        if (tenantSchema == null) {
+            return null;
+        }
+        String trimmed = tenantSchema.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    /**
+     * Escopo autocloseable do TenantContext.
+     */
+    public static final class Scope implements AutoCloseable {
+
+        private final String tenantSchema;
+        private final boolean owner;
+        private boolean closed;
+
+        private Scope(String tenantSchema, boolean owner) {
+            this.tenantSchema = tenantSchema;
+            this.owner = owner;
         }
 
-        TENANT_THREAD_LOCAL.remove();
-        log.info("🧹 Tenant desbindado | thread={} | anterior={}",
-                Thread.currentThread().threadId(), previousTenantSchema);
-    }
+        /**
+         * Retorna schema associado ao escopo.
+         *
+         * @return tenant schema
+         */
+        public String tenantSchema() {
+            return tenantSchema;
+        }
 
-    // ✅ escopo seguro (restaura o tenantSchema anterior ao sair)
-    public static Scope scope(String tenantSchema) {
-        String previousTenantSchema = getOrNull();
-        bindTenantSchema(tenantSchema);
-        return new Scope(previousTenantSchema);
-    }
-
-    // ✅ escopo PUBLIC explícito (restaura o tenantSchema anterior ao sair)
-    public static Scope publicScope() {
-        String previousTenantSchema = getOrNull();
-        bindTenantSchema(null); // explícito: public = sem tenantSchema
-        return new Scope(previousTenantSchema);
-    }
-
-    public static final class Scope implements AutoCloseable {
-        private final String previousTenantSchema;
-        private boolean closed = false;
-
-        private Scope(String previousTenantSchema) {
-            this.previousTenantSchema = previousTenantSchema;
+        /**
+         * Informa se o escopo foi o dono do bind.
+         *
+         * @return true quando abriu o bind
+         */
+        public boolean owner() {
+            return owner;
         }
 
         @Override
         public void close() {
-            if (!closed) {
-                TenantContext.bindTenantSchema(previousTenantSchema); // restaura exatamente o anterior
-                closed = true;
+            if (closed) {
+                return;
+            }
+            closed = true;
+
+            if (owner) {
+                TenantContext.clear();
             }
         }
     }

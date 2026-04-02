@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,12 +18,42 @@ import brito.com.multitenancy001.controlplane.billing.domain.Payment;
 import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
 import brito.com.multitenancy001.shared.domain.billing.PaymentPurpose;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
+import jakarta.persistence.LockModeType;
 
+/**
+ * Repositório de pagamentos do Control Plane.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Fornecer consultas de pagamento por conta, status e período.</li>
+ *   <li>Permitir lookup por idempotencyKey.</li>
+ *   <li>Permitir fetch com account para mapping e binding.</li>
+ *   <li>Oferecer lock pessimista para endurecimento de concorrência.</li>
+ * </ul>
+ */
 @Repository
 public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Long> {
 
+    /**
+     * Busca pagamento por id com account carregada.
+     *
+     * @param id id do pagamento
+     * @return pagamento com account
+     */
     @Query("SELECT p FROM Payment p JOIN FETCH p.account WHERE p.id = :id")
     Optional<Payment> findByIdWithAccount(@Param("id") Long id);
+
+    /**
+     * Busca pagamento por id com account carregada e lock pessimista.
+     *
+     * <p>Usado para endurecer conclusão/concorrência.</p>
+     *
+     * @param id id do pagamento
+     * @return pagamento com account bloqueado
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p JOIN FETCH p.account WHERE p.id = :id")
+    Optional<Payment> findByIdWithAccountForUpdate(@Param("id") Long id);
 
     default Optional<Payment> findScopedByIdAndAccountId(Long id, Long accountId) {
         return findByIdAndAccount_Id(id, accountId);
@@ -72,8 +103,20 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
 
     boolean existsByTransactionId(String transactionId);
 
+    /**
+     * Busca por idempotencyKey.
+     *
+     * @param idempotencyKey chave
+     * @return pagamento opcional
+     */
     Optional<Payment> findByIdempotencyKey(String idempotencyKey);
 
+    /**
+     * Busca por idempotencyKey com account carregada.
+     *
+     * @param idempotencyKey chave
+     * @return pagamento opcional
+     */
     @Query("""
         select p
           from Payment p
@@ -87,6 +130,43 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
     List<Payment> findByStatusAndAudit_CreatedAtBefore(PaymentStatus status, Instant date);
 
     List<Payment> findByValidUntilBeforeAndStatus(Instant date, PaymentStatus status);
+
+    /**
+     * Busca pagamentos equivalentes recentes para fallback defensivo legado.
+     *
+     * <p>Se você eliminar de vez o fallback heurístico, esse método pode sair depois.</p>
+     *
+     * @param accountId conta
+     * @param purpose finalidade
+     * @param targetPlan plano alvo
+     * @param billingCycle ciclo
+     * @param amount valor
+     * @param statuses statuses aceitos
+     * @param createdAfter corte temporal
+     * @return lista de candidatos equivalentes
+     */
+    @Query("""
+        select p
+          from Payment p
+          join fetch p.account
+         where p.account.id = :accountId
+           and p.paymentPurpose = :purpose
+           and p.targetPlan = :targetPlan
+           and p.billingCycle = :billingCycle
+           and p.amount = :amount
+           and p.status in :statuses
+           and p.audit.createdAt >= :createdAfter
+         order by p.audit.createdAt desc
+    """)
+    List<Payment> findEquivalentUpgradeCandidates(
+            @Param("accountId") Long accountId,
+            @Param("purpose") PaymentPurpose purpose,
+            @Param("targetPlan") SubscriptionPlan targetPlan,
+            @Param("billingCycle") BillingCycle billingCycle,
+            @Param("amount") BigDecimal amount,
+            @Param("statuses") List<PaymentStatus> statuses,
+            @Param("createdAfter") Instant createdAfter
+    );
 
     @Query("""
         select p
@@ -149,24 +229,4 @@ public interface ControlPlanePaymentRepository extends JpaRepository<Payment, Lo
            and p.validUntil >= :now
     """)
     boolean existsActivePayment(@Param("accountId") Long accountId, @Param("now") Instant now);
-
-    @Query("""
-        select p
-          from Payment p
-         where p.account.id = :accountId
-           and p.paymentPurpose = :purpose
-           and p.targetPlan = :targetPlan
-           and p.billingCycle = :billingCycle
-           and p.amount = :amount
-           and p.status in :statuses
-         order by p.audit.createdAt desc
-    """)
-    List<Payment> findEquivalentUpgradeCandidates(
-            @Param("accountId") Long accountId,
-            @Param("purpose") PaymentPurpose purpose,
-            @Param("targetPlan") SubscriptionPlan targetPlan,
-            @Param("billingCycle") BillingCycle billingCycle,
-            @Param("amount") BigDecimal amount,
-            @Param("statuses") List<PaymentStatus> statuses
-    );
 }
