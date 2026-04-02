@@ -1,240 +1,209 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResult;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountStatus;
-import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.controlplane.signup.app.AccountOnboardingService;
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
-import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Application Service central do Control Plane para o agregado Account.
+ * Fachada principal do agregado Account no Control Plane.
  *
- * Responsabilidades:
- * - Orquestrar casos de uso relacionados a contas (signup, consultas administrativas, mudança de status).
- * - Garantir fronteira clara entre Controller e Domínio (DDD layered).
- * - Coordenar múltiplos serviços especializados (onboarding, status, usuários, auditoria).
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Manter compatibilidade com controllers e chamadores atuais.</li>
+ *   <li>Expor uma superfície única para operações de Account.</li>
+ *   <li>Delegar comandos e consultas para serviços especializados.</li>
+ * </ul>
  *
- * Regras arquiteturais:
- * - Controllers NUNCA acessam repositórios diretamente.
- * - Todas as leituras passam por UnitOfWork readOnly().
- * - Todas as mutações passam por UnitOfWork transacional.
- *
- * Regras de domínio:
- * - Account deletada logicamente não pode ser operada.
- * - Validações semânticas usam ApiErrorCode como fonte única.
- * - O tempo é sempre obtido via AppClock.
+ * <p>Importante:</p>
+ * <ul>
+ *   <li>Esta classe deve permanecer fina.</li>
+ *   <li>Não deve concentrar regras de paginação, range, consultas complexas
+ *       ou lógica de onboarding/status.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountAppService {
 
-    private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final AccountRepository accountRepository;
-    private final AccountOnboardingService accountOnboardingService;
-    private final AccountStatusService accountStatusService;
-    private final AccountTenantUserService accountTenantUserService;
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-    private final AppClock appClock;
+    private final ControlPlaneAccountCommandService controlPlaneAccountCommandService;
+    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
 
-    // =========================================================
-    // 1) ONBOARDING / SIGNUP
-    // =========================================================
-
+    /**
+     * Cria uma nova account via fluxo de signup/onboarding.
+     *
+     * @param signupCommand comando de signup
+     * @return resultado do onboarding
+     */
     public SignupResult createAccount(SignupCommand signupCommand) {
-        /* Orquestra fluxo de onboarding e criação de Account (delegado ao onboarding). */
-        if (signupCommand == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "signupCommand é obrigatório", 400);
-        return accountOnboardingService.createAccount(signupCommand);
-    }
-
-    // =========================================================
-    // 2) CONSULTAS
-    // =========================================================
-
-    public List<Account> listAccounts() {
-        /* Lista contas não deletadas. */
-        return publicSchemaUnitOfWork.readOnly(accountRepository::findAllByDeletedFalse);
-    }
-
-    public Account getAccount(Long accountId) {
-        /* Busca conta por id (não deletada). */
-    	if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-
-        return publicSchemaUnitOfWork.readOnly(() ->
-                accountRepository.findByIdAndDeletedFalse(accountId)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND))
-        );
-    }
-
-    public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
-        /* Retorna visão admin com total de usuários e primeiro admin (se existir). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-
-        return publicSchemaUnitOfWork.readOnly(() -> {
-            Account account = accountRepository.findByIdAndDeletedFalse(accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND));
-
-            long totalUsers = controlPlaneUserRepository.countByAccount_IdAndDeletedFalse(accountId);
-            ControlPlaneUser admin = controlPlaneUserRepository.findFirstAdminByAccountId(accountId).orElse(null);
-
-            return new AccountAdminDetailsProjection(account, admin, totalUsers);
-        });
-    }
-
-    // =========================================================
-    // 3) STATUS / SOFT DELETE / RESTORE
-    // =========================================================
-
-    public AccountStatusChangeResult changeAccountStatus(Long accountId, AccountStatusChangeCommand cmd) {
-        /* Orquestra mudança de status (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "cmd é obrigatório", 400);
-
-        return accountStatusService.changeAccountStatus(accountId, cmd);
-    }
-
-    public void softDeleteAccount(Long accountId) {
-        /* Soft delete de account (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        accountStatusService.softDeleteAccount(accountId);
-    }
-    
-    
-    
-    
-    
-    
-
-    public void restoreAccount(Long accountId) {
-        /* Restaura account deletada (delegado ao service específico). */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        accountStatusService.restoreAccount(accountId);
-    }
-
-    public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
-        /* Lista usuários do tenant associado à account. */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
-    }
-
-    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        /* Suspende/reativa usuário do tenant via ação admin. */
-        if (accountId == null) throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        if (userId == null) throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-
-        accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
-    }
-
-    // =========================================================
-    // 4) CONSULTAS ADMIN (paginação)
-    // =========================================================
-
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final long MAX_CREATED_BETWEEN_DAYS = 90;
-
-    private Pageable normalizePageable(Pageable pageable) {
-        /* Normaliza limites de paginação para evitar abuso e manter comportamento consistente. */
-        if (pageable == null) return PageRequest.of(0, DEFAULT_PAGE_SIZE);
-
-        int page = Math.max(0, pageable.getPageNumber());
-        int size = pageable.getPageSize();
-
-        if (size <= 0) size = DEFAULT_PAGE_SIZE;
-        if (size > MAX_PAGE_SIZE) size = MAX_PAGE_SIZE;
-
-        return PageRequest.of(page, size, pageable.getSort());
-    }
-
-    private void assertValidCreatedBetweenRange(Instant start, Instant end) {
-        /* Valida intervalo (start/end) para consultas por data de criação. */
-        if (start == null || end == null) throw new ApiException(ApiErrorCode.INVALID_RANGE, "start/end são obrigatórios", 400);
-        if (end.isBefore(start)) throw new ApiException(ApiErrorCode.INVALID_RANGE, "end deve ser >= start", 400);
-
-        Duration d = Duration.between(start, end);
-        if (d.toDays() > MAX_CREATED_BETWEEN_DAYS) {
-            throw new ApiException(ApiErrorCode.RANGE_TOO_LARGE, "Intervalo máximo é " + MAX_CREATED_BETWEEN_DAYS + " dias", 400);
-        }
-    }
-
-    public Account findBySlug(String slug) {
-        /* Busca conta por slug (case-insensitive) e não deletada. */
-        if (slug == null || slug.isBlank()) throw new ApiException(ApiErrorCode.INVALID_SLUG, "slug é obrigatório", 400);
-
-        String normalized = slug.trim();
-
-        return publicSchemaUnitOfWork.readOnly(() ->
-                accountRepository.findBySlugAndDeletedFalseIgnoreCase(normalized)
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND))
-        );
-    }
-
-    public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
-        /* Lista contas por status com paginação normalizada. */
-        if (status == null) throw new ApiException(ApiErrorCode.STATUS_REQUIRED, "status é obrigatório", 400);
-
-        Pageable p = normalizePageable(pageable);
-        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.findByStatusAndDeletedFalse(status, p));
-    }
-
-    public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
-        /* Lista contas criadas em intervalo, com validação e paginação normalizada. */
-        assertValidCreatedBetweenRange(start, end);
-
-        Pageable p = normalizePageable(pageable);
-        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.findAccountsCreatedBetween(start, end, p));
-    }
-
-    public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
-        /* Busca por displayName com paginação normalizada. */
-        if (term == null || term.isBlank()) throw new ApiException(ApiErrorCode.INVALID_SEARCH, "term é obrigatório", 400);
-
-        String normalized = term.trim();
-        Pageable p = normalizePageable(pageable);
-
-        return publicSchemaUnitOfWork.readOnly(() -> accountRepository.searchByDisplayName(normalized, p));
+        log.info("Delegando createAccount para command service.");
+        return controlPlaneAccountCommandService.createAccount(signupCommand);
     }
 
     /**
-     * Overdue é DATA CIVIL (paymentDueDate é LocalDate/DATE).
-     * Mantemos compatibilidade aceitando Instant e convertendo explicitamente para LocalDate em UTC
-     * (sem timezone implícito do servidor).
+     * Lista contas não deletadas.
+     *
+     * @return lista de contas
      */
-    public List<Account> listOverdueAccounts(Instant today, AccountStatus status) {
-        /* Lista contas overdue com base em data civil UTC (compatibilidade). */
-        Instant baseInstant = (today != null ? today : appClock.instant());
-        LocalDate baseDateUtc = LocalDate.ofInstant(baseInstant, ZoneOffset.UTC);
-
-        AccountStatus st = (status != null ? status : AccountStatus.ACTIVE);
-
-        return publicSchemaUnitOfWork.readOnly(() ->
-                accountRepository.findOverdueAccountsNotDeleted(st, baseDateUtc)
-        );
+    public List<Account> listAccounts() {
+        return controlPlaneAccountQueryService.listAccounts();
     }
 
+    /**
+     * Busca conta não deletada por id.
+     *
+     * @param accountId id da conta
+     * @return conta encontrada
+     */
+    public Account getAccount(Long accountId) {
+        return controlPlaneAccountQueryService.getAccount(accountId);
+    }
+
+    /**
+     * Retorna visão administrativa detalhada da conta.
+     *
+     * @param accountId id da conta
+     * @return projeção administrativa
+     */
+    public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
+        return controlPlaneAccountQueryService.getAccountAdminDetails(accountId);
+    }
+
+    /**
+     * Altera status da conta.
+     *
+     * @param accountId id da conta
+     * @param accountStatusChangeCommand comando de mudança de status
+     * @return resultado consolidado
+     */
+    public AccountStatusChangeResult changeAccountStatus(
+            Long accountId,
+            AccountStatusChangeCommand accountStatusChangeCommand
+    ) {
+        log.info("Delegando changeAccountStatus para command service. accountId={}", accountId);
+        return controlPlaneAccountCommandService.changeAccountStatus(accountId, accountStatusChangeCommand);
+    }
+
+    /**
+     * Executa soft delete de account.
+     *
+     * @param accountId id da conta
+     */
+    public void softDeleteAccount(Long accountId) {
+        log.info("Delegando softDeleteAccount para command service. accountId={}", accountId);
+        controlPlaneAccountCommandService.softDeleteAccount(accountId);
+    }
+
+    /**
+     * Restaura account deletada logicamente.
+     *
+     * @param accountId id da conta
+     */
+    public void restoreAccount(Long accountId) {
+        log.info("Delegando restoreAccount para command service. accountId={}", accountId);
+        controlPlaneAccountCommandService.restoreAccount(accountId);
+    }
+
+    /**
+     * Lista usuários do tenant associado à account.
+     *
+     * @param accountId id da conta
+     * @param onlyOperational indica se retorna apenas usuários operacionais
+     * @return lista resumida de usuários
+     */
+    public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
+        return controlPlaneAccountCommandService.listTenantUsers(accountId, onlyOperational);
+    }
+
+    /**
+     * Suspende ou reativa usuário do tenant por ação administrativa.
+     *
+     * @param accountId id da conta
+     * @param userId id do usuário
+     * @param suspended status desejado
+     */
+    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
+        log.info("Delegando setUserSuspendedByAdmin para command service. accountId={}, userId={}",
+                accountId,
+                userId);
+        controlPlaneAccountCommandService.setUserSuspendedByAdmin(accountId, userId, suspended);
+    }
+
+    /**
+     * Busca conta por slug.
+     *
+     * @param slug slug informado
+     * @return conta encontrada
+     */
+    public Account findBySlug(String slug) {
+        return controlPlaneAccountQueryService.findBySlug(slug);
+    }
+
+    /**
+     * Lista contas por status com paginação normalizada.
+     *
+     * @param status status alvo
+     * @param pageable paginação
+     * @return página de contas
+     */
+    public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
+        return controlPlaneAccountQueryService.listAccountsByStatus(status, pageable);
+    }
+
+    /**
+     * Lista contas criadas em intervalo informado.
+     *
+     * @param start início do intervalo
+     * @param end fim do intervalo
+     * @param pageable paginação
+     * @return página de contas
+     */
+    public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
+        return controlPlaneAccountQueryService.listAccountsCreatedBetween(start, end, pageable);
+    }
+
+    /**
+     * Busca contas por displayName.
+     *
+     * @param term termo de busca
+     * @param pageable paginação
+     * @return página de contas
+     */
+    public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
+        return controlPlaneAccountQueryService.searchAccountsByDisplayName(term, pageable);
+    }
+
+    /**
+     * Lista contas overdue com base em data civil UTC.
+     *
+     * @param today instante base opcional
+     * @param status status alvo opcional
+     * @return lista de contas overdue
+     */
+    public List<Account> listOverdueAccounts(Instant today, AccountStatus status) {
+        return controlPlaneAccountQueryService.listOverdueAccounts(today, status);
+    }
+
+    /**
+     * Conta accounts operacionais.
+     *
+     * @return quantidade de contas operacionais
+     */
     public long countOperationalAccounts() {
-        /* Conta accounts operacionais. */
-        return publicSchemaUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
+        return controlPlaneAccountQueryService.countOperationalAccounts();
     }
 }
