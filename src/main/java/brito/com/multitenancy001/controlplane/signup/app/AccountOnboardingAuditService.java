@@ -5,59 +5,93 @@ import org.springframework.stereotype.Service;
 import brito.com.multitenancy001.controlplane.accounts.app.audit.AccountProvisioningAuditService;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailureCode;
+import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Serviço responsável pela auditoria do onboarding de Account.
+ * Serviço responsável pela auditoria do onboarding de account.
  *
  * <p>Responsabilidades:</p>
  * <ul>
  *   <li>Registrar início do provisioning.</li>
  *   <li>Registrar sucesso do provisioning.</li>
- *   <li>Registrar falha do provisioning com código e causa.</li>
+ *   <li>Registrar falha com details estruturados.</li>
  * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountOnboardingAuditService {
 
     private final AccountProvisioningAuditService accountProvisioningAuditService;
     private final AccountOnboardingSupport accountOnboardingSupport;
+    private final JsonDetailsMapper jsonDetailsMapper;
 
     /**
-     * Registra auditoria de início do provisioning.
+     * Registra início do onboarding.
      *
-     * @param account account alvo
+     * @param account account criada em provisioning
      * @param signupData dados normalizados
      */
-    public void recordStarted(Account account, AccountOnboardingSupport.SignupData signupData) {
+    public void recordStarted(
+            Account account,
+            AccountOnboardingSupport.SignupData signupData
+    ) {
         accountProvisioningAuditService.started(
                 account.getId(),
                 "Provisioning started",
-                accountOnboardingSupport.buildDetailsJson(account, signupData, "STARTED", null, null)
+                jsonDetailsMapper.toJson(
+                        accountOnboardingSupport.buildDetails(
+                                account,
+                                signupData,
+                                "STARTED",
+                                null,
+                                null
+                        )
+                )
         );
+
+        log.debug("Auditoria STARTED registrada | accountId={} | tenantSchema={}",
+                account.getId(),
+                account.getTenantSchema());
     }
 
     /**
-     * Registra auditoria de sucesso do provisioning.
+     * Registra sucesso do onboarding.
      *
      * @param account account finalizada
      * @param signupData dados normalizados
      */
-    public void recordSuccess(Account account, AccountOnboardingSupport.SignupData signupData) {
+    public void recordSuccess(
+            Account account,
+            AccountOnboardingSupport.SignupData signupData
+    ) {
         accountProvisioningAuditService.success(
                 account.getId(),
                 "Provisioning success",
-                accountOnboardingSupport.buildDetailsJson(account, signupData, "SUCCESS", null, null)
+                jsonDetailsMapper.toJson(
+                        accountOnboardingSupport.buildDetails(
+                                account,
+                                signupData,
+                                "SUCCESS",
+                                null,
+                                null
+                        )
+                )
         );
+
+        log.debug("Auditoria SUCCESS registrada | accountId={} | tenantSchema={}",
+                account.getId(),
+                account.getTenantSchema());
     }
 
     /**
-     * Registra auditoria de falha do provisioning.
+     * Registra falha do onboarding.
      *
      * @param account account alvo
      * @param signupData dados normalizados
-     * @param code código de falha
+     * @param code código da falha
      * @param cause causa técnica/funcional
      */
     public void recordFailure(
@@ -70,7 +104,20 @@ public class AccountOnboardingAuditService {
                 account.getId(),
                 code,
                 accountOnboardingSupport.safeMessage(cause),
-                accountOnboardingSupport.buildDetailsJson(account, signupData, "FAILED", code, cause)
+                jsonDetailsMapper.toJson(
+                        accountOnboardingSupport.buildDetails(
+                                account,
+                                signupData,
+                                "FAILED",
+                                code,
+                                cause
+                        )
+                )
         );
+
+        log.debug("Auditoria FAILED registrada | accountId={} | tenantSchema={} | code={}",
+                account.getId(),
+                account.getTenantSchema(),
+                code);
     }
 }

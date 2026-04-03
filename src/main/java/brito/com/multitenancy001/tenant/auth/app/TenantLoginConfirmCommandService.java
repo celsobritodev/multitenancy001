@@ -50,11 +50,11 @@ public class TenantLoginConfirmCommandService {
      */
     public JwtResult loginConfirm(TenantLoginConfirmCommand tenantLoginConfirmCommand) {
         if (tenantLoginConfirmCommand == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
         }
 
         if (!StringUtils.hasText(tenantLoginConfirmCommand.challengeId())) {
-            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório");
         }
 
         final UUID challengeId = tenantLoginConfirmSupport.parseChallengeId(tenantLoginConfirmCommand.challengeId());
@@ -70,25 +70,15 @@ public class TenantLoginConfirmCommandService {
                 : null;
 
         if (accountId == null && slug == null) {
-            tenantLoginConfirmAuditService.recordFailure(
-                    email,
-                    null,
-                    null,
-                    tenantLoginConfirmSupport.failureJson("missing_selection")
-            );
-            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug", 400);
+            tenantLoginConfirmAuditService.recordFailure(email, null, null, "missing_selection");
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug");
         }
 
         AccountSnapshot accountSnapshot = tenantLoginSelectionResolver.resolveSelectedAccount(accountId, slug);
 
         if (accountSnapshot == null || accountSnapshot.id() == null) {
-            tenantLoginConfirmAuditService.recordFailure(
-                    email,
-                    null,
-                    null,
-                    tenantLoginConfirmSupport.failureJson("account_not_found")
-            );
-            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
+            tenantLoginConfirmAuditService.recordFailure(email, null, null, "account_not_found");
+            throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada");
         }
 
         validateAccountBelongsToChallenge(tenantLoginChallenge, accountSnapshot, email);
@@ -131,9 +121,9 @@ public class TenantLoginConfirmCommandService {
                     email,
                     accountSnapshot.id(),
                     accountSnapshot.tenantSchema(),
-                    tenantLoginConfirmSupport.failureJson("account_not_in_challenge")
+                    "account_not_in_challenge"
             );
-            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Conta não pertence ao challenge", 400);
+            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Conta não pertence ao challenge");
         }
     }
 }

@@ -8,38 +8,27 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 
 /**
- * Componente de apoio para o fluxo de confirmação de login de tenant.
+ * Support do fluxo de confirmação de login tenant.
  *
- * <p>Responsabilidades:</p>
+ * <p>Responsabilidade:</p>
  * <ul>
- *   <li>Converter challengeId de string para UUID.</li>
- *   <li>Centralizar payloads JSON simples de falha.</li>
+ *   <li>Helpers pequenos e determinísticos do fluxo CONFIRM.</li>
  * </ul>
  */
 @Component
 public class TenantLoginConfirmSupport {
 
     /**
-     * Converte challengeId textual para UUID válido.
+     * Faz parse e valida o challengeId recebido externamente.
      *
-     * @param rawChallengeId challengeId recebido no request
-     * @return UUID parseado
+     * @param rawChallengeId valor bruto recebido na request
+     * @return UUID validado
      */
     public UUID parseChallengeId(String rawChallengeId) {
         try {
             return UUID.fromString(rawChallengeId);
         } catch (Exception ex) {
-            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId inválido");
         }
-    }
-
-    /**
-     * Monta JSON simples de falha do fluxo.
-     *
-     * @param reason motivo lógico da falha
-     * @return payload json
-     */
-    public String failureJson(String reason) {
-        return "{\"reason\":\"" + reason + "\"}";
     }
 }

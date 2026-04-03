@@ -1,35 +1,67 @@
 package brito.com.multitenancy001.shared.json;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.TextNode;
-import lombok.RequiredArgsConstructor;
+import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * Mapper central para serialização de details de auditoria.
+ *
+ * <p>Objetivos:</p>
+ * <ul>
+ *   <li>Padronizar serialização JSON em um único ponto.</li>
+ *   <li>Evitar concatenação manual de string JSON.</li>
+ *   <li>Dar suporte uniforme para Map, record, DTO simples e valores escalares.</li>
+ * </ul>
+ */
 @Component
-@RequiredArgsConstructor
 public class JsonDetailsMapper {
 
     private final ObjectMapper objectMapper;
 
-    public JsonNode toJsonNode(Object details) {
-        if (details == null) return NullNode.getInstance();
+    /**
+     * Construtor padrão.
+     *
+     * @param objectMapper mapper Jackson da aplicação
+     */
+    public JsonDetailsMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
-        if (details instanceof JsonNode node) {
-            return node;
+    /**
+     * Converte um objeto qualquer em {@link JsonNode}.
+     *
+     * @param value valor de entrada
+     * @return json node correspondente ou null quando value for null
+     */
+    public JsonNode toJsonNode(Object value) {
+        if (value == null) {
+            return null;
         }
+        return objectMapper.valueToTree(value);
+    }
 
-        if (details instanceof String s) {
-            if (s.isBlank()) return NullNode.getInstance();
-            try {
-                return objectMapper.readTree(s); // se for JSON válido, vira JsonNode
-            } catch (Exception ignored) {
-                return TextNode.valueOf(s); // compat: texto puro vira JSON string
-            }
-        }
+    /**
+     * Converte um objeto qualquer em string JSON.
+     *
+     * @param value valor de entrada
+     * @return string json ou null quando value for null
+     */
+    public String toJson(Object value) {
+        JsonNode node = toJsonNode(value);
+        return node == null ? null : node.toString();
+    }
 
-        // Map, DTO, record, etc.
-        return objectMapper.valueToTree(details);
+    /**
+     * Converte mapa em string JSON.
+     *
+     * @param details mapa estruturado
+     * @return string json ou null
+     */
+    public String toJson(Map<String, Object> details) {
+        return toJson((Object) details);
     }
 }

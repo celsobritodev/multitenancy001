@@ -1,12 +1,26 @@
-// src/main/java/brito/com/multitenancy001/tenant/auth/app/TenantLoginInitService.java
 package brito.com.multitenancy001.tenant.auth.app;
 
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
+import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
+import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
@@ -18,30 +32,30 @@ import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginResult;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantSelectionOptionData;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Serviço de login INIT do Tenant.
  *
- * Regras:
- * - Resolve candidatos no PUBLIC (LoginIdentityResolver)
- * - Single-tenant: autentica direto e emite JWT
- * - Multi-tenant: valida password nos candidatos e:
- *     - se 1 passou -> autentica e emite JWT
- *     - se >1 passou -> cria challenge e exige seleção (409)
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Resolve candidatos no PUBLIC via {@link LoginIdentityResolver}.</li>
+ *   <li>Se houver apenas uma account válida, autentica e emite JWT direto.</li>
+ *   <li>Se houver múltiplas accounts válidas:
+ *     <ul>
+ *       <li>se apenas uma validar senha, autentica direto;</li>
+ *       <li>se mais de uma validar senha, cria challenge e retorna seleção;</li>
+ *     </ul>
+ *   </li>
+ *   <li>Auditoria sempre com details estruturado e serialização centralizada.</li>
+ * </ul>
  *
- * Correção crítica pós-refactor multi-EMF:
- * - Tudo que acessa PUBLIC (LoginIdentityResolver e AccountResolver) deve rodar dentro do PublicSchemaExecutor.
- *   Caso contrário, pode cair no EntityManager/Tx errado e quebrar o contrato do login (401 “misterioso”).
+ * <p>Regra crítica:</p>
+ * <ul>
+ *   <li>Todo acesso ao PUBLIC deve rodar dentro do {@link PublicSchemaExecutor}.</li>
+ * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TenantLoginInitService {
@@ -51,34 +65,40 @@ public class TenantLoginInitService {
     private final AccountResolver accountResolver;
     private final LoginIdentityResolver loginIdentityResolver;
     private final PublicSchemaExecutor publicExecutor;
-
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final TenantAuthMechanics authMechanics;
-
     private final TenantAuthAuditRecorder audit;
+    private final JsonDetailsMapper jsonDetailsMapper;
 
+    /**
+     * Executa o INIT do login tenant.
+     *
+     * @param cmd comando de login
+     * @return resultado de login direto ou necessidade de seleção
+     */
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
-
-        /** comentário: valida request e inicia resolução de candidatos */
-        if (cmd == null) throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
-        if (!StringUtils.hasText(cmd.email())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
-        if (!StringUtils.hasText(cmd.password())) throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
+        if (cmd == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
+        }
+        if (!StringUtils.hasText(cmd.email())) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório");
+        }
+        if (!StringUtils.hasText(cmd.password())) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório");
+        }
 
         final String email = normalizeEmailRequired(cmd.email());
         final String password = cmd.password();
 
-        audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.ATTEMPT, email, null, null, null,
-                "{\"stage\":\"init\"}");
+        recordAttempt(email);
 
         try {
-            /** comentário: resolve candidatos no PUBLIC */
             List<LoginIdentityRow> identities = publicExecutor.inPublic(() ->
                     loginIdentityResolver.findTenantAccountsByEmail(email)
             );
 
             if (identities == null || identities.isEmpty()) {
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
-                        "{\"reason\":\"no_candidates\"}");
+                recordFailure(email, "no_candidates");
                 throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
@@ -88,48 +108,42 @@ public class TenantLoginInitService {
                     .collect(Collectors.toCollection(LinkedHashSet::new));
 
             if (candidateAccountIds.isEmpty()) {
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
-                        "{\"reason\":\"empty_candidate_ids\"}");
+                recordFailure(email, "empty_candidate_ids");
                 throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
-            /** comentário: se single-tenant, autentica diretamente */
             if (candidateAccountIds.size() == 1) {
                 Long accountId = candidateAccountIds.iterator().next();
 
-                // ✅ PUBLIC: resolve account snapshot dentro do executor
                 AccountSnapshot account = publicExecutor.inPublic(() ->
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 
-                var jwt = authMechanics.authenticateWithPassword(account, email, password);
+                JwtResult jwt = authMechanics.authenticateWithPassword(account, email, password);
 
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.tenantSchema(),
-                        "{\"mode\":\"single_tenant\"}");
+                recordSuccessSingle(email, jwt.userId(), accountId, account.tenantSchema());
 
                 return new TenantLoginResult.LoginSuccess(jwt);
             }
 
-            /** comentário: multi-tenant -> filtra candidatos que batem password */
             LinkedHashSet<Long> allowedAccountIds = new LinkedHashSet<>();
 
             for (Long accountId : candidateAccountIds) {
-                // ✅ PUBLIC: resolve account snapshot dentro do executor
                 AccountSnapshot account = publicExecutor.inPublic(() ->
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 
                 boolean ok = authMechanics.verifyPasswordInTenant(account, email, password);
-                if (ok) allowedAccountIds.add(accountId);
+                if (ok) {
+                    allowedAccountIds.add(accountId);
+                }
             }
 
             if (allowedAccountIds.isEmpty()) {
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
-                        "{\"reason\":\"no_password_match\"}");
+                recordFailure(email, "no_password_match");
                 throw new BadCredentialsException(INVALID_CREDENTIALS_MSG);
             }
 
-            /** comentário: se sobrou 1 candidato, autentica e emite JWT */
             if (allowedAccountIds.size() == 1) {
                 Long accountId = allowedAccountIds.iterator().next();
 
@@ -137,44 +151,185 @@ public class TenantLoginInitService {
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 
-                var jwt = authMechanics.authenticateWithPassword(account, email, password);
+                JwtResult jwt = authMechanics.authenticateWithPassword(account, email, password);
 
-                audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, jwt.userId(), accountId, account.tenantSchema(),
-                        "{\"mode\":\"multi_resolved_single\"}");
+                recordSuccessResolvedSingle(email, jwt.userId(), accountId, account.tenantSchema());
 
                 return new TenantLoginResult.LoginSuccess(jwt);
             }
 
-            /** comentário: >1 candidato válido -> exige seleção via challenge */
             UUID challengeId = tenantLoginChallengeService.createChallenge(email, allowedAccountIds);
 
-            List<TenantSelectionOptionData> details = identities.stream()
-                    .filter(r -> r.accountId() != null && allowedAccountIds.contains(r.accountId()))
-                    .map(r -> new TenantSelectionOptionData(r.accountId(), r.displayName(), r.slug()))
+            List<TenantSelectionOptionData> options = allowedAccountIds.stream()
+                    .map(accountId -> publicExecutor.inPublic(() ->
+                            accountResolver.resolveActiveAccountById(accountId)
+                    ))
+                    .filter(Objects::nonNull)
+                    .map(account -> new TenantSelectionOptionData(
+                            account.id(),
+                            account.displayName(),
+                            account.slug()
+                    ))
                     .toList();
 
-            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.SUCCESS, email, null, null, null,
-                    "{\"mode\":\"tenant_selection_required\",\"challengeId\":\"" + challengeId + "\"}");
+            recordSelectionRequired(email, challengeId, allowedAccountIds);
 
-            return new TenantLoginResult.TenantSelectionRequired(challengeId.toString(), details);
+            return new TenantLoginResult.TenantSelectionRequired(
+                    challengeId.toString(),
+                    options
+            );
 
         } catch (BadCredentialsException ex) {
-            throw ex;
-        } catch (ApiException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            audit.record(AuthDomain.TENANT, AuthEventType.LOGIN_INIT, AuditOutcome.FAILURE, email, null, null, null,
-                    "{\"reason\":\"unexpected\"}");
-            throw ex;
+            throw new ApiException(ApiErrorCode.UNAUTHENTICATED, INVALID_CREDENTIALS_MSG);
         }
     }
 
-    private static String normalizeEmailRequired(String email) {
-        /** comentário: normaliza e valida email */
-        String normalized = EmailNormalizer.normalizeOrNull(email);
+    /**
+     * Registra tentativa do INIT.
+     *
+     * @param email email normalizado
+     */
+    private void recordAttempt(String email) {
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.ATTEMPT,
+                email,
+                null,
+                null,
+                null,
+                toJson(m("stage", "init"))
+        );
+    }
+
+    /**
+     * Registra falha do INIT.
+     *
+     * @param email email normalizado
+     * @param reason motivo lógico
+     */
+    private void recordFailure(String email, String reason) {
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.FAILURE,
+                email,
+                null,
+                null,
+                null,
+                toJson(m("reason", reason))
+        );
+    }
+
+    /**
+     * Registra sucesso single-tenant.
+     *
+     * @param email email normalizado
+     * @param userId id do usuário
+     * @param accountId id da conta
+     * @param tenantSchema schema tenant
+     */
+    private void recordSuccessSingle(String email, Long userId, Long accountId, String tenantSchema) {
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.SUCCESS,
+                email,
+                userId,
+                accountId,
+                tenantSchema,
+                toJson(m("mode", "single_tenant"))
+        );
+    }
+
+    /**
+     * Registra sucesso após resolver múltiplas contas para apenas uma válida.
+     *
+     * @param email email normalizado
+     * @param userId id do usuário
+     * @param accountId id da conta
+     * @param tenantSchema schema tenant
+     */
+    private void recordSuccessResolvedSingle(String email, Long userId, Long accountId, String tenantSchema) {
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.LOGIN_INIT,
+                AuditOutcome.SUCCESS,
+                email,
+                userId,
+                accountId,
+                tenantSchema,
+                toJson(m("mode", "multi_resolved_single"))
+        );
+    }
+
+    /**
+     * Registra necessidade de seleção de tenant.
+     *
+     * @param email email normalizado
+     * @param challengeId challenge gerado
+     * @param allowedAccountIds contas permitidas
+     */
+    private void recordSelectionRequired(String email, UUID challengeId, Set<Long> allowedAccountIds) {
+        audit.record(
+                AuthDomain.TENANT,
+                AuthEventType.TENANT_SELECTION_REQUIRED,
+                AuditOutcome.SUCCESS,
+                email,
+                null,
+                null,
+                null,
+                toJson(m(
+                        "challengeId", challengeId != null ? challengeId.toString() : null,
+                        "candidateCount", allowedAccountIds != null ? allowedAccountIds.size() : 0
+                ))
+        );
+    }
+
+    /**
+     * Normaliza e valida email obrigatório.
+     *
+     * @param rawEmail email bruto
+     * @return email normalizado
+     */
+    private static String normalizeEmailRequired(String rawEmail) {
+        String normalized = EmailNormalizer.normalizeOrNull(rawEmail);
         if (!StringUtils.hasText(normalized)) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email inválido");
         }
         return normalized;
+    }
+
+    /**
+     * Monta mapa ordenado a partir de pares chave/valor.
+     *
+     * @param kv pares chave/valor
+     * @return mapa ordenado
+     */
+    private Map<String, Object> m(Object... kv) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (kv == null) {
+            return map;
+        }
+
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            Object key = kv[i];
+            Object value = kv[i + 1];
+            if (key != null) {
+                map.put(String.valueOf(key), value);
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Serializa details livres para JSON.
+     *
+     * @param details detalhes estruturados
+     * @return json serializado
+     */
+    private String toJson(Map<String, Object> details) {
+        return details == null ? null : jsonDetailsMapper.toJsonNode(details).toString();
     }
 }

@@ -1,5 +1,8 @@
 package brito.com.multitenancy001.controlplane.signup.app;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
@@ -7,27 +10,27 @@ import brito.com.multitenancy001.controlplane.accounts.domain.ProvisioningFailur
 import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
 
 /**
- * Componente de apoio para o onboarding de Account.
+ * Componente de apoio para o onboarding de account.
  *
  * <p>Responsabilidades:</p>
  * <ul>
  *   <li>Centralizar helpers simples do fluxo.</li>
- *   <li>Padronizar construção de details JSON de auditoria.</li>
- *   <li>Padronizar encapsulamento de falhas de provisioning.</li>
+ *   <li>Construir details estruturados de auditoria.</li>
+ *   <li>Encapsular falhas de provisioning com código tipado.</li>
  * </ul>
  */
 @Component
 public class AccountOnboardingSupport {
 
     /**
-     * Encapsula dados validados e normalizados do signup.
+     * Dados normalizados do signup.
      *
-     * @param displayName nome da empresa
+     * @param displayName nome de exibição da conta
      * @param loginEmail email de login
-     * @param taxCountryCode país fiscal
-     * @param taxIdType tipo do documento
-     * @param taxIdNumber número do documento
-     * @param password senha já validada
+     * @param taxCountryCode código do país fiscal
+     * @param taxIdType tipo do documento fiscal
+     * @param taxIdNumber número do documento fiscal
+     * @param password senha validada
      */
     public record SignupData(
             String displayName,
@@ -40,7 +43,7 @@ public class AccountOnboardingSupport {
     }
 
     /**
-     * Exceção interna para propagar código de falha de provisioning.
+     * Exceção interna usada para propagar código de falha de provisioning.
      */
     public static class ProvisioningFailedException extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -48,7 +51,7 @@ public class AccountOnboardingSupport {
         private final ProvisioningFailureCode code;
 
         /**
-         * Cria wrapper de falha de provisioning.
+         * Cria exceção de falha tipada de provisioning.
          *
          * @param code código da falha
          * @param cause causa original
@@ -59,9 +62,9 @@ public class AccountOnboardingSupport {
         }
 
         /**
-         * Retorna código da falha.
+         * Retorna o código de falha.
          *
-         * @return código da falha
+         * @return código de falha
          */
         public ProvisioningFailureCode code() {
             return code;
@@ -69,10 +72,10 @@ public class AccountOnboardingSupport {
     }
 
     /**
-     * Cria wrapper de falha de provisioning.
+     * Cria wrapper para falha de provisioning.
      *
      * @param code código da falha
-     * @param exception causa original
+     * @param exception exceção original
      * @return exceção encapsulada
      */
     public ProvisioningFailedException provisioningFailed(
@@ -83,56 +86,66 @@ public class AccountOnboardingSupport {
     }
 
     /**
-     * Retorna mensagem segura da exceção.
+     * Retorna mensagem segura e curta da causa.
      *
-     * @param throwable exceção
+     * @param cause causa original
      * @return mensagem segura
      */
-    public String safeMessage(Throwable throwable) {
-        if (throwable == null) {
-            return null;
+    public String safeMessage(Throwable cause) {
+        if (cause == null) {
+            return "unknown";
         }
 
-        String message = throwable.getMessage();
-        return message == null ? throwable.getClass().getSimpleName() : message;
+        String message = cause.getMessage();
+        if (message == null || message.isBlank()) {
+            return cause.getClass().getSimpleName();
+        }
+
+        return message.trim();
     }
 
     /**
-     * Monta details JSON simples para auditoria de provisioning.
+     * Monta details estruturados do onboarding.
      *
      * @param account account alvo
-     * @param signupData dados do signup
-     * @param stage estágio atual
-     * @param code código de falha opcional
-     * @param cause causa opcional
-     * @return json em string
+     * @param signupData dados normalizados
+     * @param stage estágio lógico
+     * @param code código de falha, quando houver
+     * @param cause causa técnica/funcional, quando houver
+     * @return mapa estruturado
      */
-    public String buildDetailsJson(
+    public Map<String, Object> buildDetails(
             Account account,
             SignupData signupData,
             String stage,
             ProvisioningFailureCode code,
             Throwable cause
     ) {
-        String accountId = (account == null || account.getId() == null)
-                ? null
-                : String.valueOf(account.getId());
+        Map<String, Object> details = new LinkedHashMap<>();
 
-        String tenantSchema = account == null ? null : account.getTenantSchema();
-        String slug = account == null ? null : account.getSlug();
+        details.put("stage", stage);
+        details.put("accountId", account != null ? account.getId() : null);
+        details.put("tenantSchema", account != null ? account.getTenantSchema() : null);
+        details.put("slug", account != null ? account.getSlug() : null);
 
-        String causeClass = cause == null ? null : cause.getClass().getName();
-        String causeMessage = cause == null ? null : safeMessage(cause);
+        if (signupData != null) {
+            details.put("displayName", signupData.displayName());
+            details.put("loginEmail", signupData.loginEmail());
+            details.put("taxCountryCode", signupData.taxCountryCode());
+            details.put("taxIdType", signupData.taxIdType() != null ? signupData.taxIdType().name() : null);
+            details.put("taxIdNumber", signupData.taxIdNumber());
+        } else {
+            details.put("displayName", null);
+            details.put("loginEmail", null);
+            details.put("taxCountryCode", null);
+            details.put("taxIdType", null);
+            details.put("taxIdNumber", null);
+        }
 
-        return "{"
-                + "\"stage\":\"" + stage + "\""
-                + ",\"accountId\":\"" + accountId + "\""
-                + ",\"tenantSchema\":\"" + tenantSchema + "\""
-                + ",\"slug\":\"" + slug + "\""
-                + ",\"loginEmail\":\"" + (signupData == null ? null : signupData.loginEmail()) + "\""
-                + ",\"code\":\"" + (code == null ? null : code.name()) + "\""
-                + ",\"causeClass\":\"" + causeClass + "\""
-                + ",\"causeMessage\":\"" + causeMessage + "\""
-                + "}";
+        details.put("code", code != null ? code.name() : null);
+        details.put("causeClass", cause != null ? cause.getClass().getName() : null);
+        details.put("causeMessage", safeMessage(cause));
+
+        return details;
     }
 }
