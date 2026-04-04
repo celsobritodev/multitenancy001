@@ -1,6 +1,7 @@
 // src/main/java/brito/com/multitenancy001/infrastructure/publicschema/audit/SecurityAuditQueryService.java
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
+import brito.com.multitenancy001.infrastructure.publicschema.audit.entity.PublicSecurityAuditEvent;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
@@ -27,7 +28,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos por tipo de ação.
      */
-    public Page<SecurityAuditEvent> findByActionType(SecurityAuditActionType actionType, Pageable pageable) {
+    public Page<PublicSecurityAuditEvent> findByActionType(SecurityAuditActionType actionType, Pageable pageable) {
         return publicSchemaUnitOfWork.readOnly(() -> 
                 securityAuditEventRepository.findByActionType(actionType, pageable));
     }
@@ -35,7 +36,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos por ator (usuário que executou a ação).
      */
-    public Page<SecurityAuditEvent> findByActorUserId(Long actorUserId, Pageable pageable) {
+    public Page<PublicSecurityAuditEvent> findByActorUserId(Long actorUserId, Pageable pageable) {
         return publicSchemaUnitOfWork.readOnly(() -> 
                 securityAuditEventRepository.findByActorUserId(actorUserId, pageable));
     }
@@ -43,7 +44,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos por alvo (usuário afetado pela ação).
      */
-    public Page<SecurityAuditEvent> findByTargetUserId(Long targetUserId, Pageable pageable) {
+    public Page<PublicSecurityAuditEvent> findByTargetUserId(Long targetUserId, Pageable pageable) {
         return publicSchemaUnitOfWork.readOnly(() -> 
                 securityAuditEventRepository.findByTargetUserId(targetUserId, pageable));
     }
@@ -51,7 +52,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos por conta.
      */
-    public Page<SecurityAuditEvent> findByAccountId(Long accountId, Pageable pageable) {
+    public Page<PublicSecurityAuditEvent> findByAccountId(Long accountId, Pageable pageable) {
         return publicSchemaUnitOfWork.readOnly(() -> 
                 securityAuditEventRepository.findByAccountId(accountId, pageable));
     }
@@ -59,7 +60,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos em um período.
      */
-    public Page<SecurityAuditEvent> findByOccurredAtBetween(Instant start, Instant end, Pageable pageable) {
+    public Page<PublicSecurityAuditEvent> findByOccurredAtBetween(Instant start, Instant end, Pageable pageable) {
         return publicSchemaUnitOfWork.readOnly(() -> 
                 securityAuditEventRepository.findByOccurredAtBetween(start, end, pageable));
     }
@@ -67,7 +68,7 @@ public class SecurityAuditQueryService {
     /**
      * Busca eventos combinando múltiplos filtros.
      */
-    public Page<SecurityAuditEvent> search(
+    public Page<PublicSecurityAuditEvent> search(
             SecurityAuditActionType actionType,
             Long actorUserId,
             Long targetUserId,

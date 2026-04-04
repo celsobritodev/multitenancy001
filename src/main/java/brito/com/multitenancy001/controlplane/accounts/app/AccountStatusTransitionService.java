@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AccountStatusLifecycleService {
+public class AccountStatusTransitionService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;

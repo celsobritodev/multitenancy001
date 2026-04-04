@@ -1,5 +1,15 @@
 package brito.com.multitenancy001.controlplane.accounts.api.admin;
 
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountAdminDetailsResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountStatusChangeRequest;
@@ -7,7 +17,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.dto.summary.AccountTe
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountAdminDetailsApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountUserApiMapper;
-import brito.com.multitenancy001.controlplane.accounts.app.AccountAppService;
+import brito.com.multitenancy001.controlplane.accounts.app.ControlPlaneAccountFacade;
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountAdminDetailsProjection;
 import brito.com.multitenancy001.controlplane.accounts.app.dto.AccountStatusChangeResponse;
@@ -21,22 +31,13 @@ import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.Instant;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/controlplane/accounts")
 @RequiredArgsConstructor
 public class ControlPlaneAccountAdminController {
 
-    private final AccountAppService accountAppService;
+    private final ControlPlaneAccountFacade controlPlaneAccountFacade;
 
     private final AccountApiMapper accountApiMapper;
     private final AccountAdminDetailsApiMapper accountAdminDetailsApiMapper;
@@ -50,7 +51,7 @@ public class ControlPlaneAccountAdminController {
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_CREATE.asAuthority())")
     public ResponseEntity<SignupResponse> createAccount(@Valid @RequestBody SignupRequest req) {
 
-        SignupResult result = accountAppService.createAccount(new SignupCommand(
+        SignupResult result = controlPlaneAccountFacade.createAccount(new SignupCommand(
                 req.displayName(),
                 req.loginEmail(),
                 req.taxIdType(),
@@ -74,7 +75,7 @@ public class ControlPlaneAccountAdminController {
     @GetMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<List<AccountResponse>> listAccounts() {
-        List<AccountResponse> out = accountAppService.listAccounts()
+        List<AccountResponse> out = controlPlaneAccountFacade.listAccounts()
                 .stream().map(accountApiMapper::toResponse).toList();
         return ResponseEntity.ok(out);
     }
@@ -82,14 +83,14 @@ public class ControlPlaneAccountAdminController {
     @GetMapping("/{accountId}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountResponse> getAccount(@PathVariable Long accountId) {
-        Account a = accountAppService.getAccount(accountId);
+        Account a = controlPlaneAccountFacade.getAccount(accountId);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
     @GetMapping("/{accountId}/admin-details")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountAdminDetailsResponse> getAdminDetails(@PathVariable Long accountId) {
-        AccountAdminDetailsProjection p = accountAppService.getAccountAdminDetails(accountId);
+        AccountAdminDetailsProjection p = controlPlaneAccountFacade.getAccountAdminDetails(accountId);
         return ResponseEntity.ok(accountAdminDetailsApiMapper.toResponse(p.account(), p.admin(), p.totalUsers()));
     }
 
@@ -102,26 +103,25 @@ public class ControlPlaneAccountAdminController {
             @PathVariable Long accountId,
             @Valid @RequestBody AccountStatusChangeRequest req
     ) {
-        AccountStatusChangeResult r = accountAppService.changeAccountStatus(
+        AccountStatusChangeResult r = controlPlaneAccountFacade.changeAccountStatus(
                 accountId,
                 new AccountStatusChangeCommand(req.status())
         );
 
-        // ✅ Response “flat” + tipado 
         return ResponseEntity.ok(AccountStatusChangeResponse.from(r));
     }
 
     @DeleteMapping("/{accountId}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_DELETE.asAuthority())")
     public ResponseEntity<Void> softDelete(@PathVariable Long accountId) {
-        accountAppService.softDeleteAccount(accountId);
+        controlPlaneAccountFacade.softDeleteAccount(accountId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{accountId}/restore")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_RESUME.asAuthority())")
     public ResponseEntity<Void> restore(@PathVariable Long accountId) {
-        accountAppService.restoreAccount(accountId);
+        controlPlaneAccountFacade.restoreAccount(accountId);
         return ResponseEntity.noContent().build();
     }
 
@@ -131,7 +131,7 @@ public class ControlPlaneAccountAdminController {
             @PathVariable Long accountId,
             @RequestParam(name = "onlyOperational", defaultValue = "false") boolean onlyOperational
     ) {
-        List<AccountTenantUserSummaryResponse> out = accountAppService
+        List<AccountTenantUserSummaryResponse> out = controlPlaneAccountFacade
                 .listTenantUsers(accountId, onlyOperational)
                 .stream()
                 .map(accountUserApiMapper::toAccountUserSummary)
@@ -150,7 +150,7 @@ public class ControlPlaneAccountAdminController {
             @PathVariable Long userId,
             @RequestParam("value") boolean value
     ) {
-        accountAppService.setUserSuspendedByAdmin(accountId, userId, value);
+        controlPlaneAccountFacade.setUserSuspendedByAdmin(accountId, userId, value);
         return ResponseEntity.noContent().build();
     }
 
@@ -161,24 +161,23 @@ public class ControlPlaneAccountAdminController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(
-                accountAppService.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse)
+                controlPlaneAccountFacade.listAccountsByStatus(status, pageable).map(accountApiMapper::toResponse)
         );
     }
 
-  @GetMapping("/created-between")
-@PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
-public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
-        @RequestParam("start") Instant start,
-        @RequestParam("end") Instant end,
-        Pageable pageable
-) {
-    return ResponseEntity.ok(
-            accountAppService
-                    .listAccountsCreatedBetween(start, end, pageable)
-                    .map(accountApiMapper::toResponse)
-    );
-}
-
+    @GetMapping("/created-between")
+    @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
+    public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
+            @RequestParam("start") Instant start,
+            @RequestParam("end") Instant end,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                controlPlaneAccountFacade
+                        .listAccountsCreatedBetween(start, end, pageable)
+                        .map(accountApiMapper::toResponse)
+        );
+    }
 
     @GetMapping("/search")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
@@ -187,7 +186,7 @@ public ResponseEntity<Page<AccountResponse>> listCreatedBetween(
             Pageable pageable
     ) {
         return ResponseEntity.ok(
-                accountAppService.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse)
+                controlPlaneAccountFacade.searchAccountsByDisplayName(term, pageable).map(accountApiMapper::toResponse)
         );
     }
 }

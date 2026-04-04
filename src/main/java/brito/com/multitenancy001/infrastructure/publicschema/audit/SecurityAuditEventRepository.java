@@ -8,24 +8,25 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import brito.com.multitenancy001.infrastructure.publicschema.audit.entity.PublicSecurityAuditEvent;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 
-public interface SecurityAuditEventRepository extends JpaRepository<SecurityAuditEvent, Long> {
+public interface SecurityAuditEventRepository extends JpaRepository<PublicSecurityAuditEvent, Long> {
 
 
 
 // Adicionar métodos de consulta:
 
-    Page<SecurityAuditEvent> findByActionType(SecurityAuditActionType actionType, Pageable pageable);
+    Page<PublicSecurityAuditEvent> findByActionType(SecurityAuditActionType actionType, Pageable pageable);
 
-    Page<SecurityAuditEvent> findByActorUserId(Long actorUserId, Pageable pageable);
+    Page<PublicSecurityAuditEvent> findByActorUserId(Long actorUserId, Pageable pageable);
 
-    Page<SecurityAuditEvent> findByTargetUserId(Long targetUserId, Pageable pageable);
+    Page<PublicSecurityAuditEvent> findByTargetUserId(Long targetUserId, Pageable pageable);
 
-    Page<SecurityAuditEvent> findByAccountId(Long accountId, Pageable pageable);
+    Page<PublicSecurityAuditEvent> findByAccountId(Long accountId, Pageable pageable);
 
-    Page<SecurityAuditEvent> findByOccurredAtBetween(Instant start, Instant end, Pageable pageable);
+    Page<PublicSecurityAuditEvent> findByOccurredAtBetween(Instant start, Instant end, Pageable pageable);
 
     @Query("""
         SELECT e FROM SecurityAuditEvent e
@@ -38,7 +39,7 @@ public interface SecurityAuditEventRepository extends JpaRepository<SecurityAudi
           AND (:end IS NULL OR e.occurredAt <= :end)
         ORDER BY e.occurredAt DESC
         """)
-    Page<SecurityAuditEvent> search(
+    Page<PublicSecurityAuditEvent> search(
             @Param("actionType") SecurityAuditActionType actionType,
             @Param("actorUserId") Long actorUserId,
             @Param("targetUserId") Long targetUserId,

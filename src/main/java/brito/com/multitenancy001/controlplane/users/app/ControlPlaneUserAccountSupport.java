@@ -28,7 +28,7 @@ public class ControlPlaneUserAccountSupport {
         } catch (IllegalStateException ex) {
             throw new ApiException(
                     ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
-                    ControlPlaneUserSupport.MSG_CP_ACCOUNT_INVALID + " " + ex.getMessage(),
+                    ControlPlaneUserInternalFacade.MSG_CP_ACCOUNT_INVALID + " " + ex.getMessage(),
                     500
             );
         }

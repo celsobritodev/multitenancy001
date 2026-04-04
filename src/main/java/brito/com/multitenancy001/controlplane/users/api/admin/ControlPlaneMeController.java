@@ -2,7 +2,7 @@ package brito.com.multitenancy001.controlplane.users.api.admin;
 
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneChangeMyPasswordRequest;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneMeResponse;
-import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserService;
+import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserFacade;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ControlPlaneMeController {
 
-    private final ControlPlaneUserService controlPlaneUserService;
+    private final ControlPlaneUserFacade controlPlaneUserService;
 
     @GetMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_ME_READ.asAuthority())")

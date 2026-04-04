@@ -44,22 +44,22 @@ public class ControlPlaneUserAuditService {
      *
      * @return ator atual
      */
-    public ControlPlaneUserSupport.AuditActor resolveActorOrAnonymous() {
+    public ControlPlaneUserInternalFacade.AuditActor resolveActorOrAnonymous() {
         try {
             Long actorId = controlPlaneRequestIdentityService.getCurrentUserId();
             Long accountId = controlPlaneRequestIdentityService.getCurrentAccountId();
 
             if (actorId == null || accountId == null) {
-                return ControlPlaneUserSupport.AuditActor.anonymous();
+                return ControlPlaneUserInternalFacade.AuditActor.anonymous();
             }
 
             return publicSchemaUnitOfWork.readOnly(() ->
                     controlPlaneUserRepository.findById(actorId)
-                            .map(user -> new ControlPlaneUserSupport.AuditActor(actorId, user.getEmail()))
-                            .orElse(new ControlPlaneUserSupport.AuditActor(actorId, null))
+                            .map(user -> new ControlPlaneUserInternalFacade.AuditActor(actorId, user.getEmail()))
+                            .orElse(new ControlPlaneUserInternalFacade.AuditActor(actorId, null))
             );
         } catch (Exception ignored) {
-            return ControlPlaneUserSupport.AuditActor.anonymous();
+            return ControlPlaneUserInternalFacade.AuditActor.anonymous();
         }
     }
 
@@ -79,13 +79,13 @@ public class ControlPlaneUserAuditService {
      */
     public <T> T auditAttemptSuccessFail(
             SecurityAuditActionType actionType,
-            ControlPlaneUserSupport.AuditActor actor,
-            ControlPlaneUserSupport.AuditTarget target,
+            ControlPlaneUserInternalFacade.AuditActor actor,
+            ControlPlaneUserInternalFacade.AuditTarget target,
             Long accountId,
             String tenantSchema,
             Map<String, Object> attemptDetails,
             Supplier<Object> successDetailsSupplier,
-            ControlPlaneUserSupport.AuditCallable<T> block
+            ControlPlaneUserInternalFacade.AuditCallable<T> block
     ) {
         recordAudit(
                 actionType,
@@ -135,7 +135,7 @@ public class ControlPlaneUserAuditService {
                     target.userId(),
                     accountId,
                     tenantSchema,
-                    failureDetails(ControlPlaneUserSupport.SCOPE, ex)
+                    failureDetails(ControlPlaneUserInternalFacade.SCOPE, ex)
             );
             throw ex;
         } catch (Exception ex) {
@@ -147,7 +147,7 @@ public class ControlPlaneUserAuditService {
                     target.userId(),
                     accountId,
                     tenantSchema,
-                    unexpectedFailureDetails(ControlPlaneUserSupport.SCOPE, ex)
+                    unexpectedFailureDetails(ControlPlaneUserInternalFacade.SCOPE, ex)
             );
             throw ex;
         }
@@ -168,7 +168,7 @@ public class ControlPlaneUserAuditService {
     public void recordAudit(
             SecurityAuditActionType actionType,
             AuditOutcome outcome,
-            ControlPlaneUserSupport.AuditActor actor,
+            ControlPlaneUserInternalFacade.AuditActor actor,
             String targetEmail,
             Long targetUserId,
             Long accountId,

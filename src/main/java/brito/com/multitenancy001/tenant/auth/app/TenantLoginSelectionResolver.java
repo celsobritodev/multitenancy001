@@ -3,7 +3,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,7 +32,7 @@ public class TenantLoginSelectionResolver {
      * @param slug slug da conta, quando informado
      * @return snapshot da conta ativa ou null
      */
-    public AccountSnapshot resolveSelectedAccount(Long accountId, String slug) {
+    public PublicAccountView resolveSelectedAccount(Long accountId, String slug) {
         if (accountId != null) {
             log.debug("Resolvendo conta por accountId={}", accountId);
             return accountResolver.resolveActiveAccountById(accountId);

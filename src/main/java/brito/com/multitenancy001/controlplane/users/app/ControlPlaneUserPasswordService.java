@@ -39,7 +39,7 @@ public class ControlPlaneUserPasswordService {
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
-    private final ControlPlaneUserSupport controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
 
     /**
      * Reseta senha de um usuário do Control Plane por ação administrativa.
@@ -54,7 +54,7 @@ public class ControlPlaneUserPasswordService {
         log.info("resetControlPlaneUserPassword INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserSupport.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -88,11 +88,11 @@ public class ControlPlaneUserPasswordService {
 
             controlPlaneUserSupport.assertMutableUser(user);
 
-            ControlPlaneUserSupport.AuditTarget target =
-                    new ControlPlaneUserSupport.AuditTarget(user.getEmail(), user.getId());
+            ControlPlaneUserInternalFacade.AuditTarget target =
+                    new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
             Map<String, Object> attempt = controlPlaneUserSupport.m(
-                    "scope", ControlPlaneUserSupport.SCOPE,
+                    "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "admin_reset"
             );
 
@@ -126,7 +126,7 @@ public class ControlPlaneUserPasswordService {
         log.info("changeMyPassword INICIANDO");
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserSupport.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
 
             if (controlPlaneChangeMyPasswordRequest == null) {
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
@@ -190,11 +190,11 @@ public class ControlPlaneUserPasswordService {
                 );
             }
 
-            ControlPlaneUserSupport.AuditTarget target =
-                    new ControlPlaneUserSupport.AuditTarget(user.getEmail(), user.getId());
+            ControlPlaneUserInternalFacade.AuditTarget target =
+                    new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
             Map<String, Object> attempt = controlPlaneUserSupport.m(
-                    "scope", ControlPlaneUserSupport.SCOPE,
+                    "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "self_change"
             );
 

@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
-import java.util.List;
-
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.app.command.AccountStatusChangeCommand;
@@ -10,25 +8,26 @@ import brito.com.multitenancy001.controlplane.signup.app.AccountOnboardingServic
 import brito.com.multitenancy001.controlplane.signup.app.command.SignupCommand;
 import brito.com.multitenancy001.controlplane.signup.app.dto.SignupResult;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Serviço de comando do agregado Account no Control Plane.
+ * Serviço de comandos do agregado Account no contexto Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
- *   <li>Delegar criação/onboarding de account.</li>
- *   <li>Delegar mudança de status e lifecycle.</li>
- *   <li>Delegar operações administrativas sobre usuários do tenant.</li>
+ *   <li>Delegar criação de account via fluxo de onboarding/signup.</li>
+ *   <li>Delegar operações de lifecycle da conta, como mudança de status,
+ *       soft delete e restore.</li>
+ *   <li>Centralizar comandos próprios do agregado Account.</li>
  * </ul>
  *
- * <p>Importante:</p>
+ * <p><b>Diretrizes arquiteturais:</b></p>
  * <ul>
- *   <li>Este serviço concentra operações de escrita e comando.</li>
- *   <li>Não deve conter lógica de consulta paginada nem filtros administrativos de leitura.</li>
+ *   <li>Este serviço não executa consultas administrativas de leitura.</li>
+ *   <li>Este serviço não deve concentrar administração de usuários tenant.</li>
+ *   <li>Este serviço atua como entry point de escrita do agregado Account.</li>
  * </ul>
  */
 @Service
@@ -37,14 +36,14 @@ import lombok.extern.slf4j.Slf4j;
 public class ControlPlaneAccountCommandService {
 
     private final AccountOnboardingService accountOnboardingService;
-    private final AccountStatusService accountStatusService;
-    private final AccountTenantUserService accountTenantUserService;
+    private final AccountStatusFacade accountStatusService;
 
     /**
-     * Orquestra criação de account via onboarding.
+     * Orquestra a criação de uma nova account via fluxo de signup/onboarding.
      *
      * @param signupCommand comando de signup
-     * @return resultado do onboarding
+     * @return resultado consolidado do onboarding
+     * @throws ApiException se o comando for nulo
      */
     public SignupResult createAccount(SignupCommand signupCommand) {
         if (signupCommand == null) {
@@ -56,11 +55,12 @@ public class ControlPlaneAccountCommandService {
     }
 
     /**
-     * Altera status da conta.
+     * Altera o status de uma conta existente.
      *
      * @param accountId id da conta
-     * @param accountStatusChangeCommand comando de status
-     * @return resultado consolidado
+     * @param accountStatusChangeCommand comando de mudança de status
+     * @return resultado consolidado da mudança de status
+     * @throws ApiException se o accountId ou o comando forem inválidos
      */
     public AccountStatusChangeResult changeAccountStatus(
             Long accountId,
@@ -74,66 +74,37 @@ public class ControlPlaneAccountCommandService {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "cmd é obrigatório", 400);
         }
 
+        log.info("Alterando status da conta. accountId={}", accountId);
         return accountStatusService.changeAccountStatus(accountId, accountStatusChangeCommand);
     }
 
     /**
-     * Executa soft delete de account.
+     * Executa soft delete de uma conta.
      *
      * @param accountId id da conta
+     * @throws ApiException se o accountId for nulo
      */
     public void softDeleteAccount(Long accountId) {
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         }
 
+        log.info("Executando softDeleteAccount. accountId={}", accountId);
         accountStatusService.softDeleteAccount(accountId);
     }
 
     /**
-     * Restaura account deletada logicamente.
+     * Restaura uma conta deletada logicamente.
      *
      * @param accountId id da conta
+     * @throws ApiException se o accountId for nulo
      */
     public void restoreAccount(Long accountId) {
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
         }
 
+        log.info("Executando restoreAccount. accountId={}", accountId);
         accountStatusService.restoreAccount(accountId);
-    }
-
-    /**
-     * Lista usuários do tenant associado à account.
-     *
-     * @param accountId id da conta
-     * @param onlyOperational indica se deve listar apenas operacionais
-     * @return lista de usuários resumidos
-     */
-    public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        }
-
-        return accountTenantUserService.listTenantUsers(accountId, onlyOperational);
-    }
-
-    /**
-     * Suspende ou reativa usuário do tenant por ação administrativa.
-     *
-     * @param accountId id da conta
-     * @param userId id do usuário
-     * @param suspended status desejado
-     */
-    public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        }
-
-        if (userId == null) {
-            throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-        }
-
-        accountTenantUserService.setUserSuspendedByAdmin(accountId, userId, suspended);
     }
 }

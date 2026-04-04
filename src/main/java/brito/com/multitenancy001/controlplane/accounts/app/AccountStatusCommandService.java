@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AccountStatusCommandService {
 
-    private final AccountStatusLifecycleService accountStatusLifecycleService;
+    private final AccountStatusTransitionService accountStatusLifecycleService;
     private final AccountStatusTenantSideEffectService accountStatusTenantSideEffectService;
     private final AccountStatusAuditService accountStatusAuditService;
     private final AccountStatusSupport accountStatusSupport;

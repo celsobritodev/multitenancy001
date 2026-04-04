@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.controlplane.billing.api.admin;
 
-import brito.com.multitenancy001.controlplane.billing.app.ControlPlanePaymentService;
+import brito.com.multitenancy001.controlplane.billing.app.ControlPlanePaymentFacade;
 import brito.com.multitenancy001.shared.api.dto.billing.AdminPaymentRequest;
 import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
 import jakarta.validation.Valid;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ControlPlanePaymentController {
 
-    private final ControlPlanePaymentService controlPlanePaymentService;
+    private final ControlPlanePaymentFacade controlPlanePaymentService;
 
     /**
      * Admin força/registrar um pagamento para uma conta.

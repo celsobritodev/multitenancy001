@@ -8,7 +8,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
@@ -47,7 +47,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
     private final AppClock appClock;
 
     @Override
-    public boolean verifyPasswordInTenant(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+    public boolean verifyPasswordInTenant(PublicAccountView account, String normalizedEmail, String rawPassword) {
         if (account == null || account.id() == null) return false;
         if (!StringUtils.hasText(account.tenantSchema())) return false;
         if (!StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(rawPassword)) return false;
@@ -72,7 +72,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
     }
 
     @Override
-    public JwtResult authenticateWithPassword(AccountSnapshot account, String normalizedEmail, String rawPassword) {
+    public JwtResult authenticateWithPassword(PublicAccountView account, String normalizedEmail, String rawPassword) {
         if (!verifyPasswordInTenant(account, normalizedEmail, rawPassword)) {
             throw new ApiException(ApiErrorCode.INVALID_CREDENTIALS, INVALID_CREDENTIALS_MSG, 401);
         }
@@ -80,7 +80,7 @@ public class TenantAuthMechanicsSpringSecurity implements TenantAuthMechanics {
     }
 
     @Override
-    public JwtResult issueJwtForAccountAndEmail(AccountSnapshot account, String normalizedEmail) {
+    public JwtResult issueJwtForAccountAndEmail(PublicAccountView account, String normalizedEmail) {
         if (account == null || account.id() == null || !StringUtils.hasText(account.tenantSchema())) {
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta/tenant inválido para autenticação", 400);
         }

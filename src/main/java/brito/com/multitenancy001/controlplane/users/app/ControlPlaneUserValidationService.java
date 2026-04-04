@@ -71,7 +71,7 @@ public class ControlPlaneUserValidationService {
         if (user != null && user.isBuiltInUser()) {
             throw new ApiException(
                     ApiErrorCode.USER_BUILT_IN_IMMUTABLE,
-                    ControlPlaneUserSupport.BUILTIN_IMMUTABLE_MESSAGE,
+                    ControlPlaneUserInternalFacade.BUILTIN_IMMUTABLE_MESSAGE,
                     409
             );
         }

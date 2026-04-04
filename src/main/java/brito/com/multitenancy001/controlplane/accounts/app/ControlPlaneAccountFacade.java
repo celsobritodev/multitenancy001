@@ -19,29 +19,33 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Fachada principal do agregado Account no Control Plane.
+ * Fachada principal do agregado Account no contexto Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
- *   <li>Manter compatibilidade com controllers e chamadores atuais.</li>
- *   <li>Expor uma superfície única para operações de Account.</li>
- *   <li>Delegar comandos e consultas para serviços especializados.</li>
+ *   <li>Manter uma superfície única de acesso para operações do módulo
+ *       Account no Control Plane.</li>
+ *   <li>Preservar compatibilidade com controllers e chamadores atuais.</li>
+ *   <li>Delegar operações para serviços especializados de command, query,
+ *       lookup e administração de usuários tenant.</li>
  * </ul>
  *
- * <p>Importante:</p>
+ * <p><b>Diretrizes arquiteturais:</b></p>
  * <ul>
  *   <li>Esta classe deve permanecer fina.</li>
- *   <li>Não deve concentrar regras de paginação, range, consultas complexas
- *       ou lógica de onboarding/status.</li>
+ *   <li>Não deve concentrar regra de negócio.</li>
+ *   <li>Não deve substituir serviços especializados.</li>
+ *   <li>Seu papel é exclusivamente de fachada/orquestração leve.</li>
  * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AccountAppService {
+public class ControlPlaneAccountFacade {
 
     private final ControlPlaneAccountCommandService controlPlaneAccountCommandService;
     private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
+    private final ControlPlaneAccountTenantUserAdminService controlPlaneAccountTenantUserAdminService;
 
     /**
      * Cria uma nova account via fluxo de signup/onboarding.
@@ -126,7 +130,7 @@ public class AccountAppService {
      * @return lista resumida de usuários
      */
     public List<UserSummaryData> listTenantUsers(Long accountId, boolean onlyOperational) {
-        return controlPlaneAccountCommandService.listTenantUsers(accountId, onlyOperational);
+        return controlPlaneAccountTenantUserAdminService.listTenantUsers(accountId, onlyOperational);
     }
 
     /**
@@ -137,10 +141,12 @@ public class AccountAppService {
      * @param suspended status desejado
      */
     public void setUserSuspendedByAdmin(Long accountId, Long userId, boolean suspended) {
-        log.info("Delegando setUserSuspendedByAdmin para command service. accountId={}, userId={}",
+        log.info(
+                "Delegando setUserSuspendedByAdmin para tenant user admin service. accountId={}, userId={}",
                 accountId,
-                userId);
-        controlPlaneAccountCommandService.setUserSuspendedByAdmin(accountId, userId, suspended);
+                userId
+        );
+        controlPlaneAccountTenantUserAdminService.setUserSuspendedByAdmin(accountId, userId, suspended);
     }
 
     /**

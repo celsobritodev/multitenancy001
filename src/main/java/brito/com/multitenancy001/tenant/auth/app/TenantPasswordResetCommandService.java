@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
 import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
 import brito.com.multitenancy001.tenant.users.app.query.TenantUserQueryService;
@@ -51,7 +51,7 @@ public class TenantPasswordResetCommandService {
 
         tenantPasswordResetAuditService.recordPasswordResetRequestedAttempt(normalizedEmail, normalizedSlug);
 
-        AccountSnapshot account = tenantPasswordResetSupport.resolveReadyAccountBySlug(normalizedSlug);
+        PublicAccountView account = tenantPasswordResetSupport.resolveReadyAccountBySlug(normalizedSlug);
         String tenantSchema = tenantPasswordResetSupport.requireTenantSchema(account);
 
         try {

@@ -9,7 +9,7 @@ import org.springframework.util.StringUtils;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginConfirmCommand;
 import brito.com.multitenancy001.tenant.auth.domain.TenantLoginChallenge;
@@ -74,7 +74,7 @@ public class TenantLoginConfirmCommandService {
             throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug");
         }
 
-        AccountSnapshot accountSnapshot = tenantLoginSelectionResolver.resolveSelectedAccount(accountId, slug);
+        PublicAccountView accountSnapshot = tenantLoginSelectionResolver.resolveSelectedAccount(accountId, slug);
 
         if (accountSnapshot == null || accountSnapshot.id() == null) {
             tenantLoginConfirmAuditService.recordFailure(email, null, null, "account_not_found");
@@ -111,7 +111,7 @@ public class TenantLoginConfirmCommandService {
      */
     private void validateAccountBelongsToChallenge(
             TenantLoginChallenge tenantLoginChallenge,
-            AccountSnapshot accountSnapshot,
+            PublicAccountView accountSnapshot,
             String email
     ) {
         Set<Long> allowedAccountIds = tenantLoginChallenge.candidateAccountIds();

@@ -7,7 +7,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -109,7 +109,7 @@ public class TenantPasswordResetSupport {
      * @param slug slug da conta
      * @return snapshot da conta
      */
-    public AccountSnapshot resolveReadyAccountBySlug(String slug) {
+    public PublicAccountView resolveReadyAccountBySlug(String slug) {
         return accountResolver.resolveActiveAccountBySlug(slug);
     }
 
@@ -119,7 +119,7 @@ public class TenantPasswordResetSupport {
      * @param account snapshot da conta
      * @return tenant schema normalizado
      */
-    public String requireTenantSchema(AccountSnapshot account) {
+    public String requireTenantSchema(PublicAccountView account) {
         if (account == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404);
         }

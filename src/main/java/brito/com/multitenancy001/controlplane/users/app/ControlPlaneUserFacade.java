@@ -35,9 +35,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ControlPlaneUserService {
+public class ControlPlaneUserFacade {
 
-    private final ControlPlaneUserCommandService controlPlaneUserCommandService;
+    private final ControlPlaneUserCommandFacade controlPlaneUserCommandService;
     private final ControlPlaneUserQueryService controlPlaneUserQueryService;
     private final ControlPlaneUserPasswordService controlPlaneUserPasswordService;
     private final ControlPlaneUserLifecycleService controlPlaneUserLifecycleService;

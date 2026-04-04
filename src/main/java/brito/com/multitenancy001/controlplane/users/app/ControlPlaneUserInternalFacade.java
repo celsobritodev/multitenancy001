@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class ControlPlaneUserSupport {
+public class ControlPlaneUserInternalFacade {
 
     /**
      * Mensagem padrão para tentativa de alteração de usuário built-in.

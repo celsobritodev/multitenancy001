@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # ============================================================
-# Script: list_top10_java.sh
+# Script: lista-maiores.sh
 # Descrição: Lista os 10 maiores arquivos .java do projeto
-# Uso: ./list_top10_java.sh
+# Uso: ./scripts/lista-maiores.sh (executar de dentro do diretório scripts)
 # ============================================================
 
 # Cores ANSI
@@ -16,9 +16,9 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
-BG_RED='\033[41m'
-BG_GREEN='\033[42m'
-BG_BLUE='\033[44m'
+
+# Navegar para o diretório pai (raiz do projeto)
+cd ..
 
 # Limpar a tela
 clear

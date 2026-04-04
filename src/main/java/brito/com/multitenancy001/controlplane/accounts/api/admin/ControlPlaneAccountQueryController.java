@@ -3,7 +3,7 @@ package brito.com.multitenancy001.controlplane.accounts.api.admin;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountCountByStatusesRequest;
 import brito.com.multitenancy001.controlplane.accounts.api.dto.AccountResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.mapper.AccountApiMapper;
-import brito.com.multitenancy001.controlplane.accounts.app.query.ControlPlaneAccountQueryService;
+import brito.com.multitenancy001.controlplane.accounts.app.query.ControlPlaneAccountLookupService;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,14 +27,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneAccountQueryController {
 
-    private final ControlPlaneAccountQueryService controlPlaneAccountQueryService;
+    private final ControlPlaneAccountLookupService controlPlaneAccountLookupService;
     private final AccountApiMapper accountApiMapper;
 
     @GetMapping("/{id}/enabled")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountResponse> getEnabledById(@PathVariable Long id) {
         /* Busca conta habilitada por id (regra de negócio no service). */
-        Account a = controlPlaneAccountQueryService.getEnabledById(id);
+        Account a = controlPlaneAccountLookupService.getEnabledById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
@@ -42,7 +42,7 @@ public class ControlPlaneAccountQueryController {
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_TENANT_READ.asAuthority())")
     public ResponseEntity<AccountResponse> getAnyById(@PathVariable Long id) {
         /* Busca conta por id sem exigir estado enabled (regra de negócio no service). */
-        Account a = controlPlaneAccountQueryService.getAnyById(id);
+        Account a = controlPlaneAccountLookupService.getAnyById(id);
         return ResponseEntity.ok(accountApiMapper.toResponse(a));
     }
 
@@ -51,7 +51,7 @@ public class ControlPlaneAccountQueryController {
     public ResponseEntity<Long> countByStatuses(@Valid @RequestBody AccountCountByStatusesRequest request) {
         /* Conta accounts por statuses (excluindo deletadas), com contrato tipado. */
         return ResponseEntity.ok(
-                controlPlaneAccountQueryService.countByStatusesNotDeleted(request.statuses())
+                controlPlaneAccountLookupService.countByStatusesNotDeleted(request.statuses())
         );
     }
 
@@ -70,7 +70,7 @@ public class ControlPlaneAccountQueryController {
     ) {
         /* Lista accounts com paymentDueDate anterior (excluindo deletadas). */
         return ResponseEntity.ok(
-                controlPlaneAccountQueryService.findPaymentDueBeforeNotDeleted(date)
+                controlPlaneAccountLookupService.findPaymentDueBeforeNotDeleted(date)
                         .stream()
                         .map(accountApiMapper::toResponse)
                         .toList()

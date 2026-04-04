@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ControlPlanePaymentService {
+public class ControlPlanePaymentFacade {
 
     private final ControlPlanePaymentCommandService controlPlanePaymentCommandService;
 

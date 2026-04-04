@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.infrastructure.publicschema.audit;
+package brito.com.multitenancy001.infrastructure.publicschema.audit.entity;
 
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "security_audit_events")
-public class SecurityAuditEvent {
+public class PublicSecurityAuditEvent {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

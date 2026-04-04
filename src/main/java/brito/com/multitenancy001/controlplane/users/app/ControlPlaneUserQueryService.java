@@ -35,7 +35,7 @@ public class ControlPlaneUserQueryService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
-    private final ControlPlaneUserSupport controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
 
     /**
      * Lista usuários não deletados do Control Plane.

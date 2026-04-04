@@ -2,7 +2,7 @@
 package brito.com.multitenancy001.controlplane.users.api;
 
 import brito.com.multitenancy001.controlplane.users.api.dto.*;
-import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserService;
+import brito.com.multitenancy001.controlplane.users.app.ControlPlaneUserFacade;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ControlPlaneUserController {
 
-    private final ControlPlaneUserService controlPlaneUserService;
+    private final ControlPlaneUserFacade controlPlaneUserService;
 
     @PostMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.controlplane.security.ControlPlanePermission).CP_USER_WRITE.asAuthority())")

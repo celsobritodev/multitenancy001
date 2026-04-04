@@ -2,6 +2,7 @@
 package brito.com.multitenancy001.infrastructure.publicschema.audit;
 
 import brito.com.multitenancy001.infrastructure.persistence.transaction.PublicTransactionTemplateProvider;
+import brito.com.multitenancy001.infrastructure.publicschema.audit.entity.PublicSecurityAuditEvent;
 import brito.com.multitenancy001.shared.context.RequestMeta;
 import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -38,7 +39,7 @@ public class SecurityAuditTxWriter {
         String method = meta != null ? meta.method() : null;
         String uri = meta != null ? meta.uri() : null;
 
-        SecurityAuditEvent e = new SecurityAuditEvent();
+        PublicSecurityAuditEvent e = new PublicSecurityAuditEvent();
         e.setOccurredAt(occurredAt);
 
         e.setRequestId(requestId);

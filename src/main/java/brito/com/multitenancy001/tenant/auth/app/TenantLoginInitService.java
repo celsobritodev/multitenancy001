@@ -23,7 +23,7 @@ import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.tenant.auth.app.audit.TenantAuthAuditRecorder;
@@ -115,7 +115,7 @@ public class TenantLoginInitService {
             if (candidateAccountIds.size() == 1) {
                 Long accountId = candidateAccountIds.iterator().next();
 
-                AccountSnapshot account = publicExecutor.inPublic(() ->
+                PublicAccountView account = publicExecutor.inPublic(() ->
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 
@@ -129,7 +129,7 @@ public class TenantLoginInitService {
             LinkedHashSet<Long> allowedAccountIds = new LinkedHashSet<>();
 
             for (Long accountId : candidateAccountIds) {
-                AccountSnapshot account = publicExecutor.inPublic(() ->
+                PublicAccountView account = publicExecutor.inPublic(() ->
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 
@@ -147,7 +147,7 @@ public class TenantLoginInitService {
             if (allowedAccountIds.size() == 1) {
                 Long accountId = allowedAccountIds.iterator().next();
 
-                AccountSnapshot account = publicExecutor.inPublic(() ->
+                PublicAccountView account = publicExecutor.inPublic(() ->
                         accountResolver.resolveActiveAccountById(accountId)
                 );
 

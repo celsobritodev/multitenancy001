@@ -21,7 +21,7 @@ public class PublicAccountFinder {
     private final AppClock appClock;
     private final PublicSchemaExecutor publicExecutor;
 
-    public AccountSnapshot resolveActiveAccountBySlug(String slug) {
+    public PublicAccountView resolveActiveAccountBySlug(String slug) {
         return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
@@ -32,16 +32,16 @@ public class PublicAccountFinder {
                 throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa", 403);
             }
 
-            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
+            return new PublicAccountView(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
         });
     }
 
-    public AccountSnapshot resolveActiveAccountById(Long accountId) {
+    public PublicAccountView resolveActiveAccountById(Long accountId) {
         if (accountId == null) throw new ApiException(ApiErrorCode.INVALID_ACCOUNT, "accountId inválido", 400);
         return resolveActiveAccountByIdInternal(accountId);
     }
 
-    private AccountSnapshot resolveActiveAccountByIdInternal(Long accountId) {
+    private PublicAccountView resolveActiveAccountByIdInternal(Long accountId) {
         return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
@@ -52,7 +52,7 @@ public class PublicAccountFinder {
                 throw new ApiException(ApiErrorCode.ACCOUNT_INACTIVE, "Conta inativa", 403);
             }
 
-            return new AccountSnapshot(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
+            return new PublicAccountView(p.getId(), p.getTenantSchema(), p.getSlug(), p.getDisplayName());
         });
     }
 
