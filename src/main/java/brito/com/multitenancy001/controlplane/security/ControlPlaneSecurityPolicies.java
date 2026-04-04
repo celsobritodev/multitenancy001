@@ -8,9 +8,9 @@ package brito.com.multitenancy001.controlplane.security;
  * 2) Env var: APP_SECURITY_CONTROLPLANE_ADMIN_CAN_DELETE=true|false
  * 3) default: false
  */
-public final class ControlPlaneSecurityFlags {
+public final class ControlPlaneSecurityPolicies {
 
-    private ControlPlaneSecurityFlags() {}
+    private ControlPlaneSecurityPolicies() {}
 
     public static boolean adminCanDelete() {
         String sys = System.getProperty("app.security.controlplane.admin-can-delete");

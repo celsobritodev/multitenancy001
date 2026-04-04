@@ -29,9 +29,9 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findBySlugAndDeletedFalseIgnoreCase(String slug);
 
-    Optional<AccountResolverProjection> findProjectionByIdAndDeletedFalse(Long id);
+    Optional<AccountSummary> findProjectionByIdAndDeletedFalse(Long id);
 
-    Optional<AccountResolverProjection> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
+    Optional<AccountSummary> findProjectionBySlugAndDeletedFalseIgnoreCase(String slug);
 
     Optional<Account> findByIdAndDeletedFalse(Long id);
 

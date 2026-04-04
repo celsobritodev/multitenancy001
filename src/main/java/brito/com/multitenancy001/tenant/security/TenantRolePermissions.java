@@ -160,7 +160,6 @@ public final class TenantRolePermissions {
                 TEN_CATEGORY_READ,
                 TEN_SUPPLIER_READ,
                 TEN_CUSTOMER_READ,
-                TEN_CUSTOMER_WRITE,
                 TEN_INVENTORY_READ,
                 TEN_SALE_READ,
                 TEN_SALE_WRITE

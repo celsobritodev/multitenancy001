@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-public interface TenantLoginChallengeStore {
+public interface TenantLoginChallengeRepository {
 
     UUID create(Instant now, String normalizedEmail, Set<Long> candidateAccountIds);
 

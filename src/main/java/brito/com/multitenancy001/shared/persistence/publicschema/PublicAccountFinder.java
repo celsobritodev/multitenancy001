@@ -7,7 +7,7 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.controlplane.accounts.persistence.AccountResolverProjection;
+import brito.com.multitenancy001.controlplane.accounts.persistence.AccountSummary;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class AccountResolver {
+public class PublicAccountFinder {
 
     private final AccountRepository accountRepository;
     private final AppClock appClock;
@@ -25,7 +25,7 @@ public class AccountResolver {
         return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
-            AccountResolverProjection p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
+            AccountSummary p = accountRepository.findProjectionBySlugAndDeletedFalseIgnoreCase(slug)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             if (!isOperational(p, now)) {
@@ -45,7 +45,7 @@ public class AccountResolver {
         return publicExecutor.inPublic(() -> {
             Instant now = appClock.instant();
 
-            AccountResolverProjection p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
+            AccountSummary p = accountRepository.findProjectionByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND, "Conta não encontrada", 404));
 
             if (!isOperational(p, now)) {
@@ -56,7 +56,7 @@ public class AccountResolver {
         });
     }
 
-    private boolean isOperational(AccountResolverProjection p, Instant now) {
+    private boolean isOperational(AccountSummary p, Instant now) {
         if (p == null) return false;
 
         if ("BUILT_IN".equalsIgnoreCase(p.getOrigin())) return true;

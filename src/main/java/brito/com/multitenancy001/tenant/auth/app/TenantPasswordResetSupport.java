@@ -6,7 +6,7 @@ import org.springframework.util.StringUtils;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import lombok.RequiredArgsConstructor;
 
@@ -25,7 +25,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantPasswordResetSupport {
 
-    private final AccountResolver accountResolver;
+    private final PublicAccountFinder accountResolver;
 
     /**
      * Normaliza e valida slug obrigatório.

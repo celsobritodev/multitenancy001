@@ -4,7 +4,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
-import brito.com.multitenancy001.tenant.auth.app.boundary.TenantLoginChallengeStore;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantLoginChallengeRepository;
 import brito.com.multitenancy001.tenant.auth.domain.TenantLoginChallenge;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,7 +38,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TenantLoginChallengeService {
 
-    private final TenantLoginChallengeStore store;
+    private final TenantLoginChallengeRepository store;
     private final AppClock appClock;
 
     private Instant now() {

@@ -2,7 +2,7 @@ package brito.com.multitenancy001.tenant.auth.app;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantLoginSelectionResolver {
 
-    private final AccountResolver accountResolver;
+    private final PublicAccountFinder accountResolver;
 
     /**
      * Resolve a conta ativa escolhida no fluxo de confirmação.

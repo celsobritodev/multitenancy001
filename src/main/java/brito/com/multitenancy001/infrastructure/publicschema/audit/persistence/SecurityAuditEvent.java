@@ -15,7 +15,7 @@ import java.time.Instant;
 @Setter
 @Entity
 @Table(name = "security_audit_event", schema = "public")
-public class SecurityAuditEventEntity {
+public class SecurityAuditEvent {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -29,7 +29,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class LoginIdentityResolver {
+public class LoginIdentityFinder {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
 

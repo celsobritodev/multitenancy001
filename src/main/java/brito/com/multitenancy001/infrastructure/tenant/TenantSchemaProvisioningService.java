@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantSchemaProvisioningService {
 
-    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
+    private final TenantSchemaProvisioner tenantSchemaProvisioningWorker;
 
     /**
      * Account.tenantSchema é o identificador persistido do schema do tenant.

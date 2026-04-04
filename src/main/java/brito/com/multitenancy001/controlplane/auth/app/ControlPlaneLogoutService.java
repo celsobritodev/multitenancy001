@@ -19,7 +19,7 @@ import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -42,7 +42,7 @@ public class ControlPlaneLogoutService {
 
     private final PublicSchemaExecutor publicSchemaExecutor;
     private final ControlPlaneRefreshTokenIntrospectionIntegrationService refreshIntrospection;
-    private final LoginIdentityResolver loginIdentityResolver;
+    private final LoginIdentityFinder loginIdentityResolver;
     private final AuthRefreshSessionService refreshSessions;
     private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
     private final JsonDetailsMapper jsonDetailsMapper;

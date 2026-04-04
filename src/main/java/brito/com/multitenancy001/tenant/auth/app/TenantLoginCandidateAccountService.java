@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import brito.com.multitenancy001.tenant.auth.app.dto.TenantLoginCandidateAccount;
 import lombok.RequiredArgsConstructor;
 
@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantLoginCandidateAccountService {
 
-    private final LoginIdentityResolver loginIdentityResolver;
+    private final LoginIdentityFinder loginIdentityResolver;
 
     public List<TenantLoginCandidateAccount> findCandidateAccounts(String normalizedEmail) {
         if (!StringUtils.hasText(normalizedEmail)) return List.of();

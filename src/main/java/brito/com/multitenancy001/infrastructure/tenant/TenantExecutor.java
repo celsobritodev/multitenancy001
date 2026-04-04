@@ -30,9 +30,9 @@ public class TenantExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(TenantExecutor.class);
 
-    private final TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker;
+    private final TenantSchemaProvisioner tenantSchemaProvisioningWorker;
 
-    public TenantExecutor(TenantSchemaProvisioningWorker tenantSchemaProvisioningWorker) {
+    public TenantExecutor(TenantSchemaProvisioner tenantSchemaProvisioningWorker) {
         this.tenantSchemaProvisioningWorker = tenantSchemaProvisioningWorker;
     }
 

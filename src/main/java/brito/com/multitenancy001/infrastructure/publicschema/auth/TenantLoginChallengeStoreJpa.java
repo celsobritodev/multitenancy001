@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.infrastructure.publicschema.auth;
 
-import brito.com.multitenancy001.tenant.auth.app.boundary.TenantLoginChallengeStore;
+import brito.com.multitenancy001.tenant.auth.app.boundary.TenantLoginChallengeRepository;
 import brito.com.multitenancy001.tenant.auth.domain.TenantLoginChallenge;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class TenantLoginChallengeStoreJpa implements TenantLoginChallengeStore {
+public class TenantLoginChallengeStoreJpa implements TenantLoginChallengeRepository {
 
     private final TenantLoginChallengeJpaRepository tenantLoginChallengeJpaRepository;
 

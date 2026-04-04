@@ -22,9 +22,9 @@ import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.AccountResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountSnapshot;
-import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
+import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityRow;
 import brito.com.multitenancy001.tenant.auth.app.audit.TenantAuthAuditRecorder;
 import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
@@ -39,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Regras:</p>
  * <ul>
- *   <li>Resolve candidatos no PUBLIC via {@link LoginIdentityResolver}.</li>
+ *   <li>Resolve candidatos no PUBLIC via {@link LoginIdentityFinder}.</li>
  *   <li>Se houver apenas uma account válida, autentica e emite JWT direto.</li>
  *   <li>Se houver múltiplas accounts válidas:
  *     <ul>
@@ -62,8 +62,8 @@ public class TenantLoginInitService {
 
     private static final String INVALID_CREDENTIALS_MSG = "usuario ou senha invalidos";
 
-    private final AccountResolver accountResolver;
-    private final LoginIdentityResolver loginIdentityResolver;
+    private final PublicAccountFinder accountResolver;
+    private final LoginIdentityFinder loginIdentityResolver;
     private final PublicSchemaExecutor publicExecutor;
     private final TenantLoginChallengeService tenantLoginChallengeService;
     private final TenantAuthMechanics authMechanics;

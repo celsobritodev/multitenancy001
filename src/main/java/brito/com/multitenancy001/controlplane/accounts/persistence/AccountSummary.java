@@ -2,7 +2,7 @@ package brito.com.multitenancy001.controlplane.accounts.persistence;
 
 import java.time.Instant;
 
-public interface AccountResolverProjection {
+public interface AccountSummary {
     Long getId();
     String getTenantSchema();
 
