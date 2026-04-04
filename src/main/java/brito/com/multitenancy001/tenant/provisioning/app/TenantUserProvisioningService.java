@@ -8,8 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.PublicTxExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.domain.EmailNormalizer;
@@ -38,8 +38,8 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p><b>Regra arquitetural crítica:</b></p>
  * <ul>
- *   <li>Operações TENANT devem permanecer dentro do {@link TenantExecutor} +
- *       {@link TxExecutor} do tenant.</li>
+ *   <li>Operações TENANT devem permanecer dentro do {@link TenantContextExecutor} +
+ *       {@link PublicTxExecutor} do tenant.</li>
  *   <li>Operações PUBLIC subsequentes devem ocorrer via
  *       {@link TenantToPublicBridgeExecutor} antes do
  *       {@link PublicSchemaUnitOfWork}.</li>
@@ -53,8 +53,8 @@ public class TenantUserProvisioningService {
     private static final String REQUIRED_TABLE = "tenant_users";
     private static final String OWNER_NAME_FALLBACK = "Owner";
 
-    private final TenantExecutor tenantExecutor;
-    private final TxExecutor transactionExecutor;
+    private final TenantContextExecutor tenantExecutor;
+    private final PublicTxExecutor transactionExecutor;
 
     private final TenantUserRepository tenantUserRepository;
     private final PasswordEncoder passwordEncoder;

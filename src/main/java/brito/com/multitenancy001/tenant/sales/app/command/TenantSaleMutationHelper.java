@@ -21,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support de mutação do módulo Sales.
+ * Helper de mutação do módulo Sales.
  *
  * <p>Centraliza regras compartilhadas entre create/update/delete/restore:</p>
  * <ul>
@@ -43,7 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TenantSaleMutationSupport {
+public class TenantSaleMutationHelper {
 
     private final TenantCustomerRepository tenantCustomerRepository;
     private final TenantProductRepository tenantProductRepository;

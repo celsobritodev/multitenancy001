@@ -35,7 +35,7 @@ public class ControlPlaneUserQueryService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
 
     /**
      * Lista usuários não deletados do Control Plane.
@@ -45,10 +45,10 @@ public class ControlPlaneUserQueryService {
     public List<ControlPlaneUserDetailsResponse> listControlPlaneUsers() {
         log.debug("listControlPlaneUsers chamado");
         return publicSchemaUnitOfWork.readOnly(() -> {
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             return controlPlaneUserRepository.findNotDeletedByAccountId(controlPlaneAccount.getId())
                     .stream()
-                    .map(controlPlaneUserSupport::mapToDetailsResponse)
+                    .map(controlPlaneUserInternalFacade::mapToDetailsResponse)
                     .toList();
         });
     }
@@ -67,10 +67,10 @@ public class ControlPlaneUserQueryService {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
-            ControlPlaneUser user = controlPlaneUserSupport.loadUserInControlPlane(userId, controlPlaneAccount.getId());
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
+            ControlPlaneUser user = controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            return controlPlaneUserSupport.mapToDetailsResponse(user);
+            return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
         });
     }
 
@@ -82,10 +82,10 @@ public class ControlPlaneUserQueryService {
     public List<ControlPlaneUserDetailsResponse> listEnabledControlPlaneUsers() {
         log.debug("listEnabledControlPlaneUsers chamado");
         return publicSchemaUnitOfWork.readOnly(() -> {
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             return controlPlaneUserRepository.findEnabledByAccountId(controlPlaneAccount.getId())
                     .stream()
-                    .map(controlPlaneUserSupport::mapToDetailsResponse)
+                    .map(controlPlaneUserInternalFacade::mapToDetailsResponse)
                     .toList();
         });
     }
@@ -104,11 +104,11 @@ public class ControlPlaneUserQueryService {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadEnabledUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadEnabledUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            return controlPlaneUserSupport.mapToDetailsResponse(user);
+            return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
         });
     }
 
@@ -123,7 +123,7 @@ public class ControlPlaneUserQueryService {
         return publicSchemaUnitOfWork.readOnly(() -> {
             Long currentUserId = controlPlaneRequestIdentityService.getCurrentUserId();
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user = controlPlaneUserRepository.findById(currentUserId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.USER_NOT_FOUND,
@@ -141,7 +141,7 @@ public class ControlPlaneUserQueryService {
                 );
             }
 
-            return controlPlaneUserSupport.mapToMeResponse(user);
+            return controlPlaneUserInternalFacade.mapToMeResponse(user);
         });
     }
 }

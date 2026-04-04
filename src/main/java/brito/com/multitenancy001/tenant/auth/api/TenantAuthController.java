@@ -12,7 +12,7 @@ import brito.com.multitenancy001.tenant.auth.api.dto.TenantLoginInitRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantRefreshRequest;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionOption;
 import brito.com.multitenancy001.tenant.auth.api.dto.TenantSelectionRequiredResponse;
-import brito.com.multitenancy001.tenant.auth.app.TenantLoginConfirmService;
+import brito.com.multitenancy001.tenant.auth.app.TenantLoginConfirmFacade;
 import brito.com.multitenancy001.tenant.auth.app.TenantLoginInitService;
 import brito.com.multitenancy001.tenant.auth.app.TenantLogoutService;
 import brito.com.multitenancy001.tenant.auth.app.TenantTokenRefreshService;
@@ -48,7 +48,7 @@ import java.util.List;
 public class TenantAuthController {
 
     private final TenantLoginInitService tenantLoginInitService;
-    private final TenantLoginConfirmService tenantLoginConfirmService;
+    private final TenantLoginConfirmFacade tenantLoginConfirmService;
     private final TenantTokenRefreshService tenantTokenRefreshService;
 
     private final TenantLogoutService tenantLogoutService;

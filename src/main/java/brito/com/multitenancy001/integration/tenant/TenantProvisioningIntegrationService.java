@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.TenantUserOperations;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
  * <p>Responsabilidades:</p>
  * <ul>
  *   <li>Atuar como adaptador entre o contexto Control Plane e o contexto Tenant.</li>
- *   <li>Gerenciar a troca de schema do tenant via {@link TenantExecutor}.</li>
+ *   <li>Gerenciar a troca de schema do tenant via {@link TenantContextExecutor}.</li>
  *   <li>Delegar a execução das regras de negócio para os serviços apropriados do Tenant.</li>
  * </ul>
  *
@@ -37,7 +37,7 @@ import lombok.RequiredArgsConstructor;
  * </ul>
  *
  * @see TenantUserOperations
- * @see TenantExecutor
+ * @see TenantContextExecutor
  * @see TenantUserAdminTxService
  * @see TenantUserProvisioningService
  */
@@ -45,7 +45,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantProvisioningIntegrationService implements TenantUserOperations {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
 
     // Tenant app services (executam dentro do schema do tenant)
     private final TenantUserAdminTxService tenantUserAdminTxService;

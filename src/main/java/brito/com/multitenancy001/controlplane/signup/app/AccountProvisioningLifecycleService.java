@@ -45,7 +45,7 @@ public class AccountProvisioningLifecycleService {
      * @param signupData dados já validados e normalizados
      * @return account persistida
      */
-    public Account createProvisioningAccount(AccountOnboardingSupport.SignupData signupData) {
+    public Account createProvisioningAccount(AccountOnboardingHelper.SignupData signupData) {
         return publicSchemaUnitOfWork.tx(() -> {
             CreateAccountCommand createAccountCommand = new CreateAccountCommand(
                     signupData.displayName(),

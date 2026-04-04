@@ -37,9 +37,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @Component
-public class TxExecutor {
+public class PublicTxExecutor {
 
-    private static final Logger log = LoggerFactory.getLogger(TxExecutor.class);
+    private static final Logger log = LoggerFactory.getLogger(PublicTxExecutor.class);
 
     private final PlatformTransactionManager publicTm;
     private final PlatformTransactionManager tenantTm;
@@ -56,7 +56,7 @@ public class TxExecutor {
     private final TransactionTemplate transactionTemplateTenantReadOnlyTx;
     private final TransactionTemplate transactionTemplateTenantRequiresNewReadOnly;
 
-    public TxExecutor(
+    public PublicTxExecutor(
             @Qualifier("publicTransactionManager") PlatformTransactionManager publicTm,
             @Qualifier("tenantTransactionManager") PlatformTransactionManager tenantTm
     ) {

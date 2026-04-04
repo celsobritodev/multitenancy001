@@ -28,7 +28,7 @@ public class TenantSaleDeleteCommandService {
     private final TenantSchemaUnitOfWork uow;
     private final SaleRepository saleRepository;
     private final AppClock appClock;
-    private final TenantSaleMutationSupport mutationSupport;
+    private final TenantSaleMutationHelper tenantSaleMutationHelper;
 
     /**
      * Deleta logicamente uma venda.
@@ -59,12 +59,12 @@ public class TenantSaleDeleteCommandService {
                     "SALE_DELETE_LOADED | saleId={} | status={} | affectInventory={} | itemsCount={} | items={}",
                     sale.getId(),
                     sale.getStatus(),
-                    mutationSupport.shouldAffectInventory(sale.getStatus()),
+                    tenantSaleMutationHelper.shouldAffectInventory(sale.getStatus()),
                     sale.getItems() != null ? sale.getItems().size() : 0,
-                    mutationSupport.describeItems(sale.getItems())
+                    tenantSaleMutationHelper.describeItems(sale.getItems())
             );
 
-            mutationSupport.restoreInventoryForCurrentActiveItems(sale);
+            tenantSaleMutationHelper.restoreInventoryForCurrentActiveItems(sale);
 
             sale.softDelete();
             saleRepository.save(sale);

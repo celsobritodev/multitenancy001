@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductStatusWriteService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantProductWriteSupport writeSupport;
+    private final TenantProductWriteHelper tenantProductWriteHelper;
 
     /**
      * Alterna o status ativo/inativo do produto.
@@ -58,7 +58,7 @@ public class TenantProductStatusWriteService {
                 product.getActive()
         );
 
-        Product loaded = writeSupport.loadWithRelationsOrThrow(
+        Product loaded = tenantProductWriteHelper.loadWithRelationsOrThrow(
                 id,
                 "Produto não encontrado após toggleActive (ID: " + id + ")"
         );

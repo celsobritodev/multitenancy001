@@ -26,13 +26,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * </ul>
  */
 @Component
-public class TenantExecutor {
+public class TenantContextExecutor {
 
-    private static final Logger log = LoggerFactory.getLogger(TenantExecutor.class);
+    private static final Logger log = LoggerFactory.getLogger(TenantContextExecutor.class);
 
     private final TenantSchemaProvisioner tenantSchemaProvisioningWorker;
 
-    public TenantExecutor(TenantSchemaProvisioner tenantSchemaProvisioningWorker) {
+    public TenantContextExecutor(TenantSchemaProvisioner tenantSchemaProvisioningWorker) {
         this.tenantSchemaProvisioningWorker = tenantSchemaProvisioningWorker;
     }
 

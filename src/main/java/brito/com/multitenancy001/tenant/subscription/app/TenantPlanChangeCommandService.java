@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TenantPlanChangeOrchestrationService {
+public class TenantPlanChangeCommandService {
 
     private static final String REQUESTED_BY = "tenant_owner";
     private static final String CHANGE_SOURCE = "tenant_self_service";
@@ -39,7 +39,7 @@ public class TenantPlanChangeOrchestrationService {
     private final TenantPlanChangePreviewService tenantPlanChangePreviewService;
     private final TenantPlanDowngradeService tenantPlanDowngradeService;
     private final TenantPlanUpgradeService tenantPlanUpgradeService;
-    private final TenantPlanUpgradeSupport tenantPlanUpgradeSupport;
+    private final TenantPlanUpgradeHelper tenantPlanUpgradeHelper;
 
     /**
      * Executa o fluxo completo de mudança de plano no tenant self-service.
@@ -91,7 +91,7 @@ public class TenantPlanChangeOrchestrationService {
         ChangeAccountPlanCommand command = new ChangeAccountPlanCommand(
                 account.getId(),
                 targetPlan,
-                tenantPlanUpgradeSupport.normalize(reason),
+                tenantPlanUpgradeHelper.normalize(reason),
                 REQUESTED_BY,
                 CHANGE_SOURCE
         );
@@ -109,7 +109,7 @@ public class TenantPlanChangeOrchestrationService {
                 amount,
                 planPriceSnapshot,
                 currencyCode,
-                tenantPlanUpgradeSupport.normalize(reason)
+                tenantPlanUpgradeHelper.normalize(reason)
         );
     }
 }

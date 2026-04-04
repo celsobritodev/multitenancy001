@@ -27,9 +27,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class TenantInventoryQueryService {
 
-    private final TenantInventoryRepository inventoryRepository;
-    private final InventoryMovementRepository movementRepository;
-    private final TenantInventorySupport tenantInventorySupport;
+    private final TenantInventoryRepository tenanntInventoryRepository;
+    private final InventoryMovementRepository inventoryMovementRepository;
+    private final TenantInventoryHelper tenantInventoryHelper;
 
     /**
      * Retorna o estoque atual do produto, criando um registro zerado se necessário.
@@ -38,12 +38,12 @@ public class TenantInventoryQueryService {
      * @return estado atual do estoque
      */
     public InventoryItem getOrCreateInventory(UUID productId) {
-        tenantInventorySupport.validateProductExists(productId);
+        tenantInventoryHelper.validateProductExists(productId);
 
         log.debug("INVENTORY_GET_OR_CREATE_START | productId={}", productId);
 
-        InventoryItem item = inventoryRepository.findByProductId(productId)
-                .orElseGet(() -> tenantInventorySupport.createInventory(productId));
+        InventoryItem item = tenanntInventoryRepository.findByProductId(productId)
+                .orElseGet(() -> tenantInventoryHelper.createInventory(productId));
 
         log.debug(
                 "INVENTORY_GET_OR_CREATE_FINISH | productId={} | inventoryId={} | available={} | reserved={} | minStock={}",
@@ -64,17 +64,17 @@ public class TenantInventoryQueryService {
      * @return lista de movimentações
      */
     public List<InventoryMovement> listMovementsByProduct(UUID productId) {
-        tenantInventorySupport.validateProductExists(productId);
+        tenantInventoryHelper.validateProductExists(productId);
 
         log.info("INVENTORY_MOVEMENT_LIST_START | productId={}", productId);
 
-        List<InventoryMovement> movements = movementRepository.findByProductIdOrderByCreatedAtDesc(productId);
+        List<InventoryMovement> movements = inventoryMovementRepository.findByProductIdOrderByCreatedAtDesc(productId);
 
         log.info(
                 "INVENTORY_MOVEMENT_LIST_FINISH | productId={} | totalMovements={} | sample={}",
                 productId,
                 movements.size(),
-                tenantInventorySupport.describeMovements(movements, 5)
+                tenantInventoryHelper.describeMovements(movements, 5)
         );
 
         return movements;

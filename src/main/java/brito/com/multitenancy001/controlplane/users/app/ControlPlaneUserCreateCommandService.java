@@ -42,7 +42,7 @@ public class ControlPlaneUserCreateCommandService {
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final ControlPlaneUserExplicitPermissionsService controlPlaneUserExplicitPermissionsService;
     private final PasswordEncoder passwordEncoder;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
     private final ControlPlaneUserIdentitySyncService controlPlaneUserIdentitySyncService;
 
     /**
@@ -60,7 +60,7 @@ public class ControlPlaneUserCreateCommandService {
         );
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (controlPlaneUserCreateRequest == null) {
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
@@ -75,15 +75,15 @@ public class ControlPlaneUserCreateCommandService {
                 throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "senha é obrigatória", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
 
-            String email = controlPlaneUserSupport.normalizeEmailOrThrow(controlPlaneUserCreateRequest.email());
-            controlPlaneUserSupport.validateNotReservedEmail(email);
+            String email = controlPlaneUserInternalFacade.normalizeEmailOrThrow(controlPlaneUserCreateRequest.email());
+            controlPlaneUserInternalFacade.validateNotReservedEmail(email);
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(email, null);
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "stage", "before_save",
                     "role", controlPlaneUserCreateRequest.role().name(),
@@ -93,14 +93,14 @@ public class ControlPlaneUserCreateCommandService {
                             : controlPlaneUserCreateRequest.permissions().size()
             );
 
-            return controlPlaneUserSupport.auditAttemptSuccessFail(
+            return controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_CREATED,
                     actor,
                     target,
                     controlPlaneAccount.getId(),
                     null,
                     attempt,
-                    () -> controlPlaneUserSupport.m(
+                    () -> controlPlaneUserInternalFacade.m(
                             "scope", ControlPlaneUserInternalFacade.SCOPE,
                             "stage", "after_save",
                             "role", controlPlaneUserCreateRequest.role().name(),
@@ -122,7 +122,7 @@ public class ControlPlaneUserCreateCommandService {
                             );
                         }
 
-                        String name = controlPlaneUserSupport.normalizeNameOrThrow(controlPlaneUserCreateRequest.name());
+                        String name = controlPlaneUserInternalFacade.normalizeNameOrThrow(controlPlaneUserCreateRequest.name());
                         ControlPlaneRole role = controlPlaneUserCreateRequest.role();
                         String passwordHash = passwordEncoder.encode(controlPlaneUserCreateRequest.password());
 
@@ -145,7 +145,7 @@ public class ControlPlaneUserCreateCommandService {
                                     controlPlaneUserCreateRequest.permissions()
                             );
 
-                            controlPlaneUserSupport.recordAudit(
+                            controlPlaneUserInternalFacade.recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
                                     actor,
@@ -153,7 +153,7 @@ public class ControlPlaneUserCreateCommandService {
                                     saved.getId(),
                                     controlPlaneAccount.getId(),
                                     null,
-                                    controlPlaneUserSupport.m(
+                                    controlPlaneUserInternalFacade.m(
                                             "scope", ControlPlaneUserInternalFacade.SCOPE,
                                             "reason", "create",
                                             "permissionsCount", controlPlaneUserCreateRequest.permissions().size(),
@@ -174,7 +174,7 @@ public class ControlPlaneUserCreateCommandService {
                                 saved.getEmail()
                         );
 
-                        return controlPlaneUserSupport.mapToDetailsResponse(saved);
+                        return controlPlaneUserInternalFacade.mapToDetailsResponse(saved);
                     }
             );
         });

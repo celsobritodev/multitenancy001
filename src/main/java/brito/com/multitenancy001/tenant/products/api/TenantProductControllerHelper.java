@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support compartilhado do boundary HTTP de Products.
+ * Helper compartilhado do boundary HTTP de Products.
  *
  * <p>Centraliza helpers reutilizados pelos delegates:</p>
  * <ul>
@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TenantProductControllerSupport {
+public class TenantProductControllerHelper {
 
     private final TenantRequestIdentityService tenantRequestIdentityService;
 

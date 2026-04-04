@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.users.app;
 
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.PublicTxExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -28,7 +28,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TenantUserAdminTxService {
 
-    private final TxExecutor transactionExecutor;
+    private final PublicTxExecutor transactionExecutor;
     private final TenantUserRepository tenantUserRepository;
     private final AppClock appClock;
 

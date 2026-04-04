@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class TenantProductWriteSupport {
+public class TenantProductWriteHelper {
 
     private final TenantProductFactory tenantProductFactory;
     private final TenantProductValidationService tenantProductValidationService;

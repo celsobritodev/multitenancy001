@@ -5,7 +5,7 @@ import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.Acco
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanChangeRequest;
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanChangeResponse;
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountSubscriptionAdminResponse;
-import brito.com.multitenancy001.controlplane.accounts.app.subscription.ControlPlaneAccountSubscriptionCommandService;
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.ControlPlaneAccountSubscriptionCommandFacade;
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.ControlPlaneAccountSubscriptionQueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.*;
 public class ControlPlaneAccountSubscriptionAdminController {
 
     private final ControlPlaneAccountSubscriptionQueryService queryService;
-    private final ControlPlaneAccountSubscriptionCommandService commandService;
+    private final ControlPlaneAccountSubscriptionCommandFacade commandService;
 
     /**
      * Consulta a assinatura consolidada da conta.

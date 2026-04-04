@@ -5,7 +5,7 @@ import java.time.Duration;
 import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.infrastructure.security.jwt.JwtTokenProvider;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.users.app.command.TenantUserCommandService;
@@ -33,9 +33,9 @@ public class TenantPasswordResetCommandService {
     private final TenantUserQueryService tenantUserQueryService;
     private final TenantUserCommandService tenantUserCommandService;
     private final JwtTokenProvider jwtTokenProvider;
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
     private final AppClock appClock;
-    private final TenantPasswordResetSupport tenantPasswordResetSupport;
+    private final TenantPasswordResetHelper tenantPasswordResetHelper;
     private final TenantPasswordResetAuditService tenantPasswordResetAuditService;
 
     /**
@@ -46,13 +46,13 @@ public class TenantPasswordResetCommandService {
      * @return token de reset
      */
     public String generatePasswordResetToken(String slug, String email) {
-        String normalizedSlug = tenantPasswordResetSupport.normalizeSlugOrThrow(slug);
-        String normalizedEmail = tenantPasswordResetSupport.normalizeEmailOrThrow(email);
+        String normalizedSlug = tenantPasswordResetHelper.normalizeSlugOrThrow(slug);
+        String normalizedEmail = tenantPasswordResetHelper.normalizeEmailOrThrow(email);
 
         tenantPasswordResetAuditService.recordPasswordResetRequestedAttempt(normalizedEmail, normalizedSlug);
 
-        PublicAccountView account = tenantPasswordResetSupport.resolveReadyAccountBySlug(normalizedSlug);
-        String tenantSchema = tenantPasswordResetSupport.requireTenantSchema(account);
+        PublicAccountView account = tenantPasswordResetHelper.resolveReadyAccountBySlug(normalizedSlug);
+        String tenantSchema = tenantPasswordResetHelper.requireTenantSchema(account);
 
         try {
             String token = tenantExecutor.runInTenantSchema(tenantSchema, () -> {
@@ -108,14 +108,14 @@ public class TenantPasswordResetCommandService {
      * @param newPassword nova senha
      */
     public void resetPasswordWithToken(String token, String newPassword) {
-        String sanitizedToken = tenantPasswordResetSupport.normalizeTokenOrThrow(token);
-        String sanitizedPassword = tenantPasswordResetSupport.normalizeNewPasswordOrThrow(newPassword);
+        String sanitizedToken = tenantPasswordResetHelper.normalizeTokenOrThrow(token);
+        String sanitizedPassword = tenantPasswordResetHelper.normalizeNewPasswordOrThrow(newPassword);
 
         String tenantSchema = jwtTokenProvider.getTenantSchemaFromToken(sanitizedToken);
         Long accountId = jwtTokenProvider.getAccountIdFromToken(sanitizedToken);
         String email = jwtTokenProvider.getEmailFromToken(sanitizedToken);
 
-        tenantPasswordResetSupport.assertResetTokenClaims(tenantSchema, accountId, email);
+        tenantPasswordResetHelper.assertResetTokenClaims(tenantSchema, accountId, email);
 
         tenantPasswordResetAuditService.recordPasswordResetCompletedAttempt(
                 email,

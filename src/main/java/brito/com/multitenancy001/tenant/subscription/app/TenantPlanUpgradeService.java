@@ -39,7 +39,7 @@ public class TenantPlanUpgradeService {
     private final TenantToPublicBridgeExecutor tenantToPublicBridgeExecutor;
     private final ControlPlanePaymentFacade controlPlanePaymentService;
     private final AppClock appClock;
-    private final TenantPlanUpgradeSupport tenantPlanUpgradeSupport;
+    private final TenantPlanUpgradeHelper tenantPlanUpgradeHelper;
 
     /**
      * Processa upgrade via billing do control plane usando bridge explícita.
@@ -66,7 +66,7 @@ public class TenantPlanUpgradeService {
             String currencyCode,
             String reason
     ) {
-        tenantPlanUpgradeSupport.validateUpgradeInputs(
+        tenantPlanUpgradeHelper.validateUpgradeInputs(
                 account,
                 preview,
                 billingCycle,
@@ -76,8 +76,8 @@ public class TenantPlanUpgradeService {
         );
 
         Instant effectiveFrom = appClock.instant();
-        Instant coverageEndDate = tenantPlanUpgradeSupport.resolveCoverageEndDate(effectiveFrom, billingCycle);
-        String idempotencyKey = tenantPlanUpgradeSupport.buildUpgradeIdempotencyKey(
+        Instant coverageEndDate = tenantPlanUpgradeHelper.resolveCoverageEndDate(effectiveFrom, billingCycle);
+        String idempotencyKey = tenantPlanUpgradeHelper.buildUpgradeIdempotencyKey(
                 account.getId(),
                 account.getSubscriptionPlan(),
                 preview.targetPlan(),
@@ -105,12 +105,12 @@ public class TenantPlanUpgradeService {
                                 amount,
                                 paymentMethod,
                                 paymentGateway,
-                                tenantPlanUpgradeSupport.buildDescription(account, preview.targetPlan(), reason),
+                                tenantPlanUpgradeHelper.buildDescription(account, preview.targetPlan(), reason),
                                 preview.targetPlan(),
                                 billingCycle,
                                 PaymentPurpose.PLAN_UPGRADE,
                                 planPriceSnapshot,
-                                tenantPlanUpgradeSupport.normalizeCurrency(currencyCode),
+                                tenantPlanUpgradeHelper.normalizeCurrency(currencyCode),
                                 effectiveFrom,
                                 coverageEndDate,
                                 idempotencyKey

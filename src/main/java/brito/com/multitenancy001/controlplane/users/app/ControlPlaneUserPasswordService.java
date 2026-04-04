@@ -39,7 +39,7 @@ public class ControlPlaneUserPasswordService {
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
     private final PasswordEncoder passwordEncoder;
     private final AppClock appClock;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
 
     /**
      * Reseta senha de um usuário do Control Plane por ação administrativa.
@@ -54,7 +54,7 @@ public class ControlPlaneUserPasswordService {
         log.info("resetControlPlaneUserPassword INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -82,21 +82,21 @@ public class ControlPlaneUserPasswordService {
                 );
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "admin_reset"
             );
 
-            controlPlaneUserSupport.auditAttemptSuccessFail(
+            controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
                     actor,
                     target,
@@ -126,7 +126,7 @@ public class ControlPlaneUserPasswordService {
         log.info("changeMyPassword INICIANDO");
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (controlPlaneChangeMyPasswordRequest == null) {
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
@@ -154,7 +154,7 @@ public class ControlPlaneUserPasswordService {
             Long currentAccountId = controlPlaneRequestIdentityService.getCurrentAccountId();
             Long currentUserId = controlPlaneRequestIdentityService.getCurrentUserId();
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             if (currentAccountId == null
                     || currentUserId == null
                     || !controlPlaneAccount.getId().equals(currentAccountId)) {
@@ -193,12 +193,12 @@ public class ControlPlaneUserPasswordService {
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "self_change"
             );
 
-            controlPlaneUserSupport.auditAttemptSuccessFail(
+            controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.PASSWORD_CHANGED,
                     actor,
                     target,

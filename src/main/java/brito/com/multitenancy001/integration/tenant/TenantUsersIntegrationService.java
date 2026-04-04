@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.contracts.UserSummaryData;
 import brito.com.multitenancy001.tenant.users.app.TenantUserAdminTxService;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantUsersIntegrationService {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
     private final TenantUserAdminTxService tenantUserAdminTxService;
 
     public int suspendAllUsersByAccount(String tenantSchema, Long accountId) {

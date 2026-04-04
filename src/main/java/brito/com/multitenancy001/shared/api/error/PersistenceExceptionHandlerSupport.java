@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support especializado em erros de persistência e constraints.
+ * Componente especializado em erros de persistência e constraints.
  *
  * <p>Responsabilidades:</p>
  * <ul>

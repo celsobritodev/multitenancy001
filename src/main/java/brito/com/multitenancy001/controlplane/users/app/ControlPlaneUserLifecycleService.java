@@ -35,7 +35,7 @@ public class ControlPlaneUserLifecycleService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
     private final ControlPlaneUserIdentitySyncService controlPlaneUserIdentitySyncService;
 
     /**
@@ -48,26 +48,26 @@ public class ControlPlaneUserLifecycleService {
         log.info("restoreControlPlaneUser INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
-            ControlPlaneUser user = controlPlaneUserSupport.loadUserInControlPlane(userId, controlPlaneAccount.getId());
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
+            ControlPlaneUser user = controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "soft_restore"
             );
 
-            ControlPlaneUserDetailsResponse response = controlPlaneUserSupport.auditAttemptSuccessFail(
+            ControlPlaneUserDetailsResponse response = controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SOFT_RESTORED,
                     actor,
                     target,
@@ -85,7 +85,7 @@ public class ControlPlaneUserLifecycleService {
                                 "restore"
                         );
 
-                        return controlPlaneUserSupport.mapToDetailsResponse(saved);
+                        return controlPlaneUserInternalFacade.mapToDetailsResponse(saved);
                     }
             );
 
@@ -103,29 +103,29 @@ public class ControlPlaneUserLifecycleService {
         log.info("softDeleteControlPlaneUser INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             final Long deletedUserId = user.getId();
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "soft_delete"
             );
 
-            controlPlaneUserSupport.auditAttemptSuccessFail(
+            controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SOFT_DELETED,
                     actor,
                     target,
@@ -164,22 +164,22 @@ public class ControlPlaneUserLifecycleService {
         log.info("suspendControlPlaneUserByAdmin INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", controlPlaneUserSuspendRequest == null ? null : controlPlaneUserSuspendRequest.reason(),
                     "by", "admin",
@@ -189,7 +189,7 @@ public class ControlPlaneUserLifecycleService {
 
             Map<String, Object> success = new LinkedHashMap<>(attempt);
 
-            controlPlaneUserSupport.auditAttemptSuccessFail(
+            controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_SUSPENDED,
                     actor,
                     target,
@@ -226,22 +226,22 @@ public class ControlPlaneUserLifecycleService {
         log.info("restoreControlPlaneUserByAdmin INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", controlPlaneUserSuspendRequest == null ? null : controlPlaneUserSuspendRequest.reason(),
                     "by", "admin",
@@ -251,7 +251,7 @@ public class ControlPlaneUserLifecycleService {
 
             Map<String, Object> success = new LinkedHashMap<>(attempt);
 
-            controlPlaneUserSupport.auditAttemptSuccessFail(
+            controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_RESTORED,
                     actor,
                     target,

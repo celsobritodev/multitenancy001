@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support especializado em falhas de autenticação e autorização.
+ * Componente especializado em falhas de autenticação e autorização.
  *
  * <p>Responsabilidades:</p>
  * <ul>

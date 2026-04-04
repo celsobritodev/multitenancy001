@@ -20,7 +20,7 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
  * </ul>
  */
 @Component
-public class ControlPlaneAccountAdminQuerySupport {
+public class ControlPlaneAccountAdminQueryHelper {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;

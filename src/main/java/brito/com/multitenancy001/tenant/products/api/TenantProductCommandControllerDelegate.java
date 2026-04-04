@@ -37,7 +37,7 @@ public class TenantProductCommandControllerDelegate {
 
     private final ProductApiMapper productApiMapper;
     private final TenantProductService tenantProductService;
-    private final TenantProductControllerSupport support;
+    private final TenantProductControllerHelper support;
 
     /**
      * Alterna o status ativo/inativo do produto.

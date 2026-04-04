@@ -40,7 +40,7 @@ public class TenantLoginConfirmCommandService {
     private final TenantLoginSelectionResolver tenantLoginSelectionResolver;
     private final TenantAuthMechanics tenantAuthMechanics;
     private final TenantLoginConfirmAuditService tenantLoginConfirmAuditService;
-    private final TenantLoginConfirmSupport tenantLoginConfirmSupport;
+    private final TenantLoginChallengeIdParser tenantLoginChallengeIdParser;
 
     /**
      * Confirma login de tenant usando challenge e seleção de conta.
@@ -57,7 +57,7 @@ public class TenantLoginConfirmCommandService {
             throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório");
         }
 
-        final UUID challengeId = tenantLoginConfirmSupport.parseChallengeId(tenantLoginConfirmCommand.challengeId());
+        final UUID challengeId = tenantLoginChallengeIdParser.parseChallengeId(tenantLoginConfirmCommand.challengeId());
 
         TenantLoginChallenge tenantLoginChallenge = tenantLoginChallengeService.requireValid(challengeId);
         final String email = tenantLoginChallenge.email();

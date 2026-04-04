@@ -36,7 +36,7 @@ public class ControlPlaneAccountPlanUpgradeService {
 
     private final ControlPlanePaymentFacade controlPlanePaymentService;
     private final AppClock appClock;
-    private final ControlPlaneAccountPlanUpgradeSupport controlPlaneAccountPlanUpgradeSupport;
+    private final ControlPlaneAccountPlanUpgradeNormalizer controlPlaneAccountPlanUpgradeNormalizer;
 
     /**
      * Processa upgrade via billing binding.
@@ -63,7 +63,7 @@ public class ControlPlaneAccountPlanUpgradeService {
             String currencyCode,
             String reason
     ) {
-        controlPlaneAccountPlanUpgradeSupport.validateUpgradeInputs(
+        controlPlaneAccountPlanUpgradeNormalizer.validateUpgradeInputs(
                 account,
                 preview,
                 billingCycle,
@@ -73,11 +73,11 @@ public class ControlPlaneAccountPlanUpgradeService {
         );
 
         Instant effectiveFrom = appClock.instant();
-        Instant coverageEndDate = controlPlaneAccountPlanUpgradeSupport.resolveCoverageEndDate(
+        Instant coverageEndDate = controlPlaneAccountPlanUpgradeNormalizer.resolveCoverageEndDate(
                 effectiveFrom,
                 billingCycle
         );
-        String idempotencyKey = controlPlaneAccountPlanUpgradeSupport.buildUpgradeIdempotencyKey(
+        String idempotencyKey = controlPlaneAccountPlanUpgradeNormalizer.buildUpgradeIdempotencyKey(
                 account.getId(),
                 account.getSubscriptionPlan(),
                 preview.targetPlan(),
@@ -105,7 +105,7 @@ public class ControlPlaneAccountPlanUpgradeService {
                         amount,
                         paymentMethod,
                         paymentGateway,
-                        controlPlaneAccountPlanUpgradeSupport.buildUpgradeDescription(
+                        controlPlaneAccountPlanUpgradeNormalizer.buildUpgradeDescription(
                                 account,
                                 preview.targetPlan(),
                                 reason
@@ -114,7 +114,7 @@ public class ControlPlaneAccountPlanUpgradeService {
                         billingCycle,
                         PaymentPurpose.PLAN_UPGRADE,
                         planPriceSnapshot,
-                        controlPlaneAccountPlanUpgradeSupport.normalizeCurrency(currencyCode),
+                        controlPlaneAccountPlanUpgradeNormalizer.normalizeCurrency(currencyCode),
                         effectiveFrom,
                         coverageEndDate,
                         idempotencyKey

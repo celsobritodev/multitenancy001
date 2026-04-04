@@ -3,7 +3,7 @@ package brito.com.multitenancy001.integration.tenant.subscription;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.integration.tenant.dto.TenantUsageSnapshot;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -35,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TenantSubscriptionUsageIntegrationService {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
     private final TenantUsageMeasurementService tenantUsageMeasurementService;
 
     /**

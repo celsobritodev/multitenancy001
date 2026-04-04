@@ -32,7 +32,7 @@ import java.math.BigDecimal;
 public class TenantInventoryAdjustmentService {
 
     private final TenantInventoryRepository inventoryRepository;
-    private final TenantInventorySupport tenantInventorySupport;
+    private final TenantInventoryHelper tenantInventoryHelper;
     private final AppClock clock;
 
     /**
@@ -67,7 +67,7 @@ public class TenantInventoryAdjustmentService {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "movementType is required", 400);
         }
 
-        tenantInventorySupport.validateProductExists(command.getProductId());
+        tenantInventoryHelper.validateProductExists(command.getProductId());
 
         log.info(
                 "INVENTORY_ADJUST_START | productId={} | quantity={} | movementType={} | referenceType={} | referenceId={} | notes={}",
@@ -80,10 +80,10 @@ public class TenantInventoryAdjustmentService {
         );
 
         InventoryItem item = inventoryRepository.findWithLockByProductId(command.getProductId())
-                .orElseGet(() -> tenantInventorySupport.createInventory(command.getProductId()));
+                .orElseGet(() -> tenantInventoryHelper.createInventory(command.getProductId()));
 
-        BigDecimal currentAvailable = tenantInventorySupport.safe(item.getQuantityAvailable());
-        BigDecimal currentReserved = tenantInventorySupport.safe(item.getQuantityReserved());
+        BigDecimal currentAvailable = tenantInventoryHelper.safe(item.getQuantityAvailable());
+        BigDecimal currentReserved = tenantInventoryHelper.safe(item.getQuantityReserved());
 
         log.debug(
                 "INVENTORY_ADJUST_LOCKED | inventoryId={} | productId={} | availableBefore={} | reservedBefore={} | movementType={} | delta={}",
@@ -95,7 +95,7 @@ public class TenantInventoryAdjustmentService {
                 command.getQuantity()
         );
 
-        tenantInventorySupport.validateStockRules(item, command);
+        tenantInventoryHelper.validateStockRules(item, command);
 
         switch (command.getMovementType()) {
             case INBOUND, RETURN, ADJUSTMENT ->
@@ -126,7 +126,7 @@ public class TenantInventoryAdjustmentService {
 
         InventoryItem savedItem = inventoryRepository.save(item);
 
-        tenantInventorySupport.registerMovement(command);
+        tenantInventoryHelper.registerMovement(command);
 
         log.info(
                 "INVENTORY_ADJUST_FINISH | productId={} | inventoryId={} | availableBefore={} | reservedBefore={} | availableAfter={} | reservedAfter={} | movementType={} | delta={}",

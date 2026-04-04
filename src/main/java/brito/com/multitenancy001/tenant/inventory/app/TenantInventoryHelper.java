@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support compartilhado do módulo de inventory.
+ * Helper compartilhado do módulo de inventory.
  *
  * <p>Responsabilidades:</p>
  * <ul>
@@ -34,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TenantInventorySupport {
+public class TenantInventoryHelper {
 
     private final TenantInventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;

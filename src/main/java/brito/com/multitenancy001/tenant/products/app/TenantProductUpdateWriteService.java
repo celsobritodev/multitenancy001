@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductUpdateWriteService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantProductWriteSupport support;
+    private final TenantProductWriteHelper support;
 
     /**
      * Atualiza produto existente.

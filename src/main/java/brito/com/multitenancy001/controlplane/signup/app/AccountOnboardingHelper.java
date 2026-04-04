@@ -20,7 +20,7 @@ import brito.com.multitenancy001.controlplane.accounts.domain.TaxIdType;
  * </ul>
  */
 @Component
-public class AccountOnboardingSupport {
+public class AccountOnboardingHelper {
 
     /**
      * Dados normalizados do signup.

@@ -21,7 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PublicAuditDispatcher {
+public class PublicAuditEventDispatcher {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AfterTransactionCompletion afterTransactionCompletion;

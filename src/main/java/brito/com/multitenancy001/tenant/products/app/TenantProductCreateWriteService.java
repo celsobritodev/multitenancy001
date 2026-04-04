@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductCreateWriteService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantProductWriteSupport support;
+    private final TenantProductWriteHelper support;
 
     /**
      * Executa a criação efetiva do produto dentro de transação tenant.

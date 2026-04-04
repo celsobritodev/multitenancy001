@@ -28,14 +28,14 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ControlPlaneAccountPlanChangeOrchestrationService {
+public class ControlPlaneAccountPlanChangeCommandService {
 
     private static final String CHANGE_SOURCE = "control_plane_admin";
 
     private final ControlPlaneAccountPlanChangePreviewService controlPlaneAccountPlanChangePreviewService;
     private final ControlPlaneAccountPlanDowngradeService controlPlaneAccountPlanDowngradeService;
     private final ControlPlaneAccountPlanUpgradeService controlPlaneAccountPlanUpgradeService;
-    private final ControlPlaneAccountPlanUpgradeSupport controlPlaneAccountPlanUpgradeSupport;
+    private final ControlPlaneAccountPlanUpgradeNormalizer controlPlaneAccountPlanUpgradeNormalizer;
 
     /**
      * Executa o fluxo completo de mudança de plano.
@@ -74,7 +74,7 @@ public class ControlPlaneAccountPlanChangeOrchestrationService {
                 preview.targetPlan(),
                 preview.changeType(),
                 preview.eligible(),
-                controlPlaneAccountPlanUpgradeSupport.normalize(requestedBy)
+                controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy)
         );
 
         if (preview.changeType() == PlanChangeType.NO_CHANGE) {
@@ -83,7 +83,7 @@ public class ControlPlaneAccountPlanChangeOrchestrationService {
                     accountId,
                     preview.currentPlan(),
                     preview.targetPlan(),
-                    controlPlaneAccountPlanUpgradeSupport.normalize(requestedBy)
+                    controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy)
             );
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "A conta já está no plano informado", 409);
         }
@@ -91,8 +91,8 @@ public class ControlPlaneAccountPlanChangeOrchestrationService {
         ChangeAccountPlanCommand command = new ChangeAccountPlanCommand(
                 accountId,
                 targetPlan,
-                controlPlaneAccountPlanUpgradeSupport.normalize(reason),
-                controlPlaneAccountPlanUpgradeSupport.normalize(requestedBy),
+                controlPlaneAccountPlanUpgradeNormalizer.normalize(reason),
+                controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy),
                 CHANGE_SOURCE
         );
 
@@ -109,7 +109,7 @@ public class ControlPlaneAccountPlanChangeOrchestrationService {
                 amount,
                 planPriceSnapshot,
                 currencyCode,
-                controlPlaneAccountPlanUpgradeSupport.normalize(reason)
+                controlPlaneAccountPlanUpgradeNormalizer.normalize(reason)
         );
     }
 }

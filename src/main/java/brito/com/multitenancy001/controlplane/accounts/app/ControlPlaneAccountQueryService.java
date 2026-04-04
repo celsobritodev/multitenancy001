@@ -41,7 +41,7 @@ public class ControlPlaneAccountQueryService {
     private final AccountRepository accountRepository;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AppClock appClock;
-    private final ControlPlaneAccountAdminQuerySupport controlPlaneAccountAdminQuerySupport;
+    private final ControlPlaneAccountAdminQueryHelper controlPlaneAccountAdminQueryHelper;
 
     /**
      * Lista contas não deletadas.
@@ -123,7 +123,7 @@ public class ControlPlaneAccountQueryService {
             throw new ApiException(ApiErrorCode.STATUS_REQUIRED, "status é obrigatório", 400);
         }
 
-        Pageable normalizedPageable = controlPlaneAccountAdminQuerySupport.normalizePageable(pageable);
+        Pageable normalizedPageable = controlPlaneAccountAdminQueryHelper.normalizePageable(pageable);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByStatusAndDeletedFalse(status, normalizedPageable)
@@ -139,9 +139,9 @@ public class ControlPlaneAccountQueryService {
      * @return página de contas
      */
     public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
-        controlPlaneAccountAdminQuerySupport.assertValidCreatedBetweenRange(start, end);
+        controlPlaneAccountAdminQueryHelper.assertValidCreatedBetweenRange(start, end);
 
-        Pageable normalizedPageable = controlPlaneAccountAdminQuerySupport.normalizePageable(pageable);
+        Pageable normalizedPageable = controlPlaneAccountAdminQueryHelper.normalizePageable(pageable);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findAccountsCreatedBetween(start, end, normalizedPageable)
@@ -161,7 +161,7 @@ public class ControlPlaneAccountQueryService {
         }
 
         String normalized = term.trim();
-        Pageable normalizedPageable = controlPlaneAccountAdminQuerySupport.normalizePageable(pageable);
+        Pageable normalizedPageable = controlPlaneAccountAdminQueryHelper.normalizePageable(pageable);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.searchByDisplayName(normalized, normalizedPageable)

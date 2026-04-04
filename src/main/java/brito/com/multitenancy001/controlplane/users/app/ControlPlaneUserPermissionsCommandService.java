@@ -33,7 +33,7 @@ public class ControlPlaneUserPermissionsCommandService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final ControlPlaneUserExplicitPermissionsService controlPlaneUserExplicitPermissionsService;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
 
     /**
      * Atualiza permissões explícitas de usuário.
@@ -49,7 +49,7 @@ public class ControlPlaneUserPermissionsCommandService {
         log.info("updateControlPlaneUserPermissions INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -59,11 +59,11 @@ public class ControlPlaneUserPermissionsCommandService {
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             int permissionCount = controlPlaneUserPermissionsUpdateRequest.permissions() == null
                     ? 0
@@ -72,13 +72,13 @@ public class ControlPlaneUserPermissionsCommandService {
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "permissions_endpoint",
                     "permissionsCount", permissionCount
             );
 
-            ControlPlaneUserDetailsResponse response = controlPlaneUserSupport.auditAttemptSuccessFail(
+            ControlPlaneUserDetailsResponse response = controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                     actor,
                     target,
@@ -91,7 +91,7 @@ public class ControlPlaneUserPermissionsCommandService {
                                 userId,
                                 controlPlaneUserPermissionsUpdateRequest.permissions()
                         );
-                        return controlPlaneUserSupport.mapToDetailsResponse(user);
+                        return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
                     }
             );
 

@@ -15,7 +15,7 @@ import brito.com.multitenancy001.shared.api.dto.billing.PaymentResponse;
  * </ul>
  */
 @Component
-public class ControlPlanePaymentResponseMapper {
+public class ControlPlanePaymentApiResponseMapper {
 
     /**
      * Converte pagamento de domínio para DTO de resposta.

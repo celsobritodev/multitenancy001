@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.PublicTxExecutor;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 
@@ -40,7 +40,7 @@ public class PublicSchemaUnitOfWork {
     private static final Logger log = LoggerFactory.getLogger(PublicSchemaUnitOfWork.class);
 
     private final PublicSchemaExecutor publicExecutor;
-    private final TxExecutor transactionExecutor;
+    private final PublicTxExecutor transactionExecutor;
 
     // =========================================================
     // REQUIRED

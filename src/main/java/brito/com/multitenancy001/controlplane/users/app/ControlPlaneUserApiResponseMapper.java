@@ -11,7 +11,7 @@ import brito.com.multitenancy001.shared.security.SystemRoleName;
  * Componente responsável pelo mapeamento de respostas do módulo de usuários do Control Plane.
  */
 @Component
-public class ControlPlaneUserResponseMapper {
+public class ControlPlaneUserApiResponseMapper {
 
     /**
      * Mapeia usuário do domínio para DTO de detalhes.

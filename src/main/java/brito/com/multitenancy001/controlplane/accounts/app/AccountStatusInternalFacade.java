@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class AccountStatusSupport {
+public class AccountStatusInternalFacade {
 
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
 

@@ -23,7 +23,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class TenantPasswordResetSupport {
+public class TenantPasswordResetHelper {
 
     private final PublicAccountFinder accountResolver;
 

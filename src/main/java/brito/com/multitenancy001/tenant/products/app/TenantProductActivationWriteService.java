@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductActivationWriteService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantProductWriteSupport support;
+    private final TenantProductWriteHelper support;
 
     /**
      * Alterna o status ativo/inativo do produto.

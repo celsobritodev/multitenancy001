@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>{@link ControlPlanePaymentLifecycleService}</li>
  *   <li>{@link ControlPlanePaymentRequestValidator}</li>
  *   <li>{@link ControlPlanePaymentUpgradeEnqueueService}</li>
- *   <li>{@link ControlPlanePaymentResponseMapper}</li>
+ *   <li>{@link ControlPlanePaymentApiResponseMapper}</li>
  * </ul>
  */
 @Service
@@ -47,7 +47,7 @@ public class ControlPlanePaymentCommandService {
     private final ControlPlanePaymentLifecycleService controlPlanePaymentLifecycleService;
     private final ControlPlanePaymentRequestValidator controlPlanePaymentRequestValidator;
     private final ControlPlanePaymentUpgradeEnqueueService controlPlanePaymentUpgradeEnqueueService;
-    private final ControlPlanePaymentResponseMapper controlPlanePaymentResponseMapper;
+    private final ControlPlanePaymentApiResponseMapper controlPlanePaymentResponseMapper;
     private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
     private final ControlPlaneBillingSecurityAuditRecorder controlPlaneBillingSecurityAuditRecorder;
     private final AppClock appClock;

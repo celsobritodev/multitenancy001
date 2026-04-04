@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantSubscriptionCommandService {
 
     private final TenantRequestIdentityService requestIdentity;
-    private final TenantPlanChangeOrchestrationService orchestrationService;
+    private final TenantPlanChangeCommandService orchestrationService;
 
     public TenantPlanChangeResponse changePlan(
             SubscriptionPlan targetPlan,

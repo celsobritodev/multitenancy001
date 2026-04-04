@@ -8,7 +8,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Role;
 import org.springframework.stereotype.Component;
 
-import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
+import brito.com.multitenancy001.infrastructure.persistence.PublicTxExecutor;
 
 /**
  * Provider de execução transacional no PUBLIC schema (Control Plane).
@@ -16,11 +16,11 @@ import brito.com.multitenancy001.infrastructure.persistence.TxExecutor;
  * <p><b>Por que existe?</b></p>
  * <ul>
  *   <li>Alguns pontos do projeto preferem um provider pequeno e sem “templates por contexto”.</li>
- *   <li>Mas a regra arquitetural do projeto é: a fonte de verdade transacional é o {@link TxExecutor}.</li>
+ *   <li>Mas a regra arquitetural do projeto é: a fonte de verdade transacional é o {@link PublicTxExecutor}.</li>
  * </ul>
  *
  * <p><b>Decisão importante:</b> este provider <b>não cria</b> {@code new TransactionTemplate(...)} por chamada.
- * Ele delega para o {@link TxExecutor}, que já possui:
+ * Ele delega para o {@link PublicTxExecutor}, que já possui:
  * <ul>
  *   <li>Templates pré-configurados (REQUIRED/REQUIRES_NEW + readOnly)</li>
  *   <li>Verificação de TM (JpaTransactionManager)</li>
@@ -35,9 +35,9 @@ public class PublicTransactionTemplateProvider {
 
     private static final Logger log = LoggerFactory.getLogger(PublicTransactionTemplateProvider.class);
 
-    private final TxExecutor txExecutor;
+    private final PublicTxExecutor txExecutor;
 
-    public PublicTransactionTemplateProvider(TxExecutor txExecutor) {
+    public PublicTransactionTemplateProvider(PublicTxExecutor txExecutor) {
         this.txExecutor = txExecutor;
         log.info("✅ PublicTransactionTemplateProvider inicializado (delegando para TxExecutor)");
     }

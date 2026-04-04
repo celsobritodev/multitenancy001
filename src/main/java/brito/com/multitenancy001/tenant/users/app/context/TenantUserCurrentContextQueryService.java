@@ -1,7 +1,7 @@
 package brito.com.multitenancy001.tenant.users.app.context;
 
 import brito.com.multitenancy001.infrastructure.security.SecurityUtils;
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.context.TenantContext;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsService;
 import brito.com.multitenancy001.shared.persistence.publicschema.AccountEntitlementsSnapshot;
@@ -38,7 +38,7 @@ import java.util.List;
 public class TenantUserCurrentContextQueryService {
 
     private final TenantUserQueryService tenantUserQueryService;
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
     private final SecurityUtils securityUtils;
     private final AccountEntitlementsService accountEntitlementsService;
 

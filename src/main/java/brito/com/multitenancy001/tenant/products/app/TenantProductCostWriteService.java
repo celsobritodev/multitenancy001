@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TenantProductCostWriteService {
 
     private final TenantProductRepository tenantProductRepository;
-    private final TenantProductWriteSupport support;
+    private final TenantProductWriteHelper support;
 
     /**
      * Atualiza o custo do produto.

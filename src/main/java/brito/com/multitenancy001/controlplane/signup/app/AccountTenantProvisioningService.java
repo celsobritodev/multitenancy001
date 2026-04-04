@@ -34,7 +34,7 @@ public class AccountTenantProvisioningService {
     private final TenantProvisioningIntegrationService tenantProvisioningIntegrationService;
     private final LoginIdentityService loginIdentityService;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-    private final AccountOnboardingSupport accountOnboardingSupport;
+    private final AccountOnboardingHelper accountOnboardingHelper;
 
     /**
      * Provisiona schema tenant, owner inicial e login identity.
@@ -45,7 +45,7 @@ public class AccountTenantProvisioningService {
      */
     public UserSummaryData provisionTenantAndOwner(
             Account account,
-            AccountOnboardingSupport.SignupData signupData
+            AccountOnboardingHelper.SignupData signupData
     ) {
         String tenantSchema = account.getTenantSchema();
 
@@ -56,13 +56,13 @@ public class AccountTenantProvisioningService {
             log.info("✅ Schema provisionado e migrado | tenantSchema={}", tenantSchema);
         } catch (FlywayException ex) {
             log.error("❌ Falha na migração Flyway | tenantSchema={}", tenantSchema, ex);
-            throw accountOnboardingSupport.provisioningFailed(
+            throw accountOnboardingHelper.provisioningFailed(
                     ProvisioningFailureCode.TENANT_MIGRATION_ERROR,
                     ex
             );
         } catch (DataAccessException ex) {
             log.error("❌ Falha na criação do schema | tenantSchema={}", tenantSchema, ex);
-            throw accountOnboardingSupport.provisioningFailed(
+            throw accountOnboardingHelper.provisioningFailed(
                     ProvisioningFailureCode.SCHEMA_CREATION_ERROR,
                     ex
             );
@@ -72,7 +72,7 @@ public class AccountTenantProvisioningService {
                     : ProvisioningFailureCode.UNKNOWN;
 
             log.error("❌ Falha no provisionamento do schema | tenantSchema={}", tenantSchema, ex);
-            throw accountOnboardingSupport.provisioningFailed(code, ex);
+            throw accountOnboardingHelper.provisioningFailed(code, ex);
         }
 
         UserSummaryData tenantOwner;
@@ -92,7 +92,7 @@ public class AccountTenantProvisioningService {
             log.info("✅ Tenant owner criado | userId={} email={}", tenantOwner.id(), tenantOwner.email());
         } catch (RuntimeException ex) {
             log.error("❌ Falha na criação do tenant owner | tenantSchema={}", tenantSchema, ex);
-            throw accountOnboardingSupport.provisioningFailed(
+            throw accountOnboardingHelper.provisioningFailed(
                     ProvisioningFailureCode.TENANT_ADMIN_CREATION_ERROR,
                     ex
             );
@@ -115,7 +115,7 @@ public class AccountTenantProvisioningService {
                     signupData.loginEmail(),
                     account.getId(),
                     ex);
-            throw accountOnboardingSupport.provisioningFailed(
+            throw accountOnboardingHelper.provisioningFailed(
                     ProvisioningFailureCode.PUBLIC_PERSISTENCE_ERROR,
                     ex
             );

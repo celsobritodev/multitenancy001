@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support especializado em erros de validação, parsing e parâmetros HTTP.
+ * Componente especializado em erros de validação, parsing e parâmetros HTTP.
  *
  * <p>Responsabilidades:</p>
  * <ul>

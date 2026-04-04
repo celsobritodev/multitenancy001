@@ -1,4 +1,4 @@
-package brito.com.multitenancy001.tenant.subscription.app;
+package brito.com.multitenancy001.controlplane.accounts.app.subscription;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -6,8 +6,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanEligibilityResult;
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
@@ -18,7 +18,7 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support compartilhado do fluxo de upgrade no self-service do tenant.
+ * Helper compartilhado do fluxo de upgrade no contexto do Control Plane.
  *
  * <p>Responsabilidades:</p>
  * <ul>
@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Component
 @Slf4j
-public class TenantPlanUpgradeSupport {
+public class ControlPlaneAccountPlanUpgradeNormalizer {
 
     private static final String DEFAULT_CURRENCY = "BRL";
 
@@ -39,7 +39,7 @@ public class TenantPlanUpgradeSupport {
      * Valida os dados obrigatórios do upgrade.
      *
      * @param account conta alvo
-     * @param preview preview calculado
+     * @param preview preview já calculado
      * @param billingCycle ciclo de cobrança
      * @param paymentMethod método de pagamento
      * @param paymentGateway gateway de pagamento
@@ -55,7 +55,7 @@ public class TenantPlanUpgradeSupport {
     ) {
         if (billingCycle == null) {
             log.warn(
-                    "Upgrade tenant rejeitado: billingCycle ausente. accountId={}, targetPlan={}",
+                    "Upgrade rejeitado: billingCycle ausente. accountId={}, targetPlan={}",
                     account.getId(),
                     preview.targetPlan()
             );
@@ -64,7 +64,7 @@ public class TenantPlanUpgradeSupport {
 
         if (billingCycle == BillingCycle.ONE_TIME) {
             log.warn(
-                    "Upgrade tenant rejeitado: billingCycle ONE_TIME não é permitido. accountId={}, currentPlan={}, targetPlan={}",
+                    "Upgrade rejeitado: billingCycle ONE_TIME não é permitido. accountId={}, currentPlan={}, targetPlan={}",
                     account.getId(),
                     account.getSubscriptionPlan(),
                     preview.targetPlan()
@@ -78,7 +78,7 @@ public class TenantPlanUpgradeSupport {
 
         if (paymentMethod == null) {
             log.warn(
-                    "Upgrade tenant rejeitado: paymentMethod ausente. accountId={}, targetPlan={}, billingCycle={}",
+                    "Upgrade rejeitado: paymentMethod ausente. accountId={}, targetPlan={}, billingCycle={}",
                     account.getId(),
                     preview.targetPlan(),
                     billingCycle
@@ -88,7 +88,7 @@ public class TenantPlanUpgradeSupport {
 
         if (paymentGateway == null) {
             log.warn(
-                    "Upgrade tenant rejeitado: paymentGateway ausente. accountId={}, targetPlan={}, billingCycle={}",
+                    "Upgrade rejeitado: paymentGateway ausente. accountId={}, targetPlan={}, billingCycle={}",
                     account.getId(),
                     preview.targetPlan(),
                     billingCycle
@@ -98,7 +98,7 @@ public class TenantPlanUpgradeSupport {
 
         if (amount == null || amount.signum() <= 0) {
             log.warn(
-                    "Upgrade tenant rejeitado: amount inválido. accountId={}, targetPlan={}, billingCycle={}, amount={}",
+                    "Upgrade rejeitado: amount inválido. accountId={}, targetPlan={}, billingCycle={}, amount={}",
                     account.getId(),
                     preview.targetPlan(),
                     billingCycle,
@@ -111,12 +111,12 @@ public class TenantPlanUpgradeSupport {
     /**
      * Resolve a data de término de cobertura a partir do ciclo recorrente.
      *
-     * @param effectiveFrom início da vigência
+     * @param effectiveFrom início de vigência
      * @param billingCycle ciclo recorrente
      * @return data final da cobertura
      */
     public Instant resolveCoverageEndDate(Instant effectiveFrom, BillingCycle billingCycle) {
-        ZonedDateTime base = effectiveFrom.atZone(ZoneOffset.UTC);
+        ZonedDateTime base = ZonedDateTime.ofInstant(effectiveFrom, ZoneOffset.UTC);
 
         return switch (billingCycle) {
             case MONTHLY -> base.plusMonths(1).toInstant();
@@ -137,7 +137,7 @@ public class TenantPlanUpgradeSupport {
      * @param reason motivo opcional
      * @return descrição consolidada
      */
-    public String buildDescription(Account account, SubscriptionPlan targetPlan, String reason) {
+    public String buildUpgradeDescription(Account account, SubscriptionPlan targetPlan, String reason) {
         StringBuilder description = new StringBuilder()
                 .append("Upgrade de plano da conta ")
                 .append(account.getId())
@@ -146,15 +146,15 @@ public class TenantPlanUpgradeSupport {
                 .append(" para ")
                 .append(targetPlan);
 
-        if (reason != null) {
-            description.append(". Motivo: ").append(reason);
+        if (StringUtils.hasText(reason)) {
+            description.append(". Motivo: ").append(reason.trim());
         }
 
         return description.toString();
     }
 
     /**
-     * Gera a chave funcional de idempotência do upgrade self-service.
+     * Gera a chave funcional de idempotência do upgrade administrativo.
      *
      * @param accountId conta
      * @param currentPlan plano atual
@@ -171,7 +171,7 @@ public class TenantPlanUpgradeSupport {
             BigDecimal amount
     ) {
         return String.format(
-                "TENANT-UPGRADE:%s:%s:%s:%s:%s",
+                "CP-UPGRADE:%s:%s:%s:%s:%s",
                 accountId,
                 currentPlan != null ? currentPlan.name() : "NULL",
                 targetPlan != null ? targetPlan.name() : "NULL",
@@ -181,23 +181,25 @@ public class TenantPlanUpgradeSupport {
     }
 
     /**
-     * Normaliza string opcional.
-     *
-     * @param value valor
-     * @return valor normalizado
-     */
-    public String normalize(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    /**
      * Normaliza moeda informada.
      *
      * @param currencyCode moeda opcional
      * @return moeda normalizada
      */
     public String normalizeCurrency(String currencyCode) {
-        String normalized = normalize(currencyCode);
-        return normalized == null ? DEFAULT_CURRENCY : normalized.toUpperCase();
+        if (!StringUtils.hasText(currencyCode)) {
+            return DEFAULT_CURRENCY;
+        }
+        return currencyCode.trim().toUpperCase();
+    }
+
+    /**
+     * Normaliza string opcional.
+     *
+     * @param value valor
+     * @return valor normalizado
+     */
+    public String normalize(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 }

@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AccountOnboardingAuditService {
 
     private final AccountProvisioningAuditService accountProvisioningAuditService;
-    private final AccountOnboardingSupport accountOnboardingSupport;
+    private final AccountOnboardingHelper accountOnboardingHelper;
     private final JsonDetailsMapper jsonDetailsMapper;
 
     /**
@@ -36,13 +36,13 @@ public class AccountOnboardingAuditService {
      */
     public void recordStarted(
             Account account,
-            AccountOnboardingSupport.SignupData signupData
+            AccountOnboardingHelper.SignupData signupData
     ) {
         accountProvisioningAuditService.started(
                 account.getId(),
                 "Provisioning started",
                 jsonDetailsMapper.toJson(
-                        accountOnboardingSupport.buildDetails(
+                        accountOnboardingHelper.buildDetails(
                                 account,
                                 signupData,
                                 "STARTED",
@@ -65,13 +65,13 @@ public class AccountOnboardingAuditService {
      */
     public void recordSuccess(
             Account account,
-            AccountOnboardingSupport.SignupData signupData
+            AccountOnboardingHelper.SignupData signupData
     ) {
         accountProvisioningAuditService.success(
                 account.getId(),
                 "Provisioning success",
                 jsonDetailsMapper.toJson(
-                        accountOnboardingSupport.buildDetails(
+                        accountOnboardingHelper.buildDetails(
                                 account,
                                 signupData,
                                 "SUCCESS",
@@ -96,16 +96,16 @@ public class AccountOnboardingAuditService {
      */
     public void recordFailure(
             Account account,
-            AccountOnboardingSupport.SignupData signupData,
+            AccountOnboardingHelper.SignupData signupData,
             ProvisioningFailureCode code,
             Throwable cause
     ) {
         accountProvisioningAuditService.failed(
                 account.getId(),
                 code,
-                accountOnboardingSupport.safeMessage(cause),
+                accountOnboardingHelper.safeMessage(cause),
                 jsonDetailsMapper.toJson(
-                        accountOnboardingSupport.buildDetails(
+                        accountOnboardingHelper.buildDetails(
                                 account,
                                 signupData,
                                 "FAILED",

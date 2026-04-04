@@ -31,7 +31,7 @@ public class TenantSaleRestoreCommandService {
     private final SaleRepository saleRepository;
     private final SaleApiMapper mapper;
     private final AppClock appClock;
-    private final TenantSaleMutationSupport mutationSupport;
+    private final TenantSaleMutationHelper tenantSaleMutationHelper;
 
     /**
      * Restaura uma venda deletada logicamente.
@@ -68,8 +68,8 @@ public class TenantSaleRestoreCommandService {
                     sale.getId(),
                     sale.getStatus(),
                     sale.isDeleted(),
-                    mutationSupport.shouldAffectInventory(sale.getStatus()),
-                    mutationSupport.describeItems(sale.getItems())
+                    tenantSaleMutationHelper.shouldAffectInventory(sale.getStatus()),
+                    tenantSaleMutationHelper.describeItems(sale.getItems())
             );
 
             sale.restore();
@@ -81,17 +81,17 @@ public class TenantSaleRestoreCommandService {
                     saved.getId(),
                     saved.getStatus(),
                     saved.isDeleted(),
-                    mutationSupport.describeActiveItems(saved.getItems())
+                    tenantSaleMutationHelper.describeActiveItems(saved.getItems())
             );
 
-            mutationSupport.applyInventoryForSaleWrite(saved);
+            tenantSaleMutationHelper.applyInventoryForSaleWrite(saved);
 
             log.info(
                     "SALE_RESTORE_SUCCESS | saleId={} | totalAmount={} | status={} | affectInventory={}",
                     saved.getId(),
                     saved.getTotalAmount(),
                     saved.getStatus(),
-                    mutationSupport.shouldAffectInventory(saved.getStatus())
+                    tenantSaleMutationHelper.shouldAffectInventory(saved.getStatus())
             );
 
             return mapper.toResponse(saved);

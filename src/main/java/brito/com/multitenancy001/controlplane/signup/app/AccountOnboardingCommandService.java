@@ -32,7 +32,7 @@ public class AccountOnboardingCommandService {
     private final AccountProvisioningLifecycleService accountProvisioningLifecycleService;
     private final AccountTenantProvisioningService accountTenantProvisioningService;
     private final AccountOnboardingAuditService accountOnboardingAuditService;
-    private final AccountOnboardingSupport accountOnboardingSupport;
+    private final AccountOnboardingHelper accountOnboardingHelper;
 
     /**
      * Executa o fluxo de criação e provisionamento de uma Account.
@@ -41,7 +41,7 @@ public class AccountOnboardingCommandService {
      * @return resultado consolidado do onboarding
      */
     public SignupResult createAccount(SignupCommand signupCommand) {
-        AccountOnboardingSupport.SignupData signupData =
+        AccountOnboardingHelper.SignupData signupData =
                 accountOnboardingValidator.validateAndNormalize(signupCommand);
 
         log.info("🚀 Tentando criar conta | loginEmail={} | displayName={}",
@@ -87,9 +87,9 @@ public class AccountOnboardingCommandService {
 
             return new SignupResult(finalizedAccount, tenantAdminResult);
 
-        } catch (AccountOnboardingSupport.ProvisioningFailedException ex) {
+        } catch (AccountOnboardingHelper.ProvisioningFailedException ex) {
             ProvisioningFailureCode code = ex.code();
-            String message = accountOnboardingSupport.safeMessage(ex.getCause());
+            String message = accountOnboardingHelper.safeMessage(ex.getCause());
 
             log.error("❌ Falha no provisioning | accountId={} | tenantSchema={} | code={} | message={}",
                     account.getId(),

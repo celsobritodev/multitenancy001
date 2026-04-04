@@ -36,7 +36,7 @@ public class AccountStatusCommandService {
     private final AccountStatusTransitionService accountStatusLifecycleService;
     private final AccountStatusTenantSideEffectService accountStatusTenantSideEffectService;
     private final AccountStatusAuditService accountStatusAuditService;
-    private final AccountStatusSupport accountStatusSupport;
+    private final AccountStatusInternalFacade accountStatusInternalFacade;
     private final AppClock appClock;
 
     /**
@@ -64,8 +64,8 @@ public class AccountStatusCommandService {
 
         Instant now = appClock.instant();
 
-        Long actorUserId = accountStatusSupport.getCurrentActorUserIdOrNull();
-        String actorEmail = accountStatusSupport.getCurrentActorEmailOrNull();
+        Long actorUserId = accountStatusInternalFacade.getCurrentActorUserIdOrNull();
+        String actorEmail = accountStatusInternalFacade.getCurrentActorEmailOrNull();
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("scope", "controlplane.accounts");

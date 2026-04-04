@@ -38,7 +38,7 @@ public class ControlPlaneUserUpdateCommandService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final ControlPlaneUserRepository controlPlaneUserRepository;
     private final ControlPlaneUserExplicitPermissionsService controlPlaneUserExplicitPermissionsService;
-    private final ControlPlaneUserInternalFacade controlPlaneUserSupport;
+    private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
     private final ControlPlaneUserIdentitySyncService controlPlaneUserIdentitySyncService;
 
     /**
@@ -55,7 +55,7 @@ public class ControlPlaneUserUpdateCommandService {
         log.info("updateControlPlaneUser INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserSupport.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
             if (userId == null) {
                 throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
@@ -65,11 +65,11 @@ public class ControlPlaneUserUpdateCommandService {
                 throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
             }
 
-            Account controlPlaneAccount = controlPlaneUserSupport.getControlPlaneAccount();
+            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
-                    controlPlaneUserSupport.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
 
-            controlPlaneUserSupport.assertMutableUser(user);
+            controlPlaneUserInternalFacade.assertMutableUser(user);
 
             String beforeName = user.getName();
             String beforeEmail = user.getEmail();
@@ -78,7 +78,7 @@ public class ControlPlaneUserUpdateCommandService {
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
 
-            Map<String, Object> attempt = controlPlaneUserSupport.m(
+            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "update",
                     "hasName", controlPlaneUserUpdateRequest.name() != null,
@@ -91,7 +91,7 @@ public class ControlPlaneUserUpdateCommandService {
             success.put("scope", ControlPlaneUserInternalFacade.SCOPE);
             success.put("reason", "update");
 
-            return controlPlaneUserSupport.auditAttemptSuccessFail(
+            return controlPlaneUserInternalFacade.auditAttemptSuccessFail(
                     SecurityAuditActionType.USER_UPDATED,
                     actor,
                     target,
@@ -106,7 +106,7 @@ public class ControlPlaneUserUpdateCommandService {
 
                         if (controlPlaneUserUpdateRequest.name() != null) {
                             String newName =
-                                    controlPlaneUserSupport.normalizeNameOrThrow(controlPlaneUserUpdateRequest.name());
+                                    controlPlaneUserInternalFacade.normalizeNameOrThrow(controlPlaneUserUpdateRequest.name());
 
                             if (user.getName() == null || !user.getName().equals(newName)) {
                                 user.rename(newName);
@@ -117,9 +117,9 @@ public class ControlPlaneUserUpdateCommandService {
 
                         if (controlPlaneUserUpdateRequest.email() != null) {
                             String newEmail =
-                                    controlPlaneUserSupport.normalizeEmailOrThrow(controlPlaneUserUpdateRequest.email());
+                                    controlPlaneUserInternalFacade.normalizeEmailOrThrow(controlPlaneUserUpdateRequest.email());
 
-                            controlPlaneUserSupport.validateNotReservedEmail(newEmail);
+                            controlPlaneUserInternalFacade.validateNotReservedEmail(newEmail);
 
                             if (beforeEmail == null || !beforeEmail.equals(newEmail)) {
                                 boolean emailExists = controlPlaneUserRepository
@@ -166,7 +166,7 @@ public class ControlPlaneUserUpdateCommandService {
                                     controlPlaneUserUpdateRequest.permissions()
                             );
 
-                            controlPlaneUserSupport.recordAudit(
+                            controlPlaneUserInternalFacade.recordAudit(
                                     SecurityAuditActionType.PERMISSIONS_CHANGED,
                                     AuditOutcome.SUCCESS,
                                     actor,
@@ -174,7 +174,7 @@ public class ControlPlaneUserUpdateCommandService {
                                     user.getId(),
                                     controlPlaneAccount.getId(),
                                     null,
-                                    controlPlaneUserSupport.m(
+                                    controlPlaneUserInternalFacade.m(
                                             "scope", ControlPlaneUserInternalFacade.SCOPE,
                                             "reason", "update",
                                             "permissionsCount",
@@ -195,7 +195,7 @@ public class ControlPlaneUserUpdateCommandService {
                         }
 
                         if (roleChanged) {
-                            controlPlaneUserSupport.recordAudit(
+                            controlPlaneUserInternalFacade.recordAudit(
                                     SecurityAuditActionType.ROLE_CHANGED,
                                     AuditOutcome.SUCCESS,
                                     actor,
@@ -203,7 +203,7 @@ public class ControlPlaneUserUpdateCommandService {
                                     user.getId(),
                                     controlPlaneAccount.getId(),
                                     null,
-                                    controlPlaneUserSupport.m(
+                                    controlPlaneUserInternalFacade.m(
                                             "scope", ControlPlaneUserInternalFacade.SCOPE,
                                             "from", beforeRole == null ? null : beforeRole.name(),
                                             "to", user.getRole() == null ? null : user.getRole().name()
@@ -215,7 +215,7 @@ public class ControlPlaneUserUpdateCommandService {
                         success.put("changes", changes);
 
                         log.info("✅ updateControlPlaneUser CONCLUÍDO | userId={}", userId);
-                        return controlPlaneUserSupport.mapToDetailsResponse(user);
+                        return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
                     }
             );
         });

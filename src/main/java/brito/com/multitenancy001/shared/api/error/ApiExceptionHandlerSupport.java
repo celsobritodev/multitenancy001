@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Support especializado em exceções funcionais e fallback genérico.
+ * Componente especializado em exceções funcionais e fallback genérico.
  *
  * <p>Responsabilidades:</p>
  * <ul>

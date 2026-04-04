@@ -49,10 +49,10 @@ public class ControlPlaneUserInternalFacade {
      */
     public static final String SCOPE = "CONTROL_PLANE";
 
-    private final ControlPlaneUserAccountSupport controlPlaneUserAccountSupport;
+    private final ControlPlaneUserAccountResolver controlPlaneUserAccountResolver;
     private final ControlPlaneUserValidationService controlPlaneUserValidationService;
     private final ControlPlaneUserLoader controlPlaneUserLoader;
-    private final ControlPlaneUserResponseMapper controlPlaneUserResponseMapper;
+    private final ControlPlaneUserApiResponseMapper controlPlaneUserResponseMapper;
     private final ControlPlaneUserAuditService controlPlaneUserAuditService;
 
     /**
@@ -61,7 +61,7 @@ public class ControlPlaneUserInternalFacade {
      * @return conta do Control Plane
      */
     public Account getControlPlaneAccount() {
-        return controlPlaneUserAccountSupport.getControlPlaneAccount();
+        return controlPlaneUserAccountResolver.getControlPlaneAccount();
     }
 
     /**

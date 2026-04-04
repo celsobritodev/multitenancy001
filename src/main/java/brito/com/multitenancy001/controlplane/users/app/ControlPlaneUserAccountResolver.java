@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class ControlPlaneUserAccountSupport {
+public class ControlPlaneUserAccountResolver {
 
     private final AccountRepository accountRepository;
 

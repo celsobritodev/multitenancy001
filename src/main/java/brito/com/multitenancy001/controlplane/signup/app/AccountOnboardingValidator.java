@@ -31,7 +31,7 @@ public class AccountOnboardingValidator {
      * @param signupCommand comando bruto
      * @return dados normalizados para o onboarding
      */
-    public AccountOnboardingSupport.SignupData validateAndNormalize(SignupCommand signupCommand) {
+    public AccountOnboardingHelper.SignupData validateAndNormalize(SignupCommand signupCommand) {
         if (signupCommand == null) {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida", 400);
         }
@@ -74,7 +74,7 @@ public class AccountOnboardingValidator {
             throw new ApiException(ApiErrorCode.PASSWORD_MISMATCH, "Senha e confirmação não conferem", 400);
         }
 
-        return new AccountOnboardingSupport.SignupData(
+        return new AccountOnboardingHelper.SignupData(
                 displayName,
                 loginEmail,
                 DEFAULT_TAX_COUNTRY_CODE,

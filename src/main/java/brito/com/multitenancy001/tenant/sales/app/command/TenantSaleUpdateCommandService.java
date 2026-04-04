@@ -40,7 +40,7 @@ public class TenantSaleUpdateCommandService {
     private final SaleRepository saleRepository;
     private final SaleApiMapper mapper;
     private final AppClock appClock;
-    private final TenantSaleMutationSupport mutationSupport;
+    private final TenantSaleMutationHelper tenantMutationHelper;
 
     /**
      * Atualiza uma venda existente.
@@ -62,7 +62,7 @@ public class TenantSaleUpdateCommandService {
         return uow.tx(tenantSchema, () -> {
             appClock.instant();
 
-            SaleStatus resolvedStatus = mutationSupport.resolveRequiredStatus(req.status(), "update");
+            SaleStatus resolvedStatus = tenantMutationHelper.resolveRequiredStatus(req.status(), "update");
 
             log.info(
                     "SALE_UPDATE_START | accountId={} | tenantSchema={} | saleId={} | newCustomerId={} | newStatus={} | newSaleDate={} | newItemsCount={}",
@@ -75,7 +75,7 @@ public class TenantSaleUpdateCommandService {
                     req.items() != null ? req.items().size() : 0
             );
 
-            mutationSupport.logRequestItems("SALE_UPDATE_REQUEST_ITEM", req.items());
+            tenantMutationHelper.logRequestItems("SALE_UPDATE_REQUEST_ITEM", req.items());
 
             Sale sale = saleRepository.findByIdAndDeletedFalse(saleId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.SALE_NOT_FOUND, "sale not found", 404));
@@ -87,16 +87,16 @@ public class TenantSaleUpdateCommandService {
                     sale.isDeleted(),
                     sale.getItems() != null ? sale.getItems().size() : 0,
                     sale.getTotalAmount(),
-                    mutationSupport.shouldAffectInventory(sale.getStatus()),
-                    mutationSupport.describeItems(sale.getItems())
+                    tenantMutationHelper.shouldAffectInventory(sale.getStatus()),
+                    tenantMutationHelper.describeItems(sale.getItems())
             );
 
-            mutationSupport.restoreInventoryForCurrentActiveItems(sale);
+            tenantMutationHelper.restoreInventoryForCurrentActiveItems(sale);
 
             sale.setSaleDate(req.saleDate());
             sale.setStatus(resolvedStatus);
 
-            mutationSupport.applyCustomerSnapshot(sale, req.customerId());
+            tenantMutationHelper.applyCustomerSnapshot(sale, req.customerId());
 
             if (sale.getItems() != null) {
                 for (SaleItem old : sale.getItems()) {
@@ -107,23 +107,23 @@ public class TenantSaleUpdateCommandService {
                 }
             }
 
-            List<SaleItem> newItems = mutationSupport.buildItems(req.items(), sale);
-            mutationSupport.validateItemsAgainstProducts(newItems);
+            List<SaleItem> newItems = tenantMutationHelper.buildItems(req.items(), sale);
+            tenantMutationHelper.validateItemsAgainstProducts(newItems);
 
             if (sale.getItems() == null) {
                 sale.setItems(new ArrayList<>());
             }
             sale.getItems().addAll(newItems);
 
-            sale.setTotalAmount(mutationSupport.sumItems(sale.getItems()));
+            sale.setTotalAmount(tenantMutationHelper.sumItems(sale.getItems()));
 
             log.debug(
                     "SALE_UPDATE_PRE_PERSIST | saleId={} | newStatus={} | newTotalAmount={} | newAffectInventory={} | newItems={}",
                     sale.getId(),
                     sale.getStatus(),
                     sale.getTotalAmount(),
-                    mutationSupport.shouldAffectInventory(sale.getStatus()),
-                    mutationSupport.describeItems(newItems)
+                    tenantMutationHelper.shouldAffectInventory(sale.getStatus()),
+                    tenantMutationHelper.describeItems(newItems)
             );
 
             Sale saved = saleRepository.save(sale);
@@ -133,10 +133,10 @@ public class TenantSaleUpdateCommandService {
                     saved.getId(),
                     saved.getTotalAmount(),
                     saved.getStatus(),
-                    mutationSupport.describeActiveItems(saved.getItems())
+                    tenantMutationHelper.describeActiveItems(saved.getItems())
             );
 
-            mutationSupport.applyInventoryForSaleWrite(saved);
+            tenantMutationHelper.applyInventoryForSaleWrite(saved);
 
             log.info(
                     "SALE_UPDATE_SUCCESS | saleId={} | totalAmount={} | customerId={} | status={} | affectInventory={}",
@@ -144,7 +144,7 @@ public class TenantSaleUpdateCommandService {
                     saved.getTotalAmount(),
                     saved.getCustomerId(),
                     saved.getStatus(),
-                    mutationSupport.shouldAffectInventory(saved.getStatus())
+                    tenantMutationHelper.shouldAffectInventory(saved.getStatus())
             );
 
             return mapper.toResponse(saved);

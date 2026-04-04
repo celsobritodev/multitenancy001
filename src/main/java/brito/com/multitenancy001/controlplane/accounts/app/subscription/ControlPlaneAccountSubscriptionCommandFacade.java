@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Receber a solicitação do controller.</li>
  *   <li>Executar validações leves de entrada.</li>
  *   <li>Delegar integralmente a orchestration para
- *       {@link ControlPlaneAccountPlanChangeOrchestrationService}.</li>
+ *       {@link ControlPlaneAccountPlanChangeCommandService}.</li>
  * </ul>
  *
  * <p>Importante:</p>
@@ -37,11 +37,11 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ControlPlaneAccountSubscriptionCommandService {
+public class ControlPlaneAccountSubscriptionCommandFacade {
 
     private static final String DEFAULT_REQUESTED_BY = "control_plane_admin";
 
-    private final ControlPlaneAccountPlanChangeOrchestrationService orchestrationService;
+    private final ControlPlaneAccountPlanChangeCommandService orchestrationService;
 
     /**
      * Solicita mudança efetiva de plano para uma conta.

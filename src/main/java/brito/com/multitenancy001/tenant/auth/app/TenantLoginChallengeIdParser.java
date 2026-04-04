@@ -8,7 +8,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 
 /**
- * Support do fluxo de confirmação de login tenant.
+ * IdParser do fluxo de confirmação de login tenant.
  *
  * <p>Responsabilidade:</p>
  * <ul>
@@ -16,7 +16,7 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
  * </ul>
  */
 @Component
-public class TenantLoginConfirmSupport {
+public class TenantLoginChallengeIdParser {
 
     /**
      * Faz parse e valida o challengeId recebido externamente.

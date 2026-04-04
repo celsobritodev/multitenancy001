@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TenantSchemaReadinessService {
 
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
 
     // ---------------------------------------------------------------------
     // USERS

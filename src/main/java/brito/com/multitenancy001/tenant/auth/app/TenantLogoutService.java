@@ -1,6 +1,6 @@
 package brito.com.multitenancy001.tenant.auth.app;
 
-import brito.com.multitenancy001.infrastructure.tenant.TenantExecutor;
+import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.domain.AuthSessionDomain;
@@ -43,7 +43,7 @@ public class TenantLogoutService {
     private final TenantAuthAuditRecorder audit;
 
     // ✅ necessários para resolver userId quando allDevices=true
-    private final TenantExecutor tenantExecutor;
+    private final TenantContextExecutor tenantExecutor;
     private final TenantUserRepository tenantUserRepository;
 
     private final JsonDetailsMapper jsonDetailsMapper;

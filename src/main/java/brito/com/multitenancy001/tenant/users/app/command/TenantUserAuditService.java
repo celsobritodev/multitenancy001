@@ -8,7 +8,7 @@ import org.springframework.util.StringUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import brito.com.multitenancy001.infrastructure.publicschema.audit.PublicAuditDispatcher;
+import brito.com.multitenancy001.infrastructure.publicschema.audit.PublicAuditEventDispatcher;
 import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
@@ -27,7 +27,7 @@ public class TenantUserAuditService {
 
     private static final String SCOPE = "TENANT";
 
-    private final PublicAuditDispatcher publicAuditDispatcher;
+    private final PublicAuditEventDispatcher publicAuditDispatcher;
     private final SecurityAuditService securityAuditService;
     private final JsonDetailsMapper jsonDetailsMapper;
 

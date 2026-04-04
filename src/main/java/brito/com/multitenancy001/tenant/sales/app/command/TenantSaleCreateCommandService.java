@@ -40,7 +40,7 @@ public class TenantSaleCreateCommandService {
     private final SaleRepository saleRepository;
     private final SaleApiMapper mapper;
     private final AppClock appClock;
-    private final TenantSaleMutationSupport mutationSupport;
+    private final TenantSaleMutationHelper tenanantSaleMutationHelper;
 
     /**
      * Cria uma nova venda.
@@ -58,7 +58,7 @@ public class TenantSaleCreateCommandService {
         return uow.tx(tenantSchema, () -> {
             appClock.instant();
 
-            SaleStatus resolvedStatus = mutationSupport.resolveRequiredStatus(req.status(), "create");
+            SaleStatus resolvedStatus = tenanantSaleMutationHelper.resolveRequiredStatus(req.status(), "create");
 
             log.info(
                     "SALE_CREATE_START | accountId={} | tenantSchema={} | customerId={} | status={} | saleDate={} | itemsCount={}",
@@ -70,27 +70,27 @@ public class TenantSaleCreateCommandService {
                     req.items() != null ? req.items().size() : 0
             );
 
-            mutationSupport.logRequestItems("SALE_CREATE_REQUEST_ITEM", req.items());
+            tenanantSaleMutationHelper.logRequestItems("SALE_CREATE_REQUEST_ITEM", req.items());
 
             Sale sale = new Sale();
             sale.setSaleDate(req.saleDate());
             sale.setStatus(resolvedStatus);
 
-            mutationSupport.applyCustomerSnapshot(sale, req.customerId());
+            tenanantSaleMutationHelper.applyCustomerSnapshot(sale, req.customerId());
 
-            List<SaleItem> items = mutationSupport.buildItems(req.items(), sale);
-            mutationSupport.validateItemsAgainstProducts(items);
+            List<SaleItem> items = tenanantSaleMutationHelper.buildItems(req.items(), sale);
+            tenanantSaleMutationHelper.validateItemsAgainstProducts(items);
 
             sale.setItems(items);
-            sale.setTotalAmount(mutationSupport.sumItems(items));
+            sale.setTotalAmount(tenanantSaleMutationHelper.sumItems(items));
 
             log.debug(
                     "SALE_CREATE_PRE_PERSIST | tenantSchema={} | customerId={} | totalAmount={} | affectInventory={} | items={}",
                     tenantSchema,
                     sale.getCustomerId(),
                     sale.getTotalAmount(),
-                    mutationSupport.shouldAffectInventory(sale.getStatus()),
-                    mutationSupport.describeItems(sale.getItems())
+                    tenanantSaleMutationHelper.shouldAffectInventory(sale.getStatus()),
+                    tenanantSaleMutationHelper.describeItems(sale.getItems())
             );
 
             Sale saved = saleRepository.save(sale);
@@ -103,7 +103,7 @@ public class TenantSaleCreateCommandService {
                     saved.getStatus()
             );
 
-            mutationSupport.applyInventoryForSaleWrite(saved);
+            tenanantSaleMutationHelper.applyInventoryForSaleWrite(saved);
 
             log.info(
                     "SALE_CREATE_SUCCESS | saleId={} | totalAmount={} | customerId={} | status={} | affectInventory={}",
@@ -111,7 +111,7 @@ public class TenantSaleCreateCommandService {
                     saved.getTotalAmount(),
                     saved.getCustomerId(),
                     saved.getStatus(),
-                    mutationSupport.shouldAffectInventory(saved.getStatus())
+                    tenanantSaleMutationHelper.shouldAffectInventory(saved.getStatus())
             );
 
             return mapper.toResponse(saved);
