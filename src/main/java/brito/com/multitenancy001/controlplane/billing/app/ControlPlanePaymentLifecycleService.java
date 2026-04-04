@@ -1,6 +1,8 @@
 package brito.com.multitenancy001.controlplane.billing.app;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import brito.com.multitenancy001.shared.api.dto.billing.PaymentRequest;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.billing.PaymentStatus;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
+import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +34,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Marcar pagamentos como falhos usando invariantes do domínio.</li>
  *   <li>Buscar pagamento por chave de idempotência.</li>
  * </ul>
+ *
+ * <p>Regra arquitetural importante:</p>
+ * <ul>
+ *   <li>O domínio {@link Payment} não deve montar JSON manualmente.</li>
+ *   <li>Quando houver metadata de falha, ele deve ser estruturado e serializado
+ *       aqui, antes de entrar na entidade.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +50,7 @@ public class ControlPlanePaymentLifecycleService {
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
+    private final JsonDetailsMapper jsonDetailsMapper;
 
     /**
      * Busca pagamento por chave de idempotência.
@@ -226,7 +237,7 @@ public class ControlPlanePaymentLifecycleService {
     }
 
     /**
-     * Marca pagamento como falho usando invariante do domínio.
+     * Marca pagamento como falho usando invariante do domínio e metadata serializado fora da entidade.
      *
      * @param paymentId id do pagamento
      * @param reason motivo técnico/funcional
@@ -240,7 +251,11 @@ public class ControlPlanePaymentLifecycleService {
                             404
                     ));
 
-            payment.markAsFailed(reason);
+            String metadataJson = jsonDetailsMapper.toJson(
+                    failureMetadata(reason)
+            );
+
+            payment.markAsFailed(reason, metadataJson);
             controlPlanePaymentRepository.save(payment);
 
             log.warn("Pagamento marcado como FAILED. paymentId={}, reason={}",
@@ -258,5 +273,17 @@ public class ControlPlanePaymentLifecycleService {
      */
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /**
+     * Monta metadata estruturado de falha.
+     *
+     * @param reason motivo da falha
+     * @return mapa estruturado
+     */
+    private Map<String, Object> failureMetadata(String reason) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("failure_reason", reason);
+        return details;
     }
 }

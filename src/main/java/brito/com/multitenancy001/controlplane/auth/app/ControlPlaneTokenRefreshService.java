@@ -1,11 +1,20 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
+import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import brito.com.multitenancy001.integration.audit.ControlPlaneAuthEventAuditIntegrationService;
 import brito.com.multitenancy001.integration.auth.ControlPlaneJwtIntegrationService;
 import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshIdentity;
 import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshTokenIntrospectionIntegrationService;
-import brito.com.multitenancy001.infrastructure.security.AuthenticatedUserContext;
-import brito.com.multitenancy001.infrastructure.security.userdetails.MultiContextUserDetailsService;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.auth.app.AuthRefreshSessionService;
 import brito.com.multitenancy001.shared.auth.app.dto.JwtResult;
@@ -15,22 +24,23 @@ import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
+import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Refresh token do Control Plane (com rotação + logout forte).
+ * Refresh token do Control Plane com rotação server-side.
  *
- * Regras:
- * - refresh emite NOVO refresh token (rotação)
- * - rotateOrThrow atualiza o hash server-side (logout forte depende disso)
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Refresh emite novo refresh token (rotação).</li>
+ *   <li>{@code rotateOrThrow} atualiza o hash server-side.</li>
+ *   <li>Não monta JSON manualmente.</li>
+ * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneTokenRefreshService {
@@ -41,26 +51,22 @@ public class ControlPlaneTokenRefreshService {
     private final ControlPlaneRefreshTokenIntrospectionIntegrationService refreshIntrospection;
     private final MultiContextUserDetailsService userDetailsService;
     private final ControlPlaneJwtIntegrationService jwtIntegration;
-
     private final AuthRefreshSessionService refreshSessions;
     private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
+    private final JsonDetailsMapper jsonDetailsMapper;
 
+    /**
+     * Executa refresh token do Control Plane.
+     *
+     * @param refreshToken refresh token atual
+     * @return novo access token + novo refresh token
+     */
     public JwtResult refresh(String refreshToken) {
-        /** comentário: valida request, emite novos tokens e rotaciona sessão server-side */
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
 
-        authAuditService.record(
-                AuthDomain.CONTROLPLANE,
-                AuthEventType.TOKEN_REFRESH,
-                AuditOutcome.ATTEMPT,
-                null,
-                null,   // ✅ actorEmail
-                null,   // actorUserId
-                DEFAULT_SCHEMA,
-                "{\"stage\":\"start\"}"
-        );
+        auditAttempt();
 
         return publicExecutor.inPublic(() -> {
             ControlPlaneRefreshIdentity id = refreshIntrospection.parseOrThrow(refreshToken);
@@ -81,19 +87,13 @@ public class ControlPlaneTokenRefreshService {
                     newRefresh,
                     id.accountId(),
                     userId,
-                    null // ✅ CONTROLPLANE não tem tenantSchema
+                    null
             );
 
-            authAuditService.record(
-                    AuthDomain.CONTROLPLANE,
-                    AuthEventType.TOKEN_REFRESH,
-                    AuditOutcome.SUCCESS,
-                    id.email(),
-                    null,   // ✅ actorEmail
-                    userId, // ✅ actorUserId
-                    DEFAULT_SCHEMA,
-                    "{\"stage\":\"completed\",\"rotated\":true}"
-            );
+            auditSuccess(id.email(), userId);
+
+            log.info("Refresh token do Control Plane concluído | email={} | userId={} | accountId={}",
+                    id.email(), userId, id.accountId());
 
             return new JwtResult(
                     newAccess,
@@ -105,5 +105,76 @@ public class ControlPlaneTokenRefreshService {
                     DEFAULT_SCHEMA
             );
         });
+    }
+
+    /**
+     * Registra tentativa de refresh.
+     */
+    private void auditAttempt() {
+        authAuditService.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.TOKEN_REFRESH,
+                AuditOutcome.ATTEMPT,
+                null,
+                null,
+                null,
+                DEFAULT_SCHEMA,
+                toJson(m("stage", "start"))
+        );
+    }
+
+    /**
+     * Registra sucesso de refresh.
+     *
+     * @param email email do usuário
+     * @param userId id do usuário
+     */
+    private void auditSuccess(String email, Long userId) {
+        authAuditService.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.TOKEN_REFRESH,
+                AuditOutcome.SUCCESS,
+                email,
+                null,
+                userId,
+                DEFAULT_SCHEMA,
+                toJson(m(
+                        "stage", "completed",
+                        "rotated", true
+                ))
+        );
+    }
+
+    /**
+     * Monta mapa ordenado a partir de pares chave/valor.
+     *
+     * @param kv pares chave/valor
+     * @return mapa ordenado
+     */
+    private Map<String, Object> m(Object... kv) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (kv == null) {
+            return map;
+        }
+
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            Object key = kv[i];
+            Object value = kv[i + 1];
+            if (key != null) {
+                map.put(String.valueOf(key), value);
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Serializa details estruturados para JSON.
+     *
+     * @param details detalhes estruturados
+     * @return json serializado
+     */
+    private String toJson(Map<String, Object> details) {
+        return details == null ? null : jsonDetailsMapper.toJsonNode(details).toString();
     }
 }

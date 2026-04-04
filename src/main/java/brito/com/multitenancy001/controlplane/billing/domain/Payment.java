@@ -149,7 +149,7 @@ public class Payment implements Auditable {
     private String description;
 
     /**
-     * Metadados livres.
+     * Metadados livres serializados em JSON.
      */
     @Column(name = "metadata_json", columnDefinition = "TEXT")
     private String metadataJson;
@@ -371,6 +371,23 @@ public class Payment implements Auditable {
      * @param reason motivo
      */
     public void markAsFailed(String reason) {
+        markAsFailed(reason, null);
+    }
+
+    /**
+     * Marca pagamento como falho permitindo metadata já serializado externamente.
+     *
+     * <p>Regra arquitetural:</p>
+     * <ul>
+     *   <li>O domínio não deve ser responsável por serializar JSON.</li>
+     *   <li>Quando houver metadata estruturado, ele deve ser gerado fora da entidade
+     *       e entregue pronto para persistência.</li>
+     * </ul>
+     *
+     * @param reason motivo da falha
+     * @param metadataJson metadata já serializado, quando houver
+     */
+    public void markAsFailed(String reason, String metadataJson) {
         if (this.status == PaymentStatus.FAILED) {
             return;
         }
@@ -383,12 +400,21 @@ public class Payment implements Auditable {
 
         this.status = PaymentStatus.FAILED;
 
-        if (this.metadataJson == null) {
-            this.metadataJson = "{\"failure_reason\":\"" + reason + "\"}";
+        if (this.metadataJson == null && metadataJson != null && !metadataJson.isBlank()) {
+            this.metadataJson = metadataJson;
         }
 
         log.warn("Pagamento marcado como FAILED. paymentId={}, transactionId={}, reason={}",
                 this.id, this.transactionId, reason);
+    }
+
+    /**
+     * Define metadata JSON explicitamente.
+     *
+     * @param metadataJson metadata serializado
+     */
+    public void replaceMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
     }
 
     /**

@@ -1,5 +1,11 @@
 package brito.com.multitenancy001.controlplane.auth.app;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import brito.com.multitenancy001.integration.audit.ControlPlaneAuthEventAuditIntegrationService;
 import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshIdentity;
 import brito.com.multitenancy001.integration.auth.ControlPlaneRefreshTokenIntrospectionIntegrationService;
@@ -11,19 +17,23 @@ import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.AuthDomain;
 import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
+import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityResolver;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Logout forte do Control Plane (opção B).
+ * Logout forte do Control Plane.
  *
- * Regras:
- * - Revoga refresh token no servidor (public schema)
- * - allDevices=true revoga todas as sessões do usuário no domínio CONTROLPLANE
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Revoga refresh token no servidor (public schema).</li>
+ *   <li>{@code allDevices=true} revoga todas as sessões do usuário no domínio CONTROLPLANE.</li>
+ *   <li>Não monta JSON manualmente.</li>
+ * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ControlPlaneLogoutService {
@@ -33,12 +43,17 @@ public class ControlPlaneLogoutService {
     private final PublicSchemaExecutor publicSchemaExecutor;
     private final ControlPlaneRefreshTokenIntrospectionIntegrationService refreshIntrospection;
     private final LoginIdentityResolver loginIdentityResolver;
-
     private final AuthRefreshSessionService refreshSessions;
     private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
+    private final JsonDetailsMapper jsonDetailsMapper;
 
+    /**
+     * Executa logout forte do Control Plane.
+     *
+     * @param refreshToken refresh token a ser revogado
+     * @param allDevices true para revogar todas as sessões do usuário
+     */
     public void logout(String refreshToken, boolean allDevices) {
-        /** comentário: resolve identidade e revoga sessão(ões) no servidor */
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
@@ -51,43 +66,107 @@ public class ControlPlaneLogoutService {
                 throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401);
             }
 
-            authAuditService.record(
-                    AuthDomain.CONTROLPLANE,
-                    AuthEventType.LOGOUT,
-                    AuditOutcome.ATTEMPT,
-                    id.email(),
-                    null,   // ✅ actorEmail
-                    userId, // ✅ actorUserId
-                    DEFAULT_SCHEMA,
-                    "{\"stage\":\"start\",\"allDevices\":" + allDevices + "}"
-            );
+            auditAttempt(id.email(), userId, allDevices);
 
             if (allDevices) {
                 refreshSessions.revokeAllForUser(
                         AuthSessionDomain.CONTROLPLANE,
                         id.accountId(),
                         userId,
-                        "{\"reason\":\"logout_all_devices\"}"
+                        toJson(m("reason", "logout_all_devices"))
                 );
             } else {
                 refreshSessions.revokeByRefreshTokenOrThrow(
                         refreshToken,
-                        "{\"reason\":\"logout\"}"
+                        toJson(m("reason", "logout"))
                 );
             }
 
-            authAuditService.record(
-                    AuthDomain.CONTROLPLANE,
-                    AuthEventType.LOGOUT,
-                    AuditOutcome.SUCCESS,
-                    id.email(),
-                    null,   // ✅ actorEmail
-                    userId, // ✅ actorUserId
-                    DEFAULT_SCHEMA,
-                    "{\"stage\":\"completed\",\"allDevices\":" + allDevices + "}"
-            );
+            auditSuccess(id.email(), userId, allDevices);
+
+            log.info("Logout do Control Plane concluído | email={} | userId={} | accountId={} | allDevices={}",
+                    id.email(), userId, id.accountId(), allDevices);
 
             return null;
         });
+    }
+
+    /**
+     * Registra tentativa de logout.
+     *
+     * @param email email alvo
+     * @param userId id do usuário
+     * @param allDevices flag de logout global
+     */
+    private void auditAttempt(String email, Long userId, boolean allDevices) {
+        authAuditService.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.LOGOUT,
+                AuditOutcome.ATTEMPT,
+                email,
+                null,
+                userId,
+                DEFAULT_SCHEMA,
+                toJson(m(
+                        "stage", "start",
+                        "allDevices", allDevices
+                ))
+        );
+    }
+
+    /**
+     * Registra sucesso de logout.
+     *
+     * @param email email alvo
+     * @param userId id do usuário
+     * @param allDevices flag de logout global
+     */
+    private void auditSuccess(String email, Long userId, boolean allDevices) {
+        authAuditService.record(
+                AuthDomain.CONTROLPLANE,
+                AuthEventType.LOGOUT,
+                AuditOutcome.SUCCESS,
+                email,
+                null,
+                userId,
+                DEFAULT_SCHEMA,
+                toJson(m(
+                        "stage", "completed",
+                        "allDevices", allDevices
+                ))
+        );
+    }
+
+    /**
+     * Monta mapa ordenado a partir de pares chave/valor.
+     *
+     * @param kv pares chave/valor
+     * @return mapa ordenado
+     */
+    private Map<String, Object> m(Object... kv) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (kv == null) {
+            return map;
+        }
+
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            Object key = kv[i];
+            Object value = kv[i + 1];
+            if (key != null) {
+                map.put(String.valueOf(key), value);
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Serializa details estruturados para JSON.
+     *
+     * @param details detalhes estruturados
+     * @return json serializado
+     */
+    private String toJson(Map<String, Object> details) {
+        return details == null ? null : jsonDetailsMapper.toJsonNode(details).toString();
     }
 }

@@ -1,45 +1,33 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-
-import com.fasterxml.jackson.databind.JsonNode;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
-import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneMeResponse;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDetailsResponse;
-import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneBuiltInUsers;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
-import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.infrastructure.publicschema.audit.SecurityAuditService;
-import brito.com.multitenancy001.integration.security.ControlPlaneRequestIdentityService;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.domain.EmailNormalizer;
 import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
-import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.security.SystemRoleName;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
- * Componente de apoio para o módulo de usuários do Control Plane.
+ * Fachada fina de apoio para o módulo de usuários do Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p>Objetivo:</p>
  * <ul>
- *   <li>Centralizar helpers compartilhados de account, user, auditoria e mapeamento.</li>
- *   <li>Evitar duplicação entre command, query, lifecycle e password services.</li>
- *   <li>Padronizar validações transversais do módulo.</li>
+ *   <li>Preservar o contrato atual usado pelos call-sites existentes.</li>
+ *   <li>Delegar responsabilidades reais para componentes menores e semânticos.</li>
+ * </ul>
+ *
+ * <p>Observação importante:</p>
+ * <ul>
+ *   <li>Esta classe não deve voltar a concentrar regra pesada.</li>
+ *   <li>Validação, loading, mapeamento e auditoria ficam em serviços especializados.</li>
  * </ul>
  */
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ControlPlaneUserSupport {
@@ -61,12 +49,11 @@ public class ControlPlaneUserSupport {
      */
     public static final String SCOPE = "CONTROL_PLANE";
 
-    private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
-    private final AccountRepository accountRepository;
-    private final ControlPlaneUserRepository controlPlaneUserRepository;
-    private final ControlPlaneRequestIdentityService controlPlaneRequestIdentityService;
-    private final SecurityAuditService securityAuditService;
-    private final JsonDetailsMapper jsonDetailsMapper;
+    private final ControlPlaneUserAccountSupport controlPlaneUserAccountSupport;
+    private final ControlPlaneUserValidationService controlPlaneUserValidationService;
+    private final ControlPlaneUserLoader controlPlaneUserLoader;
+    private final ControlPlaneUserResponseMapper controlPlaneUserResponseMapper;
+    private final ControlPlaneUserAuditService controlPlaneUserAuditService;
 
     /**
      * Obtém a conta única do Control Plane.
@@ -74,15 +61,7 @@ public class ControlPlaneUserSupport {
      * @return conta do Control Plane
      */
     public Account getControlPlaneAccount() {
-        try {
-            return accountRepository.getSingleControlPlaneAccount();
-        } catch (IllegalStateException ex) {
-            throw new ApiException(
-                    ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
-                    MSG_CP_ACCOUNT_INVALID + " " + ex.getMessage(),
-                    500
-            );
-        }
+        return controlPlaneUserAccountSupport.getControlPlaneAccount();
     }
 
     /**
@@ -92,11 +71,7 @@ public class ControlPlaneUserSupport {
      * @return email normalizado
      */
     public String normalizeEmailOrThrow(String raw) {
-        String email = EmailNormalizer.normalizeOrNull(raw);
-        if (email == null) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
-        }
-        return email;
+        return controlPlaneUserValidationService.normalizeEmailOrThrow(raw);
     }
 
     /**
@@ -106,16 +81,7 @@ public class ControlPlaneUserSupport {
      * @return nome normalizado
      */
     public String normalizeNameOrThrow(String raw) {
-        if (raw == null) {
-            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
-        }
-
-        String name = raw.trim();
-        if (name.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
-        }
-
-        return name;
+        return controlPlaneUserValidationService.normalizeNameOrThrow(raw);
     }
 
     /**
@@ -124,13 +90,7 @@ public class ControlPlaneUserSupport {
      * @param normalizedEmail email já normalizado
      */
     public void validateNotReservedEmail(String normalizedEmail) {
-        if (ControlPlaneBuiltInUsers.isReservedEmail(normalizedEmail)) {
-            throw new ApiException(
-                    ApiErrorCode.EMAIL_RESERVED,
-                    "Este email é reservado do sistema (BUILT_IN)",
-                    409
-            );
-        }
+        controlPlaneUserValidationService.validateNotReservedEmail(normalizedEmail);
     }
 
     /**
@@ -141,13 +101,7 @@ public class ControlPlaneUserSupport {
      * @return usuário encontrado
      */
     public ControlPlaneUser loadNotDeletedUserInControlPlane(Long userId, Long controlPlaneAccountId) {
-        return controlPlaneUserRepository
-                .findNotDeletedByIdAndAccountId(userId, controlPlaneAccountId)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.USER_NOT_FOUND,
-                        "Usuário não encontrado",
-                        404
-                ));
+        return controlPlaneUserLoader.loadNotDeletedUserInControlPlane(userId, controlPlaneAccountId);
     }
 
     /**
@@ -158,24 +112,7 @@ public class ControlPlaneUserSupport {
      * @return usuário encontrado
      */
     public ControlPlaneUser loadUserInControlPlane(Long userId, Long controlPlaneAccountId) {
-        ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.USER_NOT_FOUND,
-                        "Usuário não encontrado",
-                        404
-                ));
-
-        if (user.getAccount() == null
-                || user.getAccount().getId() == null
-                || !user.getAccount().getId().equals(controlPlaneAccountId)) {
-            throw new ApiException(
-                    ApiErrorCode.USER_OUT_OF_SCOPE,
-                    "Usuário não pertence ao Control Plane",
-                    403
-            );
-        }
-
-        return user;
+        return controlPlaneUserLoader.loadUserInControlPlane(userId, controlPlaneAccountId);
     }
 
     /**
@@ -186,13 +123,7 @@ public class ControlPlaneUserSupport {
      * @return usuário habilitado
      */
     public ControlPlaneUser loadEnabledUserInControlPlane(Long userId, Long controlPlaneAccountId) {
-        return controlPlaneUserRepository
-                .findEnabledByIdAndAccountId(userId, controlPlaneAccountId)
-                .orElseThrow(() -> new ApiException(
-                        ApiErrorCode.USER_NOT_ENABLED,
-                        "Usuário não encontrado ou não habilitado",
-                        404
-                ));
+        return controlPlaneUserLoader.loadEnabledUserInControlPlane(userId, controlPlaneAccountId);
     }
 
     /**
@@ -201,13 +132,7 @@ public class ControlPlaneUserSupport {
      * @param user usuário alvo
      */
     public void assertMutableUser(ControlPlaneUser user) {
-        if (user != null && user.isBuiltInUser()) {
-            throw new ApiException(
-                    ApiErrorCode.USER_BUILT_IN_IMMUTABLE,
-                    BUILTIN_IMMUTABLE_MESSAGE,
-                    409
-            );
-        }
+        controlPlaneUserValidationService.assertMutableUser(user);
     }
 
     /**
@@ -217,18 +142,7 @@ public class ControlPlaneUserSupport {
      * @return DTO de detalhes
      */
     public ControlPlaneUserDetailsResponse mapToDetailsResponse(ControlPlaneUser user) {
-        return new ControlPlaneUserDetailsResponse(
-                user.getId(),
-                user.getAccount().getId(),
-                user.getName(),
-                user.getEmail(),
-                SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin(),
-                user.isDeleted(),
-                user.isEnabled(),
-                user.getAudit() == null ? null : user.getAudit().getCreatedAt()
-        );
+        return controlPlaneUserResponseMapper.mapToDetailsResponse(user);
     }
 
     /**
@@ -238,17 +152,7 @@ public class ControlPlaneUserSupport {
      * @return DTO /me
      */
     public ControlPlaneMeResponse mapToMeResponse(ControlPlaneUser user) {
-        return new ControlPlaneMeResponse(
-                user.getId(),
-                user.getAccount().getId(),
-                user.getName(),
-                user.getEmail(),
-                SystemRoleName.fromString(user.getRole() == null ? null : user.getRole().name()),
-                user.isSuspendedByAccount(),
-                user.isSuspendedByAdmin(),
-                user.isDeleted(),
-                user.isEnabled()
-        );
+        return controlPlaneUserResponseMapper.mapToMeResponse(user);
     }
 
     /**
@@ -257,22 +161,7 @@ public class ControlPlaneUserSupport {
      * @return ator atual
      */
     public AuditActor resolveActorOrAnonymous() {
-        try {
-            Long actorId = controlPlaneRequestIdentityService.getCurrentUserId();
-            Long accountId = controlPlaneRequestIdentityService.getCurrentAccountId();
-
-            if (actorId == null || accountId == null) {
-                return AuditActor.anonymous();
-            }
-
-            return publicSchemaUnitOfWork.readOnly(() ->
-                    controlPlaneUserRepository.findById(actorId)
-                            .map(user -> new AuditActor(actorId, user.getEmail()))
-                            .orElse(new AuditActor(actorId, null))
-            );
-        } catch (Exception ignored) {
-            return AuditActor.anonymous();
-        }
+        return controlPlaneUserAuditService.resolveActorOrAnonymous();
     }
 
     /**
@@ -286,8 +175,8 @@ public class ControlPlaneUserSupport {
      * @param attemptDetails detalhes de tentativa
      * @param successDetailsSupplier supplier opcional de detalhes de sucesso
      * @param block bloco a executar
-     * @return resultado do bloco
      * @param <T> tipo de retorno
+     * @return resultado do bloco
      */
     public <T> T auditAttemptSuccessFail(
             SecurityAuditActionType actionType,
@@ -299,70 +188,16 @@ public class ControlPlaneUserSupport {
             Supplier<Object> successDetailsSupplier,
             AuditCallable<T> block
     ) {
-        recordAudit(
+        return controlPlaneUserAuditService.auditAttemptSuccessFail(
                 actionType,
-                AuditOutcome.ATTEMPT,
                 actor,
-                target.email(),
-                target.userId(),
+                target,
                 accountId,
                 tenantSchema,
-                attemptDetails
+                attemptDetails,
+                successDetailsSupplier,
+                block
         );
-
-        try {
-            T result = block.call();
-
-            Object successDetails;
-            try {
-                successDetails = (successDetailsSupplier == null)
-                        ? attemptDetails
-                        : successDetailsSupplier.get();
-            } catch (Exception ignored) {
-                successDetails = attemptDetails;
-            }
-
-            if (successDetails == null) {
-                successDetails = attemptDetails;
-            }
-
-            recordAudit(
-                    actionType,
-                    AuditOutcome.SUCCESS,
-                    actor,
-                    target.email(),
-                    target.userId(),
-                    accountId,
-                    tenantSchema,
-                    successDetails
-            );
-
-            return result;
-        } catch (ApiException ex) {
-            recordAudit(
-                    actionType,
-                    outcomeFrom(ex),
-                    actor,
-                    target.email(),
-                    target.userId(),
-                    accountId,
-                    tenantSchema,
-                    failureDetails(SCOPE, ex)
-            );
-            throw ex;
-        } catch (Exception ex) {
-            recordAudit(
-                    actionType,
-                    AuditOutcome.FAILURE,
-                    actor,
-                    target.email(),
-                    target.userId(),
-                    accountId,
-                    tenantSchema,
-                    unexpectedFailureDetails(SCOPE, ex)
-            );
-            throw ex;
-        }
     }
 
     /**
@@ -387,16 +222,15 @@ public class ControlPlaneUserSupport {
             String tenantSchema,
             Object details
     ) {
-        securityAuditService.record(
+        controlPlaneUserAuditService.recordAudit(
                 actionType,
                 outcome,
-                actor == null ? null : actor.email(),
-                actor == null ? null : actor.userId(),
+                actor,
                 targetEmail,
                 targetUserId,
                 accountId,
                 tenantSchema,
-                toJson(details)
+                details
         );
     }
 
@@ -407,105 +241,7 @@ public class ControlPlaneUserSupport {
      * @return mapa ordenado
      */
     public Map<String, Object> m(Object... kv) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        if (kv == null) {
-            return map;
-        }
-
-        for (int i = 0; i + 1 < kv.length; i += 2) {
-            Object key = kv[i];
-            Object value = kv[i + 1];
-            if (key != null) {
-                map.put(String.valueOf(key), value);
-            }
-        }
-
-        return map;
-    }
-
-    /**
-     * Converte detalhes livres para JSON.
-     *
-     * @param details detalhes
-     * @return json serializado ou null
-     */
-    private String toJson(Object details) {
-        if (details == null) {
-            return null;
-        }
-
-        JsonNode node = jsonDetailsMapper.toJsonNode(details);
-        if (node == null || node.isNull()) {
-            return null;
-        }
-
-        return node.toString();
-    }
-
-    /**
-     * Resolve outcome de auditoria a partir de ApiException.
-     *
-     * @param ex exceção de API
-     * @return outcome correspondente
-     */
-    private static AuditOutcome outcomeFrom(ApiException ex) {
-        if (ex == null) {
-            return AuditOutcome.FAILURE;
-        }
-
-        int status = ex.getStatus();
-        return (status == 401 || status == 403)
-                ? AuditOutcome.DENIED
-                : AuditOutcome.FAILURE;
-    }
-
-    /**
-     * Monta detalhes de falha de negócio.
-     *
-     * @param scope escopo
-     * @param ex exceção
-     * @return detalhes
-     */
-    private static Map<String, Object> failureDetails(String scope, ApiException ex) {
-        return Map.of(
-                "scope", scope,
-                "error", ex == null ? null : ex.getError(),
-                "status", ex == null ? 0 : ex.getStatus(),
-                "message", safeMessage(ex == null ? null : ex.getMessage())
-        );
-    }
-
-    /**
-     * Monta detalhes de falha inesperada.
-     *
-     * @param scope escopo
-     * @param ex exceção
-     * @return detalhes
-     */
-    private static Map<String, Object> unexpectedFailureDetails(String scope, Exception ex) {
-        return Map.of(
-                "scope", scope,
-                "unexpected", ex == null ? null : ex.getClass().getSimpleName(),
-                "message", safeMessage(ex == null ? null : ex.getMessage())
-        );
-    }
-
-    /**
-     * Higieniza mensagem livre para auditoria.
-     *
-     * @param message mensagem
-     * @return mensagem tratada
-     */
-    private static String safeMessage(String message) {
-        if (!StringUtils.hasText(message)) {
-            return null;
-        }
-
-        return message
-                .replace("\n", " ")
-                .replace("\r", " ")
-                .replace("\t", " ")
-                .trim();
+        return controlPlaneUserAuditService.m(kv);
     }
 
     /**
