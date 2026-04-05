@@ -46,7 +46,7 @@ public class ControlPlaneAuthController {
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@Valid @RequestBody ControlPlaneAdminLoginRequest req) {
-        /** comentário: autentica usuário de plataforma e retorna access+refresh */
+        /**  autentica usuário de plataforma e retorna access+refresh */
         JwtResult jwt = controlPlaneAuthService.loginControlPlaneUser(
                 new ControlPlaneAdminLoginCommand(req.email(), req.password())
         );
@@ -55,14 +55,14 @@ public class ControlPlaneAuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<JwtResponse> refresh(@Valid @RequestBody ControlPlaneRefreshRequest req) {
-        /** comentário: refresh com rotação server-side */
+        /** refresh com rotação server-side */
         JwtResult jwt = controlPlaneTokenRefreshService.refresh(req.refreshToken()); // ✅ AQUI o fix
         return ResponseEntity.ok(toHttp(jwt));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest req) {
-        /** comentário: logout forte (revoga sessão/refresh no servidor) */
+        /** logout forte (revoga sessão/refresh no servidor) */
         controlPlaneLogoutService.logout(req.refreshToken(), req.allDevices());
         return ResponseEntity.noContent().build();
     }

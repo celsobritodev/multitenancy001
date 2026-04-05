@@ -49,7 +49,7 @@ public class TenantLogoutService {
     private final JsonDetailsMapper jsonDetailsMapper;
 
     public void logout(String refreshToken, boolean allDevices) {
-        /** comentário: resolve identidade do refresh e revoga sessão(ões) */
+        /** resolve identidade do refresh e revoga sessão(ões) */
         TenantRefreshIdentity id = authMechanics.resolveRefreshIdentity(refreshToken);
 
         audit.record(
@@ -92,7 +92,7 @@ public class TenantLogoutService {
     }
 
     private Long resolveUserIdOrThrow(TenantRefreshIdentity id) {
-        /** comentário: garante userId para revokeAllForUser (allDevices) */
+        /**  garante userId para revokeAllForUser (allDevices) */
         if (id.userId() != null) {
             return id.userId();
         }
@@ -106,13 +106,13 @@ public class TenantLogoutService {
     }
 
     private String toJson(Object details) {
-        /** comentário: converte details (Map/record/String) em JSON string compatível com jsonb */
+        /**  converte details (Map/record/String) em JSON string compatível com jsonb */
         if (details == null) return null;
         return jsonDetailsMapper.toJsonNode(details).toString();
     }
 
     private static Map<String, Object> m(Object... kv) {
-        /** comentário: cria LinkedHashMap em pares key/value com ordem estável */
+        /**  cria LinkedHashMap em pares key/value com ordem estável */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
         if (kv.length % 2 != 0) throw new IllegalArgumentException("m(kv): quantidade ímpar de argumentos");

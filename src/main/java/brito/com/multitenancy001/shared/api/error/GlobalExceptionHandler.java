@@ -41,10 +41,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    private final ApiExceptionHandlerSupport apiExceptionHandlerSupport;
-    private final ValidationExceptionHandlerSupport validationExceptionHandlerSupport;
-    private final SecurityExceptionHandlerSupport securityExceptionHandlerSupport;
-    private final PersistenceExceptionHandlerSupport persistenceExceptionHandlerSupport;
+    private final ApiExceptionHandlerComponent apiExceptionHandlerSupport;
+    private final ValidationExceptionHandlerComponent validationExceptionHandlerSupport;
+    private final SecurityExceptionHandlerComponent securityExceptionHandlerSupport;
+    private final PersistenceExceptionHandlerComponent persistenceExceptionHandlerSupport;
 
     /**
      * Trata falhas de parsing do corpo da requisição.

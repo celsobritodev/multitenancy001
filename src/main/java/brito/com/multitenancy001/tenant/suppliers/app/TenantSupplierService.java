@@ -44,7 +44,7 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public Supplier findById(UUID id) {
-        // Comentário do método: busca por id sem retornar deletados.
+        //  busca por id sem retornar deletados.
         if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
         Supplier s = tenantSupplierRepository.findById(id)
@@ -56,19 +56,19 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public List<Supplier> findAll() {
-        // Comentário do método: lista não-deletados.
+        //  lista não-deletados.
         return tenantSupplierRepository.findAllNotDeleted();
     }
 
     @TenantReadOnlyTx
     public List<Supplier> findActive() {
-        // Comentário do método: lista ativos e não-deletados.
+        //  lista ativos e não-deletados.
         return tenantSupplierRepository.findAllActiveNotDeleted();
     }
 
     @TenantReadOnlyTx
     public Supplier findByDocument(String document) {
-        // Comentário do método: busca por document (não-deletado).
+        //  busca por document (não-deletado).
         if (!StringUtils.hasText(document)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_DOCUMENT_REQUIRED, "document é obrigatório", 400);
         }
@@ -78,7 +78,7 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public List<Supplier> searchByName(String name) {
-        // Comentário do método: busca por nome (não-deletados).
+        //  busca por nome (não-deletados).
         if (!StringUtils.hasText(name)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_NAME_REQUIRED, "name é obrigatório", 400);
         }
@@ -87,7 +87,7 @@ public class TenantSupplierService {
 
     @TenantReadOnlyTx
     public List<Supplier> findByEmail(String email) {
-        // Comentário do método: busca por email (não-deletados).
+        //  busca por email (não-deletados).
         if (!StringUtils.hasText(email)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
@@ -100,7 +100,7 @@ public class TenantSupplierService {
 
     @TenantTx
     public Supplier create(CreateSupplierCommand cmd) {
-        // Comentário do método: cria Supplier via Command + valida regras (unicidade, normalização).
+        //  cria Supplier via Command + valida regras (unicidade, normalização).
         Supplier supplier = mapToNewEntity(cmd);
 
         validateForCreate(supplier);
@@ -128,7 +128,7 @@ public class TenantSupplierService {
 
     @TenantTx
     public Supplier update(UUID id, UpdateSupplierCommand cmd) {
-        // Comentário do método: atualiza Supplier via Command (campos null não alteram).
+        //  atualiza Supplier via Command (campos null não alteram).
         if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
         if (cmd == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "payload é obrigatório", 400);
 
@@ -215,7 +215,7 @@ public class TenantSupplierService {
 
     @TenantTx
     public Supplier toggleActive(UUID id) {
-        // Comentário do método: alterna active; bloqueia se deletado.
+        //  alterna active; bloqueia se deletado.
         if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
         Supplier s = tenantSupplierRepository.findById(id)
@@ -229,7 +229,7 @@ public class TenantSupplierService {
 
   @TenantTx
 public void softDelete(UUID id) {
-    // Comentário do método: soft-delete idempotente (204 sempre que existir, mesmo se já deletado).
+    //  soft-delete idempotente (204 sempre que existir, mesmo se já deletado).
     if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
     Supplier s = tenantSupplierRepository.findById(id)
@@ -246,7 +246,7 @@ public void softDelete(UUID id) {
 
 @TenantTx
 public Supplier restore(UUID id) {
-    // Comentário do método: restore idempotente (200 com body, mesmo se já estiver restaurado).
+    //  restore idempotente (200 com body, mesmo se já estiver restaurado).
     if (id == null) throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "id é obrigatório", 400);
 
     Supplier s = tenantSupplierRepository.findById(id)
@@ -263,7 +263,7 @@ public Supplier restore(UUID id) {
 
     @TenantReadOnlyTx
     public List<Supplier> findAnyByEmail(String email) {
-        // Comentário do método: consulta "any" (inclui deletados) para diagnósticos/admin.
+        //  consulta "any" (inclui deletados) para diagnósticos/admin.
         if (!StringUtils.hasText(email)) {
             throw new ApiException(ApiErrorCode.SUPPLIER_EMAIL_REQUIRED, "email é obrigatório", 400);
         }
@@ -275,7 +275,7 @@ public Supplier restore(UUID id) {
     // =========================================================
 
     private Supplier mapToNewEntity(CreateSupplierCommand cmd) {
-        // Comentário do método: cria entity "nova" a partir do command (sem persistência).
+        //  cria entity "nova" a partir do command (sem persistência).
         if (cmd == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "Fornecedor é obrigatório", 400);
 
         return Supplier.builder()
@@ -297,7 +297,7 @@ public Supplier restore(UUID id) {
     }
 
     void validateForCreate(Supplier supplier) {
-        // Comentário do método: valida payload de criação + normaliza campos string.
+        //  valida payload de criação + normaliza campos string.
         if (supplier == null) throw new ApiException(ApiErrorCode.SUPPLIER_REQUIRED, "Fornecedor é obrigatório", 400);
 
         if (!StringUtils.hasText(supplier.getName())) {
@@ -341,7 +341,7 @@ public Supplier restore(UUID id) {
     }
 
     private void validateRating(BigDecimal rating) {
-        // Comentário do método: valida range permitido do rating.
+        //  valida range permitido do rating.
         if (rating.compareTo(BigDecimal.ZERO) < 0) {
             throw new ApiException(ApiErrorCode.INVALID_RATING, "rating não pode ser negativo", 400);
         }

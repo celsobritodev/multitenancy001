@@ -31,11 +31,11 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 
     @Query("SELECT s FROM Supplier s WHERE s.deleted = false ORDER BY s.name ASC")
     List<Supplier> findAllNotDeleted();
-    // Comentário do método: lista fornecedores não-deletados ordenados por nome.
+    //  lista fornecedores não-deletados ordenados por nome.
 
     @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
     List<Supplier> findAllActiveNotDeleted();
-    // Comentário do método: lista fornecedores ativos e não-deletados ordenados por nome.
+    //  lista fornecedores ativos e não-deletados ordenados por nome.
 
     @Query("""
             SELECT s FROM Supplier s
@@ -44,7 +44,7 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
             ORDER BY s.name ASC
             """)
     List<Supplier> searchNotDeletedByName(@Param("name") String name);
-    // Comentário do método: busca por name (contains), não-deletados.
+    //  busca por name (contains), não-deletados.
 
     @Query("""
             SELECT s FROM Supplier s
@@ -53,7 +53,7 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
             ORDER BY s.name ASC
             """)
     List<Supplier> findNotDeletedByEmail(@Param("email") String email);
-    // Comentário do método: busca por email (exato) em não-deletados.
+    //  busca por email (exato) em não-deletados.
 
     @Query("""
             SELECT s FROM Supplier s
@@ -63,7 +63,7 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
               AND LOWER(TRIM(s.document)) = LOWER(TRIM(:document))
             """)
     Optional<Supplier> findNotDeletedByDocumentIgnoreCase(@Param("document") String document);
-    // Comentário do método: busca por document (trim + ignoreCase) em não-deletados.
+    //  busca por document (trim + ignoreCase) em não-deletados.
 
     // =========================================================
     // ANY (admin/relatórios internos) ⚠️ pode incluir deleted/inactive
@@ -75,7 +75,7 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
             ORDER BY s.name ASC
             """)
     List<Supplier> findAnyByEmail(@Param("email") String email);
-    // Comentário do método: busca por email incluindo deletados/inativos (uso admin/diagnóstico).
+    //  busca por email incluindo deletados/inativos (uso admin/diagnóstico).
 
     // =========================================================
     // LEGADOS / COMPATIBILIDADE (podem ser removidos depois)
@@ -83,7 +83,7 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
 
     @Query("SELECT s FROM Supplier s WHERE s.deleted = false ORDER BY s.name ASC")
     List<Supplier> findNotDeleted();
-    // Comentário do método: legado (equivalente a findAllNotDeleted).
+    //  legado (equivalente a findAllNotDeleted).
 
     @Query("""
             SELECT s FROM Supplier s
@@ -92,12 +92,12 @@ public interface TenantSupplierRepository extends JpaRepository<Supplier, UUID> 
             ORDER BY s.name ASC
             """)
     List<Supplier> findNotDeletedByNameContainingIgnoreCase(@Param("name") String name);
-    // Comentário do método: legado (equivalente a searchNotDeletedByName).
+    //  legado (equivalente a searchNotDeletedByName).
 
     @Query("SELECT s FROM Supplier s WHERE s.deleted = false AND s.active = true ORDER BY s.name ASC")
     List<Supplier> findActiveNotDeleted();
-    // Comentário do método: legado (equivalente a findAllActiveNotDeleted).
+    //  legado (equivalente a findAllActiveNotDeleted).
 
     List<Supplier> findByNameContainingIgnoreCase(String name);
-    // Comentário do método: legado (pode incluir deletados). Evitar em regra normal.
+    //  legado (pode incluir deletados). Evitar em regra normal.
 }

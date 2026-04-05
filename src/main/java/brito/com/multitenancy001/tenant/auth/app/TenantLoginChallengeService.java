@@ -15,23 +15,26 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Application Service responsável por criar e validar challenges de seleção de tenant no login.
+ * Serviço de aplicação responsável por gerenciar os desafios (challenges) de seleção de tenant.
  *
- * <p>Responsabilidade:</p>
- * <ul>
- *   <li>Criar um challenge temporário para {@code email} com um conjunto de {@code accountIds} candidatos.</li>
- *   <li>Validar challenge por id e verificar expiração/uso único.</li>
- *   <li>Marcar challenge como usado após confirmação bem-sucedida.</li>
- * </ul>
+ * <p><b>Propósito:</b></p>
+ * Este serviço é o coração do fluxo de login em cenários onde um e-mail está associado a múltiplos tenants.
+ * Ele cria um desafio temporário (challenge) que contém a lista de tenants candidatos e o valida
+ * posteriormente, garantindo a atomicidade e segurança do processo de seleção.
  *
- * <p>Regras de tempo:</p>
- * <ul>
- *   <li>{@code AppClock} deve ser a única fonte de tempo; esta classe não deve usar {@code Instant.now()}.</li>
- * </ul>
+ * <p><b>Fluxo Típico:</b></p>
+ * <ol>
+ *   <li>O serviço {@link TenantLoginInitService} detecta ambiguidade e chama {@link #createChallenge(String, Set)}.</li>
+ *   <li>Um challengeId é gerado, persistido no PUBLIC e retornado ao frontend.</li>
+ *   <li>O frontend envia o challengeId e a escolha (slug/accountId) para o endpoint de confirmação.</li>
+ *   <li>Este serviço é então chamado para {@link #requireValid(UUID)} validar o desafio.</li>
+ *   <li>Após a autenticação bem-sucedida no tenant escolhido, o desafio é {@link #markUsed(UUID)}.</li>
+ * </ol>
  *
- * <p>Persistência:</p>
+ * <p><b>Segurança:</b></p>
  * <ul>
- *   <li>Não define tecnologia; persiste via {@code TenantLoginChallengeStore} (boundary).</li>
+ *   <li>Os desafios possuem um TTL (Time-to-Live) fixo (10 minutos) e são invalidados após o uso.</li>
+ *   <li>Não é possível confirmar um login com um desafio expirado ou já utilizado.</li>
  * </ul>
  */
 @Service

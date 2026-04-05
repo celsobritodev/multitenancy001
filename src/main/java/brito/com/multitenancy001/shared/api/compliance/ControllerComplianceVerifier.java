@@ -50,7 +50,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        /* Comentário do método: executa o scan de controllers e falha o startup caso encontre violações. */
+        /*  executa o scan de controllers e falha o startup caso encontre violações. */
 
         List<String> violations = new ArrayList<>();
 
@@ -79,7 +79,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private Map<String, Object> findControllerBeans() {
-        /* Comentário do método: coleta todos os beans anotados com @RestController ou @Controller. */
+        /* coleta todos os beans anotados com @RestController ou @Controller. */
 
         Map<String, Object> rest = applicationContext.getBeansWithAnnotation(RestController.class);
         Map<String, Object> mvc = applicationContext.getBeansWithAnnotation(Controller.class);
@@ -92,7 +92,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private List<String> checkControllerBean(String beanName, Class<?> controllerClass) {
-        /* Comentário do método: aplica todas as regras de compliance para o controller alvo. */
+        /* aplica todas as regras de compliance para o controller alvo. */
 
         List<String> v = new ArrayList<>();
 
@@ -112,7 +112,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private List<String> checkForbiddenDependencies(String beanName, Class<?> controllerClass) {
-        /* Comentário do método: detecta campos injetados proibidos (repo/entityManager/jdbc). */
+        /*  detecta campos injetados proibidos (repo/entityManager/jdbc). */
 
         List<String> v = new ArrayList<>();
 
@@ -147,7 +147,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private List<String> checkTransactionalUsage(String beanName, Class<?> controllerClass) {
-        /* Comentário do método: impede @Transactional em classe ou métodos do controller. */
+        /* impede @Transactional em classe ou métodos do controller. */
 
         List<String> v = new ArrayList<>();
 
@@ -171,7 +171,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private List<String> checkRequestBodyValidation(String beanName, Class<?> controllerClass) {
-        /* Comentário do método: garante @Valid junto de @RequestBody (principalmente em create/update). */
+        /*  garante @Valid junto de @RequestBody (principalmente em create/update). */
 
         List<String> v = new ArrayList<>();
 
@@ -197,7 +197,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private List<String> checkReturnTypes(String beanName, Class<?> controllerClass) {
-        /* Comentário do método: impede retorno de @Entity/Optional e detecta ResponseEntity<Entity>. */
+        /* impede retorno de @Entity/Optional e detecta ResponseEntity<Entity>. */
 
         List<String> v = new ArrayList<>();
 
@@ -238,13 +238,13 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private static boolean isJpaEntity(Class<?> type) {
-        /* Comentário do método: verifica se o tipo é anotado com @Entity. */
+        /* verifica se o tipo é anotado com @Entity. */
         if (type == null) return false;
         return hasAnnotation(type, Entity.class);
     }
 
     private static Type extractSingleGenericArg(Type type) {
-        /* Comentário do método: extrai o T de ResponseEntity<T> ou retorna null. */
+        /*  extrai o T de ResponseEntity<T> ou retorna null. */
         if (!(type instanceof ParameterizedType pt)) return null;
         Type[] args = pt.getActualTypeArguments();
         if (args == null || args.length != 1) return null;
@@ -252,7 +252,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private static List<Field> getAllFields(Class<?> type) {
-        /* Comentário do método: retorna todos os campos herdados + declarados. */
+        /*  retorna todos os campos herdados + declarados. */
         List<Field> fields = new ArrayList<>();
         Class<?> current = type;
         while (current != null && current != Object.class) {
@@ -263,7 +263,7 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private static List<Method> getAllMethods(Class<?> type) {
-        /* Comentário do método: retorna métodos declarados + herdados (exceto Object). */
+        /* retorna métodos declarados + herdados (exceto Object). */
         Map<String, Method> unique = new LinkedHashMap<>();
         Class<?> current = type;
         while (current != null && current != Object.class) {
@@ -276,13 +276,13 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private static String methodKey(Method m) {
-        /* Comentário do método: cria chave única por assinatura. */
+        /*  cria chave única por assinatura. */
         String params = Arrays.stream(m.getParameterTypes()).map(Class::getName).collect(Collectors.joining(","));
         return m.getName() + "(" + params + ")";
     }
 
     private static String signature(Method m) {
-        /* Comentário do método: formata uma assinatura humana do método. */
+        /*  formata uma assinatura humana do método. */
         String params = Arrays.stream(m.getParameterTypes())
                 .map(Class::getSimpleName)
                 .collect(Collectors.joining(", "));
@@ -290,22 +290,22 @@ public class ControllerComplianceVerifier implements ApplicationRunner {
     }
 
     private static boolean hasAnnotation(AnnotatedElement element, Class<? extends Annotation> ann) {
-        /* Comentário do método: checa anotação considerando meta-annotations (sem raw types). */
+        /*  checa anotação considerando meta-annotations (sem raw types). */
         return AnnotatedElementUtils.hasAnnotation(element, ann);
     }
 
     private static boolean isExempt(AnnotatedElement element) {
-        /* Comentário do método: ignora itens anotados com @ControllerComplianceExempt. */
+        /*  ignora itens anotados com @ControllerComplianceExempt. */
         return hasAnnotation(element, ControllerComplianceExempt.class);
     }
 
     private static String fmt(String beanName, Class<?> controllerClass, String code, String msg) {
-        /* Comentário do método: padroniza mensagens para facilitar leitura no fail-fast. */
+        /*  padroniza mensagens para facilitar leitura no fail-fast. */
         return "[" + code + "] bean=" + beanName + " controller=" + controllerClass.getName() + " :: " + msg;
     }
 
     private static String buildFailFastMessage(List<String> violations) {
-        /* Comentário do método: monta mensagem final (agrupada) para exception de startup. */
+        /*  monta mensagem final (agrupada) para exception de startup. */
         StringBuilder sb = new StringBuilder(4096);
         sb.append("\n");
         sb.append("============================================================\n");

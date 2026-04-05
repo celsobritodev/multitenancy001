@@ -35,7 +35,7 @@ public class TenantSupplierController {
     @GetMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<List<SupplierResponse>> listAll() {
-        // Comentário do método: lista padrão (não-deletados) e mapeia para DTO.
+        // lista padrão (não-deletados) e mapeia para DTO.
         List<Supplier> list = tenantSupplierService.findAll();
         return ResponseEntity.ok(supplierApiMapper.toResponseList(list));
     }
@@ -43,7 +43,7 @@ public class TenantSupplierController {
     @GetMapping("/active")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<List<SupplierResponse>> listActive() {
-        // Comentário do método: lista apenas ativos (não-deletados) e mapeia para DTO.
+        // lista apenas ativos (não-deletados) e mapeia para DTO.
         List<Supplier> list = tenantSupplierService.findActive();
         return ResponseEntity.ok(supplierApiMapper.toResponseList(list));
     }
@@ -51,7 +51,7 @@ public class TenantSupplierController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<SupplierResponse> getById(@PathVariable UUID id) {
-        // Comentário do método: busca por id e retorna DTO.
+        // busca por id e retorna DTO.
         Supplier s = tenantSupplierService.findById(id);
         return ResponseEntity.ok(supplierApiMapper.toResponse(s));
     }
@@ -59,7 +59,7 @@ public class TenantSupplierController {
     @GetMapping("/document/{document}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<SupplierResponse> getByDocument(@PathVariable String document) {
-        // Comentário do método: busca por document e retorna DTO.
+        // busca por document e retorna DTO.
         Supplier s = tenantSupplierService.findByDocument(document);
         return ResponseEntity.ok(supplierApiMapper.toResponse(s));
     }
@@ -67,7 +67,7 @@ public class TenantSupplierController {
     @GetMapping("/search")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<List<SupplierResponse>> searchByName(@RequestParam("name") String name) {
-        // Comentário do método: busca por nome e retorna lista DTO.
+        // busca por nome e retorna lista DTO.
         List<Supplier> list = tenantSupplierService.searchByName(name);
         return ResponseEntity.ok(supplierApiMapper.toResponseList(list));
     }
@@ -75,7 +75,7 @@ public class TenantSupplierController {
     @GetMapping("/email")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<List<SupplierResponse>> getByEmail(@RequestParam("email") String email) {
-        // Comentário do método: busca por email (não-deletados) e retorna DTO.
+        // busca por email (não-deletados) e retorna DTO.
         List<Supplier> list = tenantSupplierService.findByEmail(email);
         return ResponseEntity.ok(supplierApiMapper.toResponseList(list));
     }
@@ -83,7 +83,7 @@ public class TenantSupplierController {
     @GetMapping("/email/any")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_READ.asAuthority())")
     public ResponseEntity<List<SupplierResponse>> findAnyByEmail(@RequestParam String email) {
-        // Comentário do método: busca por email incluindo deletados (uso administrativo/diagnóstico).
+        // busca por email incluindo deletados (uso administrativo/diagnóstico).
         List<Supplier> list = tenantSupplierService.findAnyByEmail(email);
         return ResponseEntity.ok(supplierApiMapper.toResponseList(list));
     }
@@ -91,7 +91,7 @@ public class TenantSupplierController {
     @PostMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.asAuthority())")
     public ResponseEntity<SupplierResponse> create(@Valid @RequestBody SupplierCreateRequest req) {
-        // Comentário do método: converte DTO -> Command e delega regras ao Service.
+        // converte DTO -> Command e delega regras ao Service.
         Supplier saved = tenantSupplierService.create(supplierApiMapper.toCreateCommand(req));
         return ResponseEntity.status(HttpStatus.CREATED).body(supplierApiMapper.toResponse(saved));
     }
@@ -99,7 +99,7 @@ public class TenantSupplierController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.asAuthority())")
     public ResponseEntity<SupplierResponse> update(@PathVariable UUID id, @Valid @RequestBody SupplierUpdateRequest req) {
-        // Comentário do método: converte DTO -> Command e aplica update com semântica "null não altera".
+        // converte DTO -> Command e aplica update com semântica "null não altera".
         Supplier updated = tenantSupplierService.update(id, supplierApiMapper.toUpdateCommand(req));
         return ResponseEntity.ok(supplierApiMapper.toResponse(updated));
     }
@@ -107,7 +107,7 @@ public class TenantSupplierController {
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.asAuthority())")
     public ResponseEntity<SupplierResponse> toggleActive(@PathVariable UUID id) {
-        // Comentário do método: alterna active e retorna DTO.
+        // alterna active e retorna DTO.
         Supplier updated = tenantSupplierService.toggleActive(id);
         return ResponseEntity.ok(supplierApiMapper.toResponse(updated));
     }
@@ -115,7 +115,7 @@ public class TenantSupplierController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.asAuthority())")
     public ResponseEntity<Void> softDelete(@PathVariable UUID id) {
-        // Comentário do método: soft delete e retorna 204.
+        // soft delete e retorna 204.
         tenantSupplierService.softDelete(id);
         return ResponseEntity.noContent().build();
     }
@@ -123,7 +123,7 @@ public class TenantSupplierController {
     @PatchMapping("/{id}/restore")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_SUPPLIER_WRITE.asAuthority())")
     public ResponseEntity<SupplierResponse> restore(@PathVariable UUID id) {
-        // Comentário do método: restaura e retorna DTO.
+        // restaura e retorna DTO.
         Supplier restored = tenantSupplierService.restore(id);
         return ResponseEntity.ok(supplierApiMapper.toResponse(restored));
     }

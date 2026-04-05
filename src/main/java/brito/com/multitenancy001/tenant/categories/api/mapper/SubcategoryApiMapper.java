@@ -20,7 +20,7 @@ public class SubcategoryApiMapper {
      * DTO + path param -> Command.
      */
     public CreateSubcategoryCommand toCreateCommand(Long categoryId, SubcategoryCreateRequest req) {
-        // Comentário do método: Service valida e normaliza.
+        //  Service valida e normaliza.
         return new CreateSubcategoryCommand(categoryId, req.name());
     }
 
@@ -28,7 +28,7 @@ public class SubcategoryApiMapper {
      * DTO -> Command.
      */
     public UpdateSubcategoryCommand toUpdateCommand(SubcategoryUpdateRequest req) {
-        // Comentário do método: PUT exige name.
+        //  PUT exige name.
         return new UpdateSubcategoryCommand(req.name());
     }
 
@@ -36,7 +36,7 @@ public class SubcategoryApiMapper {
      * Domain -> Response.
      */
     public SubcategoryResponse toResponse(Subcategory s) {
-        // Comentário do método: categoryId é derivado do relacionamento.
+        //  categoryId é derivado do relacionamento.
         Long categoryId = (s.getCategory() != null ? s.getCategory().getId() : null);
 
         return new SubcategoryResponse(
@@ -52,7 +52,7 @@ public class SubcategoryApiMapper {
      * Lista Domain -> Lista Response.
      */
     public List<SubcategoryResponse> toResponseList(List<Subcategory> list) {
-        // Comentário do método: map simples.
+        //  map simples.
         return list.stream().map(this::toResponse).toList();
     }
 }

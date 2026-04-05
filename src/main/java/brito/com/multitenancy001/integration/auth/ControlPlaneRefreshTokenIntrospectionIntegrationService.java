@@ -22,7 +22,7 @@ public class ControlPlaneRefreshTokenIntrospectionIntegrationService {
     private final JwtTokenProvider jwtTokenProvider;
 
     public ControlPlaneRefreshIdentity parseOrThrow(String refreshToken) {
-        // Comentário: valida refresh token e extrai identidade mínima
+        //  valida refresh token e extrai identidade mínima
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }

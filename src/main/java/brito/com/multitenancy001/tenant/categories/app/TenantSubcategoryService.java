@@ -84,7 +84,7 @@ public class TenantSubcategoryService {
      * Cria Subcategory dentro de uma Category.
      */
     public Subcategory create(CreateSubcategoryCommand cmd) {
-        // Comentário do método: validações de negócio + multirepo dentro de tenantSchemaUnitOfWork.
+        // validações de negócio + multirepo dentro de tenantSchemaUnitOfWork.
         if (cmd == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório", 400);
         if (cmd.categoryId() == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
         if (!StringUtils.hasText(cmd.name())) {
@@ -127,7 +127,7 @@ public class TenantSubcategoryService {
      * Atualiza Subcategory.
      */
     public Subcategory update(Long id, UpdateSubcategoryCommand cmd) {
-        // Comentário do método: proíbe atualizar deletada; valida unicidade por categoria.
+        //  proíbe atualizar deletada; valida unicidade por categoria.
         if (id == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório", 400);
         if (cmd == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório", 400);
         if (!StringUtils.hasText(cmd.name())) {
@@ -185,7 +185,7 @@ public class TenantSubcategoryService {
      */
     @TenantTx
     public void softDelete(Long id) {
-        // Comentário do método: contrato HTTP pede sempre 204.
+        //  contrato HTTP pede sempre 204.
         if (id == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         tenantSubcategoryRepository.findByIdWithCategory(id).ifPresent(sub -> {

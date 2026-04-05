@@ -37,7 +37,7 @@ public class TenantCategoryController {
     @GetMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<CategoryResponse>> listAll() {
-        // Comentário do método: contrato retorna DTO, não Entity.
+        //  contrato retorna DTO, não Entity.
         return ResponseEntity.ok(categoryApiMapper.toResponseList(tenantCategoryService.findAll()));
     }
 
@@ -47,7 +47,7 @@ public class TenantCategoryController {
     @GetMapping("/active")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<CategoryResponse>> listActive() {
-        // Comentário do método: retorna apenas ativas (padrão atual do service).
+        //  retorna apenas ativas (padrão atual do service).
         return ResponseEntity.ok(categoryApiMapper.toResponseList(tenantCategoryService.findActive()));
     }
 
@@ -57,7 +57,7 @@ public class TenantCategoryController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<CategoryResponse> getById(@PathVariable Long id) {
-        // Comentário do método: service garante 404 quando deleted.
+        //  service garante 404 quando deleted.
         Category c = tenantCategoryService.findById(id);
         return ResponseEntity.ok(categoryApiMapper.toResponse(c));
     }
@@ -68,7 +68,7 @@ public class TenantCategoryController {
     @GetMapping("/search")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_READ.asAuthority())")
     public ResponseEntity<List<CategoryResponse>> search(@RequestParam("name") String name) {
-        // Comentário do método: service valida required/blank.
+        //  service valida required/blank.
         return ResponseEntity.ok(categoryApiMapper.toResponseList(tenantCategoryService.searchByName(name)));
     }
 
@@ -81,7 +81,7 @@ public class TenantCategoryController {
             @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "false") boolean includeInactive
     ) {
-        // Comentário do método: expõe deleted/active no DTO para suportar visão admin.
+        //  expõe deleted/active no DTO para suportar visão admin.
         return ResponseEntity.ok(
                 categoryApiMapper.toResponseList(tenantCategoryService.findWithFlags(includeDeleted, includeInactive))
         );
@@ -93,7 +93,7 @@ public class TenantCategoryController {
     @PostMapping
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryCreateRequest req) {
-        // Comentário do método: DTO -> Command -> Service.
+        //  DTO -> Command -> Service.
         Category saved = tenantCategoryService.create(categoryApiMapper.toCreateCommand(req));
         return ResponseEntity.status(HttpStatus.CREATED).body(categoryApiMapper.toResponse(saved));
     }
@@ -104,7 +104,7 @@ public class TenantCategoryController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<CategoryResponse> update(@PathVariable Long id, @Valid @RequestBody CategoryUpdateRequest req) {
-        // Comentário do método: service decide 404/409 conforme regras (deleted etc).
+        //  service decide 404/409 conforme regras (deleted etc).
         Category updated = tenantCategoryService.update(id, categoryApiMapper.toUpdateCommand(req));
         return ResponseEntity.ok(categoryApiMapper.toResponse(updated));
     }
@@ -115,7 +115,7 @@ public class TenantCategoryController {
     @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<CategoryResponse> toggleActive(@PathVariable Long id) {
-        // Comentário do método: mantém endpoint existente, apenas troca retorno para DTO.
+        //  mantém endpoint existente, apenas troca retorno para DTO.
         return ResponseEntity.ok(categoryApiMapper.toResponse(tenantCategoryService.toggleActive(id)));
     }
 
@@ -125,7 +125,7 @@ public class TenantCategoryController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<Void> softDelete(@PathVariable Long id) {
-        // Comentário do método: service implementa idempotência.
+        //  service implementa idempotência.
         tenantCategoryService.softDelete(id);
         return ResponseEntity.noContent().build();
     }
@@ -136,7 +136,7 @@ public class TenantCategoryController {
     @PatchMapping("/{id}/restore")
     @PreAuthorize("hasAuthority(T(brito.com.multitenancy001.tenant.security.TenantPermission).TEN_CATEGORY_WRITE.asAuthority())")
     public ResponseEntity<CategoryResponse> restore(@PathVariable Long id) {
-        // Comentário do método: 404 se não existir; 200 com DTO se restaurar.
+        //  404 se não existir; 200 com DTO se restaurar.
         return ResponseEntity.ok(categoryApiMapper.toResponse(tenantCategoryService.restore(id)));
     }
 }

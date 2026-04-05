@@ -26,7 +26,7 @@ public class ControlPlaneAuthAuditIntegrationService {
     private final JsonDetailsMapper jsonDetailsMapper;
 
     public void auditLoginSuccess(Long userId, String email) {
-        /** comentário: registra sucesso de login do Control Plane */
+        /** registra sucesso de login do Control Plane */
         authEventAuditService.record(
                 AuthDomain.CONTROLPLANE,
                 AuthEventType.LOGIN_SUCCESS,
@@ -40,7 +40,7 @@ public class ControlPlaneAuthAuditIntegrationService {
     }
 
     public void auditLoginFailure(String email, String reason) {
-        /** comentário: registra falha de login do Control Plane com reason estruturado */
+        /**  registra falha de login do Control Plane com reason estruturado */
         String detailsJson = (reason == null) ? null : toJson(m("reason", reason));
 
         authEventAuditService.record(
@@ -56,13 +56,13 @@ public class ControlPlaneAuthAuditIntegrationService {
     }
 
     private String toJson(Object details) {
-        /** comentário: converte details (Map/record/String) em JSON string compatível com jsonb */
+        /**  converte details (Map/record/String) em JSON string compatível com jsonb */
         if (details == null) return null;
         return jsonDetailsMapper.toJsonNode(details).toString();
     }
 
     private static Map<String, Object> m(Object... kv) {
-        /** comentário: cria LinkedHashMap em pares key/value com ordem estável */
+        /**  cria LinkedHashMap em pares key/value com ordem estável */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
         if (kv.length % 2 != 0) throw new IllegalArgumentException("m(kv): quantidade ímpar de argumentos");

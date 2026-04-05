@@ -5,21 +5,29 @@ import java.util.Objects;
 import brito.com.multitenancy001.shared.db.Schemas;
 
 /**
- * Contexto de tenant por thread.
+ * Contexto de tenant por thread (ponto de acesso central para multi-tenancy).
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Responsabilidades:</b></p>
  * <ul>
- *   <li>Manter o schema efetivo durante o processamento da request.</li>
- *   <li>Fornecer escopo seguro via try-with-resources.</li>
- *   <li>Bloquear rebind indevido de tenant diferente no mesmo thread.</li>
+ *   <li>Manter o identificador do schema ativo (tenantSchema) durante o processamento da requisição.</li>
+ *   <li>Fornecer um mecanismo seguro de escopo ({@link Scope}) via try-with-resources.</li>
+ *   <li>Impedir a troca indevida de tenant no mesmo thread (fail-fast).</li>
  * </ul>
  *
- * <p>Regras:</p>
+ * <p><b>Convenções:</b></p>
  * <ul>
- *   <li>PUBLIC é representado por ausência de tenant bindado.</li>
- *   <li>Bind do mesmo tenant é idempotente.</li>
- *   <li>Troca de tenant no mesmo thread gera fail-fast.</li>
+ *   <li>A ausência de um tenant bindado representa o schema PUBLIC (Control Plane).</li>
+ *   <li>O bind do mesmo tenant é idempotente e não causa erro.</li>
+ *   <li>A tentativa de bind de um tenant diferente quando outro já está ativo lança {@link IllegalStateException}.</li>
  * </ul>
+ *
+ * <p><b>Uso típico:</b></p>
+ * <pre>{@code
+ * // Executar um bloco no contexto de um tenant específico
+ * try (TenantContext.Scope scope = TenantContext.scope(tenantSchema)) {
+ *     // Qualquer operação de banco de dados aqui será roteada para o schema 'tenantSchema'
+ * }
+ * }</pre>
  */
 public final class TenantContext {
 

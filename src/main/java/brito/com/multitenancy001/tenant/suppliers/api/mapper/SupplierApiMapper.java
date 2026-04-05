@@ -24,7 +24,7 @@ public class SupplierApiMapper {
      * Mapeia request HTTP para Command de criação.
      */
     public CreateSupplierCommand toCreateCommand(SupplierCreateRequest req) {
-        // Comentário do método: normalização final (trim/uniqueness) acontece no Service.
+        // normalização final (trim/uniqueness) acontece no Service.
         return new CreateSupplierCommand(
                 req.name(),
                 req.contactPerson(),
@@ -45,7 +45,7 @@ public class SupplierApiMapper {
      * Mapeia request HTTP para Command de atualização.
      */
     public UpdateSupplierCommand toUpdateCommand(SupplierUpdateRequest req) {
-        // Comentário do método: campos null significam "não alterar" (compat com comportamento atual).
+        // campos null significam "não alterar" (compat com comportamento atual).
         return new UpdateSupplierCommand(
                 req.name(),
                 req.contactPerson(),
@@ -66,7 +66,7 @@ public class SupplierApiMapper {
      * Mapeia Domain para Response HTTP.
      */
     public SupplierResponse toResponse(Supplier s) {
-        // Comentário do método: expõe flags active/deleted para suportar listagens e admin.
+        // expõe flags active/deleted para suportar listagens e admin.
         return new SupplierResponse(
                 s.getId(),
                 s.getName(),
@@ -90,7 +90,7 @@ public class SupplierApiMapper {
      * Mapeia lista Domain para lista Response.
      */
     public List<SupplierResponse> toResponseList(List<Supplier> list) {
-        // Comentário do método: stream simples, sem regras.
+        // stream simples, sem regras.
         return list.stream().map(this::toResponse).toList();
     }
 }

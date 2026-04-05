@@ -25,7 +25,7 @@ public class ControlPlaneAuthenticationIntegrationService {
     private final MultiContextUserDetailsService multiContextUserDetailsService;
 
     public Authentication buildControlPlaneAuthentication(String email, Long accountId) {
-        /** comentário: carrega principal CP (com authorities) e cria Authentication */
+        /** carrega principal CP (com authorities) e cria Authentication */
         AuthenticatedUserContext principal = (AuthenticatedUserContext)
                 multiContextUserDetailsService.loadControlPlaneUserByEmail(email, accountId);
 

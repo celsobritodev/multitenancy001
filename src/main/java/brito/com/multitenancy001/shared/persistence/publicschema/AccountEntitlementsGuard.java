@@ -11,22 +11,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Guard central de quota e entitlements no PUBLIC schema.
+ * Ponto central de enforcement de quotas e limites de conta, operando no schema PUBLIC.
  *
  * <p><b>Responsabilidades:</b></p>
  * <ul>
- *   <li>Carregar a conta pública associada ao tenant.</li>
- *   <li>Executar asserts de quota com logs de diagnóstico.</li>
- *   <li>Concentrar o boundary PUBLIC para enforcement de hard limits.</li>
- *   <li>Expor snapshot efetivo de entitlements para troubleshooting.</li>
+ *   <li>Garantir que operações de escrita (criação de usuário/produto) respeitem os limites do plano.</li>
+ *   <li>Atuar como a fronteira de segurança entre o contexto do Tenant e as regras de negócio do Control Plane.</li>
+ *   <li>Fornecer logs detalhados de diagnóstico para ações de quota.</li>
+ *   <li>Servir como um anti-corruption layer, evitando que regras de faturamento/plano vazem para o domínio do Tenant.</li>
  * </ul>
  *
- * <p><b>Diretriz arquitetural:</b></p>
+ * <p><b>Regras de Uso:</b></p>
  * <ul>
- *   <li>O bridge TENANT -&gt; PUBLIC continua sendo responsabilidade do chamador.</li>
- *   <li>Este guard deve permanecer enxuto e delegar a regra ao
- *       {@link AccountEntitlementsService}.</li>
- *   <li>Os logs deste guard são parte do monitoramento da V30.</li>
+ *   <li>Deve ser chamado ANTES da operação de escrita efetiva no Tenant.</li>
+ *   <li>As operações rodam em contexto PUBLIC e exigem que o chamador faça a transição de contexto (TENANT -> PUBLIC).</li>
+ *   <li>Contas built-in (plataforma) são automaticamente consideradas ilimitadas.</li>
  * </ul>
  */
 @Service

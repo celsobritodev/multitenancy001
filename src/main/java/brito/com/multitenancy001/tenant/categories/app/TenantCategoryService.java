@@ -36,7 +36,7 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public Category findById(Long id) {
-        // Comentário do método: contrato exige 400 para id null e 404 para deleted.
+        //  contrato exige 400 para id null e 404 para deleted.
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category c = tenantCategoryRepository.findById(id)
@@ -52,19 +52,19 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public List<Category> findAll() {
-        // Comentário do método: NOT deleted.
+        //  NOT deleted.
         return tenantCategoryRepository.findNotDeleted();
     }
 
     @TenantReadOnlyTx
     public List<Category> findActive() {
-        // Comentário do método: NOT deleted e active=true.
+        //  NOT deleted e active=true.
         return tenantCategoryRepository.findNotDeletedActive();
     }
 
     @TenantReadOnlyTx
     public List<Category> searchByName(String name) {
-        // Comentário do método: valida input e retorna NOT deleted.
+        //  valida input e retorna NOT deleted.
         if (!StringUtils.hasText(name)) {
             throw new ApiException(ApiErrorCode.CATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
         }
@@ -73,7 +73,7 @@ public class TenantCategoryService {
 
     @TenantReadOnlyTx
     public List<Category> findWithFlags(boolean includeDeleted, boolean includeInactive) {
-        // Comentário do método: endpoint admin (pode trazer deleted/inactive conforme flags).
+        //  endpoint admin (pode trazer deleted/inactive conforme flags).
         return tenantCategoryRepository.findWithFlags(includeDeleted, includeInactive);
     }
 
@@ -83,7 +83,7 @@ public class TenantCategoryService {
 
     @TenantTx
     public Category create(CreateCategoryCommand cmd) {
-        // Comentário do método: Command -> Domain (cria entidade aqui).
+        //  Command -> Domain (cria entidade aqui).
         if (cmd == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
         if (!StringUtils.hasText(cmd.name())) {
             throw new ApiException(ApiErrorCode.CATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
@@ -106,7 +106,7 @@ public class TenantCategoryService {
 
     @TenantTx
     public Category update(Long id, UpdateCategoryCommand cmd) {
-        // Comentário do método: validações e regra de "não atualizar deletado".
+        //  validações e regra de "não atualizar deletado".
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
         if (cmd == null) throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "payload é obrigatório", 400);
 
@@ -137,7 +137,7 @@ public class TenantCategoryService {
 
     @TenantTx
     public Category toggleActive(Long id) {
-        // Comentário do método: mantém comportamento atual, apenas centraliza validações.
+        //  mantém comportamento atual, apenas centraliza validações.
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category category = tenantCategoryRepository.findById(id)
@@ -153,7 +153,7 @@ public class TenantCategoryService {
 
     @TenantTx
     public void softDelete(Long id) {
-        // Comentário do método: CONTRATO IDÊMPOTENTE => sempre "ok" (controller retorna 204).
+        //  CONTRATO IDÊMPOTENTE => sempre "ok" (controller retorna 204).
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         tenantCategoryRepository.findById(id).ifPresent(category -> {
@@ -165,7 +165,7 @@ public class TenantCategoryService {
 
     @TenantTx
     public Category restore(Long id) {
-        // Comentário do método: restauração mantém 404 se não existir (padrão atual).
+        //  restauração mantém 404 se não existir (padrão atual).
         if (id == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "id é obrigatório", 400);
 
         Category category = tenantCategoryRepository.findById(id)

@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class PersistenceExceptionHandlerSupport {
+public class PersistenceExceptionHandlerComponent {
 
     private final AppClock appClock;
 

@@ -33,7 +33,7 @@ public class AccountJobScheduler {
      */
     @Scheduled(fixedDelayString = "${app.jobs.scan-delay-ms:60000}")
     public void runDueJobs() {
-        /* comentário: varre jobs vencidos e nunca derruba a aplicação */
+        /*  varre jobs vencidos e nunca derruba a aplicação */
         try {
             accountJobScheduleRepository.findDue(appClock.instant())
                     .forEach(job -> {

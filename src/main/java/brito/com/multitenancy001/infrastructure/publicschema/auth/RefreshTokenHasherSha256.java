@@ -14,7 +14,7 @@ public class RefreshTokenHasherSha256 implements RefreshTokenHasher {
 
     @Override
     public String hash(String refreshToken) {
-        // Comentário: gera SHA-256 hex estável
+        //  gera SHA-256 hex estável
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(refreshToken.getBytes(StandardCharsets.UTF_8));

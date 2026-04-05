@@ -41,7 +41,7 @@ public class TenantTokenRefreshService {
 
     public JwtResult refresh(String refreshToken) {
 
-        /** comentário: valida request, executa refresh e rotaciona sessão server-side */
+        /**  valida request, executa refresh e rotaciona sessão server-side */
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
         }
@@ -85,13 +85,13 @@ public class TenantTokenRefreshService {
     }
 
     private String toJson(Object details) {
-        /** comentário: converte details (Map/record/String) em JSON string compatível com jsonb */
+        /**  converte details (Map/record/String) em JSON string compatível com jsonb */
         if (details == null) return null;
         return jsonDetailsMapper.toJsonNode(details).toString();
     }
 
     private static Map<String, Object> m(Object... kv) {
-        /** comentário: cria LinkedHashMap em pares key/value com ordem estável */
+        /**  cria LinkedHashMap em pares key/value com ordem estável */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
         if (kv.length % 2 != 0) throw new IllegalArgumentException("m(kv): quantidade ímpar de argumentos");
