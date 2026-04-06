@@ -25,6 +25,7 @@ import brito.com.multitenancy001.tenant.security.TenantPermission;
 import brito.com.multitenancy001.tenant.security.TenantRole;
 import brito.com.multitenancy001.tenant.security.TenantRolePermissions;
 import brito.com.multitenancy001.tenant.subscription.app.TenantQuotaEnforcementService;
+import brito.com.multitenancy001.tenant.subscription.app.TenantUsageSnapshotAfterCommitService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,14 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de uso de criação de usuários do tenant.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Validar payload e contexto mínimo.</li>
+ *   <li>Executar enforcement de quota antes da escrita.</li>
+ *   <li>Persistir o usuário dentro da transação tenant.</li>
+ *   <li>Agendar side effects pós-transação de identidade e refresh de usage snapshot.</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -47,7 +56,27 @@ public class TenantUserCreateCommandService {
     private final TenantQuotaEnforcementService tenantQuotaEnforcementService;
     private final TenantUserAuditService tenantUserAuditService;
     private final TenantUserActorResolver tenantUserActorResolver;
+    private final TenantUsageSnapshotAfterCommitService tenantUsageSnapshotAfterCommitService;
 
+    /**
+     * Cria usuário tenant com pré-check de quota, persistência transacional
+     * e side effects pós-transação.
+     *
+     * @param accountId id da conta
+     * @param tenantSchema schema do tenant
+     * @param name nome do usuário
+     * @param email email do usuário
+     * @param rawPassword senha em texto puro
+     * @param role role tenant
+     * @param phone telefone
+     * @param avatarUrl avatar
+     * @param locale locale
+     * @param timezone timezone
+     * @param requestedPermissions permissões explícitas
+     * @param mustChangePassword flag de troca obrigatória
+     * @param origin origem da entidade
+     * @return usuário salvo
+     */
     public TenantUser createTenantUser(
             Long accountId,
             String tenantSchema,
@@ -91,7 +120,8 @@ public class TenantUserCreateCommandService {
         AtomicReference<Long> savedUserId = new AtomicReference<>();
 
         TenantUser saved = tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
-            final TenantUserAuditService.Actor actor = tenantUserActorResolver.resolveActorOrNull(accountId, normalizedTenantSchema);
+            final TenantUserAuditService.Actor actor =
+                    tenantUserActorResolver.resolveActorOrNull(accountId, normalizedTenantSchema);
             final int requestedCount = requestedPermissions == null ? 0 : requestedPermissions.size();
 
             tenantUserAuditService.recordAudit(
@@ -231,17 +261,36 @@ public class TenantUserCreateCommandService {
             afterTransactionCompletion.runAfterCompletion(() -> {
                 try {
                     loginIdentityService.ensureTenantIdentity(finalEmail, accountId);
-                    log.info("ensureTenantIdentity executado após completion. accountId={}, userId={}, email={}",
-                            accountId, finalUserId, finalEmail);
+                    log.info(
+                            "ensureTenantIdentity executado após completion. accountId={}, userId={}, email={}",
+                            accountId,
+                            finalUserId,
+                            finalEmail
+                    );
                 } catch (Exception e) {
-                    log.error("Falha ao garantir identidade de login após completion (best-effort). accountId={}, userId={}, email={}",
-                            accountId, finalUserId, finalEmail, e);
+                    log.error(
+                            "Falha ao garantir identidade de login após completion (best-effort). accountId={}, userId={}, email={}",
+                            accountId,
+                            finalUserId,
+                            finalEmail,
+                            e
+                    );
                 }
             });
         }
 
-        log.info("Criação de usuário tenant finalizada com sucesso. accountId={}, tenantSchema={}, userId={}, email={}",
-                accountId, normalizedTenantSchema, saved.getId(), saved.getEmail());
+        tenantUsageSnapshotAfterCommitService.scheduleRefreshAfterCommit(
+                accountId,
+                normalizedTenantSchema
+        );
+
+        log.info(
+                "Criação de usuário tenant finalizada com sucesso. accountId={}, tenantSchema={}, userId={}, email={}",
+                accountId,
+                normalizedTenantSchema,
+                saved.getId(),
+                saved.getEmail()
+        );
 
         return saved;
     }

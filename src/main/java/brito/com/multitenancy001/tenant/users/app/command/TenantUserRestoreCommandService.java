@@ -11,6 +11,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.service.LoginIdentityService;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.tenant.subscription.app.TenantUsageSnapshotAfterCommitService;
 import brito.com.multitenancy001.tenant.users.domain.TenantUser;
 import brito.com.multitenancy001.tenant.users.persistence.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,13 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de uso de restore de usuários do tenant.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Validar contexto de restore.</li>
+ *   <li>Restaurar a entidade no schema tenant.</li>
+ *   <li>Executar side effects pós-transação de identidade e refresh de usage snapshot.</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -30,7 +38,16 @@ public class TenantUserRestoreCommandService {
     private final AfterTransactionCompletion afterTransactionCompletion;
     private final TenantUserAuditService tenantUserAuditService;
     private final TenantUserActorResolver tenantUserActorResolver;
+    private final TenantUsageSnapshotAfterCommitService tenantUsageSnapshotAfterCommitService;
 
+    /**
+     * Restaura usuário previamente deletado logicamente.
+     *
+     * @param userId id do usuário
+     * @param accountId id da conta
+     * @param tenantSchema schema do tenant
+     * @return usuário restaurado
+     */
     public TenantUser restore(Long userId, Long accountId, String tenantSchema) {
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatorio", 400);
@@ -46,7 +63,8 @@ public class TenantUserRestoreCommandService {
         AtomicReference<String> restoredEmail = new AtomicReference<>();
 
         TenantUser saved = tenantSchemaUnitOfWork.tx(normalizedTenantSchema, () -> {
-            TenantUserAuditService.Actor actor = tenantUserActorResolver.resolveActorOrNull(accountId, normalizedTenantSchema);
+            TenantUserAuditService.Actor actor =
+                    tenantUserActorResolver.resolveActorOrNull(accountId, normalizedTenantSchema);
 
             TenantUser user = tenantUserRepository.findIncludingDeletedByIdAndAccountId(userId, accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuario não encontrado", 404));
@@ -58,7 +76,10 @@ public class TenantUserRestoreCommandService {
                     user.getId(),
                     accountId,
                     normalizedTenantSchema,
-                    tenantUserAuditService.m("scope", "TENANT", "reason", "softRestore"),
+                    tenantUserAuditService.m(
+                            "scope", "TENANT",
+                            "reason", "softRestore"
+                    ),
                     null,
                     () -> {
                         user.restore();
@@ -74,14 +95,34 @@ public class TenantUserRestoreCommandService {
             afterTransactionCompletion.runAfterCompletion(() -> {
                 try {
                     loginIdentityService.ensureTenantIdentity(restoredEmail.get(), accountId);
-                    log.info("ensureTenantIdentity executado após restore. email={} accountId={}",
-                            restoredEmail.get(), accountId);
+                    log.info(
+                            "ensureTenantIdentity executado após restore. email={} accountId={}",
+                            restoredEmail.get(),
+                            accountId
+                    );
                 } catch (Exception e) {
-                    log.error("Falha ao garantir identidade após restore (best-effort). email={} accountId={}",
-                            restoredEmail.get(), accountId, e);
+                    log.error(
+                            "Falha ao garantir identidade após restore (best-effort). email={} accountId={}",
+                            restoredEmail.get(),
+                            accountId,
+                            e
+                    );
                 }
             });
         }
+
+        tenantUsageSnapshotAfterCommitService.scheduleRefreshAfterCommit(
+                accountId,
+                normalizedTenantSchema
+        );
+
+        log.info(
+                "Restore de usuário concluído. accountId={}, tenantSchema={}, userId={}, restoredEmail={}",
+                accountId,
+                normalizedTenantSchema,
+                saved.getId(),
+                restoredEmail.get()
+        );
 
         return saved;
     }

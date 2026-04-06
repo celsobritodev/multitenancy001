@@ -1,96 +1,90 @@
 package brito.com.multitenancy001.integration.tenant.subscription;
 
+import java.time.Instant;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.controlplane.accounts.app.subscription.AccountUsageSnapshotUpsertService;
 import brito.com.multitenancy001.infrastructure.tenant.TenantContextExecutor;
-import brito.com.multitenancy001.integration.tenant.dto.TenantUsageSnapshot;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.time.AppClock;
 import brito.com.multitenancy001.tenant.subscription.app.TenantUsageMeasurementService;
 import brito.com.multitenancy001.tenant.subscription.app.dto.TenantUsageMeasurement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Camada explícita de integração entre outros contextos e o contexto Tenant
- * para medição/sincronização de uso de subscription/quota.
+ * Serviço de integração responsável por sincronizar o uso real do tenant
+ * para o snapshot materializado no schema public.
  *
  * <p>Responsabilidades:</p>
  * <ul>
- *   <li>Executar schema switch para o tenant alvo.</li>
- *   <li>Delegar a medição real para o contexto Tenant.</li>
- *   <li>Manter compatibilidade para leitura direta de medição quando necessário.</li>
- *   <li>Delegar sincronização do snapshot público ao service especializado.</li>
+ *   <li>Executar schema switch controlado para o tenant alvo.</li>
+ *   <li>Delegar a medição real ao contexto Tenant.</li>
+ *   <li>Persistir/atualizar o snapshot público de uso da conta.</li>
+ *   <li>Centralizar logs, validações e semântica de sincronização cross-boundary.</li>
  * </ul>
  *
- * <p>Observação:</p>
+ * <p>Regras arquiteturais:</p>
  * <ul>
- *   <li>Após a primeira refatoração do Control Plane, este service não é mais
- *       a fonte principal de decisão de subscription.</li>
- *   <li>O caminho preferencial agora é sincronizar e ler o snapshot público materializado.</li>
+ *   <li>A medição continua no contexto Tenant.</li>
+ *   <li>O snapshot público é a fonte de verdade consumida pelo Control Plane.</li>
+ *   <li>Este service não executa decisão de negócio de subscription; apenas sincroniza estado materializado.</li>
  * </ul>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TenantSubscriptionUsageIntegrationService {
+public class TenantUsageSnapshotSyncService {
 
-    private final TenantContextExecutor tenantExecutor;
+    private final TenantContextExecutor tenantContextExecutor;
     private final TenantUsageMeasurementService tenantUsageMeasurementService;
-    private final TenantUsageSnapshotSyncService tenantUsageSnapshotSyncService;
+    private final AccountUsageSnapshotUpsertService accountUsageSnapshotUpsertService;
+    private final AppClock appClock;
 
     /**
-     * Mede o uso atual do tenant para a conta informada.
-     *
-     * <p>Método mantido por compatibilidade com fluxos legados ou operacionais.</p>
+     * Mede o uso real do tenant e sincroniza o snapshot público da conta.
      *
      * @param tenantSchema schema do tenant
      * @param accountId id da conta
-     * @return snapshot simples de uso
      */
-    public TenantUsageSnapshot measureUsage(String tenantSchema, Long accountId) {
+    public void syncUsageSnapshot(String tenantSchema, Long accountId) {
         validateInputs(tenantSchema, accountId);
 
         String normalizedTenantSchema = normalizeTenantSchema(tenantSchema);
 
         log.info(
-                "Iniciando medição de uso via integração tenant. accountId={}, tenantSchema={}",
+                "Iniciando sincronização de usage snapshot. accountId={}, tenantSchema={}",
                 accountId,
                 normalizedTenantSchema
         );
 
-        TenantUsageMeasurement measurement = tenantExecutor.runInTenantSchema(
+        TenantUsageMeasurement measurement = tenantContextExecutor.runInTenantSchema(
                 normalizedTenantSchema,
                 () -> tenantUsageMeasurementService.measureUsage(accountId)
         );
 
-        TenantUsageSnapshot snapshot = new TenantUsageSnapshot(
+        Instant measuredAt = appClock.instant();
+
+        accountUsageSnapshotUpsertService.upsert(
+                accountId,
                 measurement.currentUsers(),
-                measurement.currentProducts()
+                measurement.currentProducts(),
+                0L,
+                measuredAt
         );
 
         log.info(
-                "Medição de uso via integração tenant concluída com sucesso. accountId={}, tenantSchema={}, currentUsers={}, currentProducts={}",
+                "Sincronização de usage snapshot concluída com sucesso. accountId={}, tenantSchema={}, currentUsers={}, currentProducts={}, currentStorageMb={}, measuredAt={}",
                 accountId,
                 normalizedTenantSchema,
-                snapshot.currentUsers(),
-                snapshot.currentProducts()
+                measurement.currentUsers(),
+                measurement.currentProducts(),
+                0L,
+                measuredAt
         );
-
-        return snapshot;
-    }
-
-    /**
-     * Sincroniza o snapshot público de uso da conta a partir do tenant.
-     *
-     * @param tenantSchema schema do tenant
-     * @param accountId id da conta
-     */
-    public void syncPublicUsageSnapshot(String tenantSchema, Long accountId) {
-        validateInputs(tenantSchema, accountId);
-
-        tenantUsageSnapshotSyncService.syncUsageSnapshot(tenantSchema, accountId);
     }
 
     /**

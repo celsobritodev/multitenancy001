@@ -1,12 +1,10 @@
 package brito.com.multitenancy001.controlplane.accounts.app.subscription;
 
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
+import brito.com.multitenancy001.controlplane.accounts.domain.AccountUsageSnapshot;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountRepository;
-import brito.com.multitenancy001.integration.tenant.dto.TenantUsageSnapshot;
-import brito.com.multitenancy001.integration.tenant.subscription.TenantSubscriptionUsageIntegrationService;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
@@ -14,35 +12,31 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Serviço de aplicação responsável por calcular o uso atual da conta
+ * Serviço responsável por calcular o snapshot de uso do plano
  * para fins de preview e elegibilidade de mudança de plano.
  *
  * <p>Responsabilidades:</p>
  * <ul>
- *   <li>Carregar a conta no Public Schema quando necessário.</li>
- *   <li>Delegar a medição tenant-aware para a camada explícita de integração.</li>
- *   <li>Resolver o storage atual consumido pela conta.</li>
- *   <li>Montar o snapshot consolidado de uso do plano.</li>
+ *   <li>Resolver a conta no PUBLIC schema quando necessário.</li>
+ *   <li>Traduzir o snapshot materializado público em {@link PlanUsageSnapshot}.</li>
+ *   <li>Tratar contas built-in como uso zero, fora do fluxo comercial.</li>
  * </ul>
  *
- * <p>Regras arquiteturais:</p>
+ * <p>Regras arquiteturais desta versão:</p>
  * <ul>
- *   <li>O crossing ControlPlane → Tenant é feito somente por
- *       {@link TenantSubscriptionUsageIntegrationService}.</li>
- *   <li>Conta built-in retorna uso zerado.</li>
- *   <li>Conta sem tenantSchema válido falha explicitamente.</li>
- *   <li>Este service não usa repository do contexto Tenant.</li>
+ *   <li>O Control Plane não mede uso entrando no tenant.</li>
+ *   <li>O cálculo decisório passa a ler somente snapshot materializado no schema public.</li>
+ *   <li>Se o snapshot público ainda não existir para conta comercial, a operação falha explicitamente.</li>
  * </ul>
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountPlanUsageService {
 
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
     private final AccountRepository accountRepository;
-    private final TenantSubscriptionUsageIntegrationService tenantSubscriptionUsageIntegrationService;
-    private final AccountStorageUsageResolver accountStorageUsageResolver;
+    private final AccountUsageSnapshotQueryService accountUsageSnapshotQueryService;
 
     /**
      * Calcula o snapshot completo de uso a partir do id da conta.
@@ -90,10 +84,9 @@ public class AccountPlanUsageService {
         validateAccount(account);
 
         log.info(
-                "Calculando uso do plano a partir da conta já resolvida. accountId={}, currentPlan={}, tenantSchema={}, builtIn={}",
+                "Calculando uso do plano a partir da conta já resolvida. accountId={}, currentPlan={}, builtIn={}",
                 account.getId(),
                 account.getSubscriptionPlan(),
-                account.getTenantSchema(),
                 account.isBuiltInAccount()
         );
 
@@ -113,31 +106,25 @@ public class AccountPlanUsageService {
             );
         }
 
-        String tenantSchema = normalizeTenantSchema(account.getTenantSchema());
-
-        TenantUsageSnapshot tenantUsageSnapshot = tenantSubscriptionUsageIntegrationService.measureUsage(
-                tenantSchema,
-                account.getId()
-        );
-
-        long currentStorageMb = accountStorageUsageResolver.resolveStorageMb(account.getId());
+        AccountUsageSnapshot materializedSnapshot =
+                accountUsageSnapshotQueryService.requireByAccountId(account.getId());
 
         PlanUsageSnapshot snapshot = new PlanUsageSnapshot(
                 account.getId(),
                 account.getSubscriptionPlan(),
-                tenantUsageSnapshot.currentUsers(),
-                tenantUsageSnapshot.currentProducts(),
-                currentStorageMb
+                materializedSnapshot.getCurrentUsers(),
+                materializedSnapshot.getCurrentProducts(),
+                materializedSnapshot.getCurrentStorageMb()
         );
 
         log.info(
-                "Uso do plano calculado com sucesso. accountId={}, tenantSchema={}, currentPlan={}, users={}, products={}, storageMb={}",
+                "Uso do plano calculado com sucesso a partir de snapshot público. accountId={}, currentPlan={}, users={}, products={}, storageMb={}, measuredAt={}",
                 snapshot.accountId(),
-                tenantSchema,
                 snapshot.currentPlan(),
                 snapshot.currentUsers(),
                 snapshot.currentProducts(),
-                snapshot.currentStorageMb()
+                snapshot.currentStorageMb(),
+                materializedSnapshot.getMeasuredAt()
         );
 
         return snapshot;
@@ -196,29 +183,5 @@ public class AccountPlanUsageService {
         if (account.getSubscriptionPlan() == null) {
             throw new ApiException(ApiErrorCode.INVALID_REQUEST, "subscriptionPlan é obrigatório", 400);
         }
-
-        if (!account.isBuiltInAccount() && !StringUtils.hasText(account.getTenantSchema())) {
-            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
-        }
-    }
-
-    /**
-     * Normaliza o schema do tenant.
-     *
-     * @param tenantSchema schema bruto
-     * @return schema normalizado
-     */
-    private String normalizeTenantSchema(String tenantSchema) {
-        if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
-        }
-
-        String normalizedTenantSchema = tenantSchema.trim();
-
-        if (!StringUtils.hasText(normalizedTenantSchema)) {
-            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
-        }
-
-        return normalizedTenantSchema;
     }
 }

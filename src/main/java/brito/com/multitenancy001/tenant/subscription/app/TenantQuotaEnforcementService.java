@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Medir o uso real no schema tenant.</li>
  *   <li>Executar validação de entitlements no Public Schema de forma explícita.</li>
  *   <li>Evitar crossing Public dentro da mesma transação tenant de escrita.</li>
- *   <li>Garantir coerência entre medição de uso, limits e enforcement.</li>
+ *   <li>Garantir coerência entre medição de uso, limits, enforcement e sincronização de snapshot.</li>
  * </ul>
  *
  * <p>Regras arquiteturais:</p>
@@ -28,8 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>O uso tenant é medido em {@code readOnly} no schema tenant.</li>
  *   <li>A validação Public é executada fora da transação tenant de escrita.</li>
  *   <li>Este service deve ser chamado antes do save principal em write-paths críticos.</li>
- *   <li>As métricas de uso permanecem alinhadas com
- *       {@link TenantUsageMeasurementService}.</li>
+ *   <li>As métricas de uso permanecem alinhadas com {@link TenantUsageMeasurementService}.</li>
  * </ul>
  */
 @Service
@@ -109,7 +108,7 @@ public class TenantQuotaEnforcementService {
 
         long currentProducts = tenantSchemaUnitOfWork.readOnly(
                 normalizedTenantSchema,
-                tenantUsageMeasurementService::measureCurrentProducts
+                () -> tenantUsageMeasurementService.measureCurrentProducts(accountId)
         );
 
         log.info(
@@ -137,11 +136,11 @@ public class TenantQuotaEnforcementService {
     }
 
     /**
-     * Mede o uso atual completo do tenant dentro do schema informado.
+     * Mede o uso completo atual do tenant.
      *
      * @param accountId id da conta
      * @param tenantSchema schema do tenant
-     * @return snapshot de uso atual
+     * @return medição consolidada
      */
     public TenantUsageMeasurement measureUsage(Long accountId, String tenantSchema) {
         validateInputs(accountId, tenantSchema);
@@ -149,7 +148,7 @@ public class TenantQuotaEnforcementService {
         String normalizedTenantSchema = normalizeTenantSchema(tenantSchema);
 
         log.info(
-                "Medição completa de uso solicitada para enforcement. accountId={}, tenantSchema={}",
+                "Iniciando medição completa de uso. accountId={}, tenantSchema={}",
                 accountId,
                 normalizedTenantSchema
         );
@@ -171,7 +170,7 @@ public class TenantQuotaEnforcementService {
     }
 
     /**
-     * Valida parâmetros obrigatórios do fluxo de enforcement.
+     * Valida entradas obrigatórias.
      *
      * @param accountId id da conta
      * @param tenantSchema schema do tenant
@@ -180,24 +179,19 @@ public class TenantQuotaEnforcementService {
         if (accountId == null) {
             throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
         }
-
         if (!StringUtils.hasText(tenantSchema)) {
             throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
         }
     }
 
     /**
-     * Normaliza e valida o schema tenant informado.
+     * Normaliza o schema do tenant.
      *
      * @param tenantSchema schema bruto
      * @return schema normalizado
      */
     private String normalizeTenantSchema(String tenantSchema) {
-        if (!StringUtils.hasText(tenantSchema)) {
-            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
-        }
-
-        String normalizedTenantSchema = tenantSchema.trim();
+        String normalizedTenantSchema = tenantSchema == null ? null : tenantSchema.trim();
 
         if (!StringUtils.hasText(normalizedTenantSchema)) {
             throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
