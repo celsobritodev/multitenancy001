@@ -5,8 +5,8 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
-import brito.com.multitenancy001.controlplane.accounts.app.subscription.AccountPlanUsageService;
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanChangePolicy;
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanChangeType;
 import brito.com.multitenancy001.controlplane.accounts.app.subscription.PlanEligibilityResult;
@@ -21,6 +21,7 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanChangePreviewResponse;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanLimitsResponse;
 import brito.com.multitenancy001.tenant.subscription.api.dto.TenantPlanViolationResponse;
+import brito.com.multitenancy001.tenant.subscription.app.dto.TenantUsageMeasurement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Este service não executa crossing TENANT -&gt; PUBLIC diretamente.</li>
  *   <li>A resolução da conta atual fica centralizada em {@link TenantSubscriptionAccountResolver}.</li>
- *   <li>O cálculo de uso fica centralizado em {@link AccountPlanUsageService}.</li>
+ *   <li>O cálculo de uso ocorre no próprio contexto tenant via {@link TenantQuotaEnforcementService}.</li>
  *   <li>O clamp de remaining é responsabilidade deste service ao montar a resposta tenant.</li>
  *   <li>Para plano ilimitado, a convenção da API V30 é retornar {@code -1}.</li>
  * </ul>
@@ -53,7 +54,7 @@ public class TenantSubscriptionQueryService {
     private static final long UNLIMITED_REMAINING = -1L;
 
     private final TenantSubscriptionAccountResolver tenantSubscriptionAccountResolver;
-    private final AccountPlanUsageService accountPlanUsageService;
+    private final TenantQuotaEnforcementService tenantQuotaEnforcementService;
     private final SubscriptionPlanCatalog subscriptionPlanCatalog;
     private final PlanChangePolicy planChangePolicy;
 
@@ -71,7 +72,7 @@ public class TenantSubscriptionQueryService {
                 account.getSubscriptionPlan()
         );
 
-        PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
+        PlanUsageSnapshot usage = resolveUsageSnapshot(account);
         PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
 
         long remainingUsers = calculateRemaining(
@@ -208,7 +209,7 @@ public class TenantSubscriptionQueryService {
                 targetPlan
         );
 
-        PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
+        PlanUsageSnapshot usage = resolveUsageSnapshot(account);
         PlanEligibilityResult result = planChangePolicy.previewChange(usage, targetPlan);
 
         TenantPlanChangePreviewResponse response = toPreviewResponse(result);
@@ -224,6 +225,58 @@ public class TenantSubscriptionQueryService {
         );
 
         return response;
+    }
+
+    /**
+     * Resolve o usage snapshot no próprio contexto tenant,
+     * sem depender do service do control plane.
+     *
+     * @param account conta alvo
+     * @return snapshot de uso no formato esperado pela policy
+     */
+    private PlanUsageSnapshot resolveUsageSnapshot(Account account) {
+        validateAccountForTenantUsage(account);
+
+        if (account.isBuiltInAccount()) {
+            log.info(
+                    "Conta built-in detectada no tenant subscription. accountId={}, currentPlan={}",
+                    account.getId(),
+                    account.getSubscriptionPlan()
+            );
+
+            return new PlanUsageSnapshot(
+                    account.getId(),
+                    account.getSubscriptionPlan(),
+                    0L,
+                    0L,
+                    0L
+            );
+        }
+
+        TenantUsageMeasurement measurement = tenantQuotaEnforcementService.measureUsage(
+                account.getId(),
+                account.getTenantSchema()
+        );
+
+        PlanUsageSnapshot usage = new PlanUsageSnapshot(
+                account.getId(),
+                account.getSubscriptionPlan(),
+                measurement.currentUsers(),
+                measurement.currentProducts(),
+                0L
+        );
+
+        log.info(
+                "Usage snapshot tenant calculado com sucesso. accountId={}, tenantSchema={}, currentPlan={}, currentUsers={}, currentProducts={}, currentStorageMb={}",
+                account.getId(),
+                account.getTenantSchema(),
+                account.getSubscriptionPlan(),
+                usage.currentUsers(),
+                usage.currentProducts(),
+                usage.currentStorageMb()
+        );
+
+        return usage;
     }
 
     /**
@@ -324,5 +377,25 @@ public class TenantSubscriptionQueryService {
                 .filter(subscriptionPlanCatalog::isSelfServiceAllowed)
                 .sorted(Comparator.comparingInt(subscriptionPlanCatalog::rankOf))
                 .toList();
+    }
+
+    /**
+     * Valida se a conta possui os dados mínimos para cálculo de uso no contexto tenant.
+     *
+     * @param account conta resolvida
+     */
+    private void validateAccountForTenantUsage(Account account) {
+        if (account == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
+        }
+        if (account.getId() == null) {
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
+        }
+        if (account.getSubscriptionPlan() == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "subscriptionPlan é obrigatório", 400);
+        }
+        if (!account.isBuiltInAccount() && !StringUtils.hasText(account.getTenantSchema())) {
+            throw new ApiException(ApiErrorCode.TENANT_CONTEXT_REQUIRED, "tenantSchema é obrigatório", 400);
+        }
     }
 }

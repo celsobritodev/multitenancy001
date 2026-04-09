@@ -22,6 +22,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Garantir upsert idempotente por {@code accountId}.</li>
  *   <li>Centralizar timestamps e normalização de valores.</li>
  * </ul>
+ *
+ * <p>Diretriz arquitetural:</p>
+ * <ul>
+ *   <li>Escrita no Public Schema deve ocorrer via {@link PublicSchemaUnitOfWork#tx}.</li>
+ *   <li>Leituras no Public Schema devem ocorrer via {@link PublicSchemaUnitOfWork#readOnly}.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -54,7 +60,7 @@ public class AccountUsageSnapshotUpsertService {
         Instant now = appClock.instant();
         Instant effectiveMeasuredAt = measuredAt != null ? measuredAt : now;
 
-        AccountUsageSnapshot persisted = publicSchemaUnitOfWork.write(() -> {
+        AccountUsageSnapshot persisted = publicSchemaUnitOfWork.tx(() -> {
             AccountUsageSnapshot snapshot = accountUsageSnapshotRepository.findByAccountId(accountId)
                     .orElseGet(AccountUsageSnapshot::new);
 
