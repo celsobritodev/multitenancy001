@@ -16,8 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Serviço de integração responsável por sincronizar o uso real do tenant
- * para o snapshot materializado no schema public.
+ * Serviço técnico de integração responsável por medir o uso real do tenant
+ * e sincronizar o snapshot materializado no schema public.
  *
  * <p>Responsabilidades:</p>
  * <ul>
@@ -38,6 +38,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class TenantUsageSnapshotSyncService {
+
+    private static final long CURRENT_STORAGE_MB_DEFAULT = 0L;
 
     private final TenantContextExecutor tenantContextExecutor;
     private final TenantUsageMeasurementService tenantUsageMeasurementService;
@@ -72,7 +74,7 @@ public class TenantUsageSnapshotSyncService {
                 accountId,
                 measurement.currentUsers(),
                 measurement.currentProducts(),
-                0L,
+                CURRENT_STORAGE_MB_DEFAULT,
                 measuredAt
         );
 
@@ -82,7 +84,7 @@ public class TenantUsageSnapshotSyncService {
                 normalizedTenantSchema,
                 measurement.currentUsers(),
                 measurement.currentProducts(),
-                0L,
+                CURRENT_STORAGE_MB_DEFAULT,
                 measuredAt
         );
     }

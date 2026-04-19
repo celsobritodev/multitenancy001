@@ -1,0 +1,4 @@
+src/main/java/brito/com/multitenancy001/controlplane/billing/app/ControlPlanePaymentApiResponseMapper.java:18:public class ControlPlanePaymentApiResponseMapper {
+src/main/java/brito/com/multitenancy001/controlplane/users/app/ControlPlaneUserApiResponseMapper.java:14:public class ControlPlaneUserApiResponseMapper {
+src/main/java/brito/com/multitenancy001/tenant/inventory/api/dto/InventoryMovementResponse.java:16:public class InventoryMovementResponse {
+src/main/java/brito/com/multitenancy001/tenant/inventory/api/dto/InventoryResponse.java:14:public class InventoryResponse {

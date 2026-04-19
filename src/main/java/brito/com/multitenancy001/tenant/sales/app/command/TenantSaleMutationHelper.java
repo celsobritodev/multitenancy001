@@ -396,7 +396,7 @@ public class TenantSaleMutationHelper {
     }
 
     /**
-     * Descreve itens para log.
+     * Descreve itens para log em formato legível e sem pseudo-JSON.
      *
      * @param items lista de itens
      * @return string amigável para troubleshooting
@@ -411,19 +411,13 @@ public class TenantSaleMutationHelper {
             if (item == null) {
                 continue;
             }
-            parts.add(
-                    "{productId=" + item.getProductId()
-                            + ", qty=" + item.getQuantity()
-                            + ", deleted=" + item.isDeleted()
-                            + ", total=" + item.getTotalPrice()
-                            + "}"
-            );
+            parts.add(describeItem(item, true));
         }
         return parts.toString();
     }
 
     /**
-     * Descreve somente itens ativos para log.
+     * Descreve somente itens ativos para log em formato legível e sem pseudo-JSON.
      *
      * @param items lista de itens
      * @return string contendo apenas itens ativos
@@ -438,14 +432,31 @@ public class TenantSaleMutationHelper {
             if (item == null || item.isDeleted()) {
                 continue;
             }
-            parts.add(
-                    "{productId=" + item.getProductId()
-                            + ", qty=" + item.getQuantity()
-                            + ", total=" + item.getTotalPrice()
-                            + "}"
-            );
+            parts.add(describeItem(item, false));
         }
         return parts.toString();
+    }
+
+    /**
+     * Gera representação textual estável de item para logs, evitando pseudo-JSON.
+     *
+     * @param item item da venda
+     * @param includeDeleted indica se o campo deleted deve ser incluído
+     * @return descrição textual do item
+     */
+    private String describeItem(SaleItem item, boolean includeDeleted) {
+        StringBuilder sb = new StringBuilder("SaleItem(")
+                .append("productId=").append(item.getProductId())
+                .append(", qty=").append(item.getQuantity());
+
+        if (includeDeleted) {
+            sb.append(", deleted=").append(item.isDeleted());
+        }
+
+        sb.append(", total=").append(item.getTotalPrice())
+                .append(")");
+
+        return sb.toString();
     }
 
     /**
