@@ -37,7 +37,7 @@ public class AccountUsageSnapshotQueryService {
      * @return snapshot opcional
      */
     public Optional<AccountUsageSnapshot> findByAccountId(Long accountId) {
-        validateAccountId(accountId);
+        SubscriptionValidator.requireAccountId(accountId);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountUsageSnapshotRepository.findByAccountId(accountId)
@@ -51,14 +51,13 @@ public class AccountUsageSnapshotQueryService {
      * @return snapshot materializado
      */
     public AccountUsageSnapshot requireByAccountId(Long accountId) {
-        validateAccountId(accountId);
+        SubscriptionValidator.requireAccountId(accountId);
 
         AccountUsageSnapshot snapshot = publicSchemaUnitOfWork.readOnly(() ->
                 accountUsageSnapshotRepository.findByAccountId(accountId)
                         .orElseThrow(() -> new ApiException(
                                 ApiErrorCode.INVALID_REQUEST,
-                                "Snapshot de uso da conta ainda não está disponível para accountId=" + accountId,
-                                409
+                                "Snapshot de uso da conta ainda não está disponível para accountId=" + accountId
                         ))
         );
 
@@ -81,21 +80,10 @@ public class AccountUsageSnapshotQueryService {
      * @return true se existir
      */
     public boolean existsByAccountId(Long accountId) {
-        validateAccountId(accountId);
+        SubscriptionValidator.requireAccountId(accountId);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountUsageSnapshotRepository.existsByAccountId(accountId)
         );
-    }
-
-    /**
-     * Valida o accountId de entrada.
-     *
-     * @param accountId id da conta
-     */
-    private void validateAccountId(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
     }
 }

@@ -14,6 +14,20 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de uso de alternância de status ativo/inativo do produto.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Validar entrada mínima (id).</li>
+ *   <li>Alternar flag de ativo.</li>
+ *   <li>Persistir alteração.</li>
+ *   <li>Recarregar produto com relações.</li>
+ * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Sem alteração de comportamento.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -32,7 +46,7 @@ public class TenantProductActivationWriteService {
     @TenantTx
     public Product toggleActive(UUID id) {
         if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório");
         }
 
         log.info("Alternando status ativo de produto (TX). productId={}", id);
@@ -40,8 +54,7 @@ public class TenantProductActivationWriteService {
         Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
+                        "Produto não encontrado com ID: " + id
                 ));
 
         product.setActive(!Boolean.TRUE.equals(product.getActive()));

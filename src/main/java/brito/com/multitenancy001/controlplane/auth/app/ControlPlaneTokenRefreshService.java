@@ -30,16 +30,6 @@ import brito.com.multitenancy001.shared.security.SystemRoleName;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Refresh token do Control Plane com rotação server-side.
- *
- * <p>Regras:</p>
- * <ul>
- *   <li>Refresh emite novo refresh token (rotação).</li>
- *   <li>{@code rotateOrThrow} atualiza o hash server-side.</li>
- *   <li>Não monta JSON manualmente.</li>
- * </ul>
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -55,20 +45,16 @@ public class ControlPlaneTokenRefreshService {
     private final ControlPlaneAuthEventAuditIntegrationService authAuditService;
     private final JsonDetailsMapper jsonDetailsMapper;
 
-    /**
-     * Executa refresh token do Control Plane.
-     *
-     * @param refreshToken refresh token atual
-     * @return novo access token + novo refresh token
-     */
     public JwtResult refresh(String refreshToken) {
+
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken é obrigatório");
         }
 
         auditAttempt();
 
         return publicExecutor.inPublic(() -> {
+
             ControlPlaneRefreshIdentity id = refreshIntrospection.parseOrThrow(refreshToken);
 
             UserDetails ud = userDetailsService.loadControlPlaneUserByEmail(id.email(), id.accountId());
@@ -92,7 +78,7 @@ public class ControlPlaneTokenRefreshService {
 
             auditSuccess(id.email(), userId);
 
-            log.info("Refresh token do Control Plane concluído | email={} | userId={} | accountId={}",
+            log.info("Refresh concluído | email={} | userId={} | accountId={}",
                     id.email(), userId, id.accountId());
 
             return new JwtResult(
@@ -107,9 +93,6 @@ public class ControlPlaneTokenRefreshService {
         });
     }
 
-    /**
-     * Registra tentativa de refresh.
-     */
     private void auditAttempt() {
         authAuditService.record(
                 AuthDomain.CONTROLPLANE,
@@ -123,12 +106,6 @@ public class ControlPlaneTokenRefreshService {
         );
     }
 
-    /**
-     * Registra sucesso de refresh.
-     *
-     * @param email email do usuário
-     * @param userId id do usuário
-     */
     private void auditSuccess(String email, Long userId) {
         authAuditService.record(
                 AuthDomain.CONTROLPLANE,
@@ -138,43 +115,19 @@ public class ControlPlaneTokenRefreshService {
                 null,
                 userId,
                 DEFAULT_SCHEMA,
-                toJson(m(
-                        "stage", "completed",
-                        "rotated", true
-                ))
+                toJson(m("stage", "success"))
         );
     }
 
-    /**
-     * Monta mapa ordenado a partir de pares chave/valor.
-     *
-     * @param kv pares chave/valor
-     * @return mapa ordenado
-     */
     private Map<String, Object> m(Object... kv) {
         Map<String, Object> map = new LinkedHashMap<>();
-        if (kv == null) {
-            return map;
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put((String) kv[i], kv[i + 1]);
         }
-
-        for (int i = 0; i + 1 < kv.length; i += 2) {
-            Object key = kv[i];
-            Object value = kv[i + 1];
-            if (key != null) {
-                map.put(String.valueOf(key), value);
-            }
-        }
-
         return map;
     }
 
-    /**
-     * Serializa details estruturados para JSON.
-     *
-     * @param details detalhes estruturados
-     * @return json serializado
-     */
     private String toJson(Map<String, Object> details) {
-        return details == null ? null : jsonDetailsMapper.toJsonNode(details).toString();
+        return jsonDetailsMapper.toJson(details);
     }
 }

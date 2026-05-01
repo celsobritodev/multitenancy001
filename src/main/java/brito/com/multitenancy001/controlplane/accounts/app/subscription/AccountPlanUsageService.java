@@ -45,9 +45,7 @@ public class AccountPlanUsageService {
      * @return snapshot completo de uso
      */
     public PlanUsageSnapshot calculateUsageByAccountId(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
 
         log.info("Calculando uso do plano por accountId. accountId={}", accountId);
 
@@ -55,8 +53,7 @@ public class AccountPlanUsageService {
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException(
                                 ApiErrorCode.ACCOUNT_NOT_FOUND,
-                                "Conta não encontrada com id: " + accountId,
-                                404
+                                "Conta não encontrada com id: " + accountId
                         ))
         );
 
@@ -137,9 +134,7 @@ public class AccountPlanUsageService {
      * @return snapshot de uso da conta operacional
      */
     public PlanUsageSnapshot calculateUsageForEnabledAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
 
         log.info("Calculando uso do plano para conta operacional. accountId={}", accountId);
 
@@ -147,8 +142,7 @@ public class AccountPlanUsageService {
                 accountRepository.findEnabledById(accountId)
                         .orElseThrow(() -> new ApiException(
                                 ApiErrorCode.ACCOUNT_NOT_FOUND,
-                                "Conta operacional não encontrada com id: " + accountId,
-                                404
+                                "Conta operacional não encontrada com id: " + accountId
                         ))
         );
 
@@ -172,16 +166,8 @@ public class AccountPlanUsageService {
      * @param account conta
      */
     private void validateAccount(Account account) {
-        if (account == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
-        }
-
-        if (account.getId() == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
-
-        if (account.getSubscriptionPlan() == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "subscriptionPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccount(account);
+        SubscriptionValidator.requireAccountId(account.getId());
+        SubscriptionValidator.requireSubscriptionPlan(account.getSubscriptionPlan());
     }
 }

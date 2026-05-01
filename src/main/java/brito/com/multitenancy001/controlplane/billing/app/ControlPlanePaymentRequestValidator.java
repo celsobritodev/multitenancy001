@@ -12,80 +12,66 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 /**
  * Validador semântico de requests de pagamento do Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p>Regra V33:</p>
  * <ul>
- *   <li>Validar request administrativo.</li>
- *   <li>Validar request self-service.</li>
- *   <li>Garantir obrigatoriedade de {@code idempotencyKey}
- *       para operações críticas de upgrade.</li>
- *   <li>Centralizar normalização simples de strings de entrada.</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Validação centralizada.</li>
  * </ul>
  */
 @Service
 public class ControlPlanePaymentRequestValidator {
 
-    /**
-     * Valida request administrativo.
-     *
-     * @param adminPaymentRequest request administrativo
-     */
-    public void validateAdminRequest(AdminPaymentRequest adminPaymentRequest) {
-        if (adminPaymentRequest == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Request inválido", 400);
-        }
-
-        if (adminPaymentRequest.accountId() == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "accountId obrigatório", 400);
-        }
+    public void validateAdminRequest(AdminPaymentRequest request) {
+        requireRequest(request);
+        requireAccountId(request.accountId());
 
         validateCommonUpgradeIdempotency(
-                adminPaymentRequest.purpose(),
-                adminPaymentRequest.idempotencyKey()
+                request.purpose(),
+                request.idempotencyKey()
         );
     }
 
-    /**
-     * Valida request self-service.
-     *
-     * @param paymentRequest request self-service
-     */
-    public void validateSelfRequest(PaymentRequest paymentRequest) {
-        if (paymentRequest == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Request inválido", 400);
-        }
+    public void validateSelfRequest(PaymentRequest request) {
+        requireRequest(request);
 
         validateCommonUpgradeIdempotency(
-                paymentRequest.purpose(),
-                paymentRequest.idempotencyKey()
+                request.purpose(),
+                request.idempotencyKey()
         );
     }
 
-    /**
-     * Normaliza string opcional.
-     *
-     * @param value valor bruto
-     * @return valor normalizado ou {@code null}
-     */
     public String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    /**
-     * Garante obrigatoriedade de chave idempotente para upgrade de plano.
-     *
-     * @param paymentPurpose finalidade do pagamento
-     * @param idempotencyKey chave recebida
-     */
-    private void validateCommonUpgradeIdempotency(
-            PaymentPurpose paymentPurpose,
-            String idempotencyKey
-    ) {
-        if (paymentPurpose == PaymentPurpose.PLAN_UPGRADE
-                && !StringUtils.hasText(idempotencyKey)) {
+    private void requireRequest(Object request) {
+        if (request == null) {
             throw new ApiException(
                     ApiErrorCode.INVALID_REQUEST,
-                    "idempotencyKey obrigatório para upgrade",
-                    400
+                    "Request inválido"
+            );
+        }
+    }
+
+    private void requireAccountId(Long accountId) {
+        if (accountId == null) {
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "accountId obrigatório"
+            );
+        }
+    }
+
+    private void validateCommonUpgradeIdempotency(
+            PaymentPurpose purpose,
+            String idempotencyKey
+    ) {
+        if (purpose == PaymentPurpose.PLAN_UPGRADE
+                && !StringUtils.hasText(idempotencyKey)) {
+
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "idempotencyKey obrigatório para upgrade"
             );
         }
     }

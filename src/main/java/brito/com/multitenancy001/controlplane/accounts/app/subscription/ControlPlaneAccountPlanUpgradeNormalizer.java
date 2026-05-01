@@ -20,13 +20,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Helper compartilhado do fluxo de upgrade no contexto do Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p><b>Regra V33:</b></p>
  * <ul>
- *   <li>Validar inputs obrigatórios do upgrade.</li>
- *   <li>Calcular cobertura recorrente.</li>
- *   <li>Montar descrição funcional.</li>
- *   <li>Gerar chave funcional de idempotência.</li>
- *   <li>Normalizar strings e moeda.</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Validação encapsulada em métodos privados.</li>
+ *   <li>Sem duplicação de lógica.</li>
  * </ul>
  */
 @Component
@@ -35,16 +33,6 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
 
     private static final String DEFAULT_CURRENCY = "BRL";
 
-    /**
-     * Valida os dados obrigatórios do upgrade.
-     *
-     * @param account conta alvo
-     * @param preview preview já calculado
-     * @param billingCycle ciclo de cobrança
-     * @param paymentMethod método de pagamento
-     * @param paymentGateway gateway de pagamento
-     * @param amount valor do upgrade
-     */
     public void validateUpgradeInputs(
             Account account,
             PlanEligibilityResult preview,
@@ -53,29 +41,50 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
             PaymentGateway paymentGateway,
             BigDecimal amount
     ) {
+
+        validateBillingCycle(account, preview, billingCycle);
+        validatePaymentMethod(account, preview, billingCycle, paymentMethod);
+        validatePaymentGateway(account, preview, billingCycle, paymentGateway);
+        validateAmount(account, preview, billingCycle, amount);
+    }
+
+    private void validateBillingCycle(
+            Account account,
+            PlanEligibilityResult preview,
+            BillingCycle billingCycle
+    ) {
         if (billingCycle == null) {
             log.warn(
                     "Upgrade rejeitado: billingCycle ausente. accountId={}, targetPlan={}",
                     account.getId(),
                     preview.targetPlan()
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "billingCycle é obrigatório para upgrade", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "billingCycle é obrigatório para upgrade"
+            );
         }
 
         if (billingCycle == BillingCycle.ONE_TIME) {
             log.warn(
-                    "Upgrade rejeitado: billingCycle ONE_TIME não é permitido. accountId={}, currentPlan={}, targetPlan={}",
+                    "Upgrade rejeitado: billingCycle ONE_TIME inválido. accountId={}, currentPlan={}, targetPlan={}",
                     account.getId(),
                     account.getSubscriptionPlan(),
                     preview.targetPlan()
             );
             throw new ApiException(
                     ApiErrorCode.INVALID_REQUEST,
-                    "billingCycle ONE_TIME não é permitido para upgrade de plano. Use MONTHLY ou YEARLY.",
-                    400
+                    "billingCycle ONE_TIME não é permitido para upgrade de plano"
             );
         }
+    }
 
+    private void validatePaymentMethod(
+            Account account,
+            PlanEligibilityResult preview,
+            BillingCycle billingCycle,
+            PaymentMethod paymentMethod
+    ) {
         if (paymentMethod == null) {
             log.warn(
                     "Upgrade rejeitado: paymentMethod ausente. accountId={}, targetPlan={}, billingCycle={}",
@@ -83,9 +92,19 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
                     preview.targetPlan(),
                     billingCycle
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "paymentMethod é obrigatório para upgrade", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "paymentMethod é obrigatório para upgrade"
+            );
         }
+    }
 
+    private void validatePaymentGateway(
+            Account account,
+            PlanEligibilityResult preview,
+            BillingCycle billingCycle,
+            PaymentGateway paymentGateway
+    ) {
         if (paymentGateway == null) {
             log.warn(
                     "Upgrade rejeitado: paymentGateway ausente. accountId={}, targetPlan={}, billingCycle={}",
@@ -93,9 +112,19 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
                     preview.targetPlan(),
                     billingCycle
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "paymentGateway é obrigatório para upgrade", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "paymentGateway é obrigatório para upgrade"
+            );
         }
+    }
 
+    private void validateAmount(
+            Account account,
+            PlanEligibilityResult preview,
+            BillingCycle billingCycle,
+            BigDecimal amount
+    ) {
         if (amount == null || amount.signum() <= 0) {
             log.warn(
                     "Upgrade rejeitado: amount inválido. accountId={}, targetPlan={}, billingCycle={}, amount={}",
@@ -104,17 +133,13 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
                     billingCycle,
                     amount
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "amount deve ser maior que zero para upgrade", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "amount deve ser maior que zero para upgrade"
+            );
         }
     }
 
-    /**
-     * Resolve a data de término de cobertura a partir do ciclo recorrente.
-     *
-     * @param effectiveFrom início de vigência
-     * @param billingCycle ciclo recorrente
-     * @return data final da cobertura
-     */
     public Instant resolveCoverageEndDate(Instant effectiveFrom, BillingCycle billingCycle) {
         ZonedDateTime base = ZonedDateTime.ofInstant(effectiveFrom, ZoneOffset.UTC);
 
@@ -123,20 +148,11 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
             case YEARLY -> base.plusYears(1).toInstant();
             case ONE_TIME -> throw new ApiException(
                     ApiErrorCode.INVALID_REQUEST,
-                    "billingCycle ONE_TIME não possui cobertura recorrente para upgrade de plano",
-                    400
+                    "billingCycle ONE_TIME não possui cobertura recorrente"
             );
         };
     }
 
-    /**
-     * Monta a descrição funcional do upgrade.
-     *
-     * @param account conta alvo
-     * @param targetPlan plano alvo
-     * @param reason motivo opcional
-     * @return descrição consolidada
-     */
     public String buildUpgradeDescription(Account account, SubscriptionPlan targetPlan, String reason) {
         StringBuilder description = new StringBuilder()
                 .append("Upgrade de plano da conta ")
@@ -153,16 +169,6 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
         return description.toString();
     }
 
-    /**
-     * Gera a chave funcional de idempotência do upgrade administrativo.
-     *
-     * @param accountId conta
-     * @param currentPlan plano atual
-     * @param targetPlan plano alvo
-     * @param billingCycle ciclo
-     * @param amount valor
-     * @return chave funcional
-     */
     public String buildUpgradeIdempotencyKey(
             Long accountId,
             SubscriptionPlan currentPlan,
@@ -180,12 +186,6 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
         );
     }
 
-    /**
-     * Normaliza moeda informada.
-     *
-     * @param currencyCode moeda opcional
-     * @return moeda normalizada
-     */
     public String normalizeCurrency(String currencyCode) {
         if (!StringUtils.hasText(currencyCode)) {
             return DEFAULT_CURRENCY;
@@ -193,12 +193,6 @@ public class ControlPlaneAccountPlanUpgradeNormalizer {
         return currencyCode.trim().toUpperCase();
     }
 
-    /**
-     * Normaliza string opcional.
-     *
-     * @param value valor
-     * @return valor normalizado
-     */
     public String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }

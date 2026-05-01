@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.shared.api.error;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Traduzir violações de integridade para respostas 409 amigáveis.</li>
  *   <li>Mapear constraints conhecidas para campos funcionais.</li>
  *   <li>Extrair o valor conflitante do texto bruto retornado pelo banco.</li>
+ * </ul>
+ *
+ * <p>Diretrizes:</p>
+ * <ul>
+ *   <li>Evitar mensagens técnicas no payload retornado ao cliente.</li>
+ *   <li>Registrar detalhes técnicos apenas em log.</li>
  * </ul>
  */
 @Component
@@ -41,6 +49,15 @@ public class PersistenceExceptionHandlerComponent {
     }
 
     /**
+     * Retorna o requestId atual do contexto.
+     *
+     * @return requestId atual ou null
+     */
+    private UUID requestId() {
+        return RequestMetaContext.requestIdOrNull();
+    }
+
+    /**
      * Trata violações de integridade do banco de dados.
      *
      * <p>Mapeia constraints conhecidas para erros funcionais mais amigáveis.</p>
@@ -56,7 +73,11 @@ public class PersistenceExceptionHandlerComponent {
             errorMessage = "";
         }
 
-        log.warn("DataIntegrityViolationException capturada. detail={}", errorMessage);
+        log.warn(
+                "⚠️ DataIntegrityViolationException capturada | requestId={} | detail={}",
+                requestId(),
+                errorMessage
+        );
 
         if (errorMessage.contains("tax_id_number")) {
             String cnpj = extractValue(errorMessage, "tax_id_number");
@@ -65,9 +86,10 @@ public class PersistenceExceptionHandlerComponent {
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
                             .error("DUPLICATE_NUMBER")
-                            .message("Já existe uma conta com o Number: " + cnpj)
+                            .message("Já existe uma conta com o número informado.")
                             .field("taxIdNumber")
                             .invalidValue(cnpj)
+                            .details(new ErrorDetails(requestId(), "Número já cadastrado"))
                             .build()
             );
         }
@@ -79,9 +101,10 @@ public class PersistenceExceptionHandlerComponent {
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
                             .error("DUPLICATE_EMAIL")
-                            .message("Já existe uma conta com o email " + email)
+                            .message("Já existe uma conta com o e-mail informado.")
                             .field("loginEmail")
                             .invalidValue(email)
+                            .details(new ErrorDetails(requestId(), "E-mail já cadastrado"))
                             .build()
             );
         }
@@ -93,9 +116,10 @@ public class PersistenceExceptionHandlerComponent {
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
                             .error("DUPLICATE_SLUG")
-                            .message("Já existe uma conta com o slug " + slug)
+                            .message("Já existe uma conta com o slug informado.")
                             .field("slug")
                             .invalidValue(slug)
+                            .details(new ErrorDetails(requestId(), "Slug já cadastrado"))
                             .build()
             );
         }
@@ -107,7 +131,10 @@ public class PersistenceExceptionHandlerComponent {
                     ApiEnumErrorResponse.builder()
                             .timestamp(ts)
                             .error("DUPLICATE_SCHEMA")
-                            .message("Erro interno: schema " + schema + " já existe")
+                            .message("Já existe um schema com o identificador informado.")
+                            .field("tenantSchema")
+                            .invalidValue(schema)
+                            .details(new ErrorDetails(requestId(), "Schema já existente"))
                             .build()
             );
         }
@@ -117,6 +144,7 @@ public class PersistenceExceptionHandlerComponent {
                         .timestamp(ts)
                         .error("DUPLICATE_ENTRY")
                         .message("Registro duplicado. Verifique os dados informados.")
+                        .details(new ErrorDetails(requestId(), "Violação de integridade"))
                         .build()
         );
     }
@@ -142,7 +170,12 @@ public class PersistenceExceptionHandlerComponent {
                 return matcher2.group(1);
             }
         } catch (Exception e) {
-            log.debug("Erro ao extrair valor do erro de constraint. field={}, message={}", fieldName, e.getMessage());
+            log.debug(
+                    "Falha ao extrair valor do erro de constraint | requestId={} | field={} | message={}",
+                    requestId(),
+                    fieldName,
+                    e.getMessage()
+            );
         }
 
         return "não identificado";

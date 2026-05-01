@@ -8,10 +8,9 @@ import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDetailsResponse;
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserPermissionsUpdateRequest;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,25 +38,25 @@ public class ControlPlaneUserPermissionsCommandService {
      * Atualiza permissões explícitas de usuário.
      *
      * @param userId id do usuário
-     * @param controlPlaneUserPermissionsUpdateRequest request de permissões
+     * @param request request de permissões
      * @return usuário atualizado
      */
     public ControlPlaneUserDetailsResponse updateControlPlaneUserPermissions(
             Long userId,
-            ControlPlaneUserPermissionsUpdateRequest controlPlaneUserPermissionsUpdateRequest
+            ControlPlaneUserPermissionsUpdateRequest request
     ) {
         log.info("updateControlPlaneUserPermissions INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
-
-            if (controlPlaneUserPermissionsUpdateRequest == null) {
-                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
+            RequiredValidator.requirePayload(
+                    request,
+                    brito.com.multitenancy001.shared.api.error.ApiErrorCode.INVALID_REQUEST,
+                    "Requisição inválida"
+            );
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
@@ -65,9 +64,9 @@ public class ControlPlaneUserPermissionsCommandService {
 
             controlPlaneUserInternalFacade.assertMutableUser(user);
 
-            int permissionCount = controlPlaneUserPermissionsUpdateRequest.permissions() == null
+            int permissionCount = request.permissions() == null
                     ? 0
-                    : controlPlaneUserPermissionsUpdateRequest.permissions().size();
+                    : request.permissions().size();
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
@@ -89,7 +88,7 @@ public class ControlPlaneUserPermissionsCommandService {
                     () -> {
                         controlPlaneUserExplicitPermissionsService.setExplicitPermissionsFromCodes(
                                 userId,
-                                controlPlaneUserPermissionsUpdateRequest.permissions()
+                                request.permissions()
                         );
                         return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
                     }

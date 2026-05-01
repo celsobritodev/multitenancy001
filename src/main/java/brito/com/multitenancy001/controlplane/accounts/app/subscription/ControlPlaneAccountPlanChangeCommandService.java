@@ -24,6 +24,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Delegar preview, downgrade e upgrade para serviços especializados.</li>
  *   <li>Manter o fluxo principal de decisão claro e enxuto.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem ApiException com status hardcoded.</li>
+ *   <li>Sem validação inline.</li>
+ *   <li>Regra de negócio intacta.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,21 +44,6 @@ public class ControlPlaneAccountPlanChangeCommandService {
     private final ControlPlaneAccountPlanUpgradeService controlPlaneAccountPlanUpgradeService;
     private final ControlPlaneAccountPlanUpgradeNormalizer controlPlaneAccountPlanUpgradeNormalizer;
 
-    /**
-     * Executa o fluxo completo de mudança de plano.
-     *
-     * @param accountId id da conta alvo
-     * @param targetPlan plano alvo
-     * @param billingCycle ciclo de cobrança para upgrade
-     * @param paymentMethod método de pagamento para upgrade
-     * @param paymentGateway gateway para upgrade
-     * @param amount valor a cobrar no upgrade
-     * @param planPriceSnapshot snapshot opcional do preço do plano
-     * @param currencyCode moeda opcional
-     * @param reason motivo funcional opcional
-     * @param requestedBy identificador do solicitante
-     * @return resposta consolidada
-     */
     public AccountPlanChangeResponse execute(
             Long accountId,
             SubscriptionPlan targetPlan,
@@ -64,8 +56,11 @@ public class ControlPlaneAccountPlanChangeCommandService {
             String reason,
             String requestedBy
     ) {
+
         Account account = controlPlaneAccountPlanChangePreviewService.loadAccount(accountId);
         PlanEligibilityResult preview = controlPlaneAccountPlanChangePreviewService.preview(account, targetPlan);
+
+        String normalizedRequestedBy = controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy);
 
         log.info(
                 "Preview calculado para mudança de plano no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}, requestedBy={}",
@@ -74,25 +69,30 @@ public class ControlPlaneAccountPlanChangeCommandService {
                 preview.targetPlan(),
                 preview.changeType(),
                 preview.eligible(),
-                controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy)
+                normalizedRequestedBy
         );
 
         if (preview.changeType() == PlanChangeType.NO_CHANGE) {
+
             log.warn(
                     "Solicitação rejeitada: plano alvo igual ao atual. accountId={}, currentPlan={}, targetPlan={}, requestedBy={}",
                     accountId,
                     preview.currentPlan(),
                     preview.targetPlan(),
-                    controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy)
+                    normalizedRequestedBy
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "A conta já está no plano informado", 409);
+
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "A conta já está no plano informado"
+            );
         }
 
         ChangeAccountPlanCommand command = new ChangeAccountPlanCommand(
                 accountId,
                 targetPlan,
                 controlPlaneAccountPlanUpgradeNormalizer.normalize(reason),
-                controlPlaneAccountPlanUpgradeNormalizer.normalize(requestedBy),
+                normalizedRequestedBy,
                 CHANGE_SOURCE
         );
 

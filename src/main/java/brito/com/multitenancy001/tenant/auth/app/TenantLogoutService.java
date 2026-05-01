@@ -22,17 +22,23 @@ import java.util.Map;
 /**
  * Logout forte do Tenant (opção B).
  *
- * Regras:
- * - Revoga refresh token no servidor (public schema).
- * - allDevices=true revoga todas as sessões do usuário no domínio TENANT.
+ * <p>Regras:</p>
+ * <ul>
+ *   <li>Revoga refresh token no servidor (public schema).</li>
+ *   <li>allDevices=true revoga todas as sessões do usuário no domínio TENANT.</li>
+ * </ul>
  *
- * Nota:
- * - resolveRefreshIdentity(refreshToken) não faz query e pode retornar userId null.
- * - Para allDevices=true, precisamos resolver userId no schema do tenant.
+ * <p>Nota:</p>
+ * <ul>
+ *   <li>resolveRefreshIdentity(refreshToken) não faz query e pode retornar userId null.</li>
+ *   <li>Para allDevices=true, precisamos resolver userId no schema do tenant.</li>
+ * </ul>
  *
- * Regras de audit details:
- * - SEMPRE Map/record via JsonDetailsMapper
- * - Nunca montar JSON na mão (inclusive boolean concatenado).
+ * <p>Regras de audit details:</p>
+ * <ul>
+ *   <li>SEMPRE Map/record via JsonDetailsMapper</li>
+ *   <li>Nunca montar JSON na mão (inclusive boolean concatenado)</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -42,14 +48,19 @@ public class TenantLogoutService {
     private final AuthRefreshSessionService refreshSessions;
     private final TenantAuthAuditRecorder audit;
 
-    // ✅ necessários para resolver userId quando allDevices=true
     private final TenantContextExecutor tenantExecutor;
     private final TenantUserRepository tenantUserRepository;
 
     private final JsonDetailsMapper jsonDetailsMapper;
 
+    /**
+     * Executa logout do usuário tenant.
+     *
+     * @param refreshToken token de refresh
+     * @param allDevices indica se deve revogar todas as sessões
+     */
     public void logout(String refreshToken, boolean allDevices) {
-        /** resolve identidade do refresh e revoga sessão(ões) */
+
         TenantRefreshIdentity id = authMechanics.resolveRefreshIdentity(refreshToken);
 
         audit.record(
@@ -91,8 +102,14 @@ public class TenantLogoutService {
         );
     }
 
+    /**
+     * Resolve o userId necessário para revokeAllForUser.
+     *
+     * @param id identidade do refresh token
+     * @return userId resolvido
+     */
     private Long resolveUserIdOrThrow(TenantRefreshIdentity id) {
-        /**  garante userId para revokeAllForUser (allDevices) */
+
         if (id.userId() != null) {
             return id.userId();
         }
@@ -101,21 +118,36 @@ public class TenantLogoutService {
                 tenantUserRepository
                         .findByEmailAndAccountIdAndDeletedFalse(id.email(), id.accountId())
                         .map(u -> u.getId())
-                        .orElseThrow(() -> new ApiException(ApiErrorCode.INVALID_REFRESH, "refreshToken inválido", 401))
+                        .orElseThrow(() -> new ApiException(
+                                ApiErrorCode.INVALID_REFRESH,
+                                "refreshToken inválido"
+                        ))
         );
     }
 
+    /**
+     * Converte details para JSON string.
+     *
+     * @param details detalhes estruturados
+     * @return json serializado
+     */
     private String toJson(Object details) {
-        /**  converte details (Map/record/String) em JSON string compatível com jsonb */
         if (details == null) return null;
         return jsonDetailsMapper.toJsonNode(details).toString();
     }
 
+    /**
+     * Cria mapa ordenado a partir de pares chave/valor.
+     *
+     * @param kv pares chave/valor
+     * @return mapa ordenado
+     */
     private static Map<String, Object> m(Object... kv) {
-        /**  cria LinkedHashMap em pares key/value com ordem estável */
         Map<String, Object> m = new LinkedHashMap<>();
         if (kv == null) return m;
-        if (kv.length % 2 != 0) throw new IllegalArgumentException("m(kv): quantidade ímpar de argumentos");
+        if (kv.length % 2 != 0) {
+            throw new IllegalArgumentException("m(kv): quantidade ímpar de argumentos");
+        }
         for (int i = 0; i < kv.length; i += 2) {
             Object k = kv[i];
             Object v = kv[i + 1];

@@ -16,6 +16,7 @@ import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,25 +46,25 @@ public class ControlPlaneUserUpdateCommandService {
      * Atualiza dados de usuário do Control Plane.
      *
      * @param userId id do usuário
-     * @param controlPlaneUserUpdateRequest request de atualização
+     * @param request request de atualização
      * @return usuário atualizado
      */
     public ControlPlaneUserDetailsResponse updateControlPlaneUser(
             Long userId,
-            ControlPlaneUserUpdateRequest controlPlaneUserUpdateRequest
+            ControlPlaneUserUpdateRequest request
     ) {
         log.info("updateControlPlaneUser INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
-
-            if (controlPlaneUserUpdateRequest == null) {
-                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
+            RequiredValidator.requirePayload(
+                    request,
+                    ApiErrorCode.INVALID_REQUEST,
+                    "Requisição inválida"
+            );
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
@@ -81,10 +82,10 @@ public class ControlPlaneUserUpdateCommandService {
             Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
                     "scope", ControlPlaneUserInternalFacade.SCOPE,
                     "reason", "update",
-                    "hasName", controlPlaneUserUpdateRequest.name() != null,
-                    "hasEmail", controlPlaneUserUpdateRequest.email() != null,
-                    "hasRole", controlPlaneUserUpdateRequest.role() != null,
-                    "hasPermissions", controlPlaneUserUpdateRequest.permissions() != null
+                    "hasName", request.name() != null,
+                    "hasEmail", request.email() != null,
+                    "hasRole", request.role() != null,
+                    "hasPermissions", request.permissions() != null
             );
 
             Map<String, Object> success = new LinkedHashMap<>();
@@ -101,12 +102,12 @@ public class ControlPlaneUserUpdateCommandService {
                     () -> success,
                     () -> {
                         boolean roleChanged = false;
-                        boolean permissionsChanged = controlPlaneUserUpdateRequest.permissions() != null;
+                        boolean permissionsChanged = request.permissions() != null;
                         Map<String, Object> changes = new LinkedHashMap<>();
 
-                        if (controlPlaneUserUpdateRequest.name() != null) {
+                        if (request.name() != null) {
                             String newName =
-                                    controlPlaneUserInternalFacade.normalizeNameOrThrow(controlPlaneUserUpdateRequest.name());
+                                    controlPlaneUserInternalFacade.normalizeNameOrThrow(request.name());
 
                             if (user.getName() == null || !user.getName().equals(newName)) {
                                 user.rename(newName);
@@ -115,9 +116,9 @@ public class ControlPlaneUserUpdateCommandService {
                             }
                         }
 
-                        if (controlPlaneUserUpdateRequest.email() != null) {
+                        if (request.email() != null) {
                             String newEmail =
-                                    controlPlaneUserInternalFacade.normalizeEmailOrThrow(controlPlaneUserUpdateRequest.email());
+                                    controlPlaneUserInternalFacade.normalizeEmailOrThrow(request.email());
 
                             controlPlaneUserInternalFacade.validateNotReservedEmail(newEmail);
 
@@ -130,8 +131,7 @@ public class ControlPlaneUserUpdateCommandService {
                                 if (emailExists) {
                                     throw new ApiException(
                                             ApiErrorCode.EMAIL_ALREADY_IN_USE,
-                                            "Já existe um usuário ativo com este email",
-                                            409
+                                            "Já existe um usuário ativo com este email"
                                     );
                                 }
 
@@ -148,9 +148,9 @@ public class ControlPlaneUserUpdateCommandService {
                             }
                         }
 
-                        if (controlPlaneUserUpdateRequest.role() != null) {
-                            if (beforeRole == null || !beforeRole.equals(controlPlaneUserUpdateRequest.role())) {
-                                user.changeRole(controlPlaneUserUpdateRequest.role());
+                        if (request.role() != null) {
+                            if (beforeRole == null || !beforeRole.equals(request.role())) {
+                                user.changeRole(request.role());
                                 roleChanged = true;
 
                                 changes.put("roleBefore", beforeRole == null ? null : beforeRole.name());
@@ -163,7 +163,7 @@ public class ControlPlaneUserUpdateCommandService {
                         if (permissionsChanged) {
                             controlPlaneUserExplicitPermissionsService.setExplicitPermissionsFromCodes(
                                     userId,
-                                    controlPlaneUserUpdateRequest.permissions()
+                                    request.permissions()
                             );
 
                             controlPlaneUserInternalFacade.recordAudit(
@@ -178,20 +178,13 @@ public class ControlPlaneUserUpdateCommandService {
                                             "scope", ControlPlaneUserInternalFacade.SCOPE,
                                             "reason", "update",
                                             "permissionsCount",
-                                            controlPlaneUserUpdateRequest.permissions() == null
-                                                    ? 0
-                                                    : controlPlaneUserUpdateRequest.permissions().size(),
-                                            "permissions", controlPlaneUserUpdateRequest.permissions()
+                                            request.permissions() == null ? 0 : request.permissions().size(),
+                                            "permissions", request.permissions()
                                     )
                             );
 
                             changes.put("permissionsChanged", true);
-                            changes.put(
-                                    "permissionsCount",
-                                    controlPlaneUserUpdateRequest.permissions() == null
-                                            ? 0
-                                            : controlPlaneUserUpdateRequest.permissions().size()
-                            );
+                            changes.put("permissionsCount", request.permissions() == null ? 0 : request.permissions().size());
                         }
 
                         if (roleChanged) {

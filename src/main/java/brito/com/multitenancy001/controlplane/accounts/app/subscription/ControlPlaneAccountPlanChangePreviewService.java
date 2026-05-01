@@ -20,6 +20,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Calcular usage snapshot.</li>
  *   <li>Executar preview de elegibilidade da troca de plano.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem validação inline repetitiva.</li>
+ *   <li>Sem ApiException com status hardcoded.</li>
+ *   <li>Validação delegada para {@link SubscriptionValidator}.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -38,16 +45,13 @@ public class ControlPlaneAccountPlanChangePreviewService {
      * @return conta carregada
      */
     public Account loadAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
 
         Account account = publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
                         .orElseThrow(() -> new ApiException(
                                 ApiErrorCode.ACCOUNT_NOT_FOUND,
-                                "Conta não encontrada",
-                                404
+                                "Conta não encontrada"
                         ))
         );
 
@@ -69,9 +73,8 @@ public class ControlPlaneAccountPlanChangePreviewService {
      * @return preview calculado
      */
     public PlanEligibilityResult preview(Account account, SubscriptionPlan targetPlan) {
-        if (targetPlan == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccount(account);
+        SubscriptionValidator.requireTargetPlan(targetPlan);
 
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
         return planChangePolicy.previewChange(usage, targetPlan);

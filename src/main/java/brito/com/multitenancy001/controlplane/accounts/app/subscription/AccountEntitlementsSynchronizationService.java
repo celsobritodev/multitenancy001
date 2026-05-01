@@ -1,5 +1,7 @@
 package brito.com.multitenancy001.controlplane.accounts.app.subscription;
 
+import org.springframework.stereotype.Service;
+
 import brito.com.multitenancy001.controlplane.accounts.domain.Account;
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountEntitlementsRepository;
@@ -9,7 +11,6 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * Serviço responsável por sincronizar o snapshot materializado de entitlements
@@ -17,18 +18,18 @@ import org.springframework.stereotype.Service;
  *
  * <p>Regras:</p>
  * <ul>
- *   <li>Executa no public schema</li>
- *   <li>Não decide elegibilidade comercial</li>
- *   <li>Não faz billing</li>
- *   <li>Apenas materializa os limites efetivos derivados do plano vigente</li>
+ *   <li>Executa no public schema.</li>
+ *   <li>Não decide elegibilidade comercial.</li>
+ *   <li>Não faz billing.</li>
+ *   <li>Apenas materializa os limites efetivos derivados do plano vigente.</li>
  * </ul>
  *
  * <p>Estratégia de persistência:</p>
  * <ul>
- *   <li>Usa upsert semântico no repository</li>
- *   <li>Insere se não existir</li>
- *   <li>Atualiza se já existir</li>
- *   <li>Relê o snapshot ao final para devolver o estado persistido</li>
+ *   <li>Usa upsert semântico no repository.</li>
+ *   <li>Insere se não existir.</li>
+ *   <li>Atualiza se já existir.</li>
+ *   <li>Relê o snapshot ao final para devolver o estado persistido.</li>
  * </ul>
  */
 @Slf4j
@@ -51,7 +52,10 @@ public class AccountEntitlementsSynchronizationService {
         validateAccount(account);
 
         if (account.isBuiltInAccount()) {
-            log.info("Sincronização de entitlements ignorada para conta built-in. accountId={}", account.getId());
+            log.info(
+                    "Sincronização de entitlements ignorada para conta built-in. accountId={}",
+                    account.getId()
+            );
             return null;
         }
 
@@ -69,8 +73,7 @@ public class AccountEntitlementsSynchronizationService {
             AccountEntitlements saved = accountEntitlementsRepository.findByAccount_Id(account.getId())
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.INVALID_ENTITLEMENT,
-                            "Falha ao reler account_entitlements após sincronização da conta " + account.getId(),
-                            500
+                            "Falha ao reler account_entitlements após sincronização da conta " + account.getId()
                     ));
 
             log.info(
@@ -93,14 +96,8 @@ public class AccountEntitlementsSynchronizationService {
      * @param account conta
      */
     private void validateAccount(Account account) {
-        if (account == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Conta é obrigatória", 400);
-        }
-        if (account.getId() == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
-        if (account.getSubscriptionPlan() == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "subscriptionPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccount(account);
+        SubscriptionValidator.requireAccountId(account.getId());
+        SubscriptionValidator.requireSubscriptionPlan(account.getSubscriptionPlan());
     }
 }

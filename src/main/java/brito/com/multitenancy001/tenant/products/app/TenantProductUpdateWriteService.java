@@ -24,6 +24,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Resolver relações afetadas pelo update</li>
  *   <li>Persistir e reler a entidade final com relações carregadas</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ *   <li>Logs preservados</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -43,10 +50,10 @@ public class TenantProductUpdateWriteService {
     @TenantTx
     public Product update(UUID id, UpdateProductCommand updateProductCommand) {
         if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório");
         }
         if (updateProductCommand == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         log.info("Atualizando produto (TX). productId={}", id);
@@ -56,8 +63,7 @@ public class TenantProductUpdateWriteService {
         Product existing = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
+                        "Produto não encontrado com ID: " + id
                 ));
 
         support.applyUpdates(existing, updateProductCommand);

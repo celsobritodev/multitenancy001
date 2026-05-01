@@ -13,6 +13,7 @@ import brito.com.multitenancy001.integration.security.ControlPlaneRequestIdentit
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -63,12 +64,11 @@ public class ControlPlaneUserQueryService {
         log.debug("getControlPlaneUser chamado | userId={}", userId);
 
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
-            ControlPlaneUser user = controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user =
+                    controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
 
             return controlPlaneUserInternalFacade.mapToDetailsResponse(user);
         });
@@ -100,9 +100,7 @@ public class ControlPlaneUserQueryService {
         log.debug("getEnabledControlPlaneUser chamado | userId={}", userId);
 
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
@@ -122,13 +120,14 @@ public class ControlPlaneUserQueryService {
 
         return publicSchemaUnitOfWork.readOnly(() -> {
             Long currentUserId = controlPlaneRequestIdentityService.getCurrentUserId();
+            RequiredValidator.requireUserId(currentUserId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
+
             ControlPlaneUser user = controlPlaneUserRepository.findById(currentUserId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.USER_NOT_FOUND,
-                            "Usuário não encontrado",
-                            404
+                            "Usuário não encontrado"
                     ));
 
             if (user.getAccount() == null
@@ -136,8 +135,7 @@ public class ControlPlaneUserQueryService {
                     || !controlPlaneAccount.getId().equals(user.getAccount().getId())) {
                 throw new ApiException(
                         ApiErrorCode.FORBIDDEN,
-                        "Usuário não pertence ao Control Plane",
-                        403
+                        "Usuário não pertence ao Control Plane"
                 );
             }
 

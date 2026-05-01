@@ -29,6 +29,12 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Este bean concentra somente leituras de catálogo
  * e roda em transação read-only do tenant.</p>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,12 +43,6 @@ public class TenantProductQueryService {
 
     private final TenantProductRepository tenantProductRepository;
 
-    /**
-     * Lista produtos paginados.
-     *
-     * @param pageable paginação
-     * @return página de produtos
-     */
     @TenantReadOnlyTx
     public Page<Product> findAll(Pageable pageable) {
         log.info(
@@ -63,16 +63,10 @@ public class TenantProductQueryService {
         return page;
     }
 
-    /**
-     * Busca produto por id com relações carregadas.
-     *
-     * @param id id do produto
-     * @return produto encontrado
-     */
     @TenantReadOnlyTx
     public Product findById(UUID id) {
         if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório");
         }
 
         log.info("Buscando produto por id no tenant. productId={}", id);
@@ -80,24 +74,17 @@ public class TenantProductQueryService {
         Product product = tenantProductRepository.findWithRelationsById(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
+                        "Produto não encontrado com ID: " + id
                 ));
 
         log.info("Produto encontrado com sucesso. productId={}, sku={}", product.getId(), product.getSku());
         return product;
     }
 
-    /**
-     * Busca produtos por categoria.
-     *
-     * @param categoryId id da categoria
-     * @return produtos da categoria
-     */
     @TenantReadOnlyTx
     public List<Product> findByCategoryId(Long categoryId) {
         if (categoryId == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
         }
 
         log.info("Buscando produtos por categoria. categoryId={}", categoryId);
@@ -106,16 +93,10 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Busca produtos por subcategoria.
-     *
-     * @param subcategoryId id da subcategoria
-     * @return produtos da subcategoria
-     */
     @TenantReadOnlyTx
     public List<Product> findBySubcategoryId(Long subcategoryId) {
         if (subcategoryId == null) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório");
         }
 
         log.info("Buscando produtos por subcategoria. subcategoryId={}", subcategoryId);
@@ -124,16 +105,10 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Busca produtos por fornecedor.
-     *
-     * @param supplierId id do fornecedor
-     * @return produtos do fornecedor
-     */
     @TenantReadOnlyTx
     public List<Product> findBySupplierId(UUID supplierId) {
         if (supplierId == null) {
-            throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "supplierId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUPPLIER_ID_REQUIRED, "supplierId é obrigatório");
         }
 
         log.info("Buscando produtos por fornecedor. supplierId={}", supplierId);
@@ -142,16 +117,10 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Busca produtos de qualquer status por categoria.
-     *
-     * @param categoryId id da categoria
-     * @return produtos encontrados
-     */
     @TenantReadOnlyTx
     public List<Product> findAnyByCategoryId(Long categoryId) {
         if (categoryId == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
         }
 
         log.info("Buscando produtos any por categoria. categoryId={}", categoryId);
@@ -160,16 +129,10 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Busca produtos de qualquer status por subcategoria.
-     *
-     * @param subcategoryId id da subcategoria
-     * @return produtos encontrados
-     */
     @TenantReadOnlyTx
     public List<Product> findAnyBySubcategoryId(Long subcategoryId) {
         if (subcategoryId == null) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "subcategoryId é obrigatório");
         }
 
         log.info("Buscando produtos any por subcategoria. subcategoryId={}", subcategoryId);
@@ -178,16 +141,10 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Busca produtos por marca.
-     *
-     * @param brand marca
-     * @return produtos encontrados
-     */
     @TenantReadOnlyTx
     public List<Product> findAnyByBrandIgnoreCase(String brand) {
         if (!StringUtils.hasText(brand)) {
-            throw new ApiException(ApiErrorCode.BRAND_REQUIRED, "brand é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.BRAND_REQUIRED, "brand é obrigatório");
         }
 
         String normalizedBrand = brand.trim();
@@ -198,16 +155,6 @@ public class TenantProductQueryService {
         return result;
     }
 
-    /**
-     * Executa busca por filtros.
-     *
-     * @param name nome
-     * @param minPrice preço mínimo
-     * @param maxPrice preço máximo
-     * @param minStock estoque mínimo
-     * @param maxStock estoque máximo
-     * @return lista de produtos
-     */
     @TenantReadOnlyTx
     public List<Product> searchProducts(
             String name,
@@ -218,16 +165,15 @@ public class TenantProductQueryService {
     ) {
         log.info(
                 "Executando busca de produtos por filtros. name={}, minPrice={}, maxPrice={}, minStock={}, maxStock={}",
+                name, minPrice, maxPrice, minStock, maxStock
+        );
+
+        return tenantProductRepository.searchProducts(
                 name,
                 minPrice,
                 maxPrice,
                 minStock,
                 maxStock
         );
-
-        List<Product> result = tenantProductRepository.searchProducts(name, minPrice, maxPrice, minStock, maxStock);
-
-        log.info("Busca de produtos por filtros concluída. returnedElements={}", result.size());
-        return result;
     }
 }

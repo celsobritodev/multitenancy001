@@ -1,6 +1,7 @@
 package brito.com.multitenancy001.shared.api.error;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +10,7 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 
+import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.time.AppClock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,16 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Traduzir falhas de autenticação para 401 padronizado.</li>
  *   <li>Traduzir falhas de autorização para 403 padronizado.</li>
+ *   <li>Garantir resposta amigável ao cliente.</li>
+ *   <li>Registrar contexto técnico completo no log.</li>
+ * </ul>
+ *
+ * <p>Observações arquiteturais:</p>
+ * <ul>
+ *   <li>Não vaza detalhes técnicos de autenticação/autorização para o cliente.</li>
+ *   <li>Como o payload {@link ApiEnumErrorResponse} atual não possui campo
+ *       {@code requestId} próprio, o rastreamento é devolvido em {@code details}
+ *       via {@link ErrorDetails}.</li>
  * </ul>
  */
 @Component
@@ -39,6 +51,15 @@ public class SecurityExceptionHandlerComponent {
     }
 
     /**
+     * Retorna o requestId atual do contexto da request.
+     *
+     * @return requestId atual ou null
+     */
+    private UUID requestId() {
+        return RequestMetaContext.requestIdOrNull();
+    }
+
+    /**
      * Trata falhas de autenticação.
      *
      * @param ex exceção de autenticação
@@ -47,13 +68,18 @@ public class SecurityExceptionHandlerComponent {
     public ResponseEntity<ApiEnumErrorResponse> handleAuthentication(AuthenticationException ex) {
         Instant ts = appNow();
 
-        log.warn("Falha de autenticação capturada. message={}", ex.getMessage());
+        log.warn(
+                "⚠️ Falha de autenticação capturada | requestId={} | message={}",
+                requestId(),
+                ex == null ? null : ex.getMessage()
+        );
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
                         .error("INVALID_USER")
-                        .message("usuario ou senha invalidos")
+                        .message("Usuário ou senha inválidos.")
+                        .details(new ErrorDetails(requestId(), "Falha de autenticação"))
                         .build()
         );
     }
@@ -67,13 +93,18 @@ public class SecurityExceptionHandlerComponent {
     public ResponseEntity<ApiEnumErrorResponse> handleAuthorizationDenied(AuthorizationDeniedException ex) {
         Instant ts = appNow();
 
-        log.warn("AuthorizationDeniedException capturada. message={}", ex.getMessage());
+        log.warn(
+                "⚠️ AuthorizationDeniedException capturada | requestId={} | message={}",
+                requestId(),
+                ex == null ? null : ex.getMessage()
+        );
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
                         .error(ApiErrorCode.FORBIDDEN.name())
-                        .message("Acesso negado")
+                        .message("Acesso negado.")
+                        .details(new ErrorDetails(requestId(), "Usuário sem permissão"))
                         .build()
         );
     }
@@ -87,13 +118,18 @@ public class SecurityExceptionHandlerComponent {
     public ResponseEntity<ApiEnumErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         Instant ts = appNow();
 
-        log.warn("AccessDeniedException capturada. message={}", ex.getMessage());
+        log.warn(
+                "⚠️ AccessDeniedException capturada | requestId={} | message={}",
+                requestId(),
+                ex == null ? null : ex.getMessage()
+        );
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
                 ApiEnumErrorResponse.builder()
                         .timestamp(ts)
                         .error(ApiErrorCode.FORBIDDEN.name())
-                        .message("Acesso negado")
+                        .message("Acesso negado.")
+                        .details(new ErrorDetails(requestId(), "Usuário sem permissão"))
                         .build()
         );
     }

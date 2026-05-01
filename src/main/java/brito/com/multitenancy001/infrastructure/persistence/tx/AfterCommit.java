@@ -21,6 +21,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>{@link #runAfterCommitRequired(Runnable)} exige sincronização transacional ativa.</li>
  *   <li>{@link #runNowOrAfterCommit(Runnable)} mantém a semântica flexível de compatibilidade.</li>
  * </ul>
+ *
+ * <p><b>Importante:</b></p>
+ * <ul>
+ *   <li>Falhas técnicas (ausência de transação ativa) são tratadas como {@link IllegalStateException}.</li>
+ *   <li>Erros de entrada continuam sendo tratados via {@link ApiException}.</li>
+ * </ul>
  */
 @UtilityClass
 @Slf4j
@@ -32,19 +38,17 @@ public class AfterCommit {
      * <p>Se não houver sincronização transacional ativa, falha de forma explícita.</p>
      *
      * @param callback callback obrigatório
+     * @throws ApiException se callback for nulo
+     * @throws IllegalStateException se não houver transação ativa
      */
     public static void runAfterCommitRequired(Runnable callback) {
         if (callback == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "callback é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "callback é obrigatório");
         }
 
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             log.error("Tentativa inválida de registrar callback after-commit sem synchronization ativa.");
-            throw new ApiException(
-                    ApiErrorCode.INVALID_REQUEST,
-                    "Não existe transação ativa para after-commit obrigatório",
-                    500
-            );
+            throw new IllegalStateException("Não existe transação ativa para after-commit obrigatório");
         }
 
         log.debug("Registrando callback obrigatório para execução após commit.");
@@ -63,10 +67,11 @@ public class AfterCommit {
      * ou registra para after-commit se houver.
      *
      * @param callback callback obrigatório
+     * @throws ApiException se callback for nulo
      */
     public static void runNowOrAfterCommit(Runnable callback) {
         if (callback == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "callback é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "callback é obrigatório");
         }
 
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -89,8 +94,8 @@ public class AfterCommit {
     /**
      * Método de compatibilidade com call-sites existentes.
      *
-     * <p>Delegado para {@link #runNowOrAfterCommit(Runnable)} para não quebrar
-     * comportamento atual imediatamente.</p>
+     * <p>Delegado para {@link #runNowOrAfterCommit(Runnable)} para manter
+     * comportamento atual sem quebra.</p>
      *
      * @param callback callback obrigatório
      */

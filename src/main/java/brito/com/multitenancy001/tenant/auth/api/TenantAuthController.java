@@ -138,7 +138,7 @@ public class TenantAuthController {
         }
 
         log.error("❌ [LOGIN] Resultado inesperado: {}", result.getClass().getName());
-        throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "Resposta inesperada do servidor", 500);
+        throw new ApiException(ApiErrorCode.INTERNAL_ERROR, "Resposta inesperada do servidor");
     }
 
     /**

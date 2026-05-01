@@ -26,17 +26,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Consultar plano atual e status da conta.</li>
  *   <li>Consultar uso real e limites atuais.</li>
  *   <li>Executar preview de mudança de plano por accountId.</li>
- *   <li>Garantir resposta administrativa consistente com os cálculos do tenant.</li>
  * </ul>
  *
- * <p><b>Regras arquiteturais críticas:</b></p>
+ * <p><b>Regra V33:</b></p>
  * <ul>
- *   <li>A leitura da conta ocorre no PUBLIC schema.</li>
- *   <li>O cálculo de uso não pode ocorrer dentro do mesmo bloco do PUBLIC UoW,
- *       pois o cálculo de usage entra no tenant schema.</li>
- *   <li>Evitar bind de tenant dentro de transação PUBLIC já ativa.</li>
- *   <li>O remaining deve ser clampado para nunca retornar valor negativo.</li>
- *   <li>Para plano ilimitado, a convenção da API V30 é retornar {@code -1}.</li>
+ *   <li>Sem validação inline repetitiva.</li>
+ *   <li>Sem ApiException com status hardcoded.</li>
+ *   <li>Uso obrigatório de SubscriptionValidator.</li>
  * </ul>
  */
 @Service
@@ -52,16 +48,9 @@ public class ControlPlaneAccountSubscriptionQueryService {
     private final SubscriptionPlanCatalog subscriptionPlanCatalog;
     private final PlanChangePolicy planChangePolicy;
 
-    /**
-     * Retorna a visão consolidada de assinatura da conta.
-     *
-     * @param accountId id da conta
-     * @return response consolidado
-     */
     public AccountSubscriptionAdminResponse getSubscription(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+
+        SubscriptionValidator.requireAccountId(accountId);
 
         log.info("Consultando assinatura da conta no control plane. accountId={}", accountId);
 
@@ -70,29 +59,16 @@ public class ControlPlaneAccountSubscriptionQueryService {
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
         PlanLimitSnapshot limits = subscriptionPlanCatalog.resolveLimits(account.getSubscriptionPlan());
 
-        long remainingUsers = calculateRemaining(
-                usage.currentUsers(),
-                limits.maxUsers(),
-                limits.unlimited()
-        );
-
-        long remainingProducts = calculateRemaining(
-                usage.currentProducts(),
-                limits.maxProducts(),
-                limits.unlimited()
-        );
-
-        long remainingStorageMb = calculateRemaining(
-                usage.currentStorageMb(),
-                limits.maxStorageMb(),
-                limits.unlimited()
-        );
+        long remainingUsers = calculateRemaining(usage.currentUsers(), limits.maxUsers(), limits.unlimited());
+        long remainingProducts = calculateRemaining(usage.currentProducts(), limits.maxProducts(), limits.unlimited());
+        long remainingStorageMb = calculateRemaining(usage.currentStorageMb(), limits.maxStorageMb(), limits.unlimited());
 
         List<String> eligibleDowngrades = new ArrayList<>();
         List<String> blockedDowngrades = new ArrayList<>();
         List<String> availableUpgrades = new ArrayList<>();
 
         for (SubscriptionPlan candidate : orderedCommercialPlans()) {
+
             if (candidate == account.getSubscriptionPlan()) {
                 continue;
             }
@@ -118,7 +94,7 @@ public class ControlPlaneAccountSubscriptionQueryService {
             }
         }
 
-        AccountSubscriptionAdminResponse response = new AccountSubscriptionAdminResponse(
+        return new AccountSubscriptionAdminResponse(
                 account.getId(),
                 account.getStatus().name(),
                 account.getSubscriptionPlan().name(),
@@ -136,38 +112,12 @@ public class ControlPlaneAccountSubscriptionQueryService {
                 List.copyOf(blockedDowngrades),
                 List.copyOf(availableUpgrades)
         );
-
-        log.info(
-                "Assinatura da conta consultada com sucesso no control plane. accountId={}, currentPlan={}, unlimited={}, currentUsers={}, currentProducts={}, currentStorageMb={}, remainingUsers={}, remainingProducts={}, remainingStorageMb={}",
-                account.getId(),
-                account.getSubscriptionPlan(),
-                limits.unlimited(),
-                usage.currentUsers(),
-                usage.currentProducts(),
-                usage.currentStorageMb(),
-                remainingUsers,
-                remainingProducts,
-                remainingStorageMb
-        );
-
-        return response;
     }
 
-    /**
-     * Executa preview de mudança de plano para a conta.
-     *
-     * @param accountId id da conta
-     * @param targetPlan plano alvo
-     * @return preview completo
-     */
     public AccountPlanChangePreviewResponse previewChange(Long accountId, SubscriptionPlan targetPlan) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
 
-        if (targetPlan == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
+        SubscriptionValidator.requireTargetPlan(targetPlan);
 
         log.info(
                 "Executando preview de mudança de plano no control plane. accountId={}, targetPlan={}",
@@ -180,7 +130,7 @@ public class ControlPlaneAccountSubscriptionQueryService {
         PlanUsageSnapshot usage = accountPlanUsageService.calculateUsage(account);
         PlanEligibilityResult result = planChangePolicy.previewChange(usage, targetPlan);
 
-        AccountPlanChangePreviewResponse response = new AccountPlanChangePreviewResponse(
+        return new AccountPlanChangePreviewResponse(
                 account.getId(),
                 result.currentPlan().name(),
                 result.targetPlan().name(),
@@ -197,41 +147,16 @@ public class ControlPlaneAccountSubscriptionQueryService {
                         .map(this::toViolationResponse)
                         .toList()
         );
-
-        log.info(
-                "Preview de mudança de plano calculado com sucesso no control plane. accountId={}, currentPlan={}, targetPlan={}, changeType={}, eligible={}, violations={}",
-                accountId,
-                result.currentPlan(),
-                result.targetPlan(),
-                result.changeType(),
-                result.eligible(),
-                result.violations().size()
-        );
-
-        return response;
     }
 
-    /**
-     * Carrega a conta ativa e não deletada.
-     *
-     * @param accountId id da conta
-     * @return conta encontrada
-     */
     private Account loadAccount(Long accountId) {
         return accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.ACCOUNT_NOT_FOUND,
-                        "Conta não encontrada",
-                        404
+                        "Conta não encontrada"
                 ));
     }
 
-    /**
-     * Converte violação de elegibilidade em DTO administrativo.
-     *
-     * @param violation violação do domínio
-     * @return DTO de violação
-     */
     private AccountPlanViolationResponse toViolationResponse(PlanEligibilityViolation violation) {
         return new AccountPlanViolationResponse(
                 violation.type().name(),
@@ -242,46 +167,15 @@ public class ControlPlaneAccountSubscriptionQueryService {
         );
     }
 
-    /**
-     * Calcula o saldo remanescente de um recurso do plano.
-     *
-     * <p><b>Regras V30:</b></p>
-     * <ul>
-     *   <li>Se o plano for ilimitado, retorna {@code -1}.</li>
-     *   <li>Se o plano for limitado, nunca retorna valor negativo.</li>
-     *   <li>Quando o uso real atinge ou ultrapassa o limite, o retorno é {@code 0}.</li>
-     * </ul>
-     *
-     * @param currentUsage uso atual real
-     * @param maxAllowed limite máximo do plano
-     * @param unlimited indica se o plano é ilimitado
-     * @return saldo remanescente normalizado
-     */
     private long calculateRemaining(long currentUsage, long maxAllowed, boolean unlimited) {
         if (unlimited) {
             return UNLIMITED_REMAINING;
         }
 
         long rawRemaining = maxAllowed - currentUsage;
-        long clampedRemaining = Math.max(0L, rawRemaining);
-
-        if (rawRemaining < 0L) {
-            log.warn(
-                    "Remaining negativo detectado e clampado para zero no control plane. currentUsage={}, maxAllowed={}, rawRemaining={}",
-                    currentUsage,
-                    maxAllowed,
-                    rawRemaining
-            );
-        }
-
-        return clampedRemaining;
+        return Math.max(0L, rawRemaining);
     }
 
-    /**
-     * Retorna os planos comerciais ordenados por ranking.
-     *
-     * @return lista ordenada de planos self-service permitidos
-     */
     private List<SubscriptionPlan> orderedCommercialPlans() {
         return List.of(SubscriptionPlan.values()).stream()
                 .filter(subscriptionPlanCatalog::isSelfServiceAllowed)

@@ -25,6 +25,12 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  *
  * <p>Regras de domínio mais pesadas continuam pertencendo à camada APP.</p>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Sem alteração de comportamento.</li>
+ * </ul>
  */
 @Component
 @RequiredArgsConstructor
@@ -77,14 +83,13 @@ public class TenantProductControllerHelper {
      */
     public void validateCreateRequest(ProductUpsertRequest req) {
         if (req == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         if (Boolean.TRUE.equals(req.clearSubcategory()) && req.subcategoryId() != null) {
             throw new ApiException(
                     ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo",
-                    400
+                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo"
             );
         }
     }
@@ -98,8 +103,7 @@ public class TenantProductControllerHelper {
         if (Boolean.TRUE.equals(req.clearSubcategory()) && req.subcategoryId() != null) {
             throw new ApiException(
                     ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo",
-                    400
+                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo"
             );
         }
     }
@@ -115,8 +119,7 @@ public class TenantProductControllerHelper {
         if (accountId == null) {
             throw new ApiException(
                     ApiErrorCode.ACCOUNT_REQUIRED,
-                    "Não foi possível resolver a conta do tenant autenticado",
-                    400
+                    "Não foi possível resolver a conta do tenant autenticado"
             );
         }
 
@@ -135,8 +138,7 @@ public class TenantProductControllerHelper {
         if (!StringUtils.hasText(tenantSchema)) {
             throw new ApiException(
                     ApiErrorCode.TENANT_CONTEXT_REQUIRED,
-                    "Não foi possível resolver o tenantSchema do contexto atual",
-                    400
+                    "Não foi possível resolver o tenantSchema do contexto atual"
             );
         }
 

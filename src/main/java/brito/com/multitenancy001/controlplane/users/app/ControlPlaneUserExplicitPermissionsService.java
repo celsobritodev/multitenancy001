@@ -17,6 +17,7 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.security.PermissionScopeValidator;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -80,7 +81,7 @@ public class ControlPlaneUserExplicitPermissionsService {
      * @param permissionCodes coleção de códigos de permissões explícitas
      */
     public void setExplicitPermissionsFromCodes(Long userId, Collection<String> permissionCodes) {
-        validateUserIdRequired(userId);
+        RequiredValidator.requireUserId(userId);
 
         LinkedHashSet<String> normalizedPermissionCodes =
                 PermissionScopeValidator.normalizeControlPlaneStrict(permissionCodes);
@@ -115,21 +116,6 @@ public class ControlPlaneUserExplicitPermissionsService {
     }
 
     /**
-     * Valida {@code userId} obrigatório.
-     *
-     * @param userId id do usuário
-     */
-    private void validateUserIdRequired(Long userId) {
-        if (userId == null) {
-            throw new ApiException(
-                    ApiErrorCode.USER_ID_REQUIRED,
-                    "userId é obrigatório",
-                    400
-            );
-        }
-    }
-
-    /**
      * Converte códigos normalizados para enum {@link ControlPlanePermission}.
      *
      * @param normalizedPermissionCodes códigos já normalizados
@@ -160,8 +146,7 @@ public class ControlPlaneUserExplicitPermissionsService {
         } catch (IllegalArgumentException ex) {
             throw new ApiException(
                     ApiErrorCode.INVALID_PERMISSION,
-                    "Permission não existe no enum ControlPlanePermission: " + permissionCode,
-                    400
+                    "Permission não existe no enum ControlPlanePermission: " + permissionCode
             );
         }
     }
@@ -177,8 +162,7 @@ public class ControlPlaneUserExplicitPermissionsService {
         } catch (IllegalStateException ex) {
             throw new ApiException(
                     ApiErrorCode.CONTROLPLANE_ACCOUNT_INVALID,
-                    CONTROL_PLANE_ACCOUNT_INVALID_MESSAGE + " " + ex.getMessage(),
-                    500
+                    CONTROL_PLANE_ACCOUNT_INVALID_MESSAGE + " " + ex.getMessage()
             );
         }
     }
@@ -193,8 +177,7 @@ public class ControlPlaneUserExplicitPermissionsService {
         return controlPlaneUserRepository.findByIdAndDeletedFalse(userId)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.USER_NOT_FOUND,
-                        "Usuário não encontrado",
-                        404
+                        "Usuário não encontrado"
                 ));
     }
 
@@ -213,8 +196,7 @@ public class ControlPlaneUserExplicitPermissionsService {
                 || !controlPlaneUser.getAccount().getId().equals(controlPlaneAccount.getId())) {
             throw new ApiException(
                     ApiErrorCode.USER_OUT_OF_SCOPE,
-                    "Usuário não pertence ao Control Plane",
-                    403
+                    "Usuário não pertence ao Control Plane"
             );
         }
     }
@@ -228,8 +210,7 @@ public class ControlPlaneUserExplicitPermissionsService {
         if (controlPlaneUser.isBuiltInUser()) {
             throw new ApiException(
                     ApiErrorCode.USER_BUILT_IN_IMMUTABLE,
-                    BUILTIN_IMMUTABLE_MESSAGE,
-                    409
+                    BUILTIN_IMMUTABLE_MESSAGE
             );
         }
     }

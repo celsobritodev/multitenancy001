@@ -6,10 +6,9 @@ import org.springframework.stereotype.Service;
 
 import brito.com.multitenancy001.controlplane.accounts.domain.AccountUsageSnapshot;
 import brito.com.multitenancy001.controlplane.accounts.persistence.AccountUsageSnapshotRepository;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.shared.validation.NumberValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -60,7 +59,7 @@ public class AccountUsageSnapshotUpsertService {
         Instant now = appClock.instant();
         Instant effectiveMeasuredAt = measuredAt != null ? measuredAt : now;
 
-        AccountUsageSnapshot persisted = publicSchemaUnitOfWork.tx(() -> {
+        return publicSchemaUnitOfWork.tx(() -> {
             AccountUsageSnapshot snapshot = accountUsageSnapshotRepository.findByAccountId(accountId)
                     .orElseGet(AccountUsageSnapshot::new);
 
@@ -91,8 +90,6 @@ public class AccountUsageSnapshotUpsertService {
 
             return saved;
         });
-
-        return persisted;
     }
 
     /**
@@ -127,17 +124,9 @@ public class AccountUsageSnapshotUpsertService {
             long currentProducts,
             long currentStorageMb
     ) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
-        if (currentUsers < 0L) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "currentUsers não pode ser negativo", 400);
-        }
-        if (currentProducts < 0L) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "currentProducts não pode ser negativo", 400);
-        }
-        if (currentStorageMb < 0L) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "currentStorageMb não pode ser negativo", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
+        NumberValidator.requireNonNegative(currentUsers, "currentUsers");
+        NumberValidator.requireNonNegative(currentProducts, "currentProducts");
+        NumberValidator.requireNonNegative(currentStorageMb, "currentStorageMb");
     }
 }

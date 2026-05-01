@@ -19,11 +19,10 @@ import java.util.List;
 /**
  * Query Service do Control Plane para Payments.
  *
- * <p>Responsabilidades:</p>
+ * <p>Regra V33:</p>
  * <ul>
- *   <li>Consultas de pagamentos por status, conta e período.</li>
- *   <li>Agregações (total pago, contagem, etc).</li>
- *   <li>Mapeamento consistente para PaymentResponse (incluindo binding de plano).</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Validação encapsulada.</li>
  * </ul>
  */
 @Service
@@ -37,9 +36,8 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public List<PaymentResponse> findByStatus(PaymentStatus status) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (status == null) {
-                throw new ApiException(ApiErrorCode.PAYMENT_STATUS_REQUIRED, "status é obrigatório", 400);
-            }
+
+            requireStatus(status);
 
             return controlPlanePaymentRepository.findByStatus(status)
                     .stream()
@@ -51,13 +49,9 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public BigDecimal getTotalPaidInPeriod(Long accountId, Instant startDate, Instant endDate) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            }
 
-            if (startDate == null || endDate == null) {
-                throw new ApiException(ApiErrorCode.DATE_RANGE_REQUIRED, "startDate/endDate são obrigatórios", 400);
-            }
+            requireAccountId(accountId);
+            requireDateRange(startDate, endDate);
 
             BigDecimal total = controlPlanePaymentRepository.getTotalPaidInPeriod(accountId, startDate, endDate);
             return total != null ? total : BigDecimal.ZERO;
@@ -67,9 +61,8 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public long countCompletedPayments(Long accountId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            }
+
+            requireAccountId(accountId);
 
             Long count = controlPlanePaymentRepository.countCompletedPayments(accountId);
             return count != null ? count : 0L;
@@ -79,9 +72,8 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public List<PaymentResponse> listByAccount(Long accountId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            }
+
+            requireAccountId(accountId);
 
             return controlPlanePaymentRepository
                     .findByAccount_IdOrderByAudit_CreatedAtDesc(accountId)
@@ -94,17 +86,16 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public PaymentResponse getByAccount(Long accountId, Long paymentId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            }
 
-            if (paymentId == null) {
-                throw new ApiException(ApiErrorCode.PAYMENT_ID_REQUIRED, "paymentId é obrigatório", 400);
-            }
+            requireAccountId(accountId);
+            requirePaymentId(paymentId);
 
             Payment payment = controlPlanePaymentRepository
                     .findByIdAndAccount_Id(paymentId, accountId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.PAYMENT_NOT_FOUND, "Pagamento não encontrado", 404));
+                    .orElseThrow(() -> new ApiException(
+                            ApiErrorCode.PAYMENT_NOT_FOUND,
+                            "Pagamento não encontrado"
+                    ));
 
             return mapToResponse(payment);
         });
@@ -113,20 +104,57 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
     @Override
     public boolean hasActivePayment(Long accountId) {
         return publicSchemaUnitOfWork.readOnly(() -> {
-            if (accountId == null) {
-                throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-            }
+
+            requireAccountId(accountId);
 
             return controlPlanePaymentRepository.existsActivePayment(accountId, appClock.instant());
         });
     }
 
-    /**
-     * Mapeia Payment -> PaymentResponse (COM billing binding).
-     *
-     * @param payment entidade
-     * @return response completo
-     */
+    // =========================
+    // VALIDADORES PRIVADOS V33
+    // =========================
+
+    private void requireStatus(PaymentStatus status) {
+        if (status == null) {
+            throw new ApiException(
+                    ApiErrorCode.PAYMENT_STATUS_REQUIRED,
+                    "status é obrigatório"
+            );
+        }
+    }
+
+    private void requireAccountId(Long accountId) {
+        if (accountId == null) {
+            throw new ApiException(
+                    ApiErrorCode.ACCOUNT_ID_REQUIRED,
+                    "accountId é obrigatório"
+            );
+        }
+    }
+
+    private void requirePaymentId(Long paymentId) {
+        if (paymentId == null) {
+            throw new ApiException(
+                    ApiErrorCode.PAYMENT_ID_REQUIRED,
+                    "paymentId é obrigatório"
+            );
+        }
+    }
+
+    private void requireDateRange(Instant startDate, Instant endDate) {
+        if (startDate == null || endDate == null) {
+            throw new ApiException(
+                    ApiErrorCode.DATE_RANGE_REQUIRED,
+                    "startDate/endDate são obrigatórios"
+            );
+        }
+    }
+
+    // =========================
+    // MAPPER
+    // =========================
+
     private PaymentResponse mapToResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
@@ -139,7 +167,6 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
 
                 payment.getDescription(),
 
-                // 🔥 NOVOS CAMPOS (billing binding)
                 payment.getTargetPlan(),
                 payment.getBillingCycle(),
                 payment.getPaymentPurpose(),
@@ -148,7 +175,6 @@ public class ControlPlanePaymentQueryService implements PaymentQueryService {
                 payment.getEffectiveFrom(),
                 payment.getCoverageEndDate(),
 
-                // 🔥 CAMPOS ANTIGOS
                 payment.getPaymentDate(),
                 payment.getValidUntil(),
                 payment.getRefundedAt(),

@@ -27,6 +27,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Resolver fornecedor completo.</li>
  *   <li>Validar coerência entre categoria e subcategoria.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -49,8 +55,7 @@ public class TenantProductRelationResolver {
         return tenantProductRepository.findWithRelationsById(productId)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado após " + operation + " (ID: " + productId + ")",
-                        500
+                        "Produto não encontrado após " + operation + " (ID: " + productId + ")"
                 ));
     }
 
@@ -68,8 +73,7 @@ public class TenantProductRelationResolver {
             Supplier supplier = tenantSupplierRepository.findById(supplierId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.SUPPLIER_NOT_FOUND,
-                            "Fornecedor não encontrado com ID: " + supplierId,
-                            404
+                            "Fornecedor não encontrado com ID: " + supplierId
                     ));
             product.setSupplier(supplier);
         }
@@ -82,7 +86,7 @@ public class TenantProductRelationResolver {
      */
     public void resolveCategoryAndSubcategory(Product product) {
         if (product.getCategory() == null || product.getCategory().getId() == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória");
         }
 
         Long categoryId = product.getCategory().getId();
@@ -92,8 +96,7 @@ public class TenantProductRelationResolver {
         Category category = tenantCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.CATEGORY_NOT_FOUND,
-                        "Categoria não encontrada",
-                        404
+                        "Categoria não encontrada"
                 ));
         product.setCategory(category);
 
@@ -105,8 +108,7 @@ public class TenantProductRelationResolver {
             Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(subcategoryId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.SUBCATEGORY_NOT_FOUND,
-                            "Subcategoria não encontrada",
-                            404
+                            "Subcategoria não encontrada"
                     ));
             product.setSubcategory(sub);
         } else {
@@ -125,14 +127,13 @@ public class TenantProductRelationResolver {
         }
 
         if (product.getCategory() == null || product.getCategory().getId() == null) {
-            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória", 400);
+            throw new ApiException(ApiErrorCode.CATEGORY_REQUIRED, "Categoria é obrigatória");
         }
 
         if (product.getSubcategory().getCategory() == null || product.getSubcategory().getCategory().getId() == null) {
             throw new ApiException(
                     ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Subcategoria sem categoria associada (cadastro inconsistente)",
-                    409
+                    "Subcategoria sem categoria associada (cadastro inconsistente)"
             );
         }
 
@@ -142,8 +143,7 @@ public class TenantProductRelationResolver {
         if (!subCatCategoryId.equals(productCategoryId)) {
             throw new ApiException(
                     ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Subcategoria não pertence à categoria informada",
-                    409
+                    "Subcategoria não pertence à categoria informada"
             );
         }
     }

@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.infrastructure.tenant;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,35 +12,43 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.stereotype.Service;
 
+import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.tenant.provisioning.infra.TenantFlywayMigrator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Provisionamento de schema TENANT (Postgres):
- * - cria schema se não existir
- * - roda flyway do tenant
+ * Provisionamento de schema tenant no Postgres.
  *
- * ✅ Zero corrida: usa pg_advisory_lock e executa Flyway NA MESMA connection
- * ✅ Clean: sem sleep, sem "depende de timing"
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Criar schema do tenant se não existir.</li>
+ *   <li>Executar migrations Flyway do tenant na mesma conexão protegida por advisory lock.</li>
+ *   <li>Executar verificações de existência de schema e tabela.</li>
+ * </ul>
  *
- * Também expõe checks (schemaExists/tableExists) para o TenantExecutor.
+ * <p>Garantias:</p>
+ * <ul>
+ *   <li>Zero corrida via {@code pg_advisory_lock}.</li>
+ *   <li>Flyway executado na mesma conexão do lock.</li>
+ *   <li>Respostas amigáveis ao cliente; detalhes técnicos ficam apenas no log.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TenantSchemaProvisioner {
 
     private static final Duration DEFAULT_LOCK_TIMEOUT = Duration.ofSeconds(30);
 
     private final DataSource dataSource;
 
-    // =========================================================
-    // Provisioning
-    // =========================================================
-
     /**
-     * Account.tenantSchema é o identificador persistido do schema do tenant.
-     * tenantSchema é o mesmo valor, usado como contexto de execução na infraestrutura.
+     * Garante que o schema do tenant exista e aplica migrations.
+     *
+     * @param tenantSchema schema do tenant
+     * @return true quando o schema estiver pronto
      */
     public boolean ensureSchemaExistsAndMigrate(String tenantSchema) {
         validateTenantSchema(tenantSchema);
@@ -54,15 +60,15 @@ public class TenantSchemaProvisioner {
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
                         ApiErrorCode.TENANT_SCHEMA_LOCK_TIMEOUT,
-                        "Não foi possível obter lock de provisionamento do schema '" + tenantSchema + "'",
-                        409
+                        "Não foi possível obter lock de provisionamento do schema '" + tenantSchema + "'"
                 );
             }
 
             try {
+                log.info("🔄 Iniciando provisionamento do schema tenant | tenantSchema={}", tenantSchema);
+
                 createSchemaIfNotExists(conn, tenantSchema);
 
-                // Flyway do tenant usando a MESMA connection (lock continua válido)
                 SingleConnectionDataSource single = new SingleConnectionDataSource(conn, true);
                 try {
                     TenantFlywayMigrator.migrate(single, tenantSchema);
@@ -70,10 +76,11 @@ public class TenantSchemaProvisioner {
                     try {
                         single.destroy();
                     } catch (Exception ignored) {
-                        // best-effort
+                        log.debug("Falha best-effort ao destruir SingleConnectionDataSource | tenantSchema={}", tenantSchema);
                     }
                 }
 
+                log.info("✅ Provisionamento concluído com sucesso | tenantSchema={}", tenantSchema);
                 return true;
 
             } finally {
@@ -81,14 +88,24 @@ public class TenantSchemaProvisioner {
             }
 
         } catch (SQLException e) {
+            log.error(
+                    "❌ Falha SQL ao provisionar schema tenant | tenantSchema={} | message={}",
+                    tenantSchema,
+                    e.getMessage(),
+                    e
+            );
             throw new ApiException(
                     ApiErrorCode.TENANT_SCHEMA_PROVISIONING_FAILED,
-                    "Falha ao provisionar schema '" + tenantSchema + "': " + e.getMessage(),
-                    500
+                    "Falha interna ao provisionar schema do tenant."
             );
         }
     }
 
+    /**
+     * Tenta dropar o schema do tenant.
+     *
+     * @param tenantSchema schema do tenant
+     */
     public void tryDropSchema(String tenantSchema) {
         validateTenantSchema(tenantSchema);
 
@@ -99,30 +116,38 @@ public class TenantSchemaProvisioner {
             if (!tryAdvisoryLock(conn, lockKey, DEFAULT_LOCK_TIMEOUT)) {
                 throw new ApiException(
                         ApiErrorCode.TENANT_SCHEMA_LOCK_TIMEOUT,
-                        "Não foi possível obter lock para drop do schema '" + tenantSchema + "'",
-                        409
+                        "Não foi possível obter lock para drop do schema '" + tenantSchema + "'"
                 );
             }
 
             try {
+                log.info("🗑️ Iniciando drop de schema tenant | tenantSchema={}", tenantSchema);
                 dropSchemaIfExists(conn, tenantSchema);
+                log.info("✅ Drop de schema concluído | tenantSchema={}", tenantSchema);
             } finally {
                 advisoryUnlock(conn, lockKey);
             }
 
         } catch (SQLException e) {
+            log.error(
+                    "❌ Falha SQL ao dropar schema tenant | tenantSchema={} | message={}",
+                    tenantSchema,
+                    e.getMessage(),
+                    e
+            );
             throw new ApiException(
                     ApiErrorCode.TENANT_SCHEMA_DROP_FAILED,
-                    "Falha ao dropar schema '" + tenantSchema + "': " + e.getMessage(),
-                    500
+                    "Falha interna ao remover schema do tenant."
             );
         }
     }
 
-    // =========================================================
-    // Read-only checks (usados por TenantExecutor)
-    // =========================================================
-
+    /**
+     * Verifica se o schema do tenant existe.
+     *
+     * @param tenantSchema schema do tenant
+     * @return true se existir
+     */
     public boolean schemaExists(String tenantSchema) {
         validateTenantSchema(tenantSchema);
 
@@ -143,25 +168,37 @@ public class TenantSchemaProvisioner {
             }
 
         } catch (SQLException e) {
+            log.error(
+                    "❌ Falha SQL ao verificar existência de schema | tenantSchema={} | message={}",
+                    tenantSchema,
+                    e.getMessage(),
+                    e
+            );
             throw new ApiException(
                     ApiErrorCode.TENANT_SCHEMA_EXISTS_CHECK_FAILED,
-                    "Falha ao verificar schema '" + tenantSchema + "': " + e.getMessage(),
-                    500
+                    "Falha interna ao verificar schema do tenant."
             );
         }
     }
 
+    /**
+     * Verifica se a tabela existe no schema do tenant.
+     *
+     * @param tenantSchema schema do tenant
+     * @param tableName nome da tabela
+     * @return true se existir
+     */
     public boolean tableExists(String tenantSchema, String tableName) {
         validateTenantSchema(tenantSchema);
 
         if (tableName == null || tableName.isBlank()) {
-            throw new ApiException(ApiErrorCode.TABLE_REQUIRED, "requiredTable é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.TABLE_REQUIRED, "requiredTable é obrigatório");
         }
 
         String t = tableName.trim();
 
         if (!t.matches("^[a-z][a-z0-9_]*$")) {
-            throw new ApiException(ApiErrorCode.TABLE_INVALID, "Nome de tabela inválido: " + t, 400);
+            throw new ApiException(ApiErrorCode.TABLE_INVALID, "Nome de tabela inválido: " + t);
         }
 
         try (Connection conn = dataSource.getConnection();
@@ -183,18 +220,27 @@ public class TenantSchemaProvisioner {
             }
 
         } catch (SQLException e) {
+            log.error(
+                    "❌ Falha SQL ao verificar tabela do tenant | tenantSchema={} | table={} | message={}",
+                    tenantSchema,
+                    t,
+                    e.getMessage(),
+                    e
+            );
             throw new ApiException(
                     ApiErrorCode.TENANT_TABLE_EXISTS_CHECK_FAILED,
-                    "Falha ao verificar tabela '" + tenantSchema + "." + t + "': " + e.getMessage(),
-                    500
+                    "Falha interna ao verificar tabela do tenant."
             );
         }
     }
 
-    // =========================================================
-    // SQL helpers
-    // =========================================================
-
+    /**
+     * Cria schema se ainda não existir.
+     *
+     * @param conn conexão atual
+     * @param tenantSchema schema do tenant
+     * @throws SQLException erro SQL
+     */
     private void createSchemaIfNotExists(Connection conn, String tenantSchema) throws SQLException {
         String sql = "create schema if not exists " + tenantSchema;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -202,6 +248,13 @@ public class TenantSchemaProvisioner {
         }
     }
 
+    /**
+     * Remove schema se existir.
+     *
+     * @param conn conexão atual
+     * @param tenantSchema schema do tenant
+     * @throws SQLException erro SQL
+     */
     private void dropSchemaIfExists(Connection conn, String tenantSchema) throws SQLException {
         String sql = "drop schema if exists " + tenantSchema + " cascade";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -209,36 +262,58 @@ public class TenantSchemaProvisioner {
         }
     }
 
-    // =========================================================
-    // Advisory lock helpers (Postgres)
-    // =========================================================
-
+    /**
+     * Tenta obter advisory lock do Postgres.
+     *
+     * @param conn conexão atual
+     * @param key chave do lock
+     * @param timeout timeout lógico
+     * @return true se lock obtido
+     * @throws SQLException erro SQL
+     */
     private boolean tryAdvisoryLock(Connection conn, long key, Duration timeout) throws SQLException {
         Objects.requireNonNull(timeout, "timeout");
 
-        // sem atraso: tenta uma vez
         try (PreparedStatement ps = conn.prepareStatement("select pg_try_advisory_lock(?)")) {
             ps.setLong(1, key);
-            try (var rs = ps.executeQuery()) {
+            try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getBoolean(1);
             }
         }
     }
 
+    /**
+     * Libera advisory lock.
+     *
+     * @param conn conexão atual
+     * @param key chave do lock
+     */
     private void advisoryUnlock(Connection conn, long key) {
         try (PreparedStatement ps = conn.prepareStatement("select pg_advisory_unlock(?)")) {
             ps.setLong(1, key);
             ps.execute();
         } catch (SQLException ignored) {
-            // best-effort
+            log.debug("Falha best-effort ao liberar advisory lock | key={}", key);
         }
     }
 
+    /**
+     * Calcula a chave de advisory lock para o schema.
+     *
+     * @param tenantSchema schema do tenant
+     * @return chave de lock
+     */
     private long advisoryKey(String tenantSchema) {
         return fnv1a64(tenantSchema);
     }
 
+    /**
+     * Calcula hash FNV-1a 64 bits.
+     *
+     * @param s string base
+     * @return hash calculado
+     */
     private long fnv1a64(String s) {
         long hash = 0xcbf29ce484222325L;
         for (int i = 0; i < s.length(); i++) {
@@ -248,27 +323,26 @@ public class TenantSchemaProvisioner {
         return hash;
     }
 
-    // =========================================================
-    // Validation
-    // =========================================================
-
+    /**
+     * Valida nome do schema do tenant.
+     *
+     * @param tenantSchema schema do tenant
+     */
     private void validateTenantSchema(String tenantSchema) {
         if (tenantSchema == null || tenantSchema.isBlank()) {
-            // mantém mensagem/código pra não mexer em comportamento percebido
-            throw new ApiException(ApiErrorCode.SCHEMA_REQUIRED, "tenantSchema é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SCHEMA_REQUIRED, "tenantSchema é obrigatório");
         }
 
         String s = tenantSchema.trim();
 
         if (s.length() > 63) {
-            throw new ApiException(ApiErrorCode.SCHEMA_INVALID, "tenantSchema excede 63 caracteres", 400);
+            throw new ApiException(ApiErrorCode.SCHEMA_INVALID, "tenantSchema excede 63 caracteres");
         }
 
         if (!s.matches("^[a-z][a-z0-9_]*$")) {
             throw new ApiException(
                     ApiErrorCode.SCHEMA_INVALID,
-                    "tenantSchema inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef",
-                    400
+                    "tenantSchema inválido. Use apenas [a-z0-9_] e comece com letra. Ex: t_minha_loja_abcdef"
             );
         }
     }

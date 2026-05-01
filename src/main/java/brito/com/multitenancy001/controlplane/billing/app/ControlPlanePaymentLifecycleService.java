@@ -25,21 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Serviço de ciclo de vida de pagamentos do Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p>Regra V33:</p>
  * <ul>
- *   <li>Criar pagamentos PENDING em transação PUBLIC.</li>
- *   <li>Aplicar idempotência forte via busca por {@code idempotencyKey}
- *       e reaproveitamento após colisão de UNIQUE no banco.</li>
- *   <li>Finalizar pagamentos com lock pessimista.</li>
- *   <li>Marcar pagamentos como falhos usando invariantes do domínio.</li>
- *   <li>Buscar pagamento por chave de idempotência.</li>
- * </ul>
- *
- * <p>Regra arquitetural importante:</p>
- * <ul>
- *   <li>O domínio {@link Payment} não deve montar JSON manualmente.</li>
- *   <li>Quando houver metadata de falha, ele deve ser estruturado e serializado
- *       aqui, antes de entrar na entidade.</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Idempotência forte preservada.</li>
+ *   <li>Sem montagem manual de JSON no domínio.</li>
  * </ul>
  */
 @Service
@@ -52,12 +42,6 @@ public class ControlPlanePaymentLifecycleService {
     private final ControlPlanePaymentRepository controlPlanePaymentRepository;
     private final JsonDetailsMapper jsonDetailsMapper;
 
-    /**
-     * Busca pagamento por chave de idempotência.
-     *
-     * @param idempotencyKey chave normalizada
-     * @return pagamento encontrado ou {@code null}
-     */
     public Payment findByIdempotency(String idempotencyKey) {
         if (!StringUtils.hasText(idempotencyKey)) {
             return null;
@@ -68,17 +52,6 @@ public class ControlPlanePaymentLifecycleService {
         );
     }
 
-    /**
-     * Cria pagamento administrativo em transação PUBLIC.
-     *
-     * <p>Se houver colisão real de {@code idempotencyKey}, reaproveita o pagamento
-     * já persistido no banco, garantindo retry-safe.</p>
-     *
-     * @param adminPaymentRequest request administrativo
-     * @param now instante atual
-     * @param idempotencyKey chave de idempotência normalizada
-     * @return pagamento persistido ou reaproveitado
-     */
     public Payment createPaymentAdmin(
             AdminPaymentRequest adminPaymentRequest,
             Instant now,
@@ -88,8 +61,7 @@ public class ControlPlanePaymentLifecycleService {
             Account account = accountRepository.findById(adminPaymentRequest.accountId())
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.ACCOUNT_NOT_FOUND,
-                            "Conta não encontrada",
-                            404
+                            "Conta não encontrada"
                     ));
 
             Payment payment = Payment.builder()
@@ -135,18 +107,6 @@ public class ControlPlanePaymentLifecycleService {
         });
     }
 
-    /**
-     * Cria pagamento self-service em transação PUBLIC.
-     *
-     * <p>Se houver colisão real de {@code idempotencyKey}, reaproveita o pagamento
-     * já persistido no banco, garantindo retry-safe.</p>
-     *
-     * @param accountId conta autenticada
-     * @param paymentRequest request self-service
-     * @param now instante atual
-     * @param idempotencyKey chave de idempotência normalizada
-     * @return pagamento persistido ou reaproveitado
-     */
     public Payment createPaymentSelf(
             Long accountId,
             PaymentRequest paymentRequest,
@@ -157,8 +117,7 @@ public class ControlPlanePaymentLifecycleService {
             Account account = accountRepository.findById(accountId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.ACCOUNT_NOT_FOUND,
-                            "Conta não encontrada",
-                            404
+                            "Conta não encontrada"
                     ));
 
             Payment payment = Payment.builder()
@@ -204,20 +163,12 @@ public class ControlPlanePaymentLifecycleService {
         });
     }
 
-    /**
-     * Finaliza pagamento em transação isolada com lock pessimista.
-     *
-     * @param paymentId id do pagamento
-     * @param now instante atual
-     * @return pagamento finalizado
-     */
     public Payment finalizePayment(Long paymentId, Instant now) {
         return publicSchemaUnitOfWork.requiresNew(() -> {
             Payment payment = controlPlanePaymentRepository.findByIdWithAccountForUpdate(paymentId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.PAYMENT_NOT_FOUND,
-                            "Pagamento não encontrado",
-                            404
+                            "Pagamento não encontrado"
                     ));
 
             if (payment.isCompleted()) {
@@ -236,19 +187,12 @@ public class ControlPlanePaymentLifecycleService {
         });
     }
 
-    /**
-     * Marca pagamento como falho usando invariante do domínio e metadata serializado fora da entidade.
-     *
-     * @param paymentId id do pagamento
-     * @param reason motivo técnico/funcional
-     */
     public void failPayment(Long paymentId, String reason) {
         publicSchemaUnitOfWork.tx(() -> {
             Payment payment = controlPlanePaymentRepository.findById(paymentId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.PAYMENT_NOT_FOUND,
-                            "Pagamento não encontrado",
-                            404
+                            "Pagamento não encontrado"
                     ));
 
             String metadataJson = jsonDetailsMapper.toJson(
@@ -265,22 +209,10 @@ public class ControlPlanePaymentLifecycleService {
         });
     }
 
-    /**
-     * Normaliza string opcional.
-     *
-     * @param value valor bruto
-     * @return valor normalizado ou {@code null}
-     */
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    /**
-     * Monta metadata estruturado de falha.
-     *
-     * @param reason motivo da falha
-     * @return mapa estruturado
-     */
     private Map<String, Object> failureMetadata(String reason) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("failure_reason", reason);

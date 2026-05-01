@@ -30,6 +30,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Emitir JWT para a conta escolhida.</li>
  *   <li>Registrar auditoria de tentativa, falha e sucesso.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Validação inicial encapsulada.</li>
+ *   <li>Fluxo e auditoria preservados.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -49,32 +56,29 @@ public class TenantLoginConfirmCommandService {
      * @return JWT emitido para a conta selecionada
      */
     public JwtResult loginConfirm(TenantLoginConfirmCommand tenantLoginConfirmCommand) {
-        if (tenantLoginConfirmCommand == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
-        }
 
-        if (!StringUtils.hasText(tenantLoginConfirmCommand.challengeId())) {
-            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório");
-        }
+        validateCommand(tenantLoginConfirmCommand);
 
-        final UUID challengeId = tenantLoginChallengeIdParser.parseChallengeId(tenantLoginConfirmCommand.challengeId());
+        final UUID challengeId =
+                tenantLoginChallengeIdParser.parseChallengeId(tenantLoginConfirmCommand.challengeId());
 
-        TenantLoginChallenge tenantLoginChallenge = tenantLoginChallengeService.requireValid(challengeId);
+        TenantLoginChallenge tenantLoginChallenge =
+                tenantLoginChallengeService.requireValid(challengeId);
+
         final String email = tenantLoginChallenge.email();
 
         tenantLoginConfirmAuditService.recordAttempt(email, challengeId);
 
         Long accountId = tenantLoginConfirmCommand.accountId();
-        String slug = StringUtils.hasText(tenantLoginConfirmCommand.slug())
-                ? tenantLoginConfirmCommand.slug().trim()
-                : null;
+        String slug = normalizeSlug(tenantLoginConfirmCommand.slug());
 
         if (accountId == null && slug == null) {
             tenantLoginConfirmAuditService.recordFailure(email, null, null, "missing_selection");
             throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Informe accountId ou slug");
         }
 
-        PublicAccountView accountSnapshot = tenantLoginSelectionResolver.resolveSelectedAccount(accountId, slug);
+        PublicAccountView accountSnapshot =
+                tenantLoginSelectionResolver.resolveSelectedAccount(accountId, slug);
 
         if (accountSnapshot == null || accountSnapshot.id() == null) {
             tenantLoginConfirmAuditService.recordFailure(email, null, null, "account_not_found");
@@ -85,7 +89,8 @@ public class TenantLoginConfirmCommandService {
 
         tenantLoginChallengeService.markUsed(challengeId);
 
-        JwtResult jwtResult = tenantAuthMechanics.issueJwtForAccountAndEmail(accountSnapshot, email);
+        JwtResult jwtResult =
+                tenantAuthMechanics.issueJwtForAccountAndEmail(accountSnapshot, email);
 
         tenantLoginConfirmAuditService.recordSuccess(
                 email,
@@ -94,16 +99,43 @@ public class TenantLoginConfirmCommandService {
                 accountSnapshot.tenantSchema()
         );
 
-        log.info("✅ Login confirmado com sucesso | email={} | accountId={} | tenantSchema={}",
+        log.info(
+                "✅ Login confirmado com sucesso | email={} | accountId={} | tenantSchema={}",
                 email,
                 accountSnapshot.id(),
-                accountSnapshot.tenantSchema());
+                accountSnapshot.tenantSchema()
+        );
 
         return jwtResult;
     }
 
     /**
-     * Valida se a conta escolhida pertence ao conjunto de contas permitido pelo challenge.
+     * Valida o comando de confirmação.
+     *
+     * @param command comando recebido
+     */
+    private void validateCommand(TenantLoginConfirmCommand command) {
+        if (command == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
+        }
+
+        if (!StringUtils.hasText(command.challengeId())) {
+            throw new ApiException(ApiErrorCode.INVALID_CHALLENGE, "challengeId é obrigatório");
+        }
+    }
+
+    /**
+     * Normaliza slug opcional.
+     *
+     * @param slug slug bruto
+     * @return slug tratado ou null
+     */
+    private String normalizeSlug(String slug) {
+        return StringUtils.hasText(slug) ? slug.trim() : null;
+    }
+
+    /**
+     * Valida se a conta escolhida pertence ao conjunto permitido pelo challenge.
      *
      * @param tenantLoginChallenge challenge válido
      * @param accountSnapshot conta resolvida
@@ -114,6 +146,7 @@ public class TenantLoginConfirmCommandService {
             PublicAccountView accountSnapshot,
             String email
     ) {
+
         Set<Long> allowedAccountIds = tenantLoginChallenge.candidateAccountIds();
 
         if (allowedAccountIds == null || !allowedAccountIds.contains(accountSnapshot.id())) {
@@ -123,7 +156,11 @@ public class TenantLoginConfirmCommandService {
                     accountSnapshot.tenantSchema(),
                     "account_not_in_challenge"
             );
-            throw new ApiException(ApiErrorCode.INVALID_SELECTION, "Conta não pertence ao challenge");
+
+            throw new ApiException(
+                    ApiErrorCode.INVALID_SELECTION,
+                    "Conta não pertence ao challenge"
+            );
         }
     }
 }

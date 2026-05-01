@@ -10,10 +10,9 @@ import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDeta
 import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserSuspendRequest;
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,6 +25,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Restore de soft delete.</li>
  *   <li>Suspensão administrativa.</li>
  *   <li>Restauração administrativa.</li>
+ * </ul>
+ *
+ * <p>Diretrizes:</p>
+ * <ul>
+ *   <li>Eliminar validação inline repetitiva.</li>
+ *   <li>Manter mensagens amigáveis via validators compartilhados.</li>
+ *   <li>Preservar auditoria e comportamento atual.</li>
  * </ul>
  */
 @Slf4j
@@ -48,14 +54,14 @@ public class ControlPlaneUserLifecycleService {
         log.info("restoreControlPlaneUser INICIANDO | userId={}", userId);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
-            ControlPlaneUser user = controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
+            ControlPlaneUser user =
+                    controlPlaneUserInternalFacade.loadUserInControlPlane(userId, controlPlaneAccount.getId());
 
             controlPlaneUserInternalFacade.assertMutableUser(user);
 
@@ -103,11 +109,10 @@ public class ControlPlaneUserLifecycleService {
         log.info("softDeleteControlPlaneUser INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
@@ -115,7 +120,7 @@ public class ControlPlaneUserLifecycleService {
 
             controlPlaneUserInternalFacade.assertMutableUser(user);
 
-            final Long deletedUserId = user.getId();
+            Long deletedUserId = user.getId();
 
             ControlPlaneUserInternalFacade.AuditTarget target =
                     new ControlPlaneUserInternalFacade.AuditTarget(user.getEmail(), user.getId());
@@ -164,11 +169,10 @@ public class ControlPlaneUserLifecycleService {
         log.info("suspendControlPlaneUserByAdmin INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =
@@ -226,11 +230,10 @@ public class ControlPlaneUserLifecycleService {
         log.info("restoreControlPlaneUserByAdmin INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            RequiredValidator.requireUserId(userId);
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
             ControlPlaneUser user =

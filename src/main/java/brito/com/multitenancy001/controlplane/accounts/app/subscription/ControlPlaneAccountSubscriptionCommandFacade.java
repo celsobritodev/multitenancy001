@@ -7,11 +7,9 @@ import org.springframework.util.StringUtils;
 
 import brito.com.multitenancy001.controlplane.accounts.api.subscription.dto.AccountPlanChangeResponse;
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.domain.billing.BillingCycle;
 import brito.com.multitenancy001.shared.domain.billing.PaymentGateway;
 import brito.com.multitenancy001.shared.domain.billing.PaymentMethod;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Responsabilidades:</p>
  * <ul>
  *   <li>Receber a solicitação do controller.</li>
- *   <li>Executar validações leves de entrada.</li>
+ *   <li>Executar validações leves de entrada por validators centralizados.</li>
  *   <li>Delegar integralmente a orchestration para
  *       {@link ControlPlaneAccountPlanChangeCommandService}.</li>
  * </ul>
@@ -106,13 +104,8 @@ public class ControlPlaneAccountSubscriptionCommandFacade {
      * @param targetPlan plano alvo
      */
     private void validateBaseInputs(Long accountId, SubscriptionPlan targetPlan) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
-
-        if (targetPlan == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "targetPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireAccountId(accountId);
+        SubscriptionValidator.requireTargetPlan(targetPlan);
     }
 
     /**

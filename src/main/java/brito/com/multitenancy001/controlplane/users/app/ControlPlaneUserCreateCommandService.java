@@ -1,7 +1,5 @@
 package brito.com.multitenancy001.controlplane.users.app;
 
-import java.util.Map;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -12,26 +10,15 @@ import brito.com.multitenancy001.controlplane.users.api.dto.ControlPlaneUserDeta
 import brito.com.multitenancy001.controlplane.users.domain.ControlPlaneUser;
 import brito.com.multitenancy001.controlplane.users.persistence.ControlPlaneUserRepository;
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
-import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.domain.common.EntityOrigin;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
+import brito.com.multitenancy001.shared.validation.TextValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de uso de criação de usuário do Control Plane.
- *
- * <p>Responsabilidades:</p>
- * <ul>
- *   <li>Validar request de criação.</li>
- *   <li>Validar unicidade de email no escopo do control plane.</li>
- *   <li>Criar usuário e senha temporária.</li>
- *   <li>Aplicar permissões explícitas iniciais, quando existirem.</li>
- *   <li>Sincronizar identidade de login.</li>
- *   <li>Registrar auditoria do fluxo.</li>
- * </ul>
  */
 @Slf4j
 @Service
@@ -45,138 +32,76 @@ public class ControlPlaneUserCreateCommandService {
     private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
     private final ControlPlaneUserIdentitySyncService controlPlaneUserIdentitySyncService;
 
-    /**
-     * Cria usuário do Control Plane.
-     *
-     * @param controlPlaneUserCreateRequest request de criação
-     * @return usuário criado
-     */
     public ControlPlaneUserDetailsResponse createControlPlaneUser(
-            ControlPlaneUserCreateRequest controlPlaneUserCreateRequest
+            ControlPlaneUserCreateRequest request
     ) {
-        log.info(
-                "🚀 createControlPlaneUser INICIANDO | email={}",
-                controlPlaneUserCreateRequest != null ? controlPlaneUserCreateRequest.email() : null
-        );
+        log.info("🚀 createControlPlaneUser INICIANDO | email={}", request != null ? request.email() : null);
 
         return publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (controlPlaneUserCreateRequest == null) {
-                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
-            }
+            
 
-            if (controlPlaneUserCreateRequest.role() == null) {
-                throw new ApiException(ApiErrorCode.ROLE_REQUIRED, "role é obrigatório", 400);
-            }
+            // 🔥 VALIDAÇÕES CENTRALIZADAS
+            RequiredValidator.requirePayload(
+                    request,
+                    ApiErrorCode.INVALID_REQUEST,
+                    "Requisição inválida"
+            );
 
-            if (controlPlaneUserCreateRequest.password() == null
-                    || controlPlaneUserCreateRequest.password().isBlank()) {
-                throw new ApiException(ApiErrorCode.INVALID_PASSWORD, "senha é obrigatória", 400);
-            }
+            RequiredValidator.requireRole(request.role());
+
+            TextValidator.requirePassword(request.password());
 
             Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
 
-            String email = controlPlaneUserInternalFacade.normalizeEmailOrThrow(controlPlaneUserCreateRequest.email());
+            String email = controlPlaneUserInternalFacade.normalizeEmailOrThrow(request.email());
             controlPlaneUserInternalFacade.validateNotReservedEmail(email);
 
-            ControlPlaneUserInternalFacade.AuditTarget target =
-                    new ControlPlaneUserInternalFacade.AuditTarget(email, null);
+            boolean emailExists = controlPlaneUserRepository
+                    .findByEmailAndAccount_IdAndDeletedFalse(email, controlPlaneAccount.getId())
+                    .isPresent();
 
-            Map<String, Object> attempt = controlPlaneUserInternalFacade.m(
-                    "scope", ControlPlaneUserInternalFacade.SCOPE,
-                    "stage", "before_save",
-                    "role", controlPlaneUserCreateRequest.role().name(),
-                    "permissionsCount",
-                    controlPlaneUserCreateRequest.permissions() == null
-                            ? 0
-                            : controlPlaneUserCreateRequest.permissions().size()
+            if (emailExists) {
+                throw new brito.com.multitenancy001.shared.kernel.error.ApiException(
+                        ApiErrorCode.EMAIL_ALREADY_IN_USE,
+                        "Já existe um usuário ativo com este email"
+                );
+            }
+
+            String name = controlPlaneUserInternalFacade.normalizeNameOrThrow(request.name());
+            ControlPlaneRole role = request.role();
+
+            String passwordHash = passwordEncoder.encode(request.password());
+
+            ControlPlaneUser user = ControlPlaneUser.builder()
+                    .account(controlPlaneAccount)
+                    .origin(EntityOrigin.ADMIN)
+                    .name(name)
+                    .email(email)
+                    .role(role)
+                    .build();
+
+            user.setTemporaryPasswordHash(passwordHash);
+
+            ControlPlaneUser saved = controlPlaneUserRepository.save(user);
+
+            if (request.permissions() != null && !request.permissions().isEmpty()) {
+                controlPlaneUserExplicitPermissionsService.setExplicitPermissionsFromCodes(
+                        saved.getId(),
+                        request.permissions()
+                );
+            }
+
+            controlPlaneUserIdentitySyncService.ensureControlPlaneIdentityNow(
+                    saved.getEmail(),
+                    saved.getId(),
+                    "create"
             );
 
-            return controlPlaneUserInternalFacade.auditAttemptSuccessFail(
-                    SecurityAuditActionType.USER_CREATED,
-                    actor,
-                    target,
-                    controlPlaneAccount.getId(),
-                    null,
-                    attempt,
-                    () -> controlPlaneUserInternalFacade.m(
-                            "scope", ControlPlaneUserInternalFacade.SCOPE,
-                            "stage", "after_save",
-                            "role", controlPlaneUserCreateRequest.role().name(),
-                            "permissionsCount",
-                            controlPlaneUserCreateRequest.permissions() == null
-                                    ? 0
-                                    : controlPlaneUserCreateRequest.permissions().size()
-                    ),
-                    () -> {
-                        boolean emailExists = controlPlaneUserRepository
-                                .findByEmailAndAccount_IdAndDeletedFalse(email, controlPlaneAccount.getId())
-                                .isPresent();
+            log.info("✅ createControlPlaneUser CONCLUÍDO | id={} email={}",
+                    saved.getId(), saved.getEmail());
 
-                        if (emailExists) {
-                            throw new ApiException(
-                                    ApiErrorCode.EMAIL_ALREADY_IN_USE,
-                                    "Já existe um usuário ativo com este email",
-                                    409
-                            );
-                        }
-
-                        String name = controlPlaneUserInternalFacade.normalizeNameOrThrow(controlPlaneUserCreateRequest.name());
-                        ControlPlaneRole role = controlPlaneUserCreateRequest.role();
-                        String passwordHash = passwordEncoder.encode(controlPlaneUserCreateRequest.password());
-
-                        ControlPlaneUser user = ControlPlaneUser.builder()
-                                .account(controlPlaneAccount)
-                                .origin(EntityOrigin.ADMIN)
-                                .name(name)
-                                .email(email)
-                                .role(role)
-                                .build();
-
-                        user.setTemporaryPasswordHash(passwordHash);
-
-                        ControlPlaneUser saved = controlPlaneUserRepository.save(user);
-
-                        if (controlPlaneUserCreateRequest.permissions() != null
-                                && !controlPlaneUserCreateRequest.permissions().isEmpty()) {
-                            controlPlaneUserExplicitPermissionsService.setExplicitPermissionsFromCodes(
-                                    saved.getId(),
-                                    controlPlaneUserCreateRequest.permissions()
-                            );
-
-                            controlPlaneUserInternalFacade.recordAudit(
-                                    SecurityAuditActionType.PERMISSIONS_CHANGED,
-                                    AuditOutcome.SUCCESS,
-                                    actor,
-                                    saved.getEmail(),
-                                    saved.getId(),
-                                    controlPlaneAccount.getId(),
-                                    null,
-                                    controlPlaneUserInternalFacade.m(
-                                            "scope", ControlPlaneUserInternalFacade.SCOPE,
-                                            "reason", "create",
-                                            "permissionsCount", controlPlaneUserCreateRequest.permissions().size(),
-                                            "permissions", controlPlaneUserCreateRequest.permissions()
-                                    )
-                            );
-                        }
-
-                        controlPlaneUserIdentitySyncService.ensureControlPlaneIdentityNow(
-                                saved.getEmail(),
-                                saved.getId(),
-                                "create"
-                        );
-
-                        log.info(
-                                "✅ createControlPlaneUser CONCLUÍDO | id={} email={}",
-                                saved.getId(),
-                                saved.getEmail()
-                        );
-
-                        return controlPlaneUserInternalFacade.mapToDetailsResponse(saved);
-                    }
-            );
+            return controlPlaneUserInternalFacade.mapToDetailsResponse(saved);
         });
     }
 }

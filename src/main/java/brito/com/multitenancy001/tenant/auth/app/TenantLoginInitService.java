@@ -22,10 +22,10 @@ import brito.com.multitenancy001.shared.domain.audit.AuthEventType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaExecutor;
 import brito.com.multitenancy001.shared.json.JsonDetailsMapper;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
-import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
-import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityRow;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountFinder;
+import brito.com.multitenancy001.shared.persistence.publicschema.PublicAccountView;
 import brito.com.multitenancy001.tenant.auth.app.audit.TenantAuthAuditRecorder;
 import brito.com.multitenancy001.tenant.auth.app.boundary.TenantAuthMechanics;
 import brito.com.multitenancy001.tenant.auth.app.command.TenantLoginInitCommand;
@@ -54,6 +54,13 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Todo acesso ao PUBLIC deve rodar dentro do {@link PublicSchemaExecutor}.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded em {@link ApiException}.</li>
+ *   <li>Validação inicial encapsulada.</li>
+ *   <li>Fluxo funcional, auditoria e autenticação preservados.</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -77,15 +84,7 @@ public class TenantLoginInitService {
      * @return resultado de login direto ou necessidade de seleção
      */
     public TenantLoginResult loginInit(TenantLoginInitCommand cmd) {
-        if (cmd == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
-        }
-        if (!StringUtils.hasText(cmd.email())) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório");
-        }
-        if (!StringUtils.hasText(cmd.password())) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório");
-        }
+        validateLoginInitCommand(cmd);
 
         final String email = normalizeEmailRequired(cmd.email());
         final String password = cmd.password();
@@ -181,6 +180,25 @@ public class TenantLoginInitService {
 
         } catch (BadCredentialsException ex) {
             throw new ApiException(ApiErrorCode.UNAUTHENTICATED, INVALID_CREDENTIALS_MSG);
+        }
+    }
+
+    /**
+     * Valida o comando bruto de login tenant.
+     *
+     * @param cmd comando informado
+     */
+    private void validateLoginInitCommand(TenantLoginInitCommand cmd) {
+        if (cmd == null) {
+            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
+        }
+
+        if (!StringUtils.hasText(cmd.email())) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório");
+        }
+
+        if (!StringUtils.hasText(cmd.password())) {
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório");
         }
     }
 

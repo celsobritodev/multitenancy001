@@ -19,6 +19,13 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Alternar ativo/inativo</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ *   <li>Logs preservados</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,7 +44,7 @@ public class TenantProductStatusWriteService {
     @TenantTx
     public Product toggleActive(UUID id) {
         if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório");
         }
 
         log.info("PRODUCT_TOGGLE_ACTIVE_START | productId={}", id);
@@ -45,8 +52,7 @@ public class TenantProductStatusWriteService {
         Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
+                        "Produto não encontrado com ID: " + id
                 ));
 
         product.setActive(!Boolean.TRUE.equals(product.getActive()));

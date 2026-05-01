@@ -17,6 +17,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Aplicar o downgrade imediato.</li>
  *   <li>Montar a resposta consolidada.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem ApiException com status hardcoded.</li>
+ *   <li>Sem alterar regra de negócio.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -25,18 +31,12 @@ public class ControlPlaneAccountPlanDowngradeService {
 
     private final AccountPlanChangeService accountPlanChangeService;
 
-    /**
-     * Aplica downgrade elegível imediatamente.
-     *
-     * @param command comando consolidado
-     * @param preview preview já calculado
-     * @return resposta final
-     */
     public AccountPlanChangeResponse handleDowngrade(
             ChangeAccountPlanCommand command,
             PlanEligibilityResult preview
     ) {
         if (!preview.eligible()) {
+
             log.warn(
                     "Downgrade rejeitado por inelegibilidade. accountId={}, currentPlan={}, targetPlan={}, changeType={}",
                     command.accountId(),
@@ -44,7 +44,11 @@ public class ControlPlaneAccountPlanDowngradeService {
                     preview.targetPlan(),
                     preview.changeType()
             );
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "Downgrade não elegível para a conta atual", 409);
+
+            throw new ApiException(
+                    ApiErrorCode.INVALID_REQUEST,
+                    "Downgrade não elegível para a conta atual"
+            );
         }
 
         AccountPlanChangeResult result = accountPlanChangeService.applyEligibleDowngrade(command);

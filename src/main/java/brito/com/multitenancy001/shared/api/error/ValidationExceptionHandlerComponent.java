@@ -3,6 +3,7 @@ package brito.com.multitenancy001.shared.api.error;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
+import brito.com.multitenancy001.shared.context.RequestMetaContext;
 import brito.com.multitenancy001.shared.time.AppClock;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Traduzir erros de bean validation.</li>
  *   <li>Traduzir ausência de request parameter.</li>
  *   <li>Traduzir type mismatch em path variable e query param.</li>
+ * </ul>
+ *
+ * <p>Diretrizes:</p>
+ * <ul>
+ *   <li>Manter resposta amigável ao cliente.</li>
+ *   <li>Registrar logs com requestId.</li>
+ *   <li>Evitar vazamento de detalhes internos desnecessários.</li>
  * </ul>
  */
 @Component
@@ -47,6 +56,15 @@ public class ValidationExceptionHandlerComponent {
     }
 
     /**
+     * Retorna o requestId atual do contexto.
+     *
+     * @return requestId atual ou null
+     */
+    private UUID requestId() {
+        return RequestMetaContext.requestIdOrNull();
+    }
+
+    /**
      * Trata falhas de parsing do corpo da requisição.
      *
      * <p>Se a falha vier de enum inválido, devolve payload rico com valores permitidos.
@@ -59,7 +77,11 @@ public class ValidationExceptionHandlerComponent {
         Instant ts = appNow();
         Throwable cause = ex.getCause();
 
-        log.warn("HttpMessageNotReadableException capturada. message={}", ex.getMessage());
+        log.warn(
+                "⚠️ HttpMessageNotReadableException capturada | requestId={} | message={}",
+                requestId(),
+                ex.getMessage()
+        );
 
         if (cause instanceof InvalidFormatException ife) {
             Class<?> targetType = ife.getTargetType();
@@ -73,7 +95,8 @@ public class ValidationExceptionHandlerComponent {
                         .toList();
 
                 log.warn(
-                        "Enum inválido recebido. field={}, invalidValue={}, allowedValues={}",
+                        "⚠️ Enum inválido recebido | requestId={} | field={} | invalidValue={} | allowedValues={}",
+                        requestId(),
                         fieldName,
                         invalidValue,
                         allowedValues
@@ -87,6 +110,7 @@ public class ValidationExceptionHandlerComponent {
                                 .field(fieldName)
                                 .invalidValue(invalidValue)
                                 .allowedValues(allowedValues)
+                                .details(new ErrorDetails(requestId(), "Valor de enum inválido"))
                                 .build()
                 );
             }
@@ -97,6 +121,7 @@ public class ValidationExceptionHandlerComponent {
                         .timestamp(ts)
                         .error("INVALID_REQUEST_BODY")
                         .message("Corpo da requisição inválido")
+                        .details(new ErrorDetails(requestId(), "Corpo da requisição inválido"))
                         .build()
         );
     }
@@ -121,7 +146,12 @@ public class ValidationExceptionHandlerComponent {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
 
-        log.warn("Erro de validação capturado. path={}, errors={}", path, errors);
+        log.warn(
+                "⚠️ Erro de validação capturado | requestId={} | path={} | errors={}",
+                requestId(),
+                path,
+                errors
+        );
 
         ApiErrorResponse errorResponse = ApiErrorResponse.builder()
                 .timestamp(ts)
@@ -132,6 +162,7 @@ public class ValidationExceptionHandlerComponent {
                 .message("Erro de validação")
                 .details(errors)
                 .path(path)
+                .requestId(requestId())
                 .build();
 
         return ResponseEntity.badRequest().body(errorResponse);
@@ -147,7 +178,11 @@ public class ValidationExceptionHandlerComponent {
         Instant ts = appNow();
         String param = ex.getParameterName();
 
-        log.warn("Missing request parameter capturado. param={}", param);
+        log.warn(
+                "⚠️ Missing request parameter capturado | requestId={} | param={}",
+                requestId(),
+                param
+        );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 ApiEnumErrorResponse.builder()
@@ -157,7 +192,7 @@ public class ValidationExceptionHandlerComponent {
                         .field(param)
                         .invalidValue(null)
                         .allowedValues(null)
-                        .details(null)
+                        .details(new ErrorDetails(requestId(), "Parâmetro obrigatório ausente"))
                         .build()
         );
     }
@@ -177,7 +212,8 @@ public class ValidationExceptionHandlerComponent {
         String expectedType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
 
         log.warn(
-                "Type mismatch capturado. field={}, invalidValue={}, expectedType={}",
+                "⚠️ Type mismatch capturado | requestId={} | field={} | invalidValue={} | expectedType={}",
+                requestId(),
                 field,
                 invalidValue,
                 expectedType
@@ -191,7 +227,7 @@ public class ValidationExceptionHandlerComponent {
                         .field(field)
                         .invalidValue(invalidValue)
                         .allowedValues(List.of(expectedType))
-                        .details(null)
+                        .details(new ErrorDetails(requestId(), "Parâmetro inválido"))
                         .build()
         );
     }

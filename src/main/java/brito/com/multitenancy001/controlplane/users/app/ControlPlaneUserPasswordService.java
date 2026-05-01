@@ -16,6 +16,8 @@ import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
+import brito.com.multitenancy001.shared.validation.TextValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>Reset administrativo de senha.</li>
  *   <li>Troca da própria senha pelo usuário autenticado.</li>
- *   <li>Aplicar validações de senha e auditoria do fluxo.</li>
+ *   <li>Validação centralizada via validators.</li>
  * </ul>
  */
 @Slf4j
@@ -41,50 +43,35 @@ public class ControlPlaneUserPasswordService {
     private final AppClock appClock;
     private final ControlPlaneUserInternalFacade controlPlaneUserInternalFacade;
 
-    /**
-     * Reseta senha de um usuário do Control Plane por ação administrativa.
-     *
-     * @param userId id do usuário
-     * @param controlPlaneUserPasswordResetRequest request de reset
-     */
     public void resetControlPlaneUserPassword(
             Long userId,
-            ControlPlaneUserPasswordResetRequest controlPlaneUserPasswordResetRequest
+            ControlPlaneUserPasswordResetRequest request
     ) {
         log.info("resetControlPlaneUserPassword INICIANDO | userId={}", userId);
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (userId == null) {
-                throw new ApiException(ApiErrorCode.USER_ID_REQUIRED, "userId é obrigatório", 400);
-            }
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (controlPlaneUserPasswordResetRequest == null) {
-                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
-            }
+            // 🔥 VALIDAÇÃO CENTRALIZADA
+            RequiredValidator.requireUserId(userId);
+            RequiredValidator.requirePayload(request, ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
 
-            if (controlPlaneUserPasswordResetRequest.newPassword() == null
-                    || controlPlaneUserPasswordResetRequest.confirmPassword() == null) {
-                throw new ApiException(
-                        ApiErrorCode.INVALID_PASSWORD,
-                        "Senha e confirmação são obrigatórias",
-                        400
-                );
-            }
+            TextValidator.requireNewPassword(request.newPassword());
+            TextValidator.requireNewPassword(request.confirmPassword());
 
-            if (!controlPlaneUserPasswordResetRequest.newPassword()
-                    .equals(controlPlaneUserPasswordResetRequest.confirmPassword())) {
+            if (!request.newPassword().equals(request.confirmPassword())) {
                 throw new ApiException(
                         ApiErrorCode.PASSWORD_MISMATCH,
-                        "Nova senha e confirmação não conferem",
-                        400
+                        "Nova senha e confirmação não conferem"
                 );
             }
 
-            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
+            Account account = controlPlaneUserInternalFacade.getControlPlaneAccount();
+
             ControlPlaneUser user =
-                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, controlPlaneAccount.getId());
+                    controlPlaneUserInternalFacade.loadNotDeletedUserInControlPlane(userId, account.getId());
 
             controlPlaneUserInternalFacade.assertMutableUser(user);
 
@@ -100,13 +87,13 @@ public class ControlPlaneUserPasswordService {
                     SecurityAuditActionType.PASSWORD_RESET_COMPLETED,
                     actor,
                     target,
-                    controlPlaneAccount.getId(),
+                    account.getId(),
                     null,
                     attempt,
                     () -> attempt,
                     () -> {
-                        String passwordHash = passwordEncoder.encode(controlPlaneUserPasswordResetRequest.newPassword());
-                        user.setTemporaryPasswordHash(passwordHash);
+                        String hash = passwordEncoder.encode(request.newPassword());
+                        user.setTemporaryPasswordHash(hash);
                         controlPlaneUserRepository.save(user);
                         return null;
                     }
@@ -117,76 +104,53 @@ public class ControlPlaneUserPasswordService {
         });
     }
 
-    /**
-     * Altera a própria senha do usuário autenticado do Control Plane.
-     *
-     * @param controlPlaneChangeMyPasswordRequest request de troca
-     */
-    public void changeMyPassword(ControlPlaneChangeMyPasswordRequest controlPlaneChangeMyPasswordRequest) {
+    public void changeMyPassword(ControlPlaneChangeMyPasswordRequest request) {
         log.info("changeMyPassword INICIANDO");
 
         publicSchemaUnitOfWork.tx(() -> {
-            ControlPlaneUserInternalFacade.AuditActor actor = controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (controlPlaneChangeMyPasswordRequest == null) {
-                throw new ApiException(ApiErrorCode.INVALID_REQUEST, "request é obrigatório", 400);
-            }
+            ControlPlaneUserInternalFacade.AuditActor actor =
+                    controlPlaneUserInternalFacade.resolveActorOrAnonymous();
 
-            if (controlPlaneChangeMyPasswordRequest.currentPassword() == null
-                    || controlPlaneChangeMyPasswordRequest.newPassword() == null
-                    || controlPlaneChangeMyPasswordRequest.confirmPassword() == null) {
-                throw new ApiException(
-                        ApiErrorCode.INVALID_PASSWORD,
-                        "Senha atual, nova senha e confirmação são obrigatórias",
-                        400
-                );
-            }
+            // 🔥 VALIDAÇÃO CENTRALIZADA
+            RequiredValidator.requirePayload(request, ApiErrorCode.INVALID_REQUEST, "Requisição inválida");
 
-            if (!controlPlaneChangeMyPasswordRequest.newPassword()
-                    .equals(controlPlaneChangeMyPasswordRequest.confirmPassword())) {
+            TextValidator.requirePassword(request.currentPassword());
+            TextValidator.requireNewPassword(request.newPassword());
+            TextValidator.requireNewPassword(request.confirmPassword());
+
+            if (!request.newPassword().equals(request.confirmPassword())) {
                 throw new ApiException(
                         ApiErrorCode.PASSWORD_MISMATCH,
-                        "Nova senha e confirmação não conferem",
-                        400
+                        "Nova senha e confirmação não conferem"
                 );
             }
 
-            Long currentAccountId = controlPlaneRequestIdentityService.getCurrentAccountId();
-            Long currentUserId = controlPlaneRequestIdentityService.getCurrentUserId();
+            Long accountId = controlPlaneRequestIdentityService.getCurrentAccountId();
+            Long userId = controlPlaneRequestIdentityService.getCurrentUserId();
 
-            Account controlPlaneAccount = controlPlaneUserInternalFacade.getControlPlaneAccount();
-            if (currentAccountId == null
-                    || currentUserId == null
-                    || !controlPlaneAccount.getId().equals(currentAccountId)) {
+            RequiredValidator.requireAccountId(accountId);
+            RequiredValidator.requireUserId(userId);
+
+            Account account = controlPlaneUserInternalFacade.getControlPlaneAccount();
+
+            if (!account.getId().equals(accountId)) {
                 throw new ApiException(
                         ApiErrorCode.FORBIDDEN,
-                        "Usuário não pertence ao Control Plane",
-                        403
+                        "Usuário não pertence ao Control Plane"
                 );
             }
 
-            ControlPlaneUser user = controlPlaneUserRepository.findById(currentUserId)
+            ControlPlaneUser user = controlPlaneUserRepository.findById(userId)
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.USER_NOT_FOUND,
-                            "Usuário não encontrado",
-                            404
+                            "Usuário não encontrado"
                     ));
-
-            if (user.getAccount() == null
-                    || user.getAccount().getId() == null
-                    || !user.getAccount().getId().equals(controlPlaneAccount.getId())) {
-                throw new ApiException(
-                        ApiErrorCode.FORBIDDEN,
-                        "Usuário não pertence ao Control Plane",
-                        403
-                );
-            }
 
             if (!user.isEnabled()) {
                 throw new ApiException(
                         ApiErrorCode.USER_NOT_ENABLED,
-                        "Usuário não está habilitado para trocar senha",
-                        403
+                        "Usuário não está habilitado para trocar senha"
                 );
             }
 
@@ -202,25 +166,22 @@ public class ControlPlaneUserPasswordService {
                     SecurityAuditActionType.PASSWORD_CHANGED,
                     actor,
                     target,
-                    controlPlaneAccount.getId(),
+                    account.getId(),
                     null,
                     attempt,
                     () -> attempt,
                     () -> {
                         String currentHash = user.getPassword();
-                        if (currentHash == null
-                                || !passwordEncoder.matches(
-                                        controlPlaneChangeMyPasswordRequest.currentPassword(),
-                                        currentHash
-                                )) {
+
+                        if (currentHash == null ||
+                                !passwordEncoder.matches(request.currentPassword(), currentHash)) {
                             throw new ApiException(
                                     ApiErrorCode.CURRENT_PASSWORD_INVALID,
-                                    "Senha atual inválida",
-                                    400
+                                    "Senha atual inválida"
                             );
                         }
 
-                        String newHash = passwordEncoder.encode(controlPlaneChangeMyPasswordRequest.newPassword());
+                        String newHash = passwordEncoder.encode(request.newPassword());
                         user.changePasswordHash(newHash, appClock.instant());
 
                         controlPlaneUserRepository.save(user);

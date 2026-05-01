@@ -1,48 +1,90 @@
 package brito.com.multitenancy001.shared.api.error;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import lombok.Builder;
 
 /**
  * Payload padronizado de erro da API.
  *
- * <p>Este response é utilizado para devolver erros funcionais, de validação,
- * de domínio e demais falhas controladas da aplicação em um formato estável.</p>
+ * <p>Responsável por representar erros retornados ao cliente
+ * de forma estável, previsível e rastreável.</p>
  *
- * <p>Objetivos principais:</p>
+ * <p>Campos:</p>
  * <ul>
- *   <li>Padronizar o shape de erro consumido por frontend e integrações.</li>
- *   <li>Permitir que suítes E2E validem o campo {@code code} diretamente na raiz.</li>
- *   <li>Suportar metadados úteis como status HTTP e path da requisição.</li>
- *   <li>Suportar detalhes flexíveis via campo {@code details}.</li>
+ *   <li><b>timestamp</b>: instante do erro (AppClock).</li>
+ *   <li><b>status</b>: status HTTP numérico.</li>
+ *   <li><b>error</b>: código externo do erro (ex: "INVALID_REQUEST").</li>
+ *   <li><b>code</b>: código interno da aplicação (ex: ApiErrorCode).</li>
+ *   <li><b>category</b>: categoria funcional do erro (ex: AUTH, VALIDATION, DOMAIN).</li>
+ *   <li><b>message</b>: mensagem amigável para o cliente.</li>
+ *   <li><b>details</b>: dados adicionais (opcional, estruturado ou lista).</li>
+ *   <li><b>path</b>: endpoint que gerou o erro.</li>
+ *   <li><b>requestId</b>: identificador único da requisição (rastreamento).</li>
  * </ul>
  *
- * <p>Observação importante:</p>
+ * <p>Diretrizes de uso:</p>
  * <ul>
- *   <li>O campo {@code details} é propositalmente do tipo {@link Object},
- *       pois alguns fluxos devolvem {@code List<String>} e outros devolvem
- *       estruturas mais ricas vindas de {@code ApiException}.</li>
+ *   <li>NUNCA expor stacktrace ou mensagens técnicas no campo {@code message}.</li>
+ *   <li>{@code details} pode conter:
+ *       <ul>
+ *           <li>lista de erros de validação</li>
+ *           <li>{@link ErrorDetails} para rastreamento</li>
+ *           <li>dados auxiliares controlados</li>
+ *       </ul>
+ *   </li>
+ *   <li>{@code requestId} deve sempre ser preenchido quando disponível.</li>
  * </ul>
  *
- * @param timestamp instante de geração do erro
- * @param status status HTTP associado
- * @param error nome textual/legado do erro
- * @param code código funcional/canônico do erro
- * @param category categoria funcional do erro
- * @param message mensagem principal do erro
- * @param details detalhes adicionais do erro
- * @param path path HTTP da requisição
+ * <p>Compatibilidade:</p>
+ * <ul>
+ *   <li>Consumido por {@link GlobalExceptionHandler}.</li>
+ *   <li>Preenchido por {@link ApiExceptionHandlerComponent}.</li>
+ *   <li>Usado em E2E e integrações externas.</li>
+ * </ul>
  */
 @Builder
 public record ApiErrorResponse(
+
         Instant timestamp,
+
         Integer status,
+
+        /**
+         * Código externo do erro (consumido por frontend/integradores).
+         */
         String error,
+
+        /**
+         * Código interno da aplicação (normalmente ApiErrorCode.name()).
+         */
         String code,
+
+        /**
+         * Categoria funcional do erro.
+         */
         String category,
+
+        /**
+         * Mensagem amigável ao usuário.
+         */
         String message,
+
+        /**
+         * Detalhes adicionais do erro (opcional).
+         */
         Object details,
-        String path
+
+        /**
+         * Caminho da requisição HTTP.
+         */
+        String path,
+
+        /**
+         * Identificador único da requisição para rastreamento.
+         */
+        UUID requestId
+
 ) {
 }

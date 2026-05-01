@@ -20,6 +20,23 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
+/**
+ * Application Service de Subcategories (Tenant).
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Operações de leitura e escrita do agregado Subcategory</li>
+ *   <li>Garantir vínculo correto com Category</li>
+ *   <li>Validar unicidade dentro da categoria</li>
+ *   <li>Gerenciar soft-delete e restore</li>
+ * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -36,13 +53,21 @@ public class TenantSubcategoryService {
 
     @TenantReadOnlyTx
     public Subcategory findById(Long id) {
-        if (id == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório", 400);
+        if (id == null) {
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório");
+        }
 
         Subcategory s = tenantSubcategoryRepository.findByIdWithCategory(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada: " + id, 404));
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.SUBCATEGORY_NOT_FOUND,
+                        "Subcategoria não encontrada: " + id
+                ));
 
         if (s.isDeleted()) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_DELETED, "Subcategoria deletada não pode ser consultada", 404);
+            throw new ApiException(
+                    ApiErrorCode.SUBCATEGORY_DELETED,
+                    "Subcategoria deletada não pode ser consultada"
+            );
         }
 
         return s;
@@ -60,35 +85,42 @@ public class TenantSubcategoryService {
 
     @TenantReadOnlyTx
     public List<Subcategory> findByCategoryId(Long categoryId) {
-        if (categoryId == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+        if (categoryId == null) {
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
+        }
         return tenantSubcategoryRepository.findActiveNotDeletedByCategoryId(categoryId);
     }
 
     @TenantReadOnlyTx
     public List<Subcategory> findByCategoryIdAdmin(Long categoryId, boolean includeDeleted, boolean includeInactive) {
-        if (categoryId == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+        if (categoryId == null) {
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
+        }
         return tenantSubcategoryRepository.findByCategoryWithFlags(categoryId, includeDeleted, includeInactive);
     }
 
     @TenantReadOnlyTx
     public List<Subcategory> findByCategoryIdNotDeleted(Long categoryId) {
-        if (categoryId == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+        if (categoryId == null) {
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
+        }
         return tenantSubcategoryRepository.findNotDeletedByCategoryId(categoryId);
     }
 
     // =========================================================
-    // WRITE (multi-step/multi-repo => TenantSchemaUnitOfWork)
+    // WRITE (multi-step)
     // =========================================================
 
-       /**
-     * Cria Subcategory dentro de uma Category.
-     */
+    @TenantTx
     public Subcategory create(CreateSubcategoryCommand cmd) {
-        // validações de negócio + multirepo dentro de tenantSchemaUnitOfWork.
-        if (cmd == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório", 400);
-        if (cmd.categoryId() == null) throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório", 400);
+        if (cmd == null) {
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório");
+        }
+        if (cmd.categoryId() == null) {
+            throw new ApiException(ApiErrorCode.CATEGORY_ID_REQUIRED, "categoryId é obrigatório");
+        }
         if (!StringUtils.hasText(cmd.name())) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_NAME_REQUIRED, "name é obrigatório");
         }
 
         Long categoryId = cmd.categoryId();
@@ -96,10 +128,16 @@ public class TenantSubcategoryService {
 
         return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Category category = tenantCategoryRepository.findById(categoryId)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.CATEGORY_NOT_FOUND, "Categoria não encontrada: " + categoryId, 404));
+                    .orElseThrow(() -> new ApiException(
+                            ApiErrorCode.CATEGORY_NOT_FOUND,
+                            "Categoria não encontrada: " + categoryId
+                    ));
 
             if (category.isDeleted()) {
-                throw new ApiException(ApiErrorCode.CATEGORY_DELETED, "Não é permitido criar subcategoria em categoria deletada", 409);
+                throw new ApiException(
+                        ApiErrorCode.CATEGORY_DELETED,
+                        "Não é permitido criar subcategoria em categoria deletada"
+                );
             }
 
             String name = cmd.name().trim();
@@ -108,8 +146,7 @@ public class TenantSubcategoryService {
                     .ifPresent(existing -> {
                         throw new ApiException(
                                 ApiErrorCode.SUBCATEGORY_ALREADY_EXISTS,
-                                "Subcategoria já existe na categoria " + categoryId + ": " + name,
-                                409
+                                "Subcategoria já existe na categoria " + categoryId + ": " + name
                         );
                     });
 
@@ -123,25 +160,32 @@ public class TenantSubcategoryService {
         });
     }
 
-       /**
-     * Atualiza Subcategory.
-     */
+    @TenantTx
     public Subcategory update(Long id, UpdateSubcategoryCommand cmd) {
-        //  proíbe atualizar deletada; valida unicidade por categoria.
-        if (id == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório", 400);
-        if (cmd == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório", 400);
+        if (id == null) {
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório");
+        }
+        if (cmd == null) {
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_REQUIRED, "payload é obrigatório");
+        }
         if (!StringUtils.hasText(cmd.name())) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_NAME_REQUIRED, "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_NAME_REQUIRED, "name é obrigatório");
         }
 
         String tenantSchema = requireBoundTenantSchema();
 
         return tenantSchemaUnitOfWork.tx(tenantSchema, () -> {
             Subcategory existing = tenantSubcategoryRepository.findByIdWithCategory(id)
-                    .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada: " + id, 404));
+                    .orElseThrow(() -> new ApiException(
+                            ApiErrorCode.SUBCATEGORY_NOT_FOUND,
+                            "Subcategoria não encontrada: " + id
+                    ));
 
             if (existing.isDeleted()) {
-                throw new ApiException(ApiErrorCode.SUBCATEGORY_DELETED, "Não é permitido alterar subcategoria deletada", 409);
+                throw new ApiException(
+                        ApiErrorCode.SUBCATEGORY_DELETED,
+                        "Não é permitido alterar subcategoria deletada"
+                );
             }
 
             String newName = cmd.name().trim();
@@ -152,8 +196,7 @@ public class TenantSubcategoryService {
                         if (!other.getId().equals(id)) {
                             throw new ApiException(
                                     ApiErrorCode.SUBCATEGORY_ALREADY_EXISTS,
-                                    "Subcategoria já existe na categoria " + categoryId + ": " + newName,
-                                    409
+                                    "Subcategoria já existe na categoria " + categoryId + ": " + newName
                             );
                         }
                     });
@@ -163,30 +206,30 @@ public class TenantSubcategoryService {
         });
     }
 
-    // =========================================================
-    // WRITE (single-repo / simples => mantém @TenantTx)
-    // =========================================================
-
     @TenantTx
     public Subcategory toggleActive(Long id) {
         Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada: " + id, 404));
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.SUBCATEGORY_NOT_FOUND,
+                        "Subcategoria não encontrada: " + id
+                ));
 
         if (sub.isDeleted()) {
-            throw new ApiException(ApiErrorCode.SUBCATEGORY_DELETED, "Não é permitido alterar subcategoria deletada", 409);
+            throw new ApiException(
+                    ApiErrorCode.SUBCATEGORY_DELETED,
+                    "Não é permitido alterar subcategoria deletada"
+            );
         }
 
         sub.setActive(!sub.isActive());
         return tenantSubcategoryRepository.save(sub);
     }
 
-       /**
-     * Soft-delete idempotente: não falha se não existir / já estiver deletada.
-     */
     @TenantTx
     public void softDelete(Long id) {
-        //  contrato HTTP pede sempre 204.
-        if (id == null) throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório", 400);
+        if (id == null) {
+            throw new ApiException(ApiErrorCode.SUBCATEGORY_ID_REQUIRED, "id é obrigatório");
+        }
 
         tenantSubcategoryRepository.findByIdWithCategory(id).ifPresent(sub -> {
             if (sub.isDeleted()) return;
@@ -198,7 +241,10 @@ public class TenantSubcategoryService {
     @TenantTx
     public Subcategory restore(Long id) {
         Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(id)
-                .orElseThrow(() -> new ApiException(ApiErrorCode.SUBCATEGORY_NOT_FOUND, "Subcategoria não encontrada: " + id, 404));
+                .orElseThrow(() -> new ApiException(
+                        ApiErrorCode.SUBCATEGORY_NOT_FOUND,
+                        "Subcategoria não encontrada: " + id
+                ));
 
         sub.restore();
         return tenantSubcategoryRepository.save(sub);
@@ -213,8 +259,7 @@ public class TenantSubcategoryService {
         if (tenantSchema == null) {
             throw new ApiException(
                     ApiErrorCode.TENANT_CONTEXT_REQUIRED,
-                    "TenantContext não está bindado (tenantSchema=null). Operação requer contexto TENANT.",
-                    500
+                    "TenantContext não está bindado (tenantSchema=null). Operação requer contexto TENANT."
             );
         }
         return tenantSchema;

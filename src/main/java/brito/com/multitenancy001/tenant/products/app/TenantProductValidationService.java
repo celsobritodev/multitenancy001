@@ -23,6 +23,13 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Validar preço e regras numéricas básicas.</li>
  *   <li>Normalizar campos textuais de criação quando aplicável.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Validação padronizada.</li>
+ *   <li>Sem alteração de regra de negócio.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -38,19 +45,19 @@ public class TenantProductValidationService {
      */
     public void validateProductForCreate(Product product) {
         if (product == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         if (!StringUtils.hasText(product.getName())) {
-            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório");
         }
 
         if (!StringUtils.hasText(product.getSku())) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório");
         }
 
         if (product.getPrice() == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório");
         }
 
         validatePrice(product.getPrice());
@@ -59,15 +66,15 @@ public class TenantProductValidationService {
         String normalizedSku = product.getSku().trim();
 
         if (normalizedName.isEmpty()) {
-            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name é obrigatório");
         }
 
         if (normalizedSku.isEmpty()) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku é obrigatório");
         }
 
         if (tenantProductRepository.existsBySkuAndDeletedFalse(normalizedSku)) {
-            throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + normalizedSku, 409);
+            throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + normalizedSku);
         }
 
         product.setName(normalizedName);
@@ -116,10 +123,10 @@ public class TenantProductValidationService {
      */
     public void validatePrice(BigDecimal price) {
         if (price == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "price é obrigatório");
         }
         if (price.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_PRICE, "price não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_PRICE, "price não pode ser negativo");
         }
     }
 
@@ -130,23 +137,22 @@ public class TenantProductValidationService {
      */
     public void validateUpdateCommand(UpdateProductCommand updateProductCommand) {
         if (updateProductCommand == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         if (updateProductCommand.clearSubcategory() && updateProductCommand.subcategoryId() != null) {
             throw new ApiException(
                     ApiErrorCode.INVALID_SUBCATEGORY,
-                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo",
-                    400
+                    "Nao pode informar subcategoryId e clearSubcategory=true ao mesmo tempo"
             );
         }
 
         if (updateProductCommand.sku() != null && updateProductCommand.sku().trim().isEmpty()) {
-            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku não pode ser vazio", 400);
+            throw new ApiException(ApiErrorCode.SKU_REQUIRED, "sku não pode ser vazio");
         }
 
         if (updateProductCommand.name() != null && updateProductCommand.name().trim().isEmpty()) {
-            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name não pode ser vazio", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_NAME_REQUIRED, "name não pode ser vazio");
         }
 
         if (updateProductCommand.price() != null) {
@@ -155,19 +161,19 @@ public class TenantProductValidationService {
 
         if (updateProductCommand.costPrice() != null
                 && updateProductCommand.costPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo");
         }
 
         if (updateProductCommand.stockQuantity() != null && updateProductCommand.stockQuantity() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "stockQuantity não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "stockQuantity não pode ser negativo");
         }
 
         if (updateProductCommand.minStock() != null && updateProductCommand.minStock() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "minStock não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "minStock não pode ser negativo");
         }
 
         if (updateProductCommand.maxStock() != null && updateProductCommand.maxStock() < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "maxStock não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "maxStock não pode ser negativo");
         }
 
         log.debug("PRODUCT_VALIDATE_UPDATE_COMMAND_OK");

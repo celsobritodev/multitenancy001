@@ -7,26 +7,12 @@ import brito.com.multitenancy001.controlplane.accounts.persistence.AccountReposi
 import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Ponto central de enforcement de quotas e limites de conta, operando no schema PUBLIC.
- *
- * <p><b>Responsabilidades:</b></p>
- * <ul>
- *   <li>Garantir que operações de escrita (criação de usuário/produto) respeitem os limites do plano.</li>
- *   <li>Atuar como a fronteira de segurança entre o contexto do Tenant e as regras de negócio do Control Plane.</li>
- *   <li>Fornecer logs detalhados de diagnóstico para ações de quota.</li>
- *   <li>Servir como um anti-corruption layer, evitando que regras de faturamento/plano vazem para o domínio do Tenant.</li>
- * </ul>
- *
- * <p><b>Regras de Uso:</b></p>
- * <ul>
- *   <li>Deve ser chamado ANTES da operação de escrita efetiva no Tenant.</li>
- *   <li>As operações rodam em contexto PUBLIC e exigem que o chamador faça a transição de contexto (TENANT -> PUBLIC).</li>
- *   <li>Contas built-in (plataforma) são automaticamente consideradas ilimitadas.</li>
- * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,12 +23,6 @@ public class AccountEntitlementsGuard {
     private final AccountEntitlementsService accountEntitlementsService;
     private final PublicSchemaUnitOfWork publicSchemaUnitOfWork;
 
-    /**
-     * Valida quota de criação de usuários.
-     *
-     * @param accountId id da conta
-     * @param currentUsers uso atual já medido no tenant
-     */
     public void assertCanCreateUser(Long accountId, long currentUsers) {
         validateInputs(accountId, currentUsers, "currentUsers");
 
@@ -75,12 +55,6 @@ public class AccountEntitlementsGuard {
         );
     }
 
-    /**
-     * Valida quota de criação de produtos.
-     *
-     * @param accountId id da conta
-     * @param currentProducts uso atual já medido no tenant
-     */
     public void assertCanCreateProduct(Long accountId, long currentProducts) {
         validateInputs(accountId, currentProducts, "currentProducts");
 
@@ -113,20 +87,17 @@ public class AccountEntitlementsGuard {
         );
     }
 
-    /**
-     * Resolve o snapshot efetivo de entitlements para diagnóstico.
-     *
-     * @param accountId id da conta
-     * @return snapshot efetivo
-     */
     public AccountEntitlementsSnapshot resolveEffectiveSnapshot(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+        RequiredValidator.requirePayload(
+                accountId,
+                ApiErrorCode.ACCOUNT_REQUIRED,
+                "accountId é obrigatório"
+        );
 
         log.info("Resolvendo snapshot efetivo de entitlements no guard. accountId={}", accountId);
 
-        AccountEntitlementsSnapshot snapshot = accountEntitlementsService.resolveEffectiveByAccountId(accountId);
+        AccountEntitlementsSnapshot snapshot =
+                accountEntitlementsService.resolveEffectiveByAccountId(accountId);
 
         log.info(
                 "Snapshot efetivo resolvido com sucesso no guard. accountId={}, unlimited={}, maxUsers={}, maxProducts={}, maxStorageMb={}",
@@ -140,38 +111,25 @@ public class AccountEntitlementsGuard {
         return snapshot;
     }
 
-    /**
-     * Carrega a conta pública ativa e não deletada.
-     *
-     * @param accountId id da conta
-     * @return conta encontrada
-     */
     private Account loadAccountOrThrow(Long accountId) {
         return accountRepository.findByIdAndDeletedFalse(accountId)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.ACCOUNT_NOT_FOUND,
-                        "Conta não encontrada",
-                        404
+                        "Conta não encontrada"
                 ));
     }
 
-    /**
-     * Valida parâmetros básicos do guard.
-     *
-     * @param accountId id da conta
-     * @param currentUsage uso atual
-     * @param usageField nome lógico do campo de uso
-     */
     private void validateInputs(Long accountId, long currentUsage, String usageField) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "accountId é obrigatório", 400);
-        }
+        RequiredValidator.requirePayload(
+                accountId,
+                ApiErrorCode.ACCOUNT_REQUIRED,
+                "accountId é obrigatório"
+        );
 
         if (currentUsage < 0) {
             throw new ApiException(
                     ApiErrorCode.INVALID_REQUEST,
-                    usageField + " não pode ser negativo",
-                    400
+                    usageField + " não pode ser negativo"
             );
         }
     }

@@ -14,18 +14,18 @@ import brito.com.multitenancy001.shared.domain.audit.AuditOutcome;
 import brito.com.multitenancy001.shared.domain.audit.SecurityAuditActionType;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Serviço de comando responsável pelas mutações de lifecycle e status de Account.
  *
- * <p>Responsabilidades:</p>
+ * <p>Regra V33:</p>
  * <ul>
- *   <li>Alterar status da conta.</li>
- *   <li>Executar soft delete.</li>
- *   <li>Executar restore.</li>
- *   <li>Coordenar auditoria e side effects no tenant.</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Sem validação inline.</li>
+ *   <li>Sem uso de ex.getStatus().</li>
  * </ul>
  */
 @Service
@@ -39,28 +39,18 @@ public class AccountStatusCommandService {
     private final AccountStatusInternalFacade accountStatusInternalFacade;
     private final AppClock appClock;
 
-    /**
-     * Altera o status da conta e aplica side effects associados.
-     *
-     * @param accountId id da conta
-     * @param accountStatusChangeCommand comando de mudança de status
-     * @return resultado consolidado da operação
-     */
     public AccountStatusChangeResult changeAccountStatus(
             Long accountId,
-            AccountStatusChangeCommand accountStatusChangeCommand
+            AccountStatusChangeCommand command
     ) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-        }
 
-        if (accountStatusChangeCommand == null || accountStatusChangeCommand.status() == null) {
-            throw new ApiException(ApiErrorCode.STATUS_REQUIRED, "status é obrigatório", 400);
-        }
+        RequiredValidator.requireAccountId(accountId);
+        RequiredValidator.requirePayload(command, ApiErrorCode.STATUS_REQUIRED, "status é obrigatório");
+        RequiredValidator.requirePayload(command.status(), ApiErrorCode.STATUS_REQUIRED, "status é obrigatório");
 
         log.info("🔄 Iniciando mudança de status da conta [ID: {}] para [{}]",
                 accountId,
-                accountStatusChangeCommand.status());
+                command.status());
 
         Instant now = appClock.instant();
 
@@ -71,15 +61,15 @@ public class AccountStatusCommandService {
         details.put("scope", "controlplane.accounts");
         details.put("event", "account_status_change");
         details.put("accountId", accountId);
-        details.put("requestedStatus", accountStatusChangeCommand.status().name());
+        details.put("requestedStatus", command.status().name());
         details.put("occurredAt", now.toString());
 
-        if (accountStatusChangeCommand.origin() != null && !accountStatusChangeCommand.origin().isBlank()) {
-            details.put("origin", accountStatusChangeCommand.origin().trim());
+        if (command.origin() != null && !command.origin().isBlank()) {
+            details.put("origin", command.origin().trim());
         }
 
-        if (accountStatusChangeCommand.reason() != null && !accountStatusChangeCommand.reason().isBlank()) {
-            details.put("reason", accountStatusChangeCommand.reason().trim());
+        if (command.reason() != null && !command.reason().isBlank()) {
+            details.put("reason", command.reason().trim());
         }
 
         if (actorUserId != null) {
@@ -91,6 +81,7 @@ public class AccountStatusCommandService {
         }
 
         SecurityAuditActionType actionType = SecurityAuditActionType.ACCOUNT_STATUS_CHANGED;
+
         accountStatusAuditService.recordAudit(
                 actionType,
                 AuditOutcome.ATTEMPT,
@@ -102,9 +93,10 @@ public class AccountStatusCommandService {
         );
 
         try {
+
             AccountStatusChangeResult result = accountStatusLifecycleService.changeAccountStatus(
                     accountId,
-                    accountStatusChangeCommand,
+                    command,
                     details
             );
 
@@ -121,11 +113,13 @@ public class AccountStatusCommandService {
             return result;
 
         } catch (ApiException ex) {
-            details.put("error", ex.getError());
-            details.put("status", ex.getStatus());
 
-            if (ex.getStatus() == 401 || ex.getStatus() == 403) {
+            details.put("error", ex.getError());
+
+            if (isAccessDenied(ex)) {
+
                 log.warn("🚫 Acesso negado ao alterar status da conta [{}]: {}", accountId, ex.getMessage());
+
                 accountStatusAuditService.recordAudit(
                         actionType,
                         AuditOutcome.DENIED,
@@ -135,8 +129,11 @@ public class AccountStatusCommandService {
                         null,
                         details
                 );
+
             } else {
+
                 log.error("❌ Erro ao alterar status da conta [{}]: {}", accountId, ex.getMessage());
+
                 accountStatusAuditService.recordAudit(
                         actionType,
                         AuditOutcome.FAILURE,
@@ -147,10 +144,13 @@ public class AccountStatusCommandService {
                         details
                 );
             }
+
             throw ex;
 
         } catch (Exception ex) {
+
             log.error("❌ Erro inesperado ao alterar status da conta [{}]", accountId, ex);
+
             details.put("exception", ex.getClass().getSimpleName());
 
             accountStatusAuditService.recordAudit(
@@ -162,19 +162,14 @@ public class AccountStatusCommandService {
                     null,
                     details
             );
+
             throw ex;
         }
     }
 
-    /**
-     * Executa soft delete de conta e depois aplica side effect no tenant.
-     *
-     * @param accountId id da conta
-     */
     public void softDeleteAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-        }
+
+        RequiredValidator.requireAccountId(accountId);
 
         log.info("🗑️ Iniciando exclusão da conta [ID: {}]", accountId);
 
@@ -184,15 +179,9 @@ public class AccountStatusCommandService {
         log.info("🎉 Exclusão da conta [{}] concluída com sucesso", accountId);
     }
 
-    /**
-     * Executa restore de conta e depois aplica side effect no tenant.
-     *
-     * @param accountId id da conta
-     */
     public void restoreAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED, "accountId é obrigatório", 400);
-        }
+
+        RequiredValidator.requireAccountId(accountId);
 
         log.info("🔄 Iniciando restauração da conta [ID: {}]", accountId);
 
@@ -200,5 +189,13 @@ public class AccountStatusCommandService {
         accountStatusTenantSideEffectService.restoreAllTenantUsers(account);
 
         log.info("🎉 Restauração da conta [{}] concluída com sucesso", accountId);
+    }
+
+    // =========================
+    // HELPER
+    // =========================
+
+    private boolean isAccessDenied(ApiException ex) {
+        return ApiErrorCode.ACCESS_DENIED.name().equals(ex.getError());
     }
 }

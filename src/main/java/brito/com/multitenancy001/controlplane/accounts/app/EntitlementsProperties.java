@@ -1,12 +1,13 @@
 package brito.com.multitenancy001.controlplane.accounts.app;
 
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
+import java.util.Map;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
+/**
+ * Propriedades de entitlements dos planos.
+ */
 @Component
 @ConfigurationProperties(prefix = "app.entitlements")
 public class EntitlementsProperties {
@@ -14,7 +15,7 @@ public class EntitlementsProperties {
     private int devMultiplier = 1;
 
     /**
-     * Mapa: "free", "pro", "enterprise" -> limites
+     * Mapa: "free", "pro", "enterprise" -> limites.
      */
     private Map<String, PlanLimits> plans;
 
@@ -35,6 +36,7 @@ public class EntitlementsProperties {
     }
 
     public static class PlanLimits {
+
         private int maxUsers;
         private int maxProducts;
         private int maxStorageMb;
@@ -65,41 +67,57 @@ public class EntitlementsProperties {
     }
 
     /**
-     * Fail-fast global (config).
+     * Fail-fast global de configuração.
      */
     public void validate() {
         if (devMultiplier <= 0) {
-            throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "devMultiplier invalido", 500);
+            throw new IllegalStateException("Configuração inválida: devMultiplier deve ser maior que zero.");
         }
+
         if (plans == null || plans.isEmpty()) {
-            throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plans não configurado", 500);
+            throw new IllegalStateException("Configuração inválida: plans não configurado.");
         }
-        for (Map.Entry<String, PlanLimits> e : plans.entrySet()) {
-            String plan = e.getKey();
-            PlanLimits l = e.getValue();
-            if (l == null) {
-                throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plan " + plan + " invalido: null", 500);
+
+        for (Map.Entry<String, PlanLimits> entry : plans.entrySet()) {
+            String plan = entry.getKey();
+            PlanLimits limits = entry.getValue();
+
+            if (limits == null) {
+                throw new IllegalStateException("Configuração inválida: plan " + plan + " invalido: null.");
             }
-            if (l.getMaxUsers() <= 0) throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plan " + plan + " maxUsers invalido", 500);
-            if (l.getMaxProducts() <= 0) throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plan " + plan + " maxProducts invalido", 500);
-            if (l.getMaxStorageMb() <= 0) throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plan " + plan + " maxStorageMb invalido", 500);
+
+            if (limits.getMaxUsers() <= 0) {
+                throw new IllegalStateException("Configuração inválida: plan " + plan + " maxUsers invalido.");
+            }
+
+            if (limits.getMaxProducts() <= 0) {
+                throw new IllegalStateException("Configuração inválida: plan " + plan + " maxProducts invalido.");
+            }
+
+            if (limits.getMaxStorageMb() <= 0) {
+                throw new IllegalStateException("Configuração inválida: plan " + plan + " maxStorageMb invalido.");
+            }
         }
     }
 
     /**
      * Fail-fast por plano.
+     *
+     * @param planKey chave do plano
+     * @return limites configurados
      */
     public PlanLimits getPlanOrThrow(String planKey) {
         validate();
 
         if (planKey == null || planKey.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "planKey obrigatorio", 500);
+            throw new IllegalStateException("Configuração inválida: planKey obrigatorio.");
         }
 
         PlanLimits limits = plans.get(planKey.toLowerCase());
         if (limits == null) {
-            throw new ApiException(ApiErrorCode.INVALID_ENTITLEMENT, "plano não configurado: " + planKey, 500);
+            throw new IllegalStateException("Configuração inválida: plano não configurado: " + planKey);
         }
+
         return limits;
     }
 }

@@ -25,6 +25,12 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Quota enforcement não deve ocorrer aqui.
  * Esse passo deve permanecer fora, no service de orquestração.</p>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -43,7 +49,7 @@ public class TenantProductCreateWriteService {
     @TenantTx
     public Product create(CreateProductCommand createProductCommand) {
         if (createProductCommand == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         log.info(

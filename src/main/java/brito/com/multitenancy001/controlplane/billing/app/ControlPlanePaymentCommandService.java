@@ -21,23 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Serviço de comando responsável pelo fluxo principal de pagamentos do Control Plane.
- *
- * <p>Responsabilidades:</p>
- * <ul>
- *   <li>Receber requests de pagamento administrativo e self-service.</li>
- *   <li>Validar entrada semântica e identidade do chamador.</li>
- *   <li>Aplicar idempotência forte por chave persistida.</li>
- *   <li>Criar pagamento PENDING, processar gateway, concluir/falhar e enfileirar upgrade.</li>
- *   <li>Registrar auditoria de tentativa, sucesso e falha.</li>
- * </ul>
- *
- * <p>Este serviço coordena o caso de uso, mas delega responsabilidades específicas para:</p>
- * <ul>
- *   <li>{@link ControlPlanePaymentLifecycleService}</li>
- *   <li>{@link ControlPlanePaymentRequestValidator}</li>
- *   <li>{@link ControlPlanePaymentUpgradeEnqueueService}</li>
- *   <li>{@link ControlPlanePaymentApiResponseMapper}</li>
- * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -52,12 +35,6 @@ public class ControlPlanePaymentCommandService {
     private final ControlPlaneBillingSecurityAuditRecorder controlPlaneBillingSecurityAuditRecorder;
     private final AppClock appClock;
 
-    /**
-     * Processa um pagamento administrativo para uma conta explícita.
-     *
-     * @param adminPaymentRequest request administrativo
-     * @return resposta consolidada do pagamento
-     */
     public PaymentResponse processPaymentForAccount(AdminPaymentRequest adminPaymentRequest) {
         log.info("========== processPaymentForAccount INICIADO ==========");
 
@@ -144,7 +121,7 @@ public class ControlPlanePaymentCommandService {
             );
 
             log.warn("Pagamento administrativo recusado. paymentId={}", payment.getId());
-            throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Pagamento recusado", 402);
+            throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Pagamento recusado");
 
         } catch (ApiException ex) {
             details.put("exception", ex.getClass().getSimpleName());
@@ -178,12 +155,6 @@ public class ControlPlanePaymentCommandService {
         }
     }
 
-    /**
-     * Processa um pagamento self-service para a conta autenticada.
-     *
-     * @param paymentRequest request self-service
-     * @return resposta consolidada do pagamento
-     */
     public PaymentResponse processPaymentForMyAccount(PaymentRequest paymentRequest) {
         log.info("========== processPaymentForMyAccount INICIADO ==========");
 
@@ -191,7 +162,7 @@ public class ControlPlanePaymentCommandService {
 
         Long accountId = controlPlaneRequestIdentityService.getCurrentAccountId();
         if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Não autenticado", 401);
+            throw new ApiException(ApiErrorCode.ACCOUNT_REQUIRED, "Não autenticado");
         }
 
         final String idempotencyKey = controlPlanePaymentRequestValidator.normalize(paymentRequest.idempotencyKey());
@@ -275,7 +246,7 @@ public class ControlPlanePaymentCommandService {
             );
 
             log.warn("Pagamento self-service recusado. paymentId={}", payment.getId());
-            throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Pagamento recusado", 402);
+            throw new ApiException(ApiErrorCode.PAYMENT_FAILED, "Pagamento recusado");
 
         } catch (ApiException ex) {
             details.put("exception", ex.getClass().getSimpleName());
@@ -309,17 +280,6 @@ public class ControlPlanePaymentCommandService {
         }
     }
 
-    /**
-     * Simula o processamento do gateway de pagamento.
-     *
-     * <p>Este método é um placeholder para futura integração real.
-     * Quando a integração concreta for implantada, recomenda-se extrair
-     * essa responsabilidade para um {@code IntegrationService} dedicado.</p>
-     *
-     * @param paymentId id do pagamento
-     * @param request request original
-     * @return {@code true} quando aprovado
-     */
     private boolean processGateway(Long paymentId, Object request) {
         log.info("Chamando gateway de pagamento. paymentId={}, requestType={}",
                 paymentId,

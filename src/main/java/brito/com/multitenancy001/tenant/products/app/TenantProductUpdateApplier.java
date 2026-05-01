@@ -26,6 +26,12 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Validar unicidade de SKU durante a mutação.</li>
  *   <li>Garantir coerência final entre categoria e subcategoria.</li>
  * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -47,10 +53,10 @@ public class TenantProductUpdateApplier {
      */
     public void applyUpdates(Product existing, UpdateProductCommand cmd) {
         if (existing == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "produto existente é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "produto existente é obrigatório");
         }
         if (cmd == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_REQUIRED, "payload é obrigatório");
         }
 
         if (cmd.name() != null) {
@@ -68,7 +74,7 @@ public class TenantProductUpdateApplier {
             String sku = cmd.sku().trim();
             if (!sku.isEmpty()) {
                 if (tenantProductRepository.existsSkuNotDeletedExcludingId(sku, existing.getId())) {
-                    throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + sku, 409);
+                    throw new ApiException(ApiErrorCode.SKU_ALREADY_EXISTS, "SKU já cadastrado: " + sku);
                 }
                 existing.setSku(sku);
             }
@@ -111,8 +117,7 @@ public class TenantProductUpdateApplier {
             Category category = tenantCategoryRepository.findById(cmd.categoryId())
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.CATEGORY_NOT_FOUND,
-                            "Categoria não encontrada",
-                            404
+                            "Categoria não encontrada"
                     ));
             existing.setCategory(category);
         }
@@ -123,8 +128,7 @@ public class TenantProductUpdateApplier {
             Subcategory sub = tenantSubcategoryRepository.findByIdWithCategory(cmd.subcategoryId())
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.SUBCATEGORY_NOT_FOUND,
-                            "Subcategoria não encontrada",
-                            404
+                            "Subcategoria não encontrada"
                     ));
             existing.setSubcategory(sub);
         }
@@ -133,8 +137,7 @@ public class TenantProductUpdateApplier {
             Supplier supplier = tenantSupplierRepository.findById(cmd.supplierId())
                     .orElseThrow(() -> new ApiException(
                             ApiErrorCode.SUPPLIER_NOT_FOUND,
-                            "Fornecedor não encontrado",
-                            404
+                            "Fornecedor não encontrado"
                     ));
             existing.setSupplier(supplier);
         }

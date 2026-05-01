@@ -30,23 +30,10 @@ import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.persistence.publicschema.LoginIdentityFinder;
 import brito.com.multitenancy001.shared.security.SystemRoleName;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Serviço de login do Control Plane.
- *
- * <p>Responsabilidades:</p>
- * <ul>
- *   <li>Validar request de login.</li>
- *   <li>Resolver identidade via login_identities.</li>
- *   <li>Validar status do usuário (enabled / habilitado para login).</li>
- *   <li>Autenticar via AuthenticationManager.</li>
- *   <li>Emitir access token + refresh token.</li>
- *   <li>Registrar refresh session server-side.</li>
- *   <li>Auditar tentativa / sucesso / negação sem JSON manual.</li>
- * </ul>
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -64,49 +51,41 @@ public class ControlPlaneAuthService {
     private final AuthRefreshSessionService authRefreshSessionService;
     private final JsonDetailsMapper jsonDetailsMapper;
 
-    /**
-     * Efetua login do usuário do Control Plane e retorna access+refresh tokens.
-     *
-     * @param cmd comando de login (email/senha)
-     * @return JwtResult com tokens e claims essenciais
-     */
     public JwtResult loginControlPlaneUser(ControlPlaneAdminLoginCommand cmd) {
-        if (cmd == null) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "Requisição inválida", 400);
-        }
+
+        RequiredValidator.requirePayload(cmd, ApiErrorCode.INVALID_LOGIN, "Requisição inválida");
+
         if (!StringUtils.hasText(cmd.email())) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email é obrigatório");
         }
+
         if (!StringUtils.hasText(cmd.password())) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "password é obrigatório");
         }
 
         final String emailNorm = EmailNormalizer.normalizeOrNull(cmd.email());
         if (emailNorm == null) {
-            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_LOGIN, "email inválido");
         }
 
         final String password = cmd.password();
 
-        auditAttempt(emailNorm, m(
-                "stage", "init",
-                "mode", "password"
-        ));
+        auditAttempt(emailNorm, m("stage", "init", "mode", "password"));
 
         try {
             return publicSchemaExecutor.inPublic(() -> {
+
                 Long cpUserId = loginIdentityResolver.resolveControlPlaneUserIdByEmail(emailNorm);
                 if (cpUserId == null) {
                     auditDenied(emailNorm, m("reason", "identity_not_found"));
-                    throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado", 404);
+                    throw new ApiException(ApiErrorCode.USER_NOT_FOUND, "Usuário de plataforma não encontrado");
                 }
 
                 ControlPlaneUser user = controlPlaneUserRepository
                         .findByIdAndDeletedFalse(cpUserId)
                         .orElseThrow(() -> new ApiException(
                                 ApiErrorCode.USER_NOT_FOUND,
-                                "Usuário de plataforma não encontrado",
-                                404
+                                "Usuário de plataforma não encontrado"
                         ));
 
                 Long accountId = user.getAccount().getId();
@@ -114,12 +93,12 @@ public class ControlPlaneAuthService {
 
                 if (!user.isEnabled()) {
                     auditDenied(emailNorm, m("reason", "user_not_enabled"));
-                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado");
                 }
 
                 if (!user.isEnabledForLogin(now)) {
                     auditDenied(emailNorm, m("reason", "user_not_enabled_for_login"));
-                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado", 403);
+                    throw new ApiException(ApiErrorCode.ACCESS_DENIED, "Usuário não autorizado");
                 }
 
                 Authentication authentication = authenticationManager.authenticate(
@@ -170,18 +149,13 @@ public class ControlPlaneAuthService {
                         DEFAULT_SCHEMA
                 );
             });
+
         } catch (BadCredentialsException ex) {
             auditDenied(emailNorm, m("reason", "bad_credentials"));
             throw ex;
         }
     }
 
-    /**
-     * Audita tentativa de login.
-     *
-     * @param emailNorm email normalizado
-     * @param details detalhes estruturados
-     */
     private void auditAttempt(String emailNorm, Map<String, Object> details) {
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
@@ -195,17 +169,11 @@ public class ControlPlaneAuthService {
         );
     }
 
-    /**
-     * Audita negação de login.
-     *
-     * @param emailNorm email normalizado
-     * @param details detalhes estruturados
-     */
     private void auditDenied(String emailNorm, Map<String, Object> details) {
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
-                AuthEventType.LOGIN_DENIED,
-                AuditOutcome.DENIED,
+                AuthEventType.LOGIN_FAILURE,
+                AuditOutcome.FAILURE,
                 emailNorm,
                 null,
                 null,
@@ -214,12 +182,6 @@ public class ControlPlaneAuthService {
         );
     }
 
-    /**
-     * Audita sucesso de login.
-     *
-     * @param emailNorm email normalizado
-     * @param details detalhes estruturados
-     */
     private void auditSuccess(String emailNorm, Map<String, Object> details) {
         controlPlaneAuthEventAuditIntegrationService.record(
                 AuthDomain.CONTROLPLANE,
@@ -233,36 +195,15 @@ public class ControlPlaneAuthService {
         );
     }
 
-    /**
-     * Monta mapa ordenado a partir de pares chave/valor.
-     *
-     * @param kv pares chave/valor
-     * @return mapa ordenado
-     */
     private Map<String, Object> m(Object... kv) {
         Map<String, Object> map = new LinkedHashMap<>();
-        if (kv == null) {
-            return map;
+        for (int i = 0; i < kv.length; i += 2) {
+            map.put((String) kv[i], kv[i + 1]);
         }
-
-        for (int i = 0; i + 1 < kv.length; i += 2) {
-            Object key = kv[i];
-            Object value = kv[i + 1];
-            if (key != null) {
-                map.put(String.valueOf(key), value);
-            }
-        }
-
         return map;
     }
 
-    /**
-     * Serializa details estruturados para JSON.
-     *
-     * @param details detalhes estruturados
-     * @return json serializado
-     */
     private String toJson(Map<String, Object> details) {
-        return details == null ? null : jsonDetailsMapper.toJsonNode(details).toString();
+        return jsonDetailsMapper.toJson(details);
     }
 }

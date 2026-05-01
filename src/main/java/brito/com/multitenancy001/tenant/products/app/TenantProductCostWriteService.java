@@ -15,6 +15,20 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de uso de atualização do custo do produto.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Validar entrada (id e costPrice)</li>
+ *   <li>Aplicar regra de não negatividade</li>
+ *   <li>Persistir alteração</li>
+ *   <li>Recarregar produto com relações</li>
+ * </ul>
+ *
+ * <p><b>Regra V33:</b></p>
+ * <ul>
+ *   <li>Sem status HTTP hardcoded</li>
+ *   <li>Sem alteração de comportamento</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -34,15 +48,15 @@ public class TenantProductCostWriteService {
     @TenantTx
     public Product updateCostPrice(UUID id, BigDecimal costPrice) {
         if (id == null) {
-            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRODUCT_ID_REQUIRED, "id é obrigatório");
         }
 
         if (costPrice == null) {
-            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "costPrice é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.PRICE_REQUIRED, "costPrice é obrigatório");
         }
 
         if (costPrice.compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo", 400);
+            throw new ApiException(ApiErrorCode.INVALID_AMOUNT, "costPrice não pode ser negativo");
         }
 
         log.info(
@@ -54,8 +68,7 @@ public class TenantProductCostWriteService {
         Product product = tenantProductRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ApiException(
                         ApiErrorCode.PRODUCT_NOT_FOUND,
-                        "Produto não encontrado com ID: " + id,
-                        404
+                        "Produto não encontrado com ID: " + id
                 ));
 
         product.updateCostPrice(costPrice);

@@ -23,7 +23,7 @@ public class ControlPlaneUserValidationService {
     public String normalizeEmailOrThrow(String raw) {
         String email = EmailNormalizer.normalizeOrNull(raw);
         if (email == null) {
-            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido", 400);
+            throw new ApiException(ApiErrorCode.INVALID_EMAIL, "Email inválido");
         }
         return email;
     }
@@ -36,12 +36,12 @@ public class ControlPlaneUserValidationService {
      */
     public String normalizeNameOrThrow(String raw) {
         if (raw == null) {
-            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório");
         }
 
         String name = raw.trim();
         if (name.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório", 400);
+            throw new ApiException(ApiErrorCode.INVALID_NAME, "Nome é obrigatório");
         }
 
         return name;
@@ -56,8 +56,7 @@ public class ControlPlaneUserValidationService {
         if (ControlPlaneBuiltInUsers.isReservedEmail(normalizedEmail)) {
             throw new ApiException(
                     ApiErrorCode.EMAIL_RESERVED,
-                    "Este email é reservado do sistema (BUILT_IN)",
-                    409
+                    "Este email é reservado do sistema (BUILT_IN)"
             );
         }
     }
@@ -71,8 +70,7 @@ public class ControlPlaneUserValidationService {
         if (user != null && user.isBuiltInUser()) {
             throw new ApiException(
                     ApiErrorCode.USER_BUILT_IN_IMMUTABLE,
-                    ControlPlaneUserInternalFacade.BUILTIN_IMMUTABLE_MESSAGE,
-                    409
+                    ControlPlaneUserInternalFacade.BUILTIN_IMMUTABLE_MESSAGE
             );
         }
     }

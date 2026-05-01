@@ -2,8 +2,6 @@ package brito.com.multitenancy001.controlplane.accounts.app.subscription;
 
 import brito.com.multitenancy001.controlplane.accounts.app.DefaultEntitlements;
 import brito.com.multitenancy001.controlplane.accounts.domain.SubscriptionPlan;
-import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
-import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -138,8 +136,6 @@ public class SubscriptionPlanCatalog {
      * @param plan plano
      */
     private void validatePlanRequired(SubscriptionPlan plan) {
-        if (plan == null) {
-            throw new ApiException(ApiErrorCode.INVALID_REQUEST, "subscriptionPlan é obrigatório", 400);
-        }
+        SubscriptionValidator.requireSubscriptionPlan(plan);
     }
 }

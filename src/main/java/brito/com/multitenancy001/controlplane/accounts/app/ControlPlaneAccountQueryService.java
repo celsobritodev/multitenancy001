@@ -19,17 +19,17 @@ import brito.com.multitenancy001.shared.api.error.ApiErrorCode;
 import brito.com.multitenancy001.shared.executor.PublicSchemaUnitOfWork;
 import brito.com.multitenancy001.shared.kernel.error.ApiException;
 import brito.com.multitenancy001.shared.time.AppClock;
+import brito.com.multitenancy001.shared.validation.RequiredValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Serviço de consulta do agregado Account no Control Plane.
  *
- * <p>Responsabilidades:</p>
+ * <p>Regra V33:</p>
  * <ul>
- *   <li>Executar leituras simples e administrativas de Account.</li>
- *   <li>Aplicar validações de filtros e paginação.</li>
- *   <li>Centralizar consultas paginadas e buscas auxiliares do módulo.</li>
+ *   <li>Sem status HTTP hardcoded.</li>
+ *   <li>Sem validação inline repetitiva.</li>
  * </ul>
  */
 @Service
@@ -43,26 +43,13 @@ public class ControlPlaneAccountQueryService {
     private final AppClock appClock;
     private final ControlPlaneAccountAdminQueryHelper controlPlaneAccountAdminQueryHelper;
 
-    /**
-     * Lista contas não deletadas.
-     *
-     * @return lista de contas
-     */
     public List<Account> listAccounts() {
         log.debug("Listando contas não deletadas.");
         return publicSchemaUnitOfWork.readOnly(accountRepository::findAllByDeletedFalse);
     }
 
-    /**
-     * Busca conta não deletada por id.
-     *
-     * @param accountId id da conta
-     * @return conta encontrada
-     */
     public Account getAccount(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        }
+        RequiredValidator.requireAccountId(accountId);
 
         return publicSchemaUnitOfWork.readOnly(() ->
                 accountRepository.findByIdAndDeletedFalse(accountId)
@@ -70,18 +57,11 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Retorna visão administrativa detalhada da conta.
-     *
-     * @param accountId id da conta
-     * @return projeção administrativa
-     */
     public AccountAdminDetailsProjection getAccountAdminDetails(Long accountId) {
-        if (accountId == null) {
-            throw new ApiException(ApiErrorCode.ACCOUNT_ID_REQUIRED);
-        }
+        RequiredValidator.requireAccountId(accountId);
 
         return publicSchemaUnitOfWork.readOnly(() -> {
+
             Account account = accountRepository.findByIdAndDeletedFalse(accountId)
                     .orElseThrow(() -> new ApiException(ApiErrorCode.ACCOUNT_NOT_FOUND));
 
@@ -92,15 +72,12 @@ public class ControlPlaneAccountQueryService {
         });
     }
 
-    /**
-     * Busca conta por slug não deletada.
-     *
-     * @param slug slug informado
-     * @return conta encontrada
-     */
     public Account findBySlug(String slug) {
         if (slug == null || slug.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_SLUG, "slug é obrigatório", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_SLUG,
+                    "slug é obrigatório"
+            );
         }
 
         String normalized = slug.trim();
@@ -111,16 +88,12 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Lista contas por status com paginação normalizada.
-     *
-     * @param status status alvo
-     * @param pageable paginação
-     * @return página de contas
-     */
     public Page<Account> listAccountsByStatus(AccountStatus status, Pageable pageable) {
         if (status == null) {
-            throw new ApiException(ApiErrorCode.STATUS_REQUIRED, "status é obrigatório", 400);
+            throw new ApiException(
+                    ApiErrorCode.STATUS_REQUIRED,
+                    "status é obrigatório"
+            );
         }
 
         Pageable normalizedPageable = controlPlaneAccountAdminQueryHelper.normalizePageable(pageable);
@@ -130,14 +103,6 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Lista contas criadas em intervalo informado.
-     *
-     * @param start início do intervalo
-     * @param end fim do intervalo
-     * @param pageable paginação
-     * @return página de contas
-     */
     public Page<Account> listAccountsCreatedBetween(Instant start, Instant end, Pageable pageable) {
         controlPlaneAccountAdminQueryHelper.assertValidCreatedBetweenRange(start, end);
 
@@ -148,16 +113,12 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Busca contas por displayName com paginação normalizada.
-     *
-     * @param term termo de busca
-     * @param pageable paginação
-     * @return página de contas
-     */
     public Page<Account> searchAccountsByDisplayName(String term, Pageable pageable) {
         if (term == null || term.isBlank()) {
-            throw new ApiException(ApiErrorCode.INVALID_SEARCH, "term é obrigatório", 400);
+            throw new ApiException(
+                    ApiErrorCode.INVALID_SEARCH,
+                    "term é obrigatório"
+            );
         }
 
         String normalized = term.trim();
@@ -168,14 +129,8 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Lista contas overdue com base em data civil UTC.
-     *
-     * @param today instante base opcional
-     * @param status status alvo opcional
-     * @return lista de contas overdue
-     */
     public List<Account> listOverdueAccounts(Instant today, AccountStatus status) {
+
         Instant baseInstant = (today != null ? today : appClock.instant());
         LocalDate baseDateUtc = LocalDate.ofInstant(baseInstant, ZoneOffset.UTC);
 
@@ -186,11 +141,6 @@ public class ControlPlaneAccountQueryService {
         );
     }
 
-    /**
-     * Conta accounts operacionais.
-     *
-     * @return quantidade de contas operacionais
-     */
     public long countOperationalAccounts() {
         return publicSchemaUnitOfWork.readOnly(accountRepository::countOperationalAccounts);
     }
